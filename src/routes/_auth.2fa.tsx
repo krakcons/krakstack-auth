@@ -37,6 +37,7 @@ function TwoFactorVerify() {
   const [mode, setMode] = useState<"totp" | "email" | "backup">("totp");
   const [emailCodeSent, setEmailCodeSent] = useState(false);
   const redirectTarget = getRedirectTarget(searchString);
+  const oauthQuery = getOAuthQuery(searchString);
   const form = useAppForm({
     defaultValues: {
       code: "",
@@ -51,15 +52,18 @@ function TwoFactorVerify() {
           ? await authClient.twoFactor.verifyBackupCode({
               code,
               trustDevice: value.trustDevice,
+              ...(oauthQuery ? { oauth_query: oauthQuery } : {}),
             })
           : mode === "email"
             ? await authClient.twoFactor.verifyOtp({
                 code,
                 trustDevice: value.trustDevice,
+                ...(oauthQuery ? { oauth_query: oauthQuery } : {}),
               })
             : await authClient.twoFactor.verifyTotp({
                 code,
                 trustDevice: value.trustDevice,
+                ...(oauthQuery ? { oauth_query: oauthQuery } : {}),
               });
 
       if (result.error) {
@@ -227,6 +231,19 @@ const getOAuthAuthorizeTarget = (searchString: string) => {
   return `/api/auth/oauth2/authorize${searchString}`;
 };
 
+const getOAuthQuery = (searchString: string) => {
+  if (!searchString) return null;
+  const search = new URLSearchParams(searchString);
+  if (!search.has("sig")) return null;
+
+  const signedSearch = new URLSearchParams();
+  for (const [key, value] of search.entries()) {
+    signedSearch.append(key, value);
+    if (key === "sig") break;
+  }
+  return signedSearch.toString();
+};
+
 const getResultRedirectUrl = (data: unknown) => {
   if (typeof data !== "object" || data === null || !("url" in data))
     return null;
@@ -239,6 +256,8 @@ const shouldUseDocumentRedirect = (target: string) => {
   const siteUrl = import.meta.env.VITE_SITE_URL;
   if (target.startsWith("/api/")) return true;
   if (target.startsWith("/")) return false;
-  if (target.startsWith(siteUrl)) return target.slice(siteUrl.length).startsWith("/api/");
+  if (siteUrl && target.startsWith(siteUrl)) {
+    return target.slice(siteUrl.length).startsWith("/api/");
+  }
   return target.startsWith("http://") || target.startsWith("https://");
 };

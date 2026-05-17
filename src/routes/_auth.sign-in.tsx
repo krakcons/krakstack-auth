@@ -37,6 +37,7 @@ function SignIn() {
     select: (state) => state.location.searchStr,
   });
   const redirectTarget = getRedirectTarget(searchString);
+  const oauthQuery = getOAuthQuery(searchString);
   const finishSignIn = (url: string | null | undefined) => {
     const target = url ?? redirectTarget;
     if (shouldUseDocumentRedirect(target)) {
@@ -67,6 +68,7 @@ function SignIn() {
           email: value.email.trim(),
           password: value.password,
           callbackURL: redirectTarget,
+          ...(oauthQuery ? { oauth_query: oauthQuery } : {}),
         });
 
         if (result.error) {
@@ -81,7 +83,7 @@ function SignIn() {
 
         if (hasTwoFactorRedirect(result.data)) {
           navigate({
-            href: `${import.meta.env.VITE_SITE_URL}/2fa?callbackURL=${encodeURIComponent(redirectTarget)}`,
+            href: `${import.meta.env.VITE_SITE_URL}/2fa${oauthQuery ? `?${oauthQuery}` : `?callbackURL=${encodeURIComponent(redirectTarget)}`}`,
           });
           return;
         }
@@ -217,10 +219,25 @@ const getOAuthAuthorizeTarget = (searchString: string) => {
   return `/api/auth/oauth2/authorize${searchString}`;
 };
 
+const getOAuthQuery = (searchString: string) => {
+  if (!searchString) return null;
+  const search = new URLSearchParams(searchString);
+  if (!search.has("sig")) return null;
+
+  const signedSearch = new URLSearchParams();
+  for (const [key, value] of search.entries()) {
+    signedSearch.append(key, value);
+    if (key === "sig") break;
+  }
+  return signedSearch.toString();
+};
+
 const shouldUseDocumentRedirect = (target: string) => {
   const siteUrl = import.meta.env.VITE_SITE_URL;
   if (target.startsWith("/api/")) return true;
   if (target.startsWith("/")) return false;
-  if (target.startsWith(siteUrl)) return target.slice(siteUrl.length).startsWith("/api/");
+  if (siteUrl && target.startsWith(siteUrl)) {
+    return target.slice(siteUrl.length).startsWith("/api/");
+  }
   return target.startsWith("http://") || target.startsWith("https://");
 };
