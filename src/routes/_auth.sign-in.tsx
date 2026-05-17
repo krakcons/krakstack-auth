@@ -37,6 +37,7 @@ function SignIn() {
     select: (state) => state.location.searchStr,
   });
   const redirectTarget = getRedirectTarget(searchString);
+  const socialRedirectTarget = getSocialRedirectTarget(searchString);
   const oauthQuery = getOAuthQuery(searchString);
   const finishSignIn = (url: string | null | undefined) => {
     const target = url ?? redirectTarget;
@@ -105,8 +106,10 @@ function SignIn() {
     try {
       const result = await authClient.signIn.social({
         provider: "google",
-        callbackURL: redirectTarget,
+        callbackURL: socialRedirectTarget,
         errorCallbackURL: "/sign-in",
+        ...(oauthQuery ? { additionalData: { query: oauthQuery } } : {}),
+        ...(oauthQuery ? { oauth_query: oauthQuery } : {}),
       });
 
       if (result.error) {
@@ -210,6 +213,13 @@ const getRedirectTarget = (searchString: string) => {
   );
 };
 
+const getSocialRedirectTarget = (searchString: string) => {
+  const oauthTarget = getOAuthAuthorizeTargetWithoutPromptLogin(searchString);
+  if (oauthTarget) return oauthTarget;
+
+  return getRedirectTarget(searchString);
+};
+
 const getOAuthAuthorizeTarget = (searchString: string) => {
   if (!searchString) return null;
 
@@ -217,6 +227,27 @@ const getOAuthAuthorizeTarget = (searchString: string) => {
   if (!search.has("sig")) return null;
 
   return `/api/auth/oauth2/authorize${searchString}`;
+};
+
+const getOAuthAuthorizeTargetWithoutPromptLogin = (searchString: string) => {
+  if (!searchString) return null;
+
+  const search = new URLSearchParams(searchString);
+  if (!search.has("sig")) return null;
+
+  const prompts = search
+    .get("prompt")
+    ?.split(" ")
+    .filter((prompt) => prompt && prompt !== "login");
+
+  if (prompts?.length) {
+    search.set("prompt", prompts.join(" "));
+  } else {
+    search.delete("prompt");
+  }
+
+  const nextSearchString = search.toString();
+  return `/api/auth/oauth2/authorize${nextSearchString ? `?${nextSearchString}` : ""}`;
 };
 
 const getOAuthQuery = (searchString: string) => {
