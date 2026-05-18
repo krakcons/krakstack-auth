@@ -1266,7 +1266,7 @@ function ApiKeyManager() {
         from="/"
         columns={apiKeyColumns({ onDelete: deleteKey })}
         data={keys}
-        exportFileName="api-keys.csv"
+        exportFileName={m.user_api_keys_export_file_name()}
         features={{ gallery: false }}
       />
     </div>

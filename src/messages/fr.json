@@ -307,5 +307,9 @@
   "email_otp_verification_subject": "Votre code de vérification de courriel Krakstack Auth",
   "email_otp_reset_password_subject": "Votre code de réinitialisation de mot de passe Krakstack Auth",
   "email_otp_verification_text": "Votre code de vérification est : {otp}",
-  "email_otp_verification_html": "<p>Votre code de vérification est :</p><p><strong>{otp}</strong></p>"
+  "email_otp_verification_html": "<p>Votre code de vérification est :</p><p><strong>{otp}</strong></p>",
+  "user_central_auth_required": "Reconnectez-vous à Krakstack Auth pour gérer les paramètres de votre compte central.",
+  "user_central_auth_reconnect": "Reconnecter le compte",
+  "user_central_auth_reconnect_error": "Impossible de se reconnecter à Krakstack Auth.",
+  "user_api_keys_export_file_name": "cles-api.csv"
 }
