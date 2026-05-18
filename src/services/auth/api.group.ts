@@ -8,6 +8,8 @@ import {
   AuthBadRequest,
   AuthOkResponse,
   SetPasswordPayload,
+  VerifyApiKeyPayload,
+  VerifyApiKeyResponse,
   VerifyPasswordPayload,
 } from "./schema";
 
@@ -37,6 +39,20 @@ export const AuthApiGroup = HttpApiGroup.make("auth")
         summary: "Verify current user password",
         description:
           "Verifies the authenticated user's password using schema-validated input.",
+      }),
+    ),
+  )
+  .add(
+    HttpApiEndpoint.post("verifyApiKey", "/auth/verify-api-key", {
+      payload: VerifyApiKeyPayload,
+      success: VerifyApiKeyResponse,
+      error: AuthBadRequest,
+    }).annotateMerge(
+      OpenApi.annotations({
+        title: "Verify API key",
+        summary: "Verify a remote API key",
+        description:
+          "Verifies a user or organization API key and optional permissions using Better Auth's server-side API key verifier.",
       }),
     ),
   )

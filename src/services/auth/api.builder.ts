@@ -32,5 +32,52 @@ export const authApiHandler = HttpApiBuilder.group(Api, "auth", (handlers) =>
           }),
         catch: authError("Could not verify password"),
       }).pipe(Effect.map(() => ({ ok: true }))),
+    )
+    .handle("verifyApiKey", ({ payload }) =>
+      Effect.tryPromise({
+        try: () => {
+          const permissions = payload.permissions
+            ? Object.fromEntries(
+                Object.entries(payload.permissions).map(
+                  ([resource, actions]) => [resource, Array.from(actions)],
+                ),
+              )
+            : undefined;
+          const body = {
+            key: payload.key,
+            ...(payload.configId ? { configId: payload.configId } : {}),
+            ...(permissions ? { permissions } : {}),
+          };
+
+          return auth.api.verifyApiKey({ body });
+        },
+        catch: authError("Could not verify API key"),
+      }).pipe(
+        Effect.map((result) => ({
+          valid: result.valid,
+          error: result.error
+            ? {
+                code: result.error.code,
+                message: String(result.error.message ?? result.error.code),
+              }
+            : null,
+          key: result.key
+            ? {
+                id: result.key.id,
+                configId: result.key.configId,
+                name: result.key.name ?? null,
+                start: result.key.start ?? null,
+                prefix: result.key.prefix ?? null,
+                referenceId: result.key.referenceId,
+                enabled: result.key.enabled ?? null,
+                expiresAt: result.key.expiresAt ?? null,
+                createdAt: result.key.createdAt,
+                updatedAt: result.key.updatedAt,
+                permissions: result.key.permissions ?? null,
+                metadata: result.key.metadata ?? null,
+              }
+            : null,
+        })),
+      ),
     ),
 );
