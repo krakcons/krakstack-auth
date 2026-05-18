@@ -40,6 +40,36 @@ export const ApiKeyPermissions = Schema.Record(
   examples: [{ projects: ["read"] }],
 });
 
+export const CreateApiKeyPayload = Schema.Struct({
+  configId: ApiKeyConfigId,
+  name: Schema.optional(Schema.NonEmptyString),
+  organizationId: Schema.optional(Schema.String),
+  permissions: Schema.optional(ApiKeyPermissions),
+}).annotate({
+  identifier: "CreateApiKeyPayload",
+  title: "Create API key payload",
+  description:
+    "Payload used to create a user or organization API key from the server auth instance.",
+  examples: [
+    {
+      configId: "user",
+      name: "Production key",
+      permissions: { projects: ["read"] },
+    },
+  ],
+});
+
+export const CreateApiKeyResponse = Schema.Struct({
+  id: Schema.String,
+  key: Schema.String,
+}).annotate({
+  identifier: "CreateApiKeyResponse",
+  title: "Create API key response",
+  description:
+    "Response returned after creating an API key. The secret key is only returned once.",
+  examples: [{ id: "api-key-id", key: "user_1234567890" }],
+});
+
 export const VerifyApiKeyPayload = Schema.Struct({
   key: Schema.NonEmptyString,
   configId: Schema.optional(ApiKeyConfigId),

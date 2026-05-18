@@ -7,6 +7,8 @@ import {
 import {
   AuthBadRequest,
   AuthOkResponse,
+  CreateApiKeyPayload,
+  CreateApiKeyResponse,
   SetPasswordPayload,
   VerifyApiKeyPayload,
   VerifyApiKeyResponse,
@@ -39,6 +41,20 @@ export const AuthApiGroup = HttpApiGroup.make("auth")
         summary: "Verify current user password",
         description:
           "Verifies the authenticated user's password using schema-validated input.",
+      }),
+    ),
+  )
+  .add(
+    HttpApiEndpoint.post("createApiKey", "/auth/create-api-key", {
+      payload: CreateApiKeyPayload,
+      success: CreateApiKeyResponse,
+      error: AuthBadRequest,
+    }).annotateMerge(
+      OpenApi.annotations({
+        title: "Create API key",
+        summary: "Create an API key with optional permissions",
+        description:
+          "Creates a user or organization API key through Better Auth's server-side API so server-only fields like permissions can be set.",
       }),
     ),
   )
