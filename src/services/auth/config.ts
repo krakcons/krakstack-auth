@@ -128,6 +128,11 @@ export const auth = betterAuth({
       silenceWarnings: {
         oauthAuthServerConfig: true,
       },
+      clientReference: ({ session }) => {
+        return (
+          (session?.activeOrganizationId as string | undefined) ?? undefined
+        );
+      },
       clientPrivileges: async ({ user }) => {
         const role = (user as { role?: unknown } | undefined)?.role;
         if (typeof role !== "string") return false;
