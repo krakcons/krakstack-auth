@@ -4,7 +4,7 @@ import { m } from "@/paraglide/messages";
 import { NotificationService } from "@/services/notification";
 import { sesNotificationServiceLayer } from "@/services/notification/channels/ses";
 import { testNotificationServiceLayer } from "@/services/notification/channels/test";
-import type { NotificationEmailMessage } from "@/services/notification/schema";
+import type { SesEmailNotification } from "@/services/notification/channels/ses/schema";
 
 const notificationLayer =
   process.env.NODE_ENV === "test"
@@ -23,10 +23,10 @@ const localeFromRequest = (request?: Request | undefined) => {
   return language.toLowerCase().startsWith("fr") ? "fr" : "en";
 };
 
-const sendAuthEmail = (message: NotificationEmailMessage) =>
+const sendAuthEmail = (email: SesEmailNotification) =>
   Effect.gen(function* () {
     const notifications = yield* NotificationService;
-    yield* notifications.send(message);
+    yield* notifications.send({ email });
   }).pipe(Effect.provide(notificationLayer), Effect.runPromise);
 
 export const sendResetPasswordEmail = async ({
@@ -41,12 +41,10 @@ export const sendResetPasswordEmail = async ({
   const locale = localeFromRequest(request);
   await sendAuthEmail({
     from,
-    to: [to],
-    content: {
-      subject: m.email_reset_password_subject({}, { locale }),
-      text: m.email_reset_password_text({ url }, { locale }),
-      html: m.email_reset_password_html({ url }, { locale }),
-    },
+    to,
+    subject: m.email_reset_password_subject({}, { locale }),
+    text: m.email_reset_password_text({ url }, { locale }),
+    html: m.email_reset_password_html({ url }, { locale }),
   });
 };
 
@@ -62,12 +60,10 @@ export const sendTwoFactorOtpEmail = async ({
   const locale = localeFromRequest(request);
   await sendAuthEmail({
     from,
-    to: [to],
-    content: {
-      subject: m.email_two_factor_otp_subject({}, { locale }),
-      text: m.email_two_factor_otp_text({ otp }, { locale }),
-      html: m.email_two_factor_otp_html({ otp }, { locale }),
-    },
+    to,
+    subject: m.email_two_factor_otp_subject({}, { locale }),
+    text: m.email_two_factor_otp_text({ otp }, { locale }),
+    html: m.email_two_factor_otp_html({ otp }, { locale }),
   });
 };
 
@@ -94,11 +90,9 @@ export const sendEmailVerificationOtpEmail = async ({
 
   await sendAuthEmail({
     from,
-    to: [to],
-    content: {
-      subject,
-      text: m.email_otp_verification_text({ otp }, { locale }),
-      html: m.email_otp_verification_html({ otp }, { locale }),
-    },
+    to,
+    subject,
+    text: m.email_otp_verification_text({ otp }, { locale }),
+    html: m.email_otp_verification_html({ otp }, { locale }),
   });
 };

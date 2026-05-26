@@ -17,7 +17,7 @@ import { toast } from "sonner";
 import {
   createDataTableActionsColumn,
   DataTable,
-  TableSearchSchema,
+  TableSearchSchemaStandard as TableSearchSchema,
 } from "@/components/data-table";
 import { ErrorMessage, useAppForm } from "@/components/form";
 import { SidebarPageHeader } from "@/components/sidebar-layout";
