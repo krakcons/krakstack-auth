@@ -7,7 +7,7 @@ import { useState } from "react";
 import {
   createDataTableActionsColumn,
   DataTable,
-  TableSearchSchema,
+  TableSearchSchemaStandard as TableSearchSchema,
 } from "@/components/data-table";
 import { ErrorMessage } from "@/components/form";
 import { SidebarPageHeader } from "@/components/sidebar-layout";

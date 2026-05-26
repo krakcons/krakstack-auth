@@ -45,7 +45,7 @@ import {
 } from "@dnd-kit/core";
 import {
   useNavigate,
-  useSearch,
+  useRouterState,
   type ValidateFromPath,
 } from "@tanstack/react-router";
 import {
@@ -83,7 +83,6 @@ import {
 } from "lucide-react";
 import {
   Fragment,
-  useDeferredValue,
   useEffect,
   useMemo,
   useState,
@@ -159,9 +158,10 @@ export interface DataTableGalleryConfig {
 interface DataTableProps<TData, TValue> {
   columns: ColumnDef<TData, TValue>[];
   data: TData[];
+  emptyLabel?: string;
   exportFileName?: string;
   onRowClick?: (row: TData) => void;
-  from: ValidateFromPath;
+  from?: ValidateFromPath;
   grouping?: DataTableGrouping<TData>;
   gallery?: DataTableGalleryConfig;
   features?: {
@@ -664,6 +664,7 @@ const exportToCsv = <TData,>(
 export function DataTable<TData, TValue>({
   columns,
   data,
+  emptyLabel = m.table_empty(),
   exportFileName = "table.csv",
   onRowClick,
   from,
@@ -671,12 +672,10 @@ export function DataTable<TData, TValue>({
   gallery,
   features = DEFAULT_TABLE_FEATURES,
 }: DataTableProps<TData, TValue>) {
-  const search = useSearch({
-    from,
+  const search = useRouterState({
+    select: (state) => state.location.search,
   }) as TableParams | undefined;
-  const navigate = useNavigate({
-    from,
-  });
+  const navigate = useNavigate(from ? { from } : undefined);
 
   const {
     pagination = { pageIndex: 0, pageSize: 10 },
@@ -705,7 +704,6 @@ export function DataTable<TData, TValue>({
   >({});
   const [activeDragLabel, setActiveDragLabel] = useState<string | null>(null);
   const [searchInput, setSearchInput] = useState(globalFilter);
-  const deferredSearchInput = useDeferredValue(searchInput);
   const availableGroupFieldIds =
     grouping?.fields.map((field) => field.id) ?? [];
   const activeGrouping =
@@ -724,9 +722,11 @@ export function DataTable<TData, TValue>({
     updater: (
       current: TableParams & Record<string, unknown>,
     ) => Record<string, unknown>,
+    options?: { replace?: boolean },
   ) => {
     navigate({
       to: ".",
+      replace: options?.replace ?? false,
       search: (current: Record<string, unknown>) =>
         updater((current ?? {}) as TableParams & Record<string, unknown>),
     });
@@ -782,14 +782,17 @@ export function DataTable<TData, TValue>({
       if (globalFilter === newGlobalFilter) {
         return;
       }
-      updateTableSearch((current) => ({
-        ...current,
-        pagination: {
-          ...pagination,
-          pageIndex: 0,
-        },
-        globalFilter: newGlobalFilter,
-      }));
+      updateTableSearch(
+        (current) => ({
+          ...current,
+          pagination: {
+            ...pagination,
+            pageIndex: 0,
+          },
+          globalFilter: newGlobalFilter,
+        }),
+        { replace: true },
+      );
     },
     getFilteredRowModel: getFilteredRowModel(),
     autoResetPageIndex: false,
@@ -807,14 +810,6 @@ export function DataTable<TData, TValue>({
   useEffect(() => {
     setSearchInput(globalFilter);
   }, [globalFilter]);
-
-  useEffect(() => {
-    if (deferredSearchInput === globalFilter) {
-      return;
-    }
-
-    table.setGlobalFilter(deferredSearchInput);
-  }, [deferredSearchInput, globalFilter, table]);
 
   const activeGroupingFields = useMemo(
     () =>
@@ -883,12 +878,12 @@ export function DataTable<TData, TValue>({
   const renderTableEmptyState = () => (
     <TableRow>
       <TableCell className="h-24 text-center" colSpan={colSpan}>
-        {m.table_empty()}
+        {emptyLabel}
       </TableCell>
     </TableRow>
   );
 
-  const renderGalleryEmptyState = (message: ReactNode = m.table_empty()) => (
+  const renderGalleryEmptyState = (message: ReactNode = emptyLabel) => (
     <div className="text-muted-foreground rounded-xl border border-dashed px-4 py-10 text-center text-sm">
       {message}
     </div>
@@ -992,7 +987,10 @@ export function DataTable<TData, TValue>({
               <Search className="text-muted-foreground pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2" />
               <Input
                 className="pl-9"
-                onChange={(event) => setSearchInput(event.target.value)}
+                onChange={(event) => {
+                  setSearchInput(event.target.value);
+                  table.setGlobalFilter(event.target.value);
+                }}
                 placeholder={m.table_filter()}
                 value={searchInput}
               />

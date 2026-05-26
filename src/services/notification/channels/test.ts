@@ -1,16 +1,20 @@
 import { Effect, Layer } from "effect";
 
+import { NotificationChannelRegistry } from "../channel";
 import { NotificationService } from "../index";
-import { NotificationChannelService } from "../channel";
-import type { NotificationEmailMessage } from "../schema";
 
 export const testNotificationChannelLayer = Layer.succeed(
-  NotificationChannelService,
+  NotificationChannelRegistry,
   {
-    send: (message: NotificationEmailMessage) =>
-      Effect.sync(() => {
-        console.log("[notification:test] email", message);
-      }),
+    channels: [
+      {
+        key: "email",
+        send: (payload: unknown) =>
+          Effect.sync(() => {
+            console.log("[notification:test] email", payload);
+          }),
+      },
+    ],
   },
 );
 
