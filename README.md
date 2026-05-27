@@ -1,6 +1,6 @@
 # Krakstack Auth
 
-Central Better Auth server for Krakstack projects. Has organizations, api keys, 2fa, password options, components, and more. It owns user credentials, sessions, OAuth clients, and OIDC metadata so other apps can authenticate through one service. Set it up yourself or use https://auth.krakstack.net.
+Central Better Auth server for Krakstack projects. Has organizations, api keys, 2fa, password options, components, and more. It owns user credentials, sessions, OAuth clients, and OIDC metadata so other apps can authenticate through one service. Set it up yourself or use https://auth.krakstack.net
 
 ## Tech Stack
 
