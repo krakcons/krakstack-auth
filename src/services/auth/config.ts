@@ -23,6 +23,11 @@ import {
 const isDev = process.env.NODE_ENV === "development";
 
 const validAudiences = parseCsv(process.env.BETTER_AUTH_VALID_AUDIENCES);
+const apiKeyRateLimit = {
+  enabled: true,
+  timeWindow: 1000 * 60 * 60 * 24,
+  maxRequests: 1000,
+};
 
 const googleClientId = process.env.GOOGLE_CLIENT_ID;
 const googleClientSecret = process.env.GOOGLE_CLIENT_SECRET;
@@ -114,11 +119,13 @@ export const auth = betterAuth({
         configId: "user",
         defaultPrefix: "user_",
         references: "user",
+        rateLimit: apiKeyRateLimit,
       },
       {
         configId: "organization",
         defaultPrefix: "org_",
         references: "organization",
+        rateLimit: apiKeyRateLimit,
       },
     ]),
     oauthProvider({
