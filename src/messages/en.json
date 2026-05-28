@@ -154,7 +154,7 @@
   "sign_in_error": "Unable to sign in.",
   "sign_in_need_account": "Need an account?",
   "sign_up_title": "Create account",
-  "sign_up_description": "Create an account to get started.",
+  "sign_up_description": "Enter your details to create an account.",
   "sign_up_error": "Unable to create account.",
   "sign_up_have_account": "Already have an account?",
   "field_name": "Name",
