@@ -6,7 +6,7 @@ on:
 
 jobs:
   deploy:
-    uses: krakcons/krakstack-site/.github/workflows/project-deploy.yml@main
+    uses: krakcons/krakstack/.github/workflows/project-deploy.yml@main
     permissions:
       contents: read
       id-token: write
