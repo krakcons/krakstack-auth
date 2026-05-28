@@ -1,4 +1,5 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
+import { useQuery } from "@tanstack/react-query";
 
 import { m } from "@/paraglide/messages";
 import { authClient } from "@/services/auth/client";
@@ -29,6 +30,7 @@ function Consent() {
   const navigate = useNavigate();
   const { clientId, scope } = Route.useSearch();
   const scopes = scope.split(" ").filter(Boolean);
+  const clientName = useOAuthClientName(clientId);
   const form = useAppForm({
     defaultValues: {},
     onSubmitMeta: { accept: true },
@@ -58,7 +60,9 @@ function Consent() {
     <Card className="w-full max-w-lg">
       <CardHeader>
         <CardTitle className="text-3xl">{m.consent_title()}</CardTitle>
-        <CardDescription>{m.consent_description({ clientId })}</CardDescription>
+        <CardDescription>
+          {m.consent_description({ clientName })}
+        </CardDescription>
       </CardHeader>
       <form.AppForm>
         <CardContent className="space-y-4">
@@ -106,3 +110,33 @@ function Consent() {
     </Card>
   );
 }
+
+const useOAuthClientName = (clientId: string) => {
+  const { data } = useQuery({
+    queryKey: ["oauth", "public-client", clientId],
+    queryFn: async () => {
+      const result = await authClient.$fetch("/oauth2/public-client", {
+        method: "GET",
+        query: { client_id: clientId },
+      });
+
+      if (result.error) return clientId;
+
+      return getOAuthClientDisplayName(result.data, clientId);
+    },
+  });
+
+  return data ?? clientId;
+};
+
+const getOAuthClientDisplayName = (data: unknown, fallback: string) => {
+  if (typeof data !== "object" || data === null) return fallback;
+
+  const clientName = "client_name" in data ? data.client_name : undefined;
+  if (typeof clientName === "string" && clientName) return clientName;
+
+  const clientId = "client_id" in data ? data.client_id : undefined;
+  if (typeof clientId === "string" && clientId) return clientId;
+
+  return fallback;
+};
