@@ -13,6 +13,8 @@ import { corsMiddleware } from "@/lib/cors";
 import { adminApiHandler } from "@/services/admin/api.builder";
 import { authApiHandler } from "@/services/auth/api.builder";
 import { auth } from "@/services/auth/config";
+import { OAuthClients } from "@/services/oauth";
+import { oauthClientsApiHandler } from "@/services/oauth/api.builder";
 
 const fileSystemLayer = FileSystem.layerNoop({});
 const httpPlatformLayer = HttpPlatform.layer.pipe(
@@ -41,8 +43,6 @@ const authHandlerEffect = HttpEffect.fromWebHandler((request) =>
 );
 
 const authRoutesLayer = HttpRouter.add("*", "/api/auth/*", authHandlerEffect);
-
-const apiHandlersLayer = Layer.mergeAll(authApiHandler, adminApiHandler);
 
 const scalarDocsConfig = {
   theme: "default",
@@ -85,12 +85,16 @@ const docsLayer = HttpRouter.add(
 const apiLayer = Layer.mergeAll(
   HttpApiBuilder.layer(Api, {
     openapiPath: "/api/openapi.json",
-  }).pipe(Layer.provide(apiHandlersLayer)),
+  }).pipe(
+    Layer.provide(authApiHandler),
+    Layer.provide(adminApiHandler),
+    Layer.provide(oauthClientsApiHandler),
+  ),
   docsLayer,
   authRoutesLayer,
 ).pipe(Layer.provide(platformLayer));
 
-const apiWebHandler = HttpEffect.toWebHandlerLayerWith(Layer.empty, {
+const apiWebHandler = HttpEffect.toWebHandlerLayerWith(OAuthClients.layer, {
   toHandler: () => HttpRouter.toHttpEffect(apiLayer).pipe(Effect.scoped),
 });
 

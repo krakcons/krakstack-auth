@@ -2,6 +2,7 @@ import { HttpApi, OpenApi } from "effect/unstable/httpapi";
 
 import { AdminApiGroup } from "@/services/admin/api.group";
 import { AuthApiGroup } from "@/services/auth/api.group";
+import { OAuthClientsApiGroup } from "@/services/oauth/api.group";
 
 export const Api = HttpApi.make("Api")
   .annotateMerge(
@@ -12,5 +13,6 @@ export const Api = HttpApi.make("Api")
     }),
   )
   .add(AuthApiGroup)
+  .add(OAuthClientsApiGroup)
   .add(AdminApiGroup)
   .prefix("/api");

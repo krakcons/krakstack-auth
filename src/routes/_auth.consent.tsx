@@ -13,6 +13,7 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import { useOAuthClientConfigSuspense } from "@/services/auth/client/atoms";
 
 export const Route = createFileRoute("/_auth/consent")({
   validateSearch: (search: Record<string, unknown>) => ({
@@ -30,7 +31,9 @@ function Consent() {
   const navigate = useNavigate();
   const { clientId, scope } = Route.useSearch();
   const scopes = scope.split(" ").filter(Boolean);
-  const clientName = useOAuthClientName(clientId);
+  const clientConfig = useOAuthClientConfigSuspense(clientId);
+  const fallbackClientName = useOAuthClientName(clientId);
+  const clientName = clientConfig?.name ?? fallbackClientName;
   const form = useAppForm({
     defaultValues: {},
     onSubmitMeta: { accept: true },

@@ -1,4 +1,8 @@
-import { Link, createFileRoute, useNavigate } from "@tanstack/react-router";
+import {
+  createFileRoute,
+  useNavigate,
+  useRouterState,
+} from "@tanstack/react-router";
 
 import { m } from "@/paraglide/messages";
 import { authClient } from "@/services/auth/client";
@@ -11,6 +15,10 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import {
+  getOAuthClientIdFromSearch,
+  useOAuthClientConfigSuspense,
+} from "@/services/auth/client/atoms";
 
 export const Route = createFileRoute("/_auth/sign-up")({
   component: SignUp,
@@ -18,6 +26,18 @@ export const Route = createFileRoute("/_auth/sign-up")({
 
 function SignUp() {
   const navigate = useNavigate();
+  const searchString = useRouterState({
+    select: (state) => state.location.searchStr,
+  });
+  const clientId = getOAuthClientIdFromSearch(searchString);
+  const clientConfig = useOAuthClientConfigSuspense(clientId);
+  const authOptions = clientConfig?.authOptions ?? {
+    emailPassword: true,
+    google: true,
+    signUp: true,
+    signUpName: true,
+  };
+  const showName = authOptions.signUpName;
   const setFormError = (message: string) => {
     form.setErrorMap({
       onSubmit: {
@@ -57,7 +77,7 @@ function SignUp() {
 
       try {
         const result = await authClient.signUp.email({
-          name: value.name.trim(),
+          name: showName ? value.name.trim() : nameFromEmail(value.email),
           email: value.email.trim(),
           password: value.password,
         });
@@ -104,15 +124,17 @@ function SignUp() {
               form.handleSubmit();
             }}
           >
-            <form.AppField name="name">
-              {(field) => (
-                <field.TextField
-                  label={m.field_name()}
-                  autoComplete="name"
-                  required
-                />
-              )}
-            </form.AppField>
+            {showName ? (
+              <form.AppField name="name">
+                {(field) => (
+                  <field.TextField
+                    label={m.field_name()}
+                    autoComplete="name"
+                    required
+                  />
+                )}
+              </form.AppField>
+            ) : null}
             <form.AppField name="email">
               {(field) => (
                 <field.TextField
@@ -138,31 +160,39 @@ function SignUp() {
             <form.SubmitButton />
           </form>
         </form.AppForm>
-        <div className="mt-4 flex flex-col gap-3">
-          <div className="text-muted-foreground flex items-center gap-3 text-xs">
-            <span className="bg-border h-px flex-1" />
-            {m.auth_or_continue_with()}
-            <span className="bg-border h-px flex-1" />
+        {authOptions.google ? (
+          <div className="mt-4 flex flex-col gap-3">
+            <div className="text-muted-foreground flex items-center gap-3 text-xs">
+              <span className="bg-border h-px flex-1" />
+              {m.auth_or_continue_with()}
+              <span className="bg-border h-px flex-1" />
+            </div>
+            <Button
+              type="button"
+              variant="outline"
+              className="w-full"
+              onClick={signUpWithGoogle}
+            >
+              {m.auth_continue_with_google()}
+            </Button>
           </div>
-          <Button
-            type="button"
-            variant="outline"
-            className="w-full"
-            onClick={signUpWithGoogle}
-          >
-            {m.auth_continue_with_google()}
-          </Button>
-        </div>
+        ) : null}
         <p className="text-muted-foreground mt-6 text-center text-sm">
           {m.sign_up_have_account()}{" "}
-          <Link
+          <a
             className="text-foreground font-medium underline-offset-4 hover:underline"
-            to="/sign-in"
+            href={`/sign-in${searchString}`}
           >
             {m.auth_sign_in()}
-          </Link>
+          </a>
         </p>
       </CardContent>
     </Card>
   );
 }
+
+const nameFromEmail = (email: string) => {
+  const trimmed = email.trim();
+  const localPart = trimmed.split("@")[0]?.trim();
+  return localPart || trimmed;
+};

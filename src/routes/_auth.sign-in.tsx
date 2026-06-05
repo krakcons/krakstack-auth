@@ -16,6 +16,10 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import {
+  getOAuthClientIdFromSearch,
+  useOAuthClientConfigSuspense,
+} from "@/services/auth/client/atoms";
 
 export const Route = createFileRoute("/_auth/sign-in")({
   component: SignIn,
@@ -39,6 +43,16 @@ function SignIn() {
   const redirectTarget = getRedirectTarget(searchString);
   const socialRedirectTarget = getSocialRedirectTarget(searchString);
   const oauthQuery = getOAuthQuery(searchString);
+  const clientId = getOAuthClientIdFromSearch(searchString);
+  const clientConfig = useOAuthClientConfigSuspense(clientId);
+  const authOptions = clientConfig?.authOptions ?? {
+    emailPassword: true,
+    google: true,
+    signUp: true,
+  };
+  const hasPrimaryAuth = authOptions.emailPassword;
+  const hasSocialAuth = authOptions.google;
+  const hasAnyAuth = hasPrimaryAuth || hasSocialAuth;
   const finishSignIn = (url: string | null | undefined) => {
     const target = url ?? redirectTarget;
     if (shouldUseDocumentRedirect(target)) {
@@ -130,71 +144,86 @@ function SignIn() {
         <CardDescription>{m.sign_in_description()}</CardDescription>
       </CardHeader>
       <CardContent>
-        <form.AppForm>
-          <form
-            className="flex flex-col gap-4"
-            onSubmit={(event) => {
-              event.preventDefault();
-              event.stopPropagation();
-              form.handleSubmit();
-            }}
-          >
-            <form.AppField name="email">
-              {(field) => (
-                <field.TextField
-                  label={m.field_email()}
-                  type="email"
-                  autoComplete="email"
-                  required
-                />
-              )}
-            </form.AppField>
-            <form.AppField name="password">
-              {(field) => (
-                <field.TextField
-                  label={m.field_password()}
-                  type="password"
-                  autoComplete="current-password"
-                  required
-                />
-              )}
-            </form.AppField>
-            <form.FormError />
-            <div className="flex flex-wrap items-center justify-between gap-3">
-              <form.SubmitButton />
-              <Link
-                className="text-foreground text-sm font-medium underline-offset-4 hover:underline"
-                to="/forgot-password"
+        {hasPrimaryAuth ? (
+          <form.AppForm>
+            <form
+              className="flex flex-col gap-4"
+              onSubmit={(event) => {
+                event.preventDefault();
+                event.stopPropagation();
+                form.handleSubmit();
+              }}
+            >
+              <form.AppField name="email">
+                {(field) => (
+                  <field.TextField
+                    label={m.field_email()}
+                    type="email"
+                    autoComplete="email"
+                    required
+                  />
+                )}
+              </form.AppField>
+              <form.AppField name="password">
+                {(field) => (
+                  <field.TextField
+                    label={m.field_password()}
+                    type="password"
+                    autoComplete="current-password"
+                    required
+                  />
+                )}
+              </form.AppField>
+              <form.FormError />
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <form.SubmitButton />
+                <Link
+                  className="text-foreground text-sm font-medium underline-offset-4 hover:underline"
+                  to="/forgot-password"
+                >
+                  {m.sign_in_forgot_password()}
+                </Link>
+              </div>
+            </form>
+          </form.AppForm>
+        ) : null}
+        {hasSocialAuth ? (
+          <div className="mt-4 flex flex-col gap-3">
+            {hasPrimaryAuth ? (
+              <div className="text-muted-foreground flex items-center gap-3 text-xs">
+                <span className="bg-border h-px flex-1" />
+                {m.auth_or_continue_with()}
+                <span className="bg-border h-px flex-1" />
+              </div>
+            ) : null}
+            {authOptions.google ? (
+              <Button
+                type="button"
+                variant="outline"
+                className="w-full"
+                onClick={signInWithGoogle}
               >
-                {m.sign_in_forgot_password()}
-              </Link>
-            </div>
-          </form>
-        </form.AppForm>
-        <div className="mt-4 flex flex-col gap-3">
-          <div className="text-muted-foreground flex items-center gap-3 text-xs">
-            <span className="bg-border h-px flex-1" />
-            {m.auth_or_continue_with()}
-            <span className="bg-border h-px flex-1" />
+                {m.auth_continue_with_google()}
+              </Button>
+            ) : null}
           </div>
-          <Button
-            type="button"
-            variant="outline"
-            className="w-full"
-            onClick={signInWithGoogle}
-          >
-            {m.auth_continue_with_google()}
-          </Button>
-        </div>
-        <p className="text-muted-foreground mt-6 text-center text-sm">
-          {m.sign_in_need_account()}{" "}
-          <Link
-            className="text-foreground font-medium underline-offset-4 hover:underline"
-            to="/sign-up"
-          >
-            {m.auth_sign_up()}
-          </Link>
-        </p>
+        ) : null}
+        {!hasAnyAuth ? (
+          <p className="text-muted-foreground text-sm">
+            {m.oauth_client_no_auth_methods()}
+          </p>
+        ) : null}
+        {authOptions.signUp ? (
+          <p className="text-muted-foreground mt-6 text-center text-sm">
+            {m.sign_in_need_account()}{" "}
+            <a
+              className="text-foreground font-medium underline-offset-4 hover:underline"
+              href={`/sign-up${searchString}`}
+            >
+              {m.auth_sign_up()}
+            </a>
+          </p>
+        ) : null}
       </CardContent>
     </Card>
   );
