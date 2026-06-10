@@ -4,7 +4,11 @@ import { Context, Effect, Layer, Schema } from "effect";
 import { oauthClient } from "@/db/auth-schema";
 import { DB } from "@/services/database";
 
-import { OAuthClientMetadata, type UpdateOAuthClientPayload } from "./schema";
+import {
+  OAuthClientMetadata,
+  type CreateOAuthClientPayload,
+  type UpdateOAuthClientPayload,
+} from "./schema";
 import { sanitizeThemeCss } from "./theme";
 
 const googleConfigured = Boolean(
@@ -31,6 +35,32 @@ const authOptions = (metadata: OAuthClientMetadata) => ({
   signUpName: metadata.authOptions?.signUpName ?? true,
 });
 
+const scopesFromString = (value: string | undefined) =>
+  value
+    ?.split(/\s+/)
+    .map((item) => item.trim())
+    .filter(Boolean).length
+    ? value
+        .split(/\s+/)
+        .map((item) => item.trim())
+        .filter(Boolean)
+    : ["openid", "profile", "email"];
+
+const adminRow = (row: {
+  id: string;
+  clientId: string;
+  name: string | null;
+  icon: string | null;
+  redirectUris: string[];
+  scope: string[] | null;
+  disabled: boolean | null;
+  metadata: unknown;
+}) => ({
+  ...row,
+  scope: row.scope?.join(" ") ?? null,
+  metadata: decodeMetadataOrEmpty(row.metadata),
+});
+
 export class OAuthClients extends Context.Service<OAuthClients>()(
   "OAuthClients",
   {
@@ -51,11 +81,49 @@ export class OAuthClients extends Context.Service<OAuthClients>()(
           })
           .from(oauthClient);
 
-        return rows.map((row) => ({
-          ...row,
-          scope: row.scope?.join(" ") ?? null,
-          metadata: decodeMetadataOrEmpty(row.metadata),
-        }));
+        return rows.map(adminRow);
+      });
+
+      const create = Effect.fn("OAuthClients.create")(function* ({
+        payload,
+      }: {
+        payload: CreateOAuthClientPayload;
+      }) {
+        const metadata = decodeMetadata(payload.metadata);
+        const scope = scopesFromString(payload.scope);
+        const [row] = yield* db
+          .insert(oauthClient)
+          .values({
+            id: crypto.randomUUID(),
+            clientId: `oauth_${crypto.randomUUID()}`,
+            disabled: false,
+            skipConsent: false,
+            scopes: scope,
+            createdAt: new Date(),
+            updatedAt: new Date(),
+            name: payload.name || null,
+            icon: payload.icon ?? null,
+            redirectUris: Array.from(payload.redirectUris),
+            tokenEndpointAuthMethod: "none",
+            grantTypes: ["authorization_code", "refresh_token"],
+            responseTypes: ["code"],
+            public: true,
+            type: "web",
+            requirePKCE: true,
+            metadata,
+          })
+          .returning({
+            id: oauthClient.id,
+            clientId: oauthClient.clientId,
+            name: oauthClient.name,
+            icon: oauthClient.icon,
+            redirectUris: oauthClient.redirectUris,
+            scope: oauthClient.scopes,
+            disabled: oauthClient.disabled,
+            metadata: oauthClient.metadata,
+          });
+
+        return adminRow(row);
       });
 
       const getPublicConfig = Effect.fn("OAuthClients.getPublicConfig")(
@@ -108,6 +176,7 @@ export class OAuthClients extends Context.Service<OAuthClients>()(
           .set({
             name: payload.name || null,
             icon: payload.icon ?? null,
+            scopes: payload.scope ? scopesFromString(payload.scope) : undefined,
             metadata,
             updatedAt: new Date(),
           })
@@ -118,20 +187,17 @@ export class OAuthClients extends Context.Service<OAuthClients>()(
             name: oauthClient.name,
             icon: oauthClient.icon,
             redirectUris: oauthClient.redirectUris,
+            scope: oauthClient.scopes,
             disabled: oauthClient.disabled,
             metadata: oauthClient.metadata,
           });
 
         if (!row) return null;
 
-        return {
-          ...row,
-          scope: null,
-          metadata: decodeMetadataOrEmpty(row.metadata),
-        };
+        return adminRow(row);
       });
 
-      return { list, getPublicConfig, update };
+      return { list, create, getPublicConfig, update };
     }),
   },
 ) {

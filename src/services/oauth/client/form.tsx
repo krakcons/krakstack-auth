@@ -17,17 +17,49 @@ import { m } from "@/paraglide/messages";
 import {
   OAuthClientMetadata,
   type OAuthClientAdmin,
+  type CreateOAuthClientPayload,
   type UpdateOAuthClientPayload,
 } from "../schema";
 
 type OAuthClientFormValues = {
   name: string;
+  redirectUris: string;
+  scope: string[];
   icon: string;
   themeCss: string;
   emailPassword: boolean;
   google: boolean;
   signUp: boolean;
   signUpName: boolean;
+};
+
+const defaultScope = ["openid", "profile", "email"];
+
+const scopeOptions = [
+  { label: m.oauth_client_scope_openid(), value: "openid" },
+  { label: m.oauth_client_scope_profile(), value: "profile" },
+  { label: m.oauth_client_scope_email(), value: "email" },
+  { label: m.oauth_client_scope_offline_access(), value: "offline_access" },
+];
+
+const parseList = (value: string) =>
+  value
+    .split(/[\n,]+/)
+    .map((item) => item.trim())
+    .filter(Boolean);
+
+const createOAuthClient = async (payload: CreateOAuthClientPayload) => {
+  const response = await fetch("/api/oauth/clients", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+
+  if (!response.ok) {
+    throw new Error(m.admin_error_create_client());
+  }
+
+  return (await response.json()) as OAuthClientAdmin;
 };
 
 const updateOAuthClient = async (
@@ -66,8 +98,24 @@ const valuesToPayload = (value: OAuthClientFormValues) => {
   return {
     name: value.name.trim() || undefined,
     icon: value.icon.trim() || null,
+    scope: value.scope.length ? value.scope.join(" ") : defaultScope.join(" "),
     metadata,
   } satisfies UpdateOAuthClientPayload;
+};
+
+const valuesToCreatePayload = (value: OAuthClientFormValues) => {
+  const redirectUris = parseList(value.redirectUris);
+  const firstRedirectUri = redirectUris[0];
+
+  if (!firstRedirectUri) {
+    throw new Error(m.admin_field_redirect_uris_description());
+  }
+
+  return {
+    ...valuesToPayload(value),
+    redirectUris: [firstRedirectUri, ...redirectUris.slice(1)],
+    scope: value.scope.length ? value.scope.join(" ") : defaultScope.join(" "),
+  } satisfies CreateOAuthClientPayload;
 };
 
 export function OAuthClientForm({
@@ -75,36 +123,46 @@ export function OAuthClientForm({
   onClose,
   onSaved,
 }: {
-  client: OAuthClientAdmin;
+  client?: OAuthClientAdmin;
   onClose: () => void;
   onSaved: (client: OAuthClientAdmin) => void;
 }) {
   const [error, setError] = useState("");
+  const isEditing = Boolean(client);
   const form = useAppForm({
     defaultValues: {
-      name: client.name ?? "",
-      icon: client.icon ?? "",
-      themeCss: client.metadata.branding?.themeCss ?? "",
-      emailPassword: client.metadata.authOptions?.emailPassword ?? true,
-      google: client.metadata.authOptions?.google ?? true,
-      signUp: client.metadata.authOptions?.signUp ?? true,
-      signUpName: client.metadata.authOptions?.signUpName ?? true,
+      name: client?.name ?? "",
+      redirectUris: client?.redirectUris.join("\n") ?? "",
+      scope: client?.scope
+        ? parseList(client.scope.replaceAll(" ", "\n"))
+        : defaultScope,
+      icon: client?.icon ?? "",
+      themeCss: client?.metadata.branding?.themeCss ?? "",
+      emailPassword: client?.metadata.authOptions?.emailPassword ?? true,
+      google: client?.metadata.authOptions?.google ?? true,
+      signUp: client?.metadata.authOptions?.signUp ?? true,
+      signUpName: client?.metadata.authOptions?.signUpName ?? true,
     } satisfies OAuthClientFormValues,
     onSubmit: async ({ value }) => {
       setError("");
       try {
-        const updated = await updateOAuthClient(
-          client.clientId,
-          valuesToPayload(value),
+        const saved = client
+          ? await updateOAuthClient(client.clientId, valuesToPayload(value))
+          : await createOAuthClient(valuesToCreatePayload(value));
+        toast.success(
+          client
+            ? m.oauth_client_updated_toast()
+            : m.admin_client_created_toast(),
         );
-        toast.success(m.oauth_client_updated_toast());
-        onSaved(updated);
+        onSaved(saved);
         onClose();
       } catch (cause) {
         setError(
           cause instanceof Error
             ? cause.message
-            : m.oauth_client_update_error(),
+            : client
+              ? m.oauth_client_update_error()
+              : m.admin_error_create_client(),
         );
       }
     },
@@ -114,9 +172,15 @@ export function OAuthClientForm({
     <Dialog open onOpenChange={(open) => !open && onClose()}>
       <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-3xl">
         <DialogHeader>
-          <DialogTitle>{m.oauth_client_edit_title()}</DialogTitle>
+          <DialogTitle>
+            {isEditing
+              ? m.oauth_client_edit_title()
+              : m.admin_create_client_title()}
+          </DialogTitle>
           <DialogDescription>
-            {m.oauth_client_edit_description({ id: client.clientId })}
+            {client
+              ? m.oauth_client_edit_description({ id: client.clientId })
+              : m.admin_create_client_description()}
           </DialogDescription>
         </DialogHeader>
         <form.AppForm>
@@ -131,6 +195,29 @@ export function OAuthClientForm({
             <form.AppField name="name">
               {(field) => (
                 <field.TextField label={m.admin_field_display_name()} />
+              )}
+            </form.AppField>
+            {!isEditing ? (
+              <>
+                <form.AppField name="redirectUris">
+                  {(field) => (
+                    <field.TextAreaField
+                      label={m.admin_field_redirect_uris()}
+                      description={m.admin_field_redirect_uris_description()}
+                      rows={4}
+                    />
+                  )}
+                </form.AppField>
+              </>
+            ) : null}
+            <form.AppField name="scope">
+              {(field) => (
+                <field.MultiSelectField
+                  label={m.admin_column_scopes()}
+                  options={scopeOptions}
+                  placeholder={m.oauth_client_scopes_placeholder()}
+                  description={m.oauth_client_scopes_description()}
+                />
               )}
             </form.AppField>
             <form.AppField name="icon">

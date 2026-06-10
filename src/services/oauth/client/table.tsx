@@ -19,7 +19,7 @@ const listOAuthClients = async () => {
   return (await response.json()) as OAuthClientAdmin[];
 };
 
-export function OAuthClientsTable() {
+export function OAuthClientsTable({ reloadKey = 0 }: { reloadKey?: number }) {
   const [clients, setClients] = useState<OAuthClientAdmin[]>([]);
   const [editingClient, setEditingClient] = useState<OAuthClientAdmin | null>(
     null,
@@ -39,7 +39,7 @@ export function OAuthClientsTable() {
 
   useEffect(() => {
     void loadClients();
-  }, []);
+  }, [reloadKey]);
 
   return (
     <div className="flex flex-col gap-4">

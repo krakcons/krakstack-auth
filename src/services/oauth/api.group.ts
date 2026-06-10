@@ -7,6 +7,7 @@ import {
 import { Schema } from "effect";
 
 import {
+  CreateOAuthClientPayload,
   OAuthClientAdmin,
   OAuthClientIdParams,
   OAuthClientPublicConfig,
@@ -28,6 +29,24 @@ export const OAuthClientsApiGroup = HttpApiGroup.make("oauthClients")
         summary: "List OAuth clients for administrators",
         description:
           "Returns OAuth client records including editable white-label metadata.",
+      }),
+    ),
+  )
+  .add(
+    HttpApiEndpoint.post("createOAuthClient", "/oauth/clients", {
+      payload: CreateOAuthClientPayload,
+      success: OAuthClientAdmin,
+      error: [
+        HttpApiError.Unauthorized,
+        HttpApiError.Forbidden,
+        HttpApiError.InternalServerError,
+      ],
+    }).annotateMerge(
+      OpenApi.annotations({
+        title: "Create OAuth client",
+        summary: "Create an OAuth client for administrators",
+        description:
+          "Registers a public PKCE OAuth client with redirect URIs, scopes, and white-label metadata.",
       }),
     ),
   )

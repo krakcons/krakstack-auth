@@ -118,9 +118,40 @@ export const OAuthClientAdmin = Schema.Struct({
   ],
 });
 
+export const CreateOAuthClientPayload = Schema.Struct({
+  name: Schema.optional(Schema.String),
+  icon: Schema.optional(Schema.NullOr(Schema.String)),
+  redirectUris: Schema.NonEmptyArray(Schema.NonEmptyString),
+  scope: Schema.optional(Schema.String),
+  metadata: OAuthClientMetadata,
+}).annotate({
+  identifier: "CreateOAuthClientPayload",
+  title: "Create OAuth client payload",
+  description:
+    "Payload used by administrators to register a public PKCE OAuth client.",
+  examples: [
+    {
+      name: "Example app",
+      icon: "https://example.com/logo.svg",
+      redirectUris: ["https://example.com/callback"],
+      scope: "openid profile email",
+      metadata: {
+        branding: { themeCss: ":root { --primary: oklch(0.5 0.1 240); }" },
+        authOptions: {
+          emailPassword: true,
+          google: true,
+          signUp: true,
+          signUpName: true,
+        },
+      },
+    },
+  ],
+});
+
 export const UpdateOAuthClientPayload = Schema.Struct({
   name: Schema.optional(Schema.String),
   icon: Schema.optional(Schema.NullOr(Schema.String)),
+  scope: Schema.optional(Schema.String),
   metadata: OAuthClientMetadata,
 }).annotate({
   identifier: "UpdateOAuthClientPayload",
@@ -131,6 +162,7 @@ export const UpdateOAuthClientPayload = Schema.Struct({
     {
       name: "Example app",
       icon: "https://example.com/logo.svg",
+      scope: "openid profile email",
       metadata: {
         branding: { themeCss: ":root { --primary: oklch(0.5 0.1 240); }" },
         authOptions: {
@@ -150,4 +182,5 @@ export const OAuthClientMetadataStandard =
 export type OAuthClientMetadata = typeof OAuthClientMetadata.Type;
 export type OAuthClientAdmin = typeof OAuthClientAdmin.Type;
 export type OAuthClientPublicConfig = typeof OAuthClientPublicConfig.Type;
+export type CreateOAuthClientPayload = typeof CreateOAuthClientPayload.Type;
 export type UpdateOAuthClientPayload = typeof UpdateOAuthClientPayload.Type;

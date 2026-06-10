@@ -56,6 +56,24 @@ export const oauthClientsApiHandler = HttpApiBuilder.group(
             .pipe(Effect.mapError(internalServerError));
         }),
       )
+      .handle("createOAuthClient", ({ payload, request }) =>
+        Effect.gen(function* () {
+          const session = yield* Effect.tryPromise({
+            try: () => auth.api.getSession({ headers: request.headers }),
+            catch: internalServerError,
+          });
+
+          if (!session) return yield* new HttpApiError.Unauthorized({});
+          if (!hasAdminRole(userRole(session.user))) {
+            return yield* new HttpApiError.Forbidden({});
+          }
+
+          const clients = yield* OAuthClients;
+          return yield* clients
+            .create({ payload })
+            .pipe(Effect.mapError(internalServerError));
+        }),
+      )
       .handle("getOAuthClientConfig", ({ params }) =>
         Effect.gen(function* () {
           const clients = yield* OAuthClients;

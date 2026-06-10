@@ -329,5 +329,11 @@
   "oauth_client_updated_toast": "OAuth client updated",
   "oauth_client_no_auth_methods": "No authentication methods are enabled for this application.",
   "oauth_client_fetch_error": "Unable to load OAuth clients.",
-  "oauth_client_auth_sign_up_name": "Sign-up name field"
+  "oauth_client_auth_sign_up_name": "Sign-up name field",
+  "oauth_client_scopes_description": "Select the OAuth scopes this client can request.",
+  "oauth_client_scopes_placeholder": "Select scopes",
+  "oauth_client_scope_openid": "OpenID",
+  "oauth_client_scope_profile": "Profile",
+  "oauth_client_scope_email": "Email",
+  "oauth_client_scope_offline_access": "Offline access"
 }

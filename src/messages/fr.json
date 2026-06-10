@@ -329,5 +329,11 @@
   "oauth_client_updated_toast": "Client OAuth mis à jour",
   "oauth_client_no_auth_methods": "Aucune méthode d'authentification n'est activée pour cette application.",
   "oauth_client_fetch_error": "Impossible de charger les clients OAuth.",
-  "oauth_client_auth_sign_up_name": "Champ du nom à l'inscription"
+  "oauth_client_auth_sign_up_name": "Champ du nom à l'inscription",
+  "oauth_client_scopes_description": "Sélectionnez les portées OAuth que ce client peut demander.",
+  "oauth_client_scopes_placeholder": "Sélectionner des portées",
+  "oauth_client_scope_openid": "OpenID",
+  "oauth_client_scope_profile": "Profil",
+  "oauth_client_scope_email": "Courriel",
+  "oauth_client_scope_offline_access": "Accès hors ligne"
 }
