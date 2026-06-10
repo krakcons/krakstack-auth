@@ -13,6 +13,7 @@ import {
   OAuthClientPublicConfig,
   UpdateOAuthClientPayload,
 } from "./schema";
+import { PresignedUpload, PresignUploadPayload } from "@/services/s3/schema";
 
 export const OAuthClientsApiGroup = HttpApiGroup.make("oauthClients")
   .add(
@@ -85,6 +86,29 @@ export const OAuthClientsApiGroup = HttpApiGroup.make("oauthClients")
         summary: "Update OAuth client white-label settings",
         description:
           "Updates logo URL and schema-validated metadata for an OAuth client.",
+      }),
+    ),
+  )
+  .add(
+    HttpApiEndpoint.post(
+      "presignOAuthClientLogoUpload",
+      "/oauth/clients/logo/presign",
+      {
+        payload: PresignUploadPayload,
+        success: PresignedUpload,
+        error: [
+          HttpApiError.BadRequest,
+          HttpApiError.Unauthorized,
+          HttpApiError.Forbidden,
+          HttpApiError.InternalServerError,
+        ],
+      },
+    ).annotateMerge(
+      OpenApi.annotations({
+        title: "Presign OAuth client logo upload",
+        summary: "Create a presigned OAuth client logo upload URL",
+        description:
+          "Returns a short-lived S3 upload URL and the stable asset URL to store on an OAuth client.",
       }),
     ),
   )

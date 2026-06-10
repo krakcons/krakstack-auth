@@ -15,6 +15,9 @@ import { authApiHandler } from "@/services/auth/api.builder";
 import { auth } from "@/services/auth/config";
 import { OAuthClients } from "@/services/oauth";
 import { oauthClientsApiHandler } from "@/services/oauth/api.builder";
+import { Organizations } from "@/services/organizations";
+import { organizationsApiHandler } from "@/services/organizations/api.builder";
+import { S3Service } from "@/services/s3";
 
 const fileSystemLayer = FileSystem.layerNoop({});
 const httpPlatformLayer = HttpPlatform.layer.pipe(
@@ -42,7 +45,46 @@ const authHandlerEffect = HttpEffect.fromWebHandler((request) =>
   ),
 );
 
+const logoContentType = (path: string) => {
+  if (path.endsWith(".svg")) return "image/svg+xml";
+  if (path.endsWith(".png")) return "image/png";
+  if (path.endsWith(".webp")) return "image/webp";
+  if (path.endsWith(".gif")) return "image/gif";
+  return "image/jpeg";
+};
+
+const logoAssetHandlerEffect = HttpEffect.fromWebHandler(async (request) => {
+  const prefix = "/api/assets/";
+  const path = decodeURIComponent(
+    new URL(request.url).pathname.slice(prefix.length),
+  );
+
+  if (!path.startsWith("logos/") || path.includes("..")) {
+    return Response.json({}, { status: 404 });
+  }
+
+  const stream = await Effect.runPromise(
+    Effect.gen(function* () {
+      const s3 = yield* S3Service;
+      const file = yield* s3.file(path);
+      return file.stream();
+    }).pipe(Effect.provide(S3Service.layer)),
+  );
+
+  return new Response(stream, {
+    headers: {
+      "Cache-Control": "public, max-age=31536000, immutable",
+      "Content-Type": logoContentType(path),
+    },
+  });
+});
+
 const authRoutesLayer = HttpRouter.add("*", "/api/auth/*", authHandlerEffect);
+const logoAssetRoutesLayer = HttpRouter.add(
+  "GET",
+  "/api/assets/*",
+  logoAssetHandlerEffect,
+);
 
 const scalarDocsConfig = {
   theme: "default",
@@ -89,14 +131,24 @@ const apiLayer = Layer.mergeAll(
     Layer.provide(authApiHandler),
     Layer.provide(adminApiHandler),
     Layer.provide(oauthClientsApiHandler),
+    Layer.provide(organizationsApiHandler),
   ),
   docsLayer,
+  logoAssetRoutesLayer,
   authRoutesLayer,
 ).pipe(Layer.provide(platformLayer));
 
-const apiWebHandler = HttpEffect.toWebHandlerLayerWith(OAuthClients.layer, {
+const appServicesLayer = Layer.mergeAll(
+  OAuthClients.layer,
+  Organizations.layer,
+  S3Service.layer,
+);
+
+const apiWebHandler = HttpEffect.toWebHandlerLayerWith(appServicesLayer, {
   toHandler: () => HttpRouter.toHttpEffect(apiLayer).pipe(Effect.scoped),
 });
 
-export const apiHandler = corsMiddleware(apiWebHandler.handler);
+export const apiHandler = corsMiddleware((request) =>
+  apiWebHandler.handler(request),
+);
 export const disposeApiHandler = apiWebHandler.dispose;

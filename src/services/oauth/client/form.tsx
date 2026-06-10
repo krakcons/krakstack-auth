@@ -1,3 +1,4 @@
+import { useAtomSet } from "@effect/atom-react";
 import { Schema } from "effect";
 import { Loader2 } from "lucide-react";
 import { useState } from "react";
@@ -12,6 +13,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { ApiClient } from "@/lib/api-client";
 import { m } from "@/paraglide/messages";
 
 import {
@@ -25,7 +27,7 @@ type OAuthClientFormValues = {
   name: string;
   redirectUris: string;
   scope: string[];
-  icon: string;
+  icon: File | string | null;
   themeCss: string;
   emailPassword: boolean;
   google: boolean;
@@ -42,47 +44,28 @@ const scopeOptions = [
   { label: m.oauth_client_scope_offline_access(), value: "offline_access" },
 ];
 
+const isFile = (value: unknown): value is File => value instanceof File;
+
+const createOAuthClientAtom = ApiClient.mutation(
+  "oauthClients",
+  "createOAuthClient",
+);
+const updateOAuthClientAtom = ApiClient.mutation(
+  "oauthClients",
+  "updateOAuthClient",
+);
+const presignLogoUploadAtom = ApiClient.mutation(
+  "oauthClients",
+  "presignOAuthClientLogoUpload",
+);
+
 const parseList = (value: string) =>
   value
     .split(/[\n,]+/)
     .map((item) => item.trim())
     .filter(Boolean);
 
-const createOAuthClient = async (payload: CreateOAuthClientPayload) => {
-  const response = await fetch("/api/oauth/clients", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(payload),
-  });
-
-  if (!response.ok) {
-    throw new Error(m.admin_error_create_client());
-  }
-
-  return (await response.json()) as OAuthClientAdmin;
-};
-
-const updateOAuthClient = async (
-  clientId: string,
-  payload: UpdateOAuthClientPayload,
-) => {
-  const response = await fetch(
-    `/api/oauth/clients/${encodeURIComponent(clientId)}`,
-    {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload),
-    },
-  );
-
-  if (!response.ok) {
-    throw new Error(m.oauth_client_update_error());
-  }
-
-  return (await response.json()) as OAuthClientAdmin;
-};
-
-const valuesToPayload = (value: OAuthClientFormValues) => {
+const valuesToPayload = (value: OAuthClientFormValues, icon: string | null) => {
   const metadata = Schema.decodeUnknownSync(OAuthClientMetadata)({
     branding: {
       themeCss: value.themeCss.trim() || undefined,
@@ -97,13 +80,16 @@ const valuesToPayload = (value: OAuthClientFormValues) => {
 
   return {
     name: value.name.trim() || undefined,
-    icon: value.icon.trim() || null,
+    icon,
     scope: value.scope.length ? value.scope.join(" ") : defaultScope.join(" "),
     metadata,
   } satisfies UpdateOAuthClientPayload;
 };
 
-const valuesToCreatePayload = (value: OAuthClientFormValues) => {
+const valuesToCreatePayload = (
+  value: OAuthClientFormValues,
+  icon: string | null,
+) => {
   const redirectUris = parseList(value.redirectUris);
   const firstRedirectUri = redirectUris[0];
 
@@ -112,7 +98,7 @@ const valuesToCreatePayload = (value: OAuthClientFormValues) => {
   }
 
   return {
-    ...valuesToPayload(value),
+    ...valuesToPayload(value, icon),
     redirectUris: [firstRedirectUri, ...redirectUris.slice(1)],
     scope: value.scope.length ? value.scope.join(" ") : defaultScope.join(" "),
   } satisfies CreateOAuthClientPayload;
@@ -127,6 +113,15 @@ export function OAuthClientForm({
   onClose: () => void;
   onSaved: (client: OAuthClientAdmin) => void;
 }) {
+  const createOAuthClient = useAtomSet(createOAuthClientAtom, {
+    mode: "promise",
+  });
+  const updateOAuthClient = useAtomSet(updateOAuthClientAtom, {
+    mode: "promise",
+  });
+  const presignLogoUpload = useAtomSet(presignLogoUploadAtom, {
+    mode: "promise",
+  });
   const [error, setError] = useState("");
   const isEditing = Boolean(client);
   const form = useAppForm({
@@ -136,7 +131,7 @@ export function OAuthClientForm({
       scope: client?.scope
         ? parseList(client.scope.replaceAll(" ", "\n"))
         : defaultScope,
-      icon: client?.icon ?? "",
+      icon: client?.icon ?? null,
       themeCss: client?.metadata.branding?.themeCss ?? "",
       emailPassword: client?.metadata.authOptions?.emailPassword ?? true,
       google: client?.metadata.authOptions?.google ?? true,
@@ -146,9 +141,36 @@ export function OAuthClientForm({
     onSubmit: async ({ value }) => {
       setError("");
       try {
+        const iconFile = isFile(value.icon) ? value.icon : null;
+        const icon = iconFile
+          ? await (async () => {
+              const presigned = await presignLogoUpload({
+                payload: {
+                  fileName: iconFile.name,
+                  contentType: iconFile.type,
+                },
+              });
+              const uploadResponse = await fetch(presigned.uploadUrl, {
+                method: "PUT",
+                headers: { "Content-Type": iconFile.type },
+                body: iconFile,
+              });
+
+              if (!uploadResponse.ok) {
+                throw new Error(m.oauth_client_update_error());
+              }
+
+              return presigned.url;
+            })()
+          : value.icon;
         const saved = client
-          ? await updateOAuthClient(client.clientId, valuesToPayload(value))
-          : await createOAuthClient(valuesToCreatePayload(value));
+          ? await updateOAuthClient({
+              params: { clientId: client.clientId },
+              payload: valuesToPayload(value, icon),
+            })
+          : await createOAuthClient({
+              payload: valuesToCreatePayload(value, icon),
+            });
         toast.success(
           client
             ? m.oauth_client_updated_toast()
@@ -222,10 +244,14 @@ export function OAuthClientForm({
             </form.AppField>
             <form.AppField name="icon">
               {(field) => (
-                <field.TextField
+                <field.ImageField
                   label={m.oauth_client_logo_url()}
-                  type="url"
-                  description={m.oauth_client_logo_url_description()}
+                  size={{
+                    width: 96,
+                    height: 96,
+                    suggestedWidth: 512,
+                    suggestedHeight: 512,
+                  }}
                 />
               )}
             </form.AppField>

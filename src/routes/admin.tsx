@@ -8,6 +8,7 @@ import {
   KeyRound,
   LayoutDashboard,
   Loader2,
+  Building2,
   ShieldAlert,
   Users,
 } from "lucide-react";
@@ -60,6 +61,11 @@ const adminNavGroups: NavGroup[] = [
     items: [
       { label: m.sidebar_nav_dashboard, href: "/admin", icon: LayoutDashboard },
       { label: m.sidebar_nav_users, href: "/admin/users", icon: Users },
+      {
+        label: m.sidebar_nav_organizations,
+        href: "/admin/organizations",
+        icon: Building2,
+      },
     ],
   },
   {

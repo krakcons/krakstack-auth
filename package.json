@@ -41,7 +41,7 @@
     "cmdk": "^1.1.1",
     "date-fns": "^4.3.0",
     "drizzle-orm": "^1.0.0-rc.4-5d5b77c",
-    "effect": "^4.0.0-beta.71",
+    "effect": "^4.0.0-beta.78",
     "embla-carousel-react": "^8.6.0",
     "input-otp": "^1.4.2",
     "lucide-react": "^1.16.0",
