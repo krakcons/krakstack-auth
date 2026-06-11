@@ -17,6 +17,7 @@ import { useEffect, useState } from "react";
 import { m } from "@/paraglide/messages";
 import { Button } from "@/components/ui/button";
 import { LocaleToggle } from "@/components/ui/locale-toggle";
+import { useSidebar } from "@/components/ui/sidebar";
 import { SidebarLayout, type NavGroup } from "@/components/ui/sidebar-layout";
 import {
   Card,
@@ -131,13 +132,19 @@ function Admin() {
 
   return (
     <SidebarLayout
-      sidebarHeader={<OrganizationSwitcher side="right" locked />}
+      sidebarHeader={<AdminOrganizationSwitcher />}
       headerActions={<UserButton />}
       groups={adminNavGroups}
     >
       <Outlet />
     </SidebarLayout>
   );
+}
+
+function AdminOrganizationSwitcher() {
+  const { isMobile } = useSidebar();
+
+  return <OrganizationSwitcher locked side={isMobile ? "bottom" : "right"} />;
 }
 
 function AdminAccessDenied({ isSignedIn }: { isSignedIn: boolean }) {
