@@ -68,6 +68,17 @@ const parseList = (value: string) =>
     .map((item) => item.trim())
     .filter(Boolean);
 
+const redirectUrisFromValue = (value: string): [string, ...string[]] => {
+  const redirectUris = parseList(value);
+  const firstRedirectUri = redirectUris[0];
+
+  if (!firstRedirectUri) {
+    throw new Error(m.admin_field_redirect_uris_description());
+  }
+
+  return [firstRedirectUri, ...redirectUris.slice(1)];
+};
+
 const valuesToPayload = (value: OAuthClientFormValues, icon: string | null) => {
   const metadata = Schema.decodeUnknownSync(OAuthClientMetadata)({
     branding: {
@@ -84,6 +95,7 @@ const valuesToPayload = (value: OAuthClientFormValues, icon: string | null) => {
   return {
     name: value.name.trim() || undefined,
     icon,
+    redirectUris: redirectUrisFromValue(value.redirectUris),
     scope: value.scope.length ? value.scope.join(" ") : defaultScope.join(" "),
     metadata,
   } satisfies UpdateOAuthClientPayload;
@@ -93,16 +105,8 @@ const valuesToCreatePayload = (
   value: OAuthClientFormValues,
   icon: string | null,
 ) => {
-  const redirectUris = parseList(value.redirectUris);
-  const firstRedirectUri = redirectUris[0];
-
-  if (!firstRedirectUri) {
-    throw new Error(m.admin_field_redirect_uris_description());
-  }
-
   return {
     ...valuesToPayload(value, icon),
-    redirectUris: [firstRedirectUri, ...redirectUris.slice(1)],
     scope: value.scope.length ? value.scope.join(" ") : defaultScope.join(" "),
   } satisfies CreateOAuthClientPayload;
 };
@@ -222,19 +226,15 @@ export function OAuthClientForm({
                 <field.TextField label={m.admin_field_display_name()} />
               )}
             </form.AppField>
-            {!isEditing ? (
-              <>
-                <form.AppField name="redirectUris">
-                  {(field) => (
-                    <field.TextAreaField
-                      label={m.admin_field_redirect_uris()}
-                      description={m.admin_field_redirect_uris_description()}
-                      rows={4}
-                    />
-                  )}
-                </form.AppField>
-              </>
-            ) : null}
+            <form.AppField name="redirectUris">
+              {(field) => (
+                <field.TextAreaField
+                  label={m.admin_field_redirect_uris()}
+                  description={m.admin_field_redirect_uris_description()}
+                  rows={4}
+                />
+              )}
+            </form.AppField>
             <form.AppField name="scope">
               {(field) => (
                 <field.MultiSelectField

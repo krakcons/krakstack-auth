@@ -159,6 +159,9 @@ export class OAuthClients extends Context.Service<OAuthClients>()(
               update: {
                 client_name: payload.name || undefined,
                 logo_uri: payload.icon ?? undefined,
+                redirect_uris: payload.redirectUris
+                  ? Array.from(payload.redirectUris)
+                  : undefined,
                 scope: payload.scope
                   ? scopesFromString(payload.scope).join(" ")
                   : undefined,

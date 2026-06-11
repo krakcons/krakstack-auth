@@ -161,6 +161,25 @@ const clientColumns = ({
     ),
   },
   {
+    accessorKey: "redirectUris",
+    header: m.admin_column_redirect_uris(),
+    cell: ({ row }) => (
+      <div className="flex max-w-80 flex-col gap-1">
+        {row.original.redirectUris.length ? (
+          row.original.redirectUris.map((uri) => (
+            <code key={uri} className="text-muted-foreground truncate text-xs">
+              {uri}
+            </code>
+          ))
+        ) : (
+          <span className="text-muted-foreground text-sm">
+            {m.admin_none()}
+          </span>
+        )}
+      </div>
+    ),
+  },
+  {
     id: "branding",
     header: m.oauth_client_branding(),
     cell: ({ row }) => (

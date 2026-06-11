@@ -48,6 +48,16 @@ const requireAdmin = (headers: Headers) =>
     }
   });
 
+const requireSession = (headers: Headers) =>
+  Effect.gen(function* () {
+    const session = yield* Effect.tryPromise({
+      try: () => auth.api.getSession({ headers }),
+      catch: internalServerError,
+    });
+
+    if (!session) return yield* new HttpApiError.Unauthorized({});
+  });
+
 const safeFileName = (name: string) =>
   name
     .trim()
@@ -111,7 +121,7 @@ export const organizationsApiHandler = HttpApiBuilder.group(
       )
       .handle("presignOrganizationLogoUpload", ({ payload, request }) =>
         Effect.gen(function* () {
-          yield* requireAdmin(request.headers);
+          yield* requireSession(request.headers);
 
           if (!payload.contentType.startsWith("image/")) {
             return yield* new HttpApiError.BadRequest({});

@@ -104,7 +104,7 @@ export const OrganizationsApiGroup = HttpApiGroup.make("organizations")
         title: "Presign organization logo upload",
         summary: "Create a presigned organization logo upload URL",
         description:
-          "Returns a short-lived S3 upload URL and the stable asset URL to store on an organization.",
+          "Returns a short-lived S3 upload URL and the stable asset URL to store in organization metadata. Requires an authenticated user session.",
       }),
     ),
   )

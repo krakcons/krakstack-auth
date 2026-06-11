@@ -189,17 +189,19 @@ export const CreateOAuthClientPayload = Schema.Struct({
 export const UpdateOAuthClientPayload = Schema.Struct({
   name: Schema.optional(Schema.String),
   icon: Schema.optional(Schema.NullOr(Schema.String)),
+  redirectUris: Schema.optional(Schema.NonEmptyArray(Schema.NonEmptyString)),
   scope: Schema.optional(Schema.String),
   metadata: OAuthClientMetadata,
 }).annotate({
   identifier: "UpdateOAuthClientPayload",
   title: "Update OAuth client payload",
   description:
-    "Payload used by administrators to update OAuth client white-label settings.",
+    "Payload used by administrators to update OAuth client redirect URIs and white-label settings.",
   examples: [
     {
       name: "Example app",
       icon: "https://example.com/logo.svg",
+      redirectUris: ["https://example.com/callback"],
       scope: "openid profile email",
       metadata: {
         branding: { themeCss: ":root { --primary: oklch(0.5 0.1 240); }" },
