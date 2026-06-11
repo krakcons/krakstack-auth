@@ -350,5 +350,7 @@
   "organization_deleted_toast": "Organization deleted",
   "organization_action_delete": "Delete organization",
   "organization_delete_title": "Delete organization",
-  "organization_delete_description": "Are you sure you want to delete {name}? This action cannot be undone."
+  "organization_delete_description": "Are you sure you want to delete {name}? This action cannot be undone.",
+  "admin_copy_client_id": "Copy ID",
+  "admin_copy_client_secret": "Copy secret"
 }

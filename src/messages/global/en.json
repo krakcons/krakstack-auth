@@ -149,6 +149,8 @@
   "admin_client_credentials_description": "Save these credentials now. You will not be able to see the client secret again.",
   "admin_client_id_label": "Client ID",
   "admin_client_secret_label": "Client Secret",
+  "admin_copy_client_id": "Copy ID",
+  "admin_copy_client_secret": "Copy secret",
   "admin_client_copied": "Copied to clipboard",
   "admin_client_created_toast": "OAuth client created",
   "admin_client_updated_toast": "OAuth client updated",

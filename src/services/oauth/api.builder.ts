@@ -63,7 +63,7 @@ export const oauthClientsApiHandler = HttpApiBuilder.group(
 
           const clients = yield* OAuthClients;
           return yield* clients
-            .list()
+            .list({ headers: request.headers })
             .pipe(Effect.mapError(internalServerError));
         }),
       )
@@ -81,7 +81,7 @@ export const oauthClientsApiHandler = HttpApiBuilder.group(
 
           const clients = yield* OAuthClients;
           return yield* clients
-            .create({ payload })
+            .create({ headers: request.headers, payload })
             .pipe(Effect.mapError(internalServerError));
         }),
       )
@@ -110,7 +110,32 @@ export const oauthClientsApiHandler = HttpApiBuilder.group(
 
           const clients = yield* OAuthClients;
           const client = yield* clients
-            .update({ clientId: params.clientId, payload })
+            .update({
+              clientId: params.clientId,
+              headers: request.headers,
+              payload,
+            })
+            .pipe(Effect.mapError(internalServerError));
+
+          if (!client) return yield* new HttpApiError.NotFound({});
+          return client;
+        }),
+      )
+      .handle("deleteOAuthClient", ({ params, request }) =>
+        Effect.gen(function* () {
+          const session = yield* Effect.tryPromise({
+            try: () => auth.api.getSession({ headers: request.headers }),
+            catch: internalServerError,
+          });
+
+          if (!session) return yield* new HttpApiError.Unauthorized({});
+          if (!hasAdminRole(userRole(session.user))) {
+            return yield* new HttpApiError.Forbidden({});
+          }
+
+          const clients = yield* OAuthClients;
+          const client = yield* clients
+            .delete({ clientId: params.clientId, headers: request.headers })
             .pipe(Effect.mapError(internalServerError));
 
           if (!client) return yield* new HttpApiError.NotFound({});

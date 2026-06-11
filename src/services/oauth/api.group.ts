@@ -9,6 +9,7 @@ import { Schema } from "effect";
 import {
   CreateOAuthClientPayload,
   OAuthClientAdmin,
+  OAuthClientCreated,
   OAuthClientIdParams,
   OAuthClientPublicConfig,
   UpdateOAuthClientPayload,
@@ -36,7 +37,7 @@ export const OAuthClientsApiGroup = HttpApiGroup.make("oauthClients")
   .add(
     HttpApiEndpoint.post("createOAuthClient", "/oauth/clients", {
       payload: CreateOAuthClientPayload,
-      success: OAuthClientAdmin,
+      success: OAuthClientCreated,
       error: [
         HttpApiError.Unauthorized,
         HttpApiError.Forbidden,
@@ -47,7 +48,7 @@ export const OAuthClientsApiGroup = HttpApiGroup.make("oauthClients")
         title: "Create OAuth client",
         summary: "Create an OAuth client for administrators",
         description:
-          "Registers a public PKCE OAuth client with redirect URIs, scopes, and white-label metadata.",
+          "Registers an OAuth client with redirect URIs, scopes, white-label metadata, and a generated client secret returned once.",
       }),
     ),
   )
@@ -86,6 +87,24 @@ export const OAuthClientsApiGroup = HttpApiGroup.make("oauthClients")
         summary: "Update OAuth client white-label settings",
         description:
           "Updates logo URL and schema-validated metadata for an OAuth client.",
+      }),
+    ),
+  )
+  .add(
+    HttpApiEndpoint.delete("deleteOAuthClient", "/oauth/clients/:clientId", {
+      params: OAuthClientIdParams,
+      success: OAuthClientAdmin,
+      error: [
+        HttpApiError.Unauthorized,
+        HttpApiError.Forbidden,
+        HttpApiError.NotFound,
+        HttpApiError.InternalServerError,
+      ],
+    }).annotateMerge(
+      OpenApi.annotations({
+        title: "Delete OAuth client",
+        summary: "Delete an OAuth client",
+        description: "Deletes an OAuth client and returns the deleted record.",
       }),
     ),
   )

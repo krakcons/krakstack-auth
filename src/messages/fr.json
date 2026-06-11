@@ -350,5 +350,7 @@
   "organization_deleted_toast": "Organisation supprimée",
   "organization_action_delete": "Supprimer l'organisation",
   "organization_delete_title": "Supprimer l'organisation",
-  "organization_delete_description": "Êtes-vous sûr de vouloir supprimer {name} ? Cette action est irréversible."
+  "organization_delete_description": "Êtes-vous sûr de vouloir supprimer {name} ? Cette action est irréversible.",
+  "admin_copy_client_id": "Copier l'ID",
+  "admin_copy_client_secret": "Copier le secret"
 }

@@ -118,6 +118,44 @@ export const OAuthClientAdmin = Schema.Struct({
   ],
 });
 
+export const OAuthClientCreated = Schema.Struct({
+  id: Schema.String,
+  clientId: Schema.String,
+  clientSecret: Schema.String,
+  name: Schema.NullOr(Schema.String),
+  icon: Schema.NullOr(Schema.String),
+  redirectUris: Schema.Array(Schema.String),
+  scope: Schema.NullOr(Schema.String),
+  disabled: Schema.NullOr(Schema.Boolean),
+  metadata: OAuthClientMetadata,
+}).annotate({
+  identifier: "OAuthClientCreated",
+  title: "Created OAuth client credentials",
+  description:
+    "Administrative OAuth client configuration returned once after creation, including the generated client secret.",
+  examples: [
+    {
+      id: "client-row-id",
+      clientId: "oauth-client-id",
+      clientSecret: "oauth-client-secret",
+      name: "Example app",
+      icon: null,
+      redirectUris: ["https://example.com/callback"],
+      scope: "openid profile email",
+      disabled: false,
+      metadata: {
+        branding: { themeCss: ":root { --primary: oklch(0.5 0.1 240); }" },
+        authOptions: {
+          emailPassword: true,
+          google: true,
+          signUp: true,
+          signUpName: true,
+        },
+      },
+    },
+  ],
+});
+
 export const CreateOAuthClientPayload = Schema.Struct({
   name: Schema.optional(Schema.String),
   icon: Schema.optional(Schema.NullOr(Schema.String)),
@@ -181,6 +219,7 @@ export const OAuthClientMetadataStandard =
 
 export type OAuthClientMetadata = typeof OAuthClientMetadata.Type;
 export type OAuthClientAdmin = typeof OAuthClientAdmin.Type;
+export type OAuthClientCreated = typeof OAuthClientCreated.Type;
 export type OAuthClientPublicConfig = typeof OAuthClientPublicConfig.Type;
 export type CreateOAuthClientPayload = typeof CreateOAuthClientPayload.Type;
 export type UpdateOAuthClientPayload = typeof UpdateOAuthClientPayload.Type;

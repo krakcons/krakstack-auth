@@ -1,12 +1,23 @@
 import { type ColumnDef } from "@tanstack/react-table";
-import { Pencil } from "lucide-react";
+import { Pencil, Trash2 } from "lucide-react";
 import { useEffect, useState } from "react";
+import { toast } from "sonner";
 
 import {
   createDataTableActionsColumn,
   DataTable,
 } from "@/components/data-table";
 import { ErrorMessage } from "@/components/form";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { Badge } from "@/components/ui/badge";
 import { m } from "@/paraglide/messages";
 
@@ -19,9 +30,22 @@ const listOAuthClients = async () => {
   return (await response.json()) as OAuthClientAdmin[];
 };
 
+const deleteOAuthClient = async (clientId: string) => {
+  const response = await fetch(
+    `/api/oauth/clients/${encodeURIComponent(clientId)}`,
+    { method: "DELETE" },
+  );
+
+  if (!response.ok) throw new Error(m.admin_error_delete_client());
+  return (await response.json()) as OAuthClientAdmin;
+};
+
 export function OAuthClientsTable({ reloadKey = 0 }: { reloadKey?: number }) {
   const [clients, setClients] = useState<OAuthClientAdmin[]>([]);
   const [editingClient, setEditingClient] = useState<OAuthClientAdmin | null>(
+    null,
+  );
+  const [deletingClient, setDeletingClient] = useState<OAuthClientAdmin | null>(
     null,
   );
   const [error, setError] = useState("");
@@ -45,7 +69,10 @@ export function OAuthClientsTable({ reloadKey = 0 }: { reloadKey?: number }) {
     <div className="flex flex-col gap-4">
       {error ? <ErrorMessage text={error} /> : null}
       <DataTable
-        columns={clientColumns({ onEdit: setEditingClient })}
+        columns={clientColumns({
+          onEdit: setEditingClient,
+          onDelete: setDeletingClient,
+        })}
         data={clients}
         exportFileName="oauth-clients.csv"
         features={{ gallery: false }}
@@ -64,14 +91,27 @@ export function OAuthClientsTable({ reloadKey = 0 }: { reloadKey?: number }) {
           }}
         />
       ) : null}
+      {deletingClient ? (
+        <DeleteOAuthClientDialog
+          client={deletingClient}
+          onClose={() => setDeletingClient(null)}
+          onDeleted={(deleted) => {
+            setClients((current) =>
+              current.filter((client) => client.clientId !== deleted.clientId),
+            );
+          }}
+        />
+      ) : null}
     </div>
   );
 }
 
 const clientColumns = ({
   onEdit,
+  onDelete,
 }: {
   onEdit: (client: OAuthClientAdmin) => void;
+  onDelete: (client: OAuthClientAdmin) => void;
 }): ColumnDef<OAuthClientAdmin>[] => [
   {
     accessorKey: "name",
@@ -154,5 +194,63 @@ const clientColumns = ({
       icon: <Pencil className="size-4" />,
       onClick: onEdit,
     },
+    {
+      name: m.actions_delete(),
+      icon: <Trash2 className="size-4" />,
+      variant: "destructive",
+      onClick: onDelete,
+    },
   ]),
 ];
+
+function DeleteOAuthClientDialog({
+  client,
+  onClose,
+  onDeleted,
+}: {
+  client: OAuthClientAdmin;
+  onClose: () => void;
+  onDeleted: (client: OAuthClientAdmin) => void;
+}) {
+  const [error, setError] = useState("");
+  const name = client.name ?? client.clientId;
+
+  return (
+    <AlertDialog open onOpenChange={(open) => !open && onClose()}>
+      <AlertDialogContent>
+        <AlertDialogHeader>
+          <AlertDialogTitle>{m.admin_delete_client_title()}</AlertDialogTitle>
+          <AlertDialogDescription>
+            {m.admin_delete_client_description({ name })}
+          </AlertDialogDescription>
+        </AlertDialogHeader>
+        {error ? <ErrorMessage text={error} /> : null}
+        <AlertDialogFooter>
+          <AlertDialogCancel>
+            {m.form_block_navigation_cancel()}
+          </AlertDialogCancel>
+          <AlertDialogAction
+            onClick={async (event) => {
+              event.preventDefault();
+              setError("");
+              try {
+                const deleted = await deleteOAuthClient(client.clientId);
+                toast.success(m.admin_client_deleted_toast());
+                onDeleted(deleted);
+                onClose();
+              } catch (cause) {
+                setError(
+                  cause instanceof Error
+                    ? cause.message
+                    : m.admin_error_delete_client(),
+                );
+              }
+            }}
+          >
+            {m.actions_delete()}
+          </AlertDialogAction>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
+  );
+}

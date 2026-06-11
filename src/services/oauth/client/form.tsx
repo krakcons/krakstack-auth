@@ -19,9 +19,12 @@ import { m } from "@/paraglide/messages";
 import {
   OAuthClientMetadata,
   type OAuthClientAdmin,
+  type OAuthClientCreated,
   type CreateOAuthClientPayload,
   type UpdateOAuthClientPayload,
 } from "../schema";
+
+export type OAuthClientFormSaved = OAuthClientAdmin | OAuthClientCreated;
 
 type OAuthClientFormValues = {
   name: string;
@@ -111,7 +114,7 @@ export function OAuthClientForm({
 }: {
   client?: OAuthClientAdmin;
   onClose: () => void;
-  onSaved: (client: OAuthClientAdmin) => void;
+  onSaved: (client: OAuthClientFormSaved) => void;
 }) {
   const createOAuthClient = useAtomSet(createOAuthClientAtom, {
     mode: "promise",

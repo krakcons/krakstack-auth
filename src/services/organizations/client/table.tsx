@@ -159,7 +159,7 @@ const organizationColumns = ({
       onClick: onEdit,
     },
     {
-      name: m.organization_action_delete(),
+      name: m.actions_delete(),
       icon: <Trash2 className="size-4" />,
       variant: "destructive",
       onClick: onDelete,
@@ -210,7 +210,7 @@ function DeleteOrganizationDialog({
               }
             }}
           >
-            {m.organization_action_delete()}
+            {m.actions_delete()}
           </AlertDialogAction>
         </AlertDialogFooter>
       </AlertDialogContent>
