@@ -21,7 +21,7 @@ export const PresignedUpload = Schema.Struct({
     {
       uploadUrl:
         "https://s3.example.com/bucket/logos/organizations/logo.png?signature=...",
-      url: "/api/assets/logos/organizations/logo.png",
+      url: "https://auth.example.com/api/assets/logos/organizations/logo.png",
     },
   ],
 });

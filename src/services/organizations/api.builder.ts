@@ -5,6 +5,7 @@ import { HttpApiBuilder, HttpApiError } from "effect/unstable/httpapi";
 import { Api } from "@/api";
 import { auth } from "@/services/auth/config";
 import { S3Service } from "@/services/s3";
+import { s3AssetUrl } from "@/services/s3/asset-url";
 
 import { Organizations } from ".";
 
@@ -64,9 +65,6 @@ const safeFileName = (name: string) =>
     .toLowerCase()
     .replace(/[^a-z0-9._-]+/g, "-")
     .replace(/^-+|-+$/g, "") || "logo";
-
-const assetUrl = (key: string) =>
-  `/api/assets/${key.split("/").map(encodeURIComponent).join("/")}`;
 
 export const organizationsApiHandler = HttpApiBuilder.group(
   Api,
@@ -137,7 +135,7 @@ export const organizationsApiHandler = HttpApiBuilder.group(
             })
             .pipe(Effect.mapError(internalServerError));
 
-          return { uploadUrl, url: assetUrl(key) };
+          return { uploadUrl, url: s3AssetUrl(key) };
         }),
       ),
 );
