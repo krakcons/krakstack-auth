@@ -1,5 +1,5 @@
 import { betterAuth } from "better-auth";
-import { drizzleAdapter } from "@better-auth/drizzle-adapter/relations-v2";
+import { drizzleAdapter } from "better-auth-drizzle-adapter";
 import {
   admin,
   emailOTP,
