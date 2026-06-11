@@ -375,5 +375,7 @@
   "organization_logo": "Logo",
   "organization_logo_upload_error": "Impossible de téléverser le logo de l'organisation.",
   "organization_contact_email": "E-mail de contact",
-  "organization_location": "Emplacement"
+  "organization_location": "Emplacement",
+  "user_profile_photo_upload_label": "Photo de profil",
+  "user_profile_image_upload_error": "Impossible de téléverser votre photo de profil."
 }

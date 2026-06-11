@@ -1,8 +1,9 @@
 import { Effect } from "effect";
-import { HttpApiBuilder } from "effect/unstable/httpapi";
+import { HttpApiBuilder, HttpApiError } from "effect/unstable/httpapi";
 
 import { Api } from "@/api";
 import { auth } from "@/services/auth/config";
+import { S3Service } from "@/services/s3";
 
 import { AuthBadRequest } from "./schema";
 
@@ -10,6 +11,18 @@ const authError = (fallback: string) => (error: unknown) =>
   new AuthBadRequest({
     message: error instanceof Error ? error.message : fallback,
   });
+
+const internalServerError = () => new HttpApiError.InternalServerError({});
+
+const safeFileName = (name: string) =>
+  name
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9._-]+/g, "-")
+    .replace(/^-+|-+$/g, "") || "profile-image";
+
+const assetUrl = (key: string) =>
+  `/api/assets/${key.split("/").map(encodeURIComponent).join("/")}`;
 
 export const authApiHandler = HttpApiBuilder.group(Api, "auth", (handlers) =>
   handlers
@@ -114,5 +127,33 @@ export const authApiHandler = HttpApiBuilder.group(Api, "auth", (handlers) =>
             : null,
         })),
       ),
+    )
+    .handle("presignUserImageUpload", ({ payload, request }) =>
+      Effect.gen(function* () {
+        const session = yield* Effect.tryPromise({
+          try: () => auth.api.getSession({ headers: request.headers }),
+          catch: internalServerError,
+        });
+
+        if (!session) return yield* new HttpApiError.Unauthorized({});
+
+        if (!payload.contentType.startsWith("image/")) {
+          return yield* new AuthBadRequest({
+            message: "Only image uploads are supported",
+          });
+        }
+
+        const s3 = yield* S3Service;
+        const key = `logos/users/${session.user.id}/${crypto.randomUUID()}-${safeFileName(payload.fileName)}`;
+        const uploadUrl = yield* s3
+          .presign(key, {
+            expiresIn: 300,
+            method: "PUT",
+            type: payload.contentType,
+          })
+          .pipe(Effect.mapError(internalServerError));
+
+        return { uploadUrl, url: assetUrl(key) };
+      }),
     ),
 );

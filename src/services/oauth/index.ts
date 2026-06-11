@@ -1,6 +1,9 @@
 import { Context, Effect, Layer, Schema } from "effect";
 import type { Headers } from "effect/unstable/http/Headers";
+import { eq } from "drizzle-orm";
 
+import { oauthClient } from "@/db/auth-schema";
+import { DB } from "@/services/database";
 import { auth } from "@/services/auth/config";
 
 import {
@@ -45,11 +48,17 @@ const scopesFromString = (value: string | undefined) =>
         .filter(Boolean)
     : ["openid", "profile", "email"];
 
-const metadataFromClient = (client: object) =>
-  decodeMetadataOrEmpty({
+const metadataFromClient = (client: object) => {
+  const metadata = Reflect.get(client, "metadata");
+  if (metadata !== undefined && metadata !== null) {
+    return decodeMetadataOrEmpty(metadata);
+  }
+
+  return decodeMetadataOrEmpty({
     branding: Reflect.get(client, "branding"),
     authOptions: Reflect.get(client, "authOptions"),
   });
+};
 
 const adminRow = (client: {
   client_id: string;
@@ -80,7 +89,9 @@ const createdRow = (
 export class OAuthClients extends Context.Service<OAuthClients>()(
   "OAuthClients",
   {
-    make: Effect.sync(() => {
+    make: Effect.gen(function* () {
+      const db = yield* DB;
+
       const list = Effect.fn("OAuthClients.list")(function* ({
         headers,
       }: {
@@ -124,17 +135,20 @@ export class OAuthClients extends Context.Service<OAuthClients>()(
 
       const getPublicConfig = Effect.fn("OAuthClients.getPublicConfig")(
         function* ({ clientId }: { clientId: string }) {
-          const client = yield* Effect.promise(() =>
-            auth.api.getOAuthClientPublicPrelogin({
-              body: { client_id: clientId },
-            }),
-          );
+          const [client] = yield* db
+            .select()
+            .from(oauthClient)
+            .where(eq(oauthClient.clientId, clientId))
+            .limit(1);
+
+          if (!client || client.disabled) return null;
+
           const metadata = metadataFromClient(client);
 
           return {
-            clientId: client.client_id,
-            name: client.client_name ?? null,
-            logoUrl: client.logo_uri ?? null,
+            clientId: client.clientId,
+            name: client.name ?? null,
+            logoUrl: client.icon ?? null,
             themeCss: sanitizeThemeCss(metadata.branding?.themeCss, clientId),
             authOptions: authOptions(metadata),
           };
@@ -202,5 +216,7 @@ export class OAuthClients extends Context.Service<OAuthClients>()(
     }),
   },
 ) {
-  static readonly layer = Layer.effect(this, this.make);
+  static readonly layer = Layer.effect(this, this.make).pipe(
+    Layer.provide(DB.layer),
+  );
 }

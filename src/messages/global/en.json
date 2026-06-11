@@ -183,6 +183,8 @@
   "oauth_client_updated_toast": "OAuth client updated",
   "oauth_client_no_auth_methods": "No authentication methods are enabled for this application.",
   "organization_field_logo_url": "Logo image",
+  "user_profile_photo_upload_label": "Profile photo",
+  "user_profile_image_upload_error": "Could not upload your profile photo.",
   "organization_fetch_error": "Unable to load organizations.",
   "organization_delete_error": "Unable to delete organization.",
   "organization_created_toast": "Organization created",

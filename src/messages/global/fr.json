@@ -183,6 +183,8 @@
   "oauth_client_updated_toast": "Client OAuth mis à jour",
   "oauth_client_no_auth_methods": "Aucune méthode d'authentification n'est activée pour cette application.",
   "organization_field_logo_url": "Image du logo",
+  "user_profile_photo_upload_label": "Photo de profil",
+  "user_profile_image_upload_error": "Impossible de téléverser votre photo de profil.",
   "organization_fetch_error": "Impossible de charger les organisations.",
   "organization_delete_error": "Impossible de supprimer l'organisation.",
   "organization_created_toast": "Organisation créée",

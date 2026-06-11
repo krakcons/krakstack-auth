@@ -375,5 +375,7 @@
   "organization_logo": "Logo",
   "organization_logo_upload_error": "Could not upload the organization logo.",
   "organization_contact_email": "Contact email",
-  "organization_location": "Location"
+  "organization_location": "Location",
+  "user_profile_photo_upload_label": "Profile photo",
+  "user_profile_image_upload_error": "Could not upload your profile photo."
 }
