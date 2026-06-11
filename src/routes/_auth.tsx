@@ -5,8 +5,8 @@ import {
 } from "@tanstack/react-router";
 import { Users } from "lucide-react";
 
-import { AppBrand } from "@/components/app-brand";
-import { LocaleToggle } from "@/components/locale-toggle";
+import { AppBrand } from "@/components/ui/app-brand";
+import { LocaleToggle } from "@/components/ui/locale-toggle";
 import { m } from "@/paraglide/messages";
 import {
   getOAuthClientIdFromSearch,
@@ -37,7 +37,7 @@ function AuthLayout() {
           label={clientConfig?.name ?? m.sidebar_brand()}
           subtitle={m.sidebar_brand_subtitle()}
           icon={Users}
-          logoUrl={clientConfig?.logoUrl}
+          {...(clientConfig?.logoUrl ? { imageSrc: clientConfig.logoUrl } : {})}
         />
       </div>
       <div className="absolute top-6 right-6 md:top-10 md:right-10">

@@ -124,7 +124,7 @@
   "key_value_field_value": "Value",
   "key_value_field_delete": "Delete",
   "key_value_field_add": "Add",
-  "form_accepts": "Accepts:",
+  "form_accepts": "Accepts: {accepts}",
   "form_suggested_image_size": "Suggested image size:",
   "actions_delete": "Delete",
   "form_block_navigation_title": "Leave without saving?",
@@ -352,5 +352,14 @@
   "organization_delete_title": "Delete organization",
   "organization_delete_description": "Are you sure you want to delete {name}? This action cannot be undone.",
   "admin_copy_client_id": "Copy ID",
-  "admin_copy_client_secret": "Copy secret"
+  "admin_copy_client_secret": "Copy secret",
+  "table_loading": "Loading...",
+  "table_results": "{count} results",
+  "user_api_key_permissions": "Permissions",
+  "user_api_key_permissions_description": "Choose the permissions this API key should receive.",
+  "user_api_key_no_permissions": "No permissions",
+  "user_api_key_copy": "Copy",
+  "user_api_key_copied": "Copied",
+  "api_key_rate_limit_notice": "API keys are subject to the same rate limits as your account.",
+  "table_clear_search": "Clear search"
 }

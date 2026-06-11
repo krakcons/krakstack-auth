@@ -16,8 +16,8 @@ import { useEffect, useState } from "react";
 
 import { m } from "@/paraglide/messages";
 import { Button } from "@/components/ui/button";
-import { LocaleToggle } from "@/components/locale-toggle";
-import { SidebarLayout, type NavGroup } from "@/components/sidebar-layout";
+import { LocaleToggle } from "@/components/ui/locale-toggle";
+import { SidebarLayout, type NavGroup } from "@/components/ui/sidebar-layout";
 import {
   Card,
   CardContent,
@@ -26,8 +26,12 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { authClient } from "@/services/auth/client";
-import { AppBrand } from "@/components/app-brand";
+import {
+  authClient,
+  ensureKrakOrganizationSelected,
+} from "@/services/auth/client";
+import { OrganizationSwitcher } from "@/components/ui/organization-switcher";
+import { UserButton } from "@/components/ui/user-button";
 import type { AuthSession } from "@/services/auth/config";
 
 type SessionData = AuthSession | null;
@@ -51,6 +55,8 @@ export const Route = createFileRoute("/admin")({
     if (!session.data?.user) {
       throw redirect({ to: "/sign-in" });
     }
+
+    await ensureKrakOrganizationSelected();
   },
   component: Admin,
 });
@@ -125,15 +131,8 @@ function Admin() {
 
   return (
     <SidebarLayout
-      sidebarHeader={
-        <AppBrand
-          label={m.sidebar_brand()}
-          subtitle={m.sidebar_brand_subtitle()}
-          icon={Users}
-          href="/"
-          variant="sidebar"
-        />
-      }
+      sidebarHeader={<OrganizationSwitcher side="right" locked />}
+      headerActions={<UserButton />}
       groups={adminNavGroups}
     >
       <Outlet />

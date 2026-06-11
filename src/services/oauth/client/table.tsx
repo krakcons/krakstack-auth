@@ -6,8 +6,8 @@ import { toast } from "sonner";
 import {
   createDataTableActionsColumn,
   DataTable,
-} from "@/components/data-table";
-import { ErrorMessage } from "@/components/form";
+} from "@/components/ui/data-table";
+import { ErrorMessage } from "@/components/ui/form";
 import {
   AlertDialog,
   AlertDialogAction,

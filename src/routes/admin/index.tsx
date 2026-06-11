@@ -4,7 +4,7 @@ import { Bar, BarChart, CartesianGrid, XAxis, YAxis } from "recharts";
 import { KeyRound, Loader2, Users } from "lucide-react";
 
 import { m } from "@/paraglide/messages";
-import { SidebarPageHeader } from "@/components/sidebar-layout";
+import { SidebarPageHeader } from "@/components/ui/sidebar-layout";
 import {
   Card,
   CardContent,

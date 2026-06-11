@@ -2,9 +2,7 @@ import { Link, Outlet, useRouterState } from "@tanstack/react-router";
 import type { LucideIcon } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
-import { LocaleToggle } from "@/components/locale-toggle";
-import { OrganizationSwitcher } from "@/components/organization-switcher";
-import { UserButton } from "@/components/user-button";
+import { LocaleToggle } from "@/components/ui/locale-toggle";
 import {
   Sidebar,
   SidebarContent,
@@ -25,6 +23,7 @@ type NavItem = {
   label: () => string;
   href: string;
   icon: LucideIcon;
+  external?: boolean;
 };
 
 type NavGroup = {
@@ -53,18 +52,26 @@ function AppSidebar({ groups, header }: AppSidebarProps) {
             <SidebarGroupLabel>{group.label()}</SidebarGroupLabel>
             <SidebarGroupContent>
               <SidebarMenu>
-                {group.items.map((item) => (
-                  <SidebarMenuItem key={item.href}>
-                    <SidebarMenuButton
-                      isActive={pathname === item.href}
-                      render={<Link to={item.href} />}
-                      tooltip={item.label()}
-                    >
-                      <item.icon />
-                      <span>{item.label()}</span>
-                    </SidebarMenuButton>
-                  </SidebarMenuItem>
-                ))}
+                {group.items.map((item) => {
+                  const render = item.external ? (
+                    <a href={item.href} target="_blank" rel="noreferrer" />
+                  ) : (
+                    <Link to={item.href} />
+                  );
+
+                  return (
+                    <SidebarMenuItem key={item.href}>
+                      <SidebarMenuButton
+                        isActive={!item.external && pathname === item.href}
+                        render={render}
+                        tooltip={item.label()}
+                      >
+                        <item.icon />
+                        <span>{item.label()}</span>
+                      </SidebarMenuButton>
+                    </SidebarMenuItem>
+                  );
+                })}
               </SidebarMenu>
             </SidebarGroupContent>
           </SidebarGroup>
@@ -117,10 +124,12 @@ export function SidebarLayout({
   groups,
   children,
   sidebarHeader,
+  headerActions,
 }: {
   groups: NavGroup[];
   children?: React.ReactNode;
   sidebarHeader?: React.ReactNode;
+  headerActions?: React.ReactNode;
 }) {
   return (
     <SidebarProvider>
@@ -129,9 +138,8 @@ export function SidebarLayout({
         <header className="bg-background/95 supports-[backdrop-filter]:bg-background/60 sticky top-0 z-10 flex h-14 shrink-0 items-center gap-2 border-b px-4 backdrop-blur">
           <SidebarTrigger />
           <div className="ml-auto flex items-center gap-2">
-            <OrganizationSwitcher />
+            {headerActions}
             <LocaleToggle />
-            <UserButton />
           </div>
         </header>
         <div className="flex flex-col gap-6 px-5 py-6 md:px-8">

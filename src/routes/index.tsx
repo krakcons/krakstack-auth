@@ -2,8 +2,8 @@ import { Link, createFileRoute } from "@tanstack/react-router";
 import { Users } from "lucide-react";
 
 import { m } from "@/paraglide/messages";
-import { AppBrand } from "@/components/app-brand";
-import { LocaleToggle } from "@/components/locale-toggle";
+import { AppBrand } from "@/components/ui/app-brand";
+import { LocaleToggle } from "@/components/ui/locale-toggle";
 import { buttonVariants } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 

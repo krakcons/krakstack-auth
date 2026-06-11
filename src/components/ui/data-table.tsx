@@ -80,6 +80,7 @@ import {
   Rows3,
   Search,
   Settings2,
+  X,
 } from "lucide-react";
 import {
   Fragment,
@@ -160,10 +161,14 @@ interface DataTableProps<TData, TValue> {
   data: TData[];
   emptyLabel?: string;
   exportFileName?: string;
+  isLoading?: boolean;
   onRowClick?: (row: TData) => void;
   from?: ValidateFromPath;
   grouping?: DataTableGrouping<TData>;
   gallery?: DataTableGalleryConfig;
+  serverPagination?: {
+    rowCount: number;
+  };
   features?: {
     pagination?: boolean;
     search?: boolean;
@@ -608,7 +613,9 @@ const getColumnDisplayName = <TData,>(
   return header ? getHeaderName(header) : columnId;
 };
 
-const escapeCsvValue = (value: string) => {
+export type CsvValue = string | number | boolean | null | undefined;
+
+const escapeCsvValue = (value: CsvValue) => {
   if (value === null || value === undefined) return "";
   const stringValue = String(value);
   if (
@@ -621,10 +628,34 @@ const escapeCsvValue = (value: string) => {
   return stringValue;
 };
 
-const getCsvBlob = <TData,>(
+export const downloadCsv = (
+  headers: CsvValue[],
+  data: CsvValue[][],
+  fileName = "data.csv",
+) => {
+  const csvContent = [headers, ...data]
+    .map((row) => row.map(escapeCsvValue).join(","))
+    .join("\n");
+  const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+  const link = document.createElement("a");
+  const url = window.URL.createObjectURL(blob);
+
+  link.href = url;
+  link.setAttribute(
+    "download",
+    fileName.endsWith(".csv") ? fileName : `${fileName}.csv`,
+  );
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  requestAnimationFrame(() => window.URL.revokeObjectURL(url));
+};
+
+const exportTableToCsv = <TData,>(
   table: TanstackTable<TData>,
   rows: Row<TData>[],
-): Blob => {
+  fileName = "data.csv",
+): void => {
   const exportableColumns = table
     .getVisibleLeafColumns()
     .filter((column) => column.id !== "actions");
@@ -638,27 +669,7 @@ const getCsvBlob = <TData,>(
     }),
   );
 
-  const csvContent = [headerNames, ...data]
-    .map((row) => row.map(escapeCsvValue).join(","))
-    .join("\n");
-
-  return new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
-};
-
-const exportToCsv = <TData,>(
-  table: TanstackTable<TData>,
-  rows: Row<TData>[],
-  fileName = "data.csv",
-): void => {
-  const blob = getCsvBlob(table, rows);
-  const link = document.createElement("a");
-  const url = window.URL.createObjectURL(blob);
-  link.href = url;
-  link.setAttribute("download", fileName);
-  document.body.appendChild(link);
-  link.click();
-  link.remove();
-  requestAnimationFrame(() => window.URL.revokeObjectURL(url));
+  downloadCsv(headerNames, data, fileName);
 };
 
 export function DataTable<TData, TValue>({
@@ -666,10 +677,12 @@ export function DataTable<TData, TValue>({
   data,
   emptyLabel = m.table_empty(),
   exportFileName = "table.csv",
+  isLoading = false,
   onRowClick,
   from,
   grouping,
   gallery,
+  serverPagination,
   features = DEFAULT_TABLE_FEATURES,
 }: DataTableProps<TData, TValue>) {
   const search = useRouterState({
@@ -696,6 +709,7 @@ export function DataTable<TData, TValue>({
   };
   const currentView: DataTableView = showGallery ? view : "table";
   const isGalleryView = currentView === "gallery";
+  const emptyStateLabel = isLoading ? m.table_loading() : emptyLabel;
 
   const [columnVisibility, setColumnVisibility] = useState<VisibilityState>({});
   const [rowSelection, setRowSelection] = useState({});
@@ -727,6 +741,7 @@ export function DataTable<TData, TValue>({
     navigate({
       to: ".",
       replace: options?.replace ?? false,
+      resetScroll: false,
       search: (current: Record<string, unknown>) =>
         updater((current ?? {}) as TableParams & Record<string, unknown>),
     });
@@ -774,7 +789,6 @@ export function DataTable<TData, TValue>({
       }));
     },
     getCoreRowModel: getCoreRowModel(),
-    getPaginationRowModel: getPaginationRowModel(),
     getSortedRowModel: getSortedRowModel(),
     onGlobalFilterChange: (updater) => {
       const newGlobalFilter =
@@ -795,6 +809,9 @@ export function DataTable<TData, TValue>({
       );
     },
     getFilteredRowModel: getFilteredRowModel(),
+    ...(serverPagination
+      ? { manualPagination: true, rowCount: serverPagination.rowCount }
+      : { getPaginationRowModel: getPaginationRowModel() }),
     autoResetPageIndex: false,
     onColumnVisibilityChange: setColumnVisibility,
     onRowSelectionChange: setRowSelection,
@@ -878,12 +895,12 @@ export function DataTable<TData, TValue>({
   const renderTableEmptyState = () => (
     <TableRow>
       <TableCell className="h-24 text-center" colSpan={colSpan}>
-        {emptyLabel}
+        {emptyStateLabel}
       </TableCell>
     </TableRow>
   );
 
-  const renderGalleryEmptyState = (message: ReactNode = emptyLabel) => (
+  const renderGalleryEmptyState = (message: ReactNode = emptyStateLabel) => (
     <div className="text-muted-foreground rounded-xl border border-dashed px-4 py-10 text-center text-sm">
       {message}
     </div>
@@ -983,10 +1000,10 @@ export function DataTable<TData, TValue>({
       <div className="flex flex-col gap-3 pb-4">
         <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
           {showSearch ? (
-            <div className="relative min-w-sm flex-1">
+            <div className="relative w-full min-w-0 flex-1 sm:min-w-sm">
               <Search className="text-muted-foreground pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2" />
               <Input
-                className="pl-9"
+                className="px-9"
                 onChange={(event) => {
                   setSearchInput(event.target.value);
                   table.setGlobalFilter(event.target.value);
@@ -994,6 +1011,21 @@ export function DataTable<TData, TValue>({
                 placeholder={m.table_filter()}
                 value={searchInput}
               />
+              {searchInput ? (
+                <Button
+                  aria-label={m.table_clear_search()}
+                  className="text-muted-foreground hover:text-foreground absolute top-1/2 right-1 size-7 -translate-y-1/2 active:!-translate-y-1/2"
+                  onClick={() => {
+                    setSearchInput("");
+                    table.setGlobalFilter("");
+                  }}
+                  size="icon"
+                  type="button"
+                  variant="ghost"
+                >
+                  <X className="size-4" />
+                </Button>
+              ) : null}
             </div>
           ) : (
             <div />
@@ -1003,7 +1035,12 @@ export function DataTable<TData, TValue>({
               <DropdownMenu>
                 <DropdownMenuTrigger
                   render={
-                    <Button className="h-8" size="sm" variant="outline">
+                    <Button
+                      aria-label={m.table_group_by()}
+                      className="h-8"
+                      size="sm"
+                      variant="outline"
+                    >
                       <Rows3 />
                       <span className="hidden sm:inline">
                         {m.table_group_by()}
@@ -1042,12 +1079,15 @@ export function DataTable<TData, TValue>({
             ) : null}
             {showExport ? (
               <Button
+                aria-label={m.table_export()}
                 disabled={!hasExportableRows}
-                onClick={() => exportToCsv(table, exportRows, exportFileName)}
+                onClick={() =>
+                  exportTableToCsv(table, exportRows, exportFileName)
+                }
                 size="sm"
                 variant="outline"
               >
-                <Download size={18} />
+                <Download />
                 <span className="hidden sm:inline">{m.table_export()}</span>
               </Button>
             ) : null}
@@ -1179,7 +1219,14 @@ function DataTableDisplayModeSwitch({
   return (
     <DropdownMenu>
       <DropdownMenuTrigger
-        render={<Button className="h-8" size="sm" variant="outline" />}
+        render={
+          <Button
+            aria-label={m.table_view()}
+            className="h-8"
+            size="sm"
+            variant="outline"
+          />
+        }
       >
         <Rows3 />
         {m.table_view()}
@@ -1232,15 +1279,20 @@ function DataTableSortDropdown<TData>({
     <DropdownMenu>
       <DropdownMenuTrigger
         render={
-          <Button className="h-8" size="sm" variant="outline">
+          <Button
+            aria-label={m.table_sort_by()}
+            className="h-8"
+            size="sm"
+            variant="outline"
+          >
             {activeSortColumn ? (
               activeSortColumn.desc ? (
-                <ArrowDown className="size-4" />
+                <ArrowDown />
               ) : (
-                <ArrowUp className="size-4" />
+                <ArrowUp />
               )
             ) : (
-              <ChevronsUpDown className="size-4" />
+              <ChevronsUpDown />
             )}
             <span className="hidden sm:inline">{m.table_sort_by()}</span>
           </Button>
@@ -1259,22 +1311,18 @@ function DataTableSortDropdown<TData>({
                 <DropdownMenuSubTrigger inset={!!sortState}>
                   {sortState ? (
                     <span className="pointer-events-none absolute left-3 flex size-4 items-center justify-center">
-                      {sortState.desc ? (
-                        <ArrowDown className="size-4" />
-                      ) : (
-                        <ArrowUp className="size-4" />
-                      )}
+                      {sortState.desc ? <ArrowDown /> : <ArrowUp />}
                     </span>
                   ) : null}
                   {label}
                 </DropdownMenuSubTrigger>
                 <DropdownMenuSubContent>
                   <DropdownMenuItem onClick={() => column.toggleSorting(false)}>
-                    <ArrowUp className="size-4" />
+                    <ArrowUp />
                     {m.table_sort_asc()}
                   </DropdownMenuItem>
                   <DropdownMenuItem onClick={() => column.toggleSorting(true)}>
-                    <ArrowDown className="size-4" />
+                    <ArrowDown />
                     {m.table_sort_desc()}
                   </DropdownMenuItem>
                   {sortState && (
@@ -1324,7 +1372,12 @@ function DataTableViewOptions<TData>({
     <DropdownMenu>
       <DropdownMenuTrigger
         render={
-          <Button className="h-8" size="sm" variant="outline">
+          <Button
+            aria-label={m.table_columns()}
+            className="h-8"
+            size="sm"
+            variant="outline"
+          >
             <Settings2 />
             <span className="hidden sm:inline">{m.table_columns()}</span>
           </Button>
@@ -1368,16 +1421,20 @@ export function DataTablePagination<TData>({
   table,
 }: DataTablePaginationProps<TData>) {
   const selectedRows = table.getFilteredSelectedRowModel().rows.length;
+  const filteredRows = table.getFilteredRowModel().rows.length;
 
   return (
     <div className="flex flex-col gap-3 px-2 sm:flex-row sm:items-center sm:justify-between">
-      <div className="text-muted-foreground text-sm">
-        {selectedRows > 0
-          ? m.table_selected_of({
+      <div className="text-muted-foreground flex flex-wrap items-center gap-x-3 gap-y-1 text-sm">
+        <span>{m.table_results({ count: filteredRows })}</span>
+        {selectedRows > 0 ? (
+          <span>
+            {m.table_selected_of({
               selected: selectedRows,
-              total: table.getFilteredRowModel().rows.length,
-            })
-          : ""}
+              total: filteredRows,
+            })}
+          </span>
+        ) : null}
       </div>
       <div className="flex items-center gap-4 sm:justify-end">
         <div className="flex items-center gap-2">

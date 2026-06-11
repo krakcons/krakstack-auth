@@ -3,7 +3,7 @@ import { useQuery } from "@tanstack/react-query";
 
 import { m } from "@/paraglide/messages";
 import { authClient } from "@/services/auth/client";
-import { useAppForm } from "@/components/form";
+import { useAppForm } from "@/components/ui/form";
 import { Button } from "@/components/ui/button";
 import {
   Card,

@@ -9,6 +9,8 @@ import {
 import { oauthProviderClient } from "@better-auth/oauth-provider/client";
 import { apiKeyClient } from "@better-auth/api-key/client";
 
+export const KRAK_ORGANIZATION_SLUG = "krak";
+
 export const authClient = createAuthClient({
   plugins: [
     adminClient(),
@@ -22,3 +24,13 @@ export const authClient = createAuthClient({
     genericOAuthClient(),
   ],
 });
+
+export const ensureKrakOrganizationSelected = async () => {
+  const result = await authClient.organization.setActive({
+    organizationSlug: KRAK_ORGANIZATION_SLUG,
+  });
+
+  if (result.error) {
+    throw new Error(result.error.message ?? "Krak organization is required");
+  }
+};

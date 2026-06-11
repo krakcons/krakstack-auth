@@ -3,8 +3,8 @@ import { Copy, Plus } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
 
-import { TableSearchSchemaStandard as TableSearchSchema } from "@/components/data-table";
-import { SidebarPageHeader } from "@/components/sidebar-layout";
+import { TableSearchSchemaStandard as TableSearchSchema } from "@/components/ui/data-table";
+import { SidebarPageHeader } from "@/components/ui/sidebar-layout";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,

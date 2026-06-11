@@ -385,13 +385,12 @@ const ImageField = ({
   };
 }) => {
   const { width, height } = size;
-  const field = useFieldContext<File | string | null>();
+  const field = useFieldContext<File | null>();
   const invalid = !field.state.meta.isValid;
 
-  const imageUrl =
-    field.state.value instanceof File
-      ? URL.createObjectURL(field.state.value).toString()
-      : (field.state.value ?? defaultImageUrl);
+  const imageUrl = field.state.value
+    ? URL.createObjectURL(field.state.value).toString()
+    : defaultImageUrl;
 
   return (
     <Field data-invalid={invalid}>
@@ -430,7 +429,7 @@ const ImageField = ({
           }}
           aria-invalid={invalid}
         />
-        {(field.state.value || defaultImageUrl) && (
+        {field.state.value && (
           <Button
             type="button"
             variant="secondary"

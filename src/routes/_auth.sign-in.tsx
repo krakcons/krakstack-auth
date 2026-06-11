@@ -7,7 +7,7 @@ import {
 
 import { m } from "@/paraglide/messages";
 import { authClient } from "@/services/auth/client";
-import { useAppForm } from "@/components/form";
+import { useAppForm } from "@/components/ui/form";
 import {
   Card,
   CardContent,

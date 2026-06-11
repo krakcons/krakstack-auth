@@ -5,7 +5,7 @@ import {
 } from "@tanstack/react-router";
 import type { QueryClient } from "@tanstack/react-query";
 
-import { TableSearchSchemaStandard as TableSearchSchema } from "@/components/data-table";
+import { TableSearchSchemaStandard as TableSearchSchema } from "@/components/ui/data-table";
 import { Toaster } from "@/components/ui/sonner";
 import { m } from "../paraglide/messages.js";
 import { getLocale } from "../paraglide/runtime.js";

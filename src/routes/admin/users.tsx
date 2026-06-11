@@ -8,9 +8,9 @@ import {
   createDataTableActionsColumn,
   DataTable,
   TableSearchSchemaStandard as TableSearchSchema,
-} from "@/components/data-table";
-import { ErrorMessage } from "@/components/form";
-import { SidebarPageHeader } from "@/components/sidebar-layout";
+} from "@/components/ui/data-table";
+import { ErrorMessage } from "@/components/ui/form";
+import { SidebarPageHeader } from "@/components/ui/sidebar-layout";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {

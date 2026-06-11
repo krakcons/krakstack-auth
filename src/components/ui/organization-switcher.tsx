@@ -1,8 +1,15 @@
 import type { ApiKey } from "@better-auth/api-key/client";
 import { type ColumnDef } from "@tanstack/react-table";
-import { Building2, KeyRound, PencilIcon, Trash2 } from "lucide-react";
+import {
+  Building2,
+  ChevronsUpDown,
+  KeyRound,
+  PencilIcon,
+  Trash2,
+} from "lucide-react";
 import {
   type ComponentProps,
+  type ReactNode,
   useEffect,
   useEffectEvent,
   useState,
@@ -11,8 +18,9 @@ import {
 import {
   createDataTableActionsColumn,
   DataTable,
-} from "@/components/data-table";
-import { useAppForm } from "@/components/form";
+} from "@/components/ui/data-table";
+import { AppBrand } from "@/components/ui/app-brand";
+import { useAppForm } from "@/components/ui/form";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -33,10 +41,12 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Separator } from "@/components/ui/separator";
 import { m } from "@/paraglide/messages";
-import { authClient } from "@/services/auth/client";
+import { centralAuthClient } from "@/services/auth/client/central";
 
 type OrganizationSwitcherProps = {
   side?: ComponentProps<typeof DropdownMenuContent>["side"];
+  renderUnauthenticated?: () => ReactNode;
+  locked?: boolean;
 };
 
 type OrganizationSummary = {
@@ -57,17 +67,27 @@ const slugify = (value: string) =>
 
 export function OrganizationSwitcher({
   side = "bottom",
+  renderUnauthenticated,
+  locked = false,
 }: OrganizationSwitcherProps) {
-  const organizations = authClient.useListOrganizations();
-  const activeOrganization = authClient.useActiveOrganization();
+  const session = centralAuthClient.useSession();
+  const organizations = centralAuthClient.useListOrganizations();
+  const activeOrganization = centralAuthClient.useActiveOrganization();
   const [dialog, setDialog] = useState<OrganizationDialog | null>(null);
+
+  if (!session.data) {
+    return <>{renderUnauthenticated?.()}</>;
+  }
 
   const active = activeOrganization.data;
   const activeName = active?.name;
-  const selectableOrganizations =
-    organizations.data?.filter(
-      (organization) => organization.id !== active?.id,
-    ) ?? [];
+  const selectableOrganizations = !locked
+    ? (organizations.data?.filter(
+        (organization) => organization.id !== active?.id,
+      ) ?? [])
+    : [];
+  const hasOrganizationListItems =
+    organizations.isPending || Boolean(organizations.error) || !locked;
 
   const refresh = async () => {
     await organizations.refetch();
@@ -79,11 +99,19 @@ export function OrganizationSwitcher({
       <DropdownMenu>
         <DropdownMenuTrigger
           render={
-            <Button variant="outline" className="max-w-48 justify-start">
-              <Building2 data-icon="inline-start" />
-              <span className="truncate">
-                {activeName ?? m.organization_switcher_label()}
-              </span>
+            <Button
+              variant="ghost"
+              className="h-11 max-w-64 justify-between gap-3 px-2"
+            >
+              <AppBrand
+                to={null}
+                label={activeName ?? m.organization_switcher_label()}
+                subtitle={active?.slug ?? m.organization_switcher_label()}
+                imageSrc="/logo192.png"
+                icon={Building2}
+                className="min-w-0 flex-1 text-left"
+              />
+              <ChevronsUpDown className="text-muted-foreground size-4 shrink-0" />
             </Button>
           }
         />
@@ -95,27 +123,16 @@ export function OrganizationSwitcher({
         >
           <DropdownMenuGroup>
             <DropdownMenuLabel className="p-0 font-normal">
-              <div className="flex items-center gap-2 px-1 py-1.5 text-left text-sm">
-                <Building2 className="size-4.5" />
-                <div className="grid flex-1 text-left text-sm leading-tight">
-                  {active ? (
-                    <>
-                      <span className="text-foreground truncate font-medium">
-                        {active.name}
-                      </span>
-                      <span className="text-muted-foreground truncate text-xs">
-                        {active.slug}
-                      </span>
-                    </>
-                  ) : (
-                    <span className="text-foreground truncate font-medium">
-                      {m.organization_switcher_label()}
-                    </span>
-                  )}
-                </div>
-              </div>
+              <AppBrand
+                to={null}
+                label={active?.name ?? m.organization_switcher_label()}
+                subtitle={active?.slug ?? m.organization_switcher_label()}
+                imageSrc="/logo192.png"
+                icon={Building2}
+                className="px-1 py-1.5 text-left text-sm"
+              />
             </DropdownMenuLabel>
-            <DropdownMenuSeparator />
+            {hasOrganizationListItems ? <DropdownMenuSeparator /> : null}
             {organizations.isPending ? (
               <DropdownMenuItem disabled>
                 {m.organization_loading()}
@@ -126,33 +143,44 @@ export function OrganizationSwitcher({
                 {organizations.error.message}
               </DropdownMenuItem>
             ) : null}
-            {selectableOrganizations.length ? (
+            {!locked && selectableOrganizations.length ? (
               selectableOrganizations.map((organization) => (
                 <DropdownMenuItem
                   key={organization.id}
                   onClick={async () => {
-                    const result = await authClient.organization.setActive({
-                      organizationId: organization.id,
-                    });
+                    const result =
+                      await centralAuthClient.organization.setActive({
+                        organizationId: organization.id,
+                      });
                     if (!result.error) await refresh();
                   }}
                 >
-                  <Building2 />
-                  <span className="truncate">{organization.name}</span>
+                  <AppBrand
+                    to={null}
+                    label={organization.name}
+                    subtitle={organization.slug}
+                    imageSrc="/logo192.png"
+                    icon={Building2}
+                    className="w-full text-left [&>div:first-child]:size-7"
+                  />
                 </DropdownMenuItem>
               ))
-            ) : !organizations.isPending ? (
+            ) : !locked && !organizations.isPending ? (
               <DropdownMenuItem disabled>
                 {active
                   ? m.organization_switcher_no_other_organizations()
                   : m.organization_switcher_empty()}
               </DropdownMenuItem>
             ) : null}
-            <DropdownMenuSeparator />
-            <DropdownMenuItem onClick={() => setDialog("create")}>
-              <Building2 />
-              {m.organization_create_title()}
-            </DropdownMenuItem>
+            {!locked ? (
+              <>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem onClick={() => setDialog("create")}>
+                  <Building2 />
+                  {m.organization_create_title()}
+                </DropdownMenuItem>
+              </>
+            ) : null}
             {activeOrganization.data ? (
               <>
                 <DropdownMenuSeparator />
@@ -170,44 +198,76 @@ export function OrganizationSwitcher({
         </DropdownMenuContent>
       </DropdownMenu>
       <Dialog
-        open={dialog !== null}
+        open={dialog === "create"}
         onOpenChange={(open) => {
-          if (!open) setDialog(null);
+          setDialog((current) =>
+            open ? "create" : current === "create" ? null : current,
+          );
         }}
       >
         <DialogContent className="max-h-[85vh] overflow-y-auto sm:max-w-3xl">
           <DialogHeader>
             <DialogTitle className="text-2xl">
-              {dialog === "create"
-                ? m.organization_create_title()
-                : dialog === "apiKeys"
-                  ? m.user_api_keys_title()
-                  : m.organization_switcher_manage()}
+              {m.organization_create_title()}
             </DialogTitle>
             <DialogDescription>
-              {dialog === "create"
-                ? m.organization_create_description()
-                : dialog === "apiKeys"
-                  ? activeOrganization.data?.name
-                  : m.organization_edit_description()}
+              {m.organization_create_description()}
             </DialogDescription>
           </DialogHeader>
           <Separator />
-          {dialog === "create" ? (
-            <CreateOrganizationSection
-              onCreated={async () => {
-                await refresh();
-                setDialog(null);
-              }}
-            />
-          ) : null}
-          {dialog === "manage" && activeOrganization.data ? (
+          <CreateOrganizationSection
+            onCreated={async () => {
+              await refresh();
+              setDialog(null);
+            }}
+          />
+        </DialogContent>
+      </Dialog>
+      <Dialog
+        open={dialog === "manage"}
+        onOpenChange={(open) => {
+          setDialog((current) =>
+            open ? "manage" : current === "manage" ? null : current,
+          );
+        }}
+      >
+        <DialogContent className="max-h-[85vh] overflow-y-auto sm:max-w-3xl">
+          <DialogHeader>
+            <DialogTitle className="text-2xl">
+              {m.organization_switcher_manage()}
+            </DialogTitle>
+            <DialogDescription>
+              {m.organization_edit_description()}
+            </DialogDescription>
+          </DialogHeader>
+          <Separator />
+          {activeOrganization.data ? (
             <EditOrganizationSection
               organization={activeOrganization.data}
               onUpdated={refresh}
             />
           ) : null}
-          {dialog === "apiKeys" && activeOrganization.data ? (
+        </DialogContent>
+      </Dialog>
+      <Dialog
+        open={dialog === "apiKeys"}
+        onOpenChange={(open) => {
+          setDialog((current) =>
+            open ? "apiKeys" : current === "apiKeys" ? null : current,
+          );
+        }}
+      >
+        <DialogContent className="max-h-[85vh] overflow-y-auto sm:max-w-3xl">
+          <DialogHeader>
+            <DialogTitle className="text-2xl">
+              {m.user_api_keys_title()}
+            </DialogTitle>
+            <DialogDescription>
+              {activeOrganization.data?.name}
+            </DialogDescription>
+          </DialogHeader>
+          <Separator />
+          {activeOrganization.data ? (
             <OrganizationApiKeyManager organization={activeOrganization.data} />
           ) : null}
         </DialogContent>
@@ -233,7 +293,7 @@ function EditOrganizationSection({
       const name = value.name.trim();
       const slug = value.slug.trim().toLowerCase();
 
-      const result = await authClient.organization.update({
+      const result = await centralAuthClient.organization.update({
         organizationId: organization.id,
         data: { name, slug },
       });
@@ -293,7 +353,7 @@ function CreateOrganizationSection({
       const name = value.name.trim();
       const slug = (value.slug.trim() || slugify(name)).toLowerCase();
 
-      const result = await authClient.organization.create({
+      const result = await centralAuthClient.organization.create({
         name,
         slug,
       });
@@ -358,7 +418,7 @@ function OrganizationApiKeyManager({
   const loadKeys = useEffectEvent(async () => {
     setLoading(true);
     setError(null);
-    const result = await authClient.apiKey.list({
+    const result = await centralAuthClient.apiKey.list({
       query: { configId: "organization", organizationId: organization.id },
     });
 
@@ -381,7 +441,7 @@ function OrganizationApiKeyManager({
     onSubmit: async ({ value, formApi }) => {
       formApi.setErrorMap({ onSubmit: undefined });
       setCreatedKey(null);
-      const result = await authClient.apiKey.create({
+      const result = await centralAuthClient.apiKey.create({
         configId: "organization",
         organizationId: organization.id,
         name: value.name.trim(),
@@ -404,7 +464,7 @@ function OrganizationApiKeyManager({
   });
 
   const deleteKey = async (key: ApiKeySummary) => {
-    const result = await authClient.apiKey.delete({
+    const result = await centralAuthClient.apiKey.delete({
       configId: "organization",
       keyId: key.id,
     });
@@ -428,6 +488,9 @@ function OrganizationApiKeyManager({
             createForm.handleSubmit();
           }}
         >
+          <p className="text-muted-foreground text-sm">
+            {m.api_key_rate_limit_notice()}
+          </p>
           <createForm.AppField name="name">
             {(field) => (
               <field.TextField label={m.user_api_key_name()} required />
@@ -452,13 +515,11 @@ function OrganizationApiKeyManager({
         </div>
       ) : null}
       {error ? <p className="text-destructive text-sm">{error}</p> : null}
-      {loading ? (
-        <p className="text-muted-foreground text-sm">{m.user_loading()}</p>
-      ) : null}
       <Separator />
       <DataTable
         columns={apiKeyColumns({ onDelete: deleteKey })}
         data={keys}
+        emptyLabel={loading ? m.user_loading() : m.table_empty()}
         exportFileName={`${organization.slug}-api-keys.csv`}
         features={{ gallery: false }}
       />

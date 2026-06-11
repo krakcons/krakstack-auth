@@ -1,6 +1,6 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 
-import { useAppForm } from "@/components/form";
+import { useAppForm } from "@/components/ui/form";
 import {
   Card,
   CardContent,

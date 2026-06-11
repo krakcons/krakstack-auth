@@ -2,22 +2,29 @@ import { Link } from "@tanstack/react-router";
 import type { ComponentProps } from "react";
 import type { LucideIcon } from "lucide-react";
 
-type AppBrandProps = Omit<ComponentProps<typeof Link>, "to"> & {
+type AppBrandBaseProps = {
   label: string;
   subtitle: string;
-  icon?: LucideIcon;
-  logoUrl?: string | null | undefined;
-  to?: string;
+  className?: string;
   variant?: "default" | "sidebar";
-};
+} & (
+  | (Omit<ComponentProps<typeof Link>, "to"> & { to?: string })
+  | (ComponentProps<"div"> & { to: null })
+);
+
+type AppBrandProps = AppBrandBaseProps &
+  (
+    | { icon: LucideIcon; imageSrc?: string }
+    | { imageSrc: string; icon?: LucideIcon }
+  );
 
 export function AppBrand({
   className,
   label,
   subtitle,
   icon: Icon,
-  logoUrl,
-  to = "/",
+  imageSrc,
+  to,
   variant = "default",
   ...props
 }: AppBrandProps) {
@@ -28,26 +35,16 @@ export function AppBrand({
   const contentClassName =
     variant === "sidebar" ? "group-data-[collapsible=icon]:hidden" : undefined;
 
-  return (
-    <Link
-      to={to}
-      className={[
-        "flex min-w-0 items-center gap-2 text-foreground hover:text-foreground",
-        variant === "sidebar" ? "p-2" : "",
-        className,
-      ]
-        .filter(Boolean)
-        .join(" ")}
-      {...props}
-    >
+  const content = (
+    <>
       <div
         className={[
           "flex size-8 shrink-0 items-center justify-center overflow-hidden rounded-md",
-          logoUrl ? "border bg-background" : iconClassName,
+          imageSrc ? "border bg-background" : iconClassName,
         ].join(" ")}
       >
-        {logoUrl ? (
-          <img src={logoUrl} alt="" className="size-full object-contain" />
+        {imageSrc ? (
+          <img src={imageSrc} alt={label} className="size-full object-cover" />
         ) : Icon ? (
           <Icon className="size-4" />
         ) : null}
@@ -62,6 +59,33 @@ export function AppBrand({
           {subtitle}
         </span>
       </div>
+    </>
+  );
+  const brandClassName = [
+    "flex min-w-0 items-center gap-2 text-foreground hover:text-foreground",
+    variant === "sidebar"
+      ? "p-2 group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:p-0"
+      : "",
+    className,
+  ]
+    .filter(Boolean)
+    .join(" ");
+
+  if (to === null) {
+    return (
+      <div className={brandClassName} {...(props as ComponentProps<"div">)}>
+        {content}
+      </div>
+    );
+  }
+
+  return (
+    <Link
+      to={to ?? "/"}
+      className={brandClassName}
+      {...(props as Omit<ComponentProps<typeof Link>, "to">)}
+    >
+      {content}
     </Link>
   );
 }

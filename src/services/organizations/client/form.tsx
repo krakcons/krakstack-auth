@@ -4,7 +4,7 @@ import { Loader2 } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
 
-import { ErrorMessage, useAppForm } from "@/components/form";
+import { ErrorMessage, useAppForm } from "@/components/ui/form";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,

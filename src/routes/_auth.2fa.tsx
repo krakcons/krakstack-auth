@@ -6,7 +6,7 @@ import {
 import { REGEXP_ONLY_DIGITS } from "input-otp";
 import { useState } from "react";
 
-import { FieldError, useAppForm } from "@/components/form";
+import { FieldError, useAppForm } from "@/components/ui/form";
 import {
   Card,
   CardContent,
