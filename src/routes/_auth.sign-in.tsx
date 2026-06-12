@@ -236,6 +236,7 @@ const getRedirectTarget = (searchString: string) => {
   const search = new URLSearchParams(searchString);
   return (
     search.get("callbackURL") ??
+    search.get("redirect") ??
     search.get("redirectTo") ??
     search.get("returnTo") ??
     "/admin"

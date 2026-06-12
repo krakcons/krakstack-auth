@@ -29,6 +29,7 @@ function SignUp() {
   const searchString = useRouterState({
     select: (state) => state.location.searchStr,
   });
+  const redirectTarget = getRedirectTarget(searchString);
   const clientId = getOAuthClientIdFromSearch(searchString);
   const clientConfig = useOAuthClientConfigSuspense(clientId);
   const authOptions = clientConfig?.authOptions ?? {
@@ -51,7 +52,7 @@ function SignUp() {
     try {
       const result = await authClient.signIn.social({
         provider: "google",
-        callbackURL: "/admin",
+        callbackURL: redirectTarget,
         errorCallbackURL: "/sign-up",
       });
 
@@ -195,4 +196,15 @@ const nameFromEmail = (email: string) => {
   const trimmed = email.trim();
   const localPart = trimmed.split("@")[0]?.trim();
   return localPart || trimmed;
+};
+
+const getRedirectTarget = (searchString: string) => {
+  const search = new URLSearchParams(searchString);
+  return (
+    search.get("callbackURL") ??
+    search.get("redirect") ??
+    search.get("redirectTo") ??
+    search.get("returnTo") ??
+    "/admin"
+  );
 };
