@@ -6,6 +6,7 @@ import {
 } from "@tanstack/react-router";
 import {
   KeyRound,
+  KeySquare,
   LayoutDashboard,
   Loader2,
   Building2,
@@ -68,6 +69,11 @@ const adminNavGroups: NavGroup[] = [
     items: [
       { label: m.sidebar_nav_dashboard, href: "/admin", icon: LayoutDashboard },
       { label: m.sidebar_nav_users, href: "/admin/users", icon: Users },
+      {
+        label: m.sidebar_nav_api_keys,
+        href: "/admin/api-keys",
+        icon: KeySquare,
+      },
       {
         label: m.sidebar_nav_organizations,
         href: "/admin/organizations",

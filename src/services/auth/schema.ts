@@ -23,6 +23,7 @@ export const VerifyPasswordPayload = Schema.Struct({
 export const ApiKeyConfigId = Schema.Union([
   Schema.Literal("user"),
   Schema.Literal("organization"),
+  Schema.Literal("service"),
 ]).annotate({
   identifier: "ApiKeyConfigId",
   title: "API key configuration ID",

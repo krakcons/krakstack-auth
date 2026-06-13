@@ -7,10 +7,12 @@ import {
 } from "effect/unstable/httpapi";
 
 import {
+  ActiveOrganization,
   CreateOrganizationPayload,
   Organization,
   OrganizationIdParams,
   UpdateOrganizationPayload,
+  UserIdParams,
 } from "./schema";
 import { PresignedUpload, PresignUploadPayload } from "@/services/s3/schema";
 
@@ -28,6 +30,42 @@ export const OrganizationsApiGroup = HttpApiGroup.make("organizations")
         title: "List organizations",
         summary: "List organizations for administrators",
         description: "Returns app-managed organization records.",
+      }),
+    ),
+  )
+  .add(
+    HttpApiEndpoint.get(
+      "listUserOrganizations",
+      "/organizations/user/:userId",
+      {
+        params: UserIdParams,
+        success: Schema.Array(Organization),
+        error: [HttpApiError.Unauthorized, HttpApiError.InternalServerError],
+      },
+    ).annotateMerge(
+      OpenApi.annotations({
+        title: "List user organizations",
+        summary: "List organizations for a user",
+        description:
+          "Returns organization records for a user. Requires a service API key.",
+      }),
+    ),
+  )
+  .add(
+    HttpApiEndpoint.get(
+      "getUserActiveOrganization",
+      "/organizations/user/:userId/active",
+      {
+        params: UserIdParams,
+        success: ActiveOrganization,
+        error: [HttpApiError.Unauthorized, HttpApiError.InternalServerError],
+      },
+    ).annotateMerge(
+      OpenApi.annotations({
+        title: "Get user active organization",
+        summary: "Get active organization for a user",
+        description:
+          "Returns the active organization ID from the user's latest central auth session. Requires a service API key.",
       }),
     ),
   )

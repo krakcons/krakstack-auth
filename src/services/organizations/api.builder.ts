@@ -1,9 +1,12 @@
 import { Cause, Effect } from "effect";
+import { and, desc, eq, gt, isNotNull } from "drizzle-orm";
 import type { Headers } from "effect/unstable/http/Headers";
 import { HttpApiBuilder, HttpApiError } from "effect/unstable/httpapi";
 
 import { Api } from "@/api";
+import { member, organization, session as authSession } from "@/db/auth-schema";
 import { auth } from "@/services/auth/config";
+import { db } from "@/services/database";
 import { S3Service } from "@/services/s3";
 import { s3AssetUrl } from "@/services/s3/asset-url";
 
@@ -59,6 +62,29 @@ const requireSession = (headers: Headers) =>
     if (!session) return yield* new HttpApiError.Unauthorized({});
   });
 
+const headerValue = (headers: Headers, name: string) => {
+  const getter = (
+    headers as unknown as { get?: (key: string) => string | null }
+  ).get;
+  if (getter) return getter.call(headers, name) ?? undefined;
+
+  const record = headers as unknown as Record<string, string | undefined>;
+  return record[name] ?? record[name.toLowerCase()];
+};
+
+const requireServiceApiKey = (headers: Headers) =>
+  Effect.gen(function* () {
+    const key = headerValue(headers, "x-api-key");
+    if (!key) return yield* new HttpApiError.Unauthorized({});
+
+    const result = yield* Effect.tryPromise({
+      try: () => auth.api.verifyApiKey({ body: { key, configId: "service" } }),
+      catch: internalServerError,
+    });
+
+    if (!result.valid) return yield* new HttpApiError.Unauthorized({});
+  });
+
 const safeFileName = (name: string) =>
   name
     .trim()
@@ -79,6 +105,60 @@ export const organizationsApiHandler = HttpApiBuilder.group(
           return yield* service
             .list({ headers: request.headers })
             .pipe(Effect.mapError(internalServerError));
+        }),
+      )
+      .handle("listUserOrganizations", ({ params, request }) =>
+        Effect.gen(function* () {
+          yield* requireServiceApiKey(request.headers);
+
+          const memberships = yield* Effect.tryPromise({
+            try: () =>
+              db
+                .select({
+                  id: organization.id,
+                  name: organization.name,
+                  slug: organization.slug,
+                  logo: organization.logo,
+                  metadata: organization.metadata,
+                  createdAt: organization.createdAt,
+                })
+                .from(member)
+                .innerJoin(
+                  organization,
+                  eq(member.organizationId, organization.id),
+                )
+                .where(eq(member.userId, params.userId)),
+            catch: internalServerError,
+          });
+
+          return memberships;
+        }),
+      )
+      .handle("getUserActiveOrganization", ({ params, request }) =>
+        Effect.gen(function* () {
+          yield* requireServiceApiKey(request.headers);
+
+          const [activeSession] = yield* Effect.tryPromise({
+            try: () =>
+              db
+                .select({ id: authSession.activeOrganizationId })
+                .from(authSession)
+                .where(
+                  and(
+                    eq(authSession.userId, params.userId),
+                    isNotNull(authSession.activeOrganizationId),
+                    gt(authSession.expiresAt, new Date()),
+                  ),
+                )
+                .orderBy(
+                  desc(authSession.updatedAt),
+                  desc(authSession.createdAt),
+                )
+                .limit(1),
+            catch: internalServerError,
+          });
+
+          return { id: activeSession?.id ?? null };
         }),
       )
       .handle("createOrganization", ({ payload, request }) =>

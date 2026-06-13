@@ -127,6 +127,16 @@ export const auth = betterAuth({
         references: "organization",
         rateLimit: apiKeyRateLimit,
       },
+      {
+        configId: "service",
+        defaultPrefix: "svc_",
+        references: "user",
+        rateLimit: {
+          enabled: true,
+          timeWindow: 1000 * 60 * 60 * 24,
+          maxRequests: 10000,
+        },
+      },
     ]),
     oauthProvider({
       loginPage: "/sign-in",

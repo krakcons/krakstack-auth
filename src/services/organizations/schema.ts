@@ -32,6 +32,25 @@ export const OrganizationIdParams = Schema.Struct({
   examples: [{ id: "organization-id" }],
 });
 
+export const UserIdParams = Schema.Struct({
+  userId: Schema.String,
+}).annotate({
+  identifier: "UserIdParams",
+  title: "User ID params",
+  description: "Path parameters used to identify a user.",
+  examples: [{ userId: "user-id" }],
+});
+
+export const ActiveOrganization = Schema.Struct({
+  id: Schema.NullOr(Schema.String),
+}).annotate({
+  identifier: "ActiveOrganization",
+  title: "Active organization",
+  description:
+    "The active organization ID resolved from a user's auth session.",
+  examples: [{ id: "organization-id" }],
+});
+
 export const CreateOrganizationPayload = Schema.Struct({
   name: Schema.NonEmptyString,
   slug: Schema.NonEmptyString,
@@ -71,5 +90,6 @@ export const CreateOrganizationPayloadStandard = Schema.toStandardSchemaV1(
 );
 
 export type Organization = typeof Organization.Type;
+export type ActiveOrganization = typeof ActiveOrganization.Type;
 export type CreateOrganizationPayload = typeof CreateOrganizationPayload.Type;
 export type UpdateOrganizationPayload = typeof UpdateOrganizationPayload.Type;

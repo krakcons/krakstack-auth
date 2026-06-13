@@ -4,4 +4,4 @@ export const schema = {
   ...authSchema,
 };
 
-export const relations = {};
+export const relations = authSchema.relations;
