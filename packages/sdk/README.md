@@ -45,4 +45,4 @@ const organizations = await Effect.runPromise(
 );
 ```
 
-Atom clients are also exported as `BackendApiClient` and `FrontendApiClient`.
+The frontend subpath also exports `FrontendApiClient` for Atom-based browser state.

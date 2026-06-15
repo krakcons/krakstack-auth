@@ -5,19 +5,9 @@ import {
   HttpClientRequest,
 } from "effect/unstable/http";
 import { HttpApiClient } from "effect/unstable/httpapi";
-import { AtomHttpApi } from "effect/unstable/reactivity";
 
-import { defaultBaseUrl, readClientConfig } from "../config";
+import { readClientConfig } from "../config";
 import { BackendApi } from "./api";
-
-export class BackendApiClient extends AtomHttpApi.Service<BackendApiClient>()(
-  "BackendApiClient",
-  {
-    api: BackendApi,
-    baseUrl: defaultBaseUrl(),
-    httpClient: FetchHttpClient.layer,
-  },
-) {}
 
 export class AuthClientConfig extends Context.Service<AuthClientConfig>()(
   "AuthClientConfig",
