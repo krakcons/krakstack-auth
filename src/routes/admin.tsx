@@ -32,8 +32,7 @@ import {
   authClient,
   ensureKrakOrganizationSelected,
 } from "@/services/auth/client";
-import { OrganizationSwitcher } from "@/components/ui/organization-switcher";
-import { UserButton } from "@/components/ui/user-button";
+import { OrganizationSwitcher, UserButton } from "@krak-stack/auth/components";
 import type { AuthSession } from "@/services/auth/config";
 
 type SessionData = AuthSession | null;

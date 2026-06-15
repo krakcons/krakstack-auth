@@ -7,8 +7,17 @@ export const BackendAuthIdsQuery = Schema.Struct({
 }).annotate({
   identifier: "BackendAuthIdsQuery",
   title: "Backend auth IDs query",
-  description: "Comma-separated resource IDs used to hydrate backend records.",
+  description: "Comma-separated resource IDs used to return backend records.",
   examples: [{ ids: "user_1,user_2,user_3" }],
+});
+
+export const BackendAuthIdParams = Schema.Struct({
+  id: Schema.NonEmptyString,
+}).annotate({
+  identifier: "BackendAuthIdParams",
+  title: "Backend auth ID params",
+  description: "Resource ID used to return a backend record.",
+  examples: [{ id: "user_1" }],
 });
 
 export const BackendAuthUsersResponse = Schema.Struct({
@@ -18,7 +27,7 @@ export const BackendAuthUsersResponse = Schema.Struct({
   identifier: "BackendAuthUsersResponse",
   title: "Backend auth users response",
   description:
-    "Batch user hydration response with records and requested IDs that were not found.",
+    "Batch user response with records and requested IDs that were not found.",
 });
 
 export const BackendAuthOrganizationsResponse = Schema.Struct({
@@ -28,7 +37,7 @@ export const BackendAuthOrganizationsResponse = Schema.Struct({
   identifier: "BackendAuthOrganizationsResponse",
   title: "Backend auth organizations response",
   description:
-    "Batch organization hydration response with records and requested IDs that were not found.",
+    "Batch organization response with records and requested IDs that were not found.",
 });
 
 export type BackendAuthUsersResponse = typeof BackendAuthUsersResponse.Type;

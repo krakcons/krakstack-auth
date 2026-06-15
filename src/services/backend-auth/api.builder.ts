@@ -1,4 +1,4 @@
-import { Cause, Effect, Option } from "effect";
+import { Cause, Effect, Layer, Option } from "effect";
 import { Headers } from "effect/unstable/http";
 import { HttpApiBuilder, HttpApiError } from "effect/unstable/httpapi";
 
@@ -51,9 +51,9 @@ const parseIds = (ids: string) =>
     .map((id) => id.trim())
     .filter(Boolean);
 
-export const backendAuthApiHandler = HttpApiBuilder.group(
+const backendAuthUsersApiHandler = HttpApiBuilder.group(
   BackendAuthApi,
-  "backendAuth",
+  "backendUsers",
   (handlers) =>
     handlers
       .handle("listUsersByIds", ({ query, request }) =>
@@ -66,6 +66,27 @@ export const backendAuthApiHandler = HttpApiBuilder.group(
             .pipe(Effect.mapError(internalServerError));
         }),
       )
+      .handle("getUser", ({ params, request }) =>
+        Effect.gen(function* () {
+          yield* requireServiceApiKey(request.headers);
+
+          const backendAuth = yield* BackendAuth;
+          const user = yield* backendAuth
+            .getUser({ id: params.id })
+            .pipe(Effect.mapError(internalServerError));
+
+          if (!user) return yield* new HttpApiError.NotFound({});
+
+          return user;
+        }),
+      ),
+);
+
+const backendAuthOrganizationsApiHandler = HttpApiBuilder.group(
+  BackendAuthApi,
+  "backendOrganizations",
+  (handlers) =>
+    handlers
       .handle("listOrganizationsByIds", ({ query, request }) =>
         Effect.gen(function* () {
           yield* requireServiceApiKey(request.headers);
@@ -75,5 +96,23 @@ export const backendAuthApiHandler = HttpApiBuilder.group(
             .listOrganizationsByIds({ ids: parseIds(query.ids) })
             .pipe(Effect.mapError(internalServerError));
         }),
+      )
+      .handle("getOrganization", ({ params, request }) =>
+        Effect.gen(function* () {
+          yield* requireServiceApiKey(request.headers);
+
+          const backendAuth = yield* BackendAuth;
+          const organization = yield* backendAuth
+            .getOrganization({ id: params.id })
+            .pipe(Effect.mapError(internalServerError));
+
+          if (!organization) return yield* new HttpApiError.NotFound({});
+
+          return organization;
+        }),
       ),
+);
+
+export const backendAuthApiHandler = backendAuthUsersApiHandler.pipe(
+  Layer.merge(backendAuthOrganizationsApiHandler),
 );

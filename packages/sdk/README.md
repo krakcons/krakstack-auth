@@ -15,6 +15,16 @@ bun add @krak-stack/auth effect
 
 ## Backend Auth API
 
+Users:
+
+- `listUsersByIds({ query: { ids } })` - returns matching users and missing IDs for a comma-separated ID list.
+- `getUser({ params: { id } })` - returns one user by ID.
+
+Organizations:
+
+- `listOrganizationsByIds({ query: { ids } })` - returns matching organizations and missing IDs for a comma-separated ID list.
+- `getOrganization({ params: { id } })` - returns one organization by ID.
+
 ```ts
 import { Effect } from "effect";
 import { AuthClient } from "@krak-stack/auth/backend";
@@ -46,3 +56,12 @@ const organizations = await Effect.runPromise(
 ```
 
 The frontend subpath also exports `FrontendApiClient` for Atom-based browser state.
+
+## Components
+
+```tsx
+import { OrganizationSwitcher, UserButton } from "@krak-stack/auth/components";
+
+<OrganizationSwitcher side="bottom" />
+<UserButton signOutRedirect="/" side="bottom" />
+```

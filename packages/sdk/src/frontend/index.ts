@@ -56,4 +56,4 @@ export type {
   FrontendPresignedUpload,
   FrontendPresignUploadPayload,
 } from "./schema";
-export type { Organization } from "../schema";
+export type { Organization, OrganizationMetadata } from "../schema";

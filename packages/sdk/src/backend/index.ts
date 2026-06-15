@@ -41,4 +41,4 @@ export class AuthClient extends Context.Service<AuthClient>()(
 
 export { BackendApi, BackendApiGroup } from "./api";
 export type { BackendOrganizationsResponse, BackendUsersResponse } from "./schema";
-export type { Organization, User } from "../schema";
+export type { Organization, OrganizationMetadata, User } from "../schema";

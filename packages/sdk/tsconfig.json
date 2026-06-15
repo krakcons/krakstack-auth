@@ -1,6 +1,6 @@
 {
   "extends": "../../tsconfig.json",
-  "include": ["src/**/*.ts"],
+  "include": ["src/**/*.ts", "src/**/*.tsx"],
   "compilerOptions": {
     "rootDir": "src",
     "outDir": "dist",
@@ -9,6 +9,7 @@
     "emitDeclarationOnly": false,
     "noEmit": false,
     "allowImportingTsExtensions": false,
+    "paths": {},
     "types": ["node"],
     "lib": ["ES2022", "DOM", "DOM.Iterable"]
   }

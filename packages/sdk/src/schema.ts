@@ -29,12 +29,65 @@ export const User = Schema.Struct({
   ],
 });
 
+export const OrganizationLocale = Schema.Union([
+  Schema.Literal("en"),
+  Schema.Literal("fr"),
+]).annotate({
+  identifier: "OrganizationLocale",
+  title: "Organization locale",
+  description: "Supported organization translation locale.",
+  examples: ["en", "fr"],
+});
+
+export const OrganizationTranslation = Schema.Struct({
+  locale: OrganizationLocale,
+  name: Schema.String,
+  logo: Schema.NullOr(Schema.String),
+  contactEmail: Schema.NullOr(Schema.String),
+  location: Schema.NullOr(Schema.String),
+}).annotate({
+  identifier: "OrganizationTranslation",
+  title: "Organization translation",
+  description: "Localized display metadata for an organization.",
+  examples: [
+    {
+      locale: "en",
+      name: "KrakStack",
+      logo: "https://example.com/logo.svg",
+      contactEmail: "team@example.com",
+      location: "Montreal, QC",
+    },
+  ],
+});
+
+export const OrganizationMetadata = Schema.Struct({
+  translations: Schema.Array(OrganizationTranslation),
+}).annotate({
+  identifier: "OrganizationMetadata",
+  title: "Organization metadata",
+  description:
+    "Localized names, logos, contact emails, and locations stored on an organization record.",
+  examples: [
+    {
+      translations: [
+        {
+          locale: "en",
+          name: "KrakStack",
+          logo: "https://example.com/logo.svg",
+          contactEmail: "team@example.com",
+          location: "Montreal, QC",
+        },
+      ],
+    },
+  ],
+});
+
 export const Organization = Schema.Struct({
   id: Schema.String,
   name: Schema.String,
   slug: Schema.String,
   logo: Schema.NullOr(Schema.String),
-  metadata: Schema.NullOr(Schema.Unknown),
+  metadata: Schema.NullOr(OrganizationMetadata),
   createdAt: Schema.Date,
 }).annotate({
   identifier: "Organization",
@@ -46,11 +99,24 @@ export const Organization = Schema.Struct({
       name: "KrakStack",
       slug: "krakstack",
       logo: null,
-      metadata: { tier: "internal" },
+      metadata: {
+        translations: [
+          {
+            locale: "en",
+            name: "KrakStack",
+            logo: null,
+            contactEmail: "team@example.com",
+            location: "Montreal, QC",
+          },
+        ],
+      },
       createdAt: new Date("2026-01-01T00:00:00.000Z"),
     },
   ],
 });
 
 export type User = typeof User.Type;
+export type OrganizationLocale = typeof OrganizationLocale.Type;
+export type OrganizationTranslation = typeof OrganizationTranslation.Type;
+export type OrganizationMetadata = typeof OrganizationMetadata.Type;
 export type Organization = typeof Organization.Type;
