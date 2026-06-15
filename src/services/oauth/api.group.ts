@@ -16,9 +16,9 @@ import {
 } from "./schema";
 import { PresignedUpload, PresignUploadPayload } from "@/services/s3/schema";
 
-export const OAuthClientsApiGroup = HttpApiGroup.make("oauthClients")
+export const AdminOAuthClientsApiGroup = HttpApiGroup.make("oauthClients")
   .add(
-    HttpApiEndpoint.get("listOAuthClients", "/oauth/clients", {
+    HttpApiEndpoint.get("listOAuthClients", "/admin/oauth/clients", {
       success: Schema.Array(OAuthClientAdmin),
       error: [
         HttpApiError.Unauthorized,
@@ -35,7 +35,7 @@ export const OAuthClientsApiGroup = HttpApiGroup.make("oauthClients")
     ),
   )
   .add(
-    HttpApiEndpoint.post("createOAuthClient", "/oauth/clients", {
+    HttpApiEndpoint.post("createOAuthClient", "/admin/oauth/clients", {
       payload: CreateOAuthClientPayload,
       success: OAuthClientCreated,
       error: [
@@ -71,17 +71,21 @@ export const OAuthClientsApiGroup = HttpApiGroup.make("oauthClients")
     ),
   )
   .add(
-    HttpApiEndpoint.patch("updateOAuthClient", "/oauth/clients/:clientId", {
-      params: OAuthClientIdParams,
-      payload: UpdateOAuthClientPayload,
-      success: OAuthClientAdmin,
-      error: [
-        HttpApiError.Unauthorized,
-        HttpApiError.Forbidden,
-        HttpApiError.NotFound,
-        HttpApiError.InternalServerError,
-      ],
-    }).annotateMerge(
+    HttpApiEndpoint.patch(
+      "updateOAuthClient",
+      "/admin/oauth/clients/:clientId",
+      {
+        params: OAuthClientIdParams,
+        payload: UpdateOAuthClientPayload,
+        success: OAuthClientAdmin,
+        error: [
+          HttpApiError.Unauthorized,
+          HttpApiError.Forbidden,
+          HttpApiError.NotFound,
+          HttpApiError.InternalServerError,
+        ],
+      },
+    ).annotateMerge(
       OpenApi.annotations({
         title: "Update OAuth client",
         summary: "Update OAuth client white-label settings",
@@ -91,16 +95,20 @@ export const OAuthClientsApiGroup = HttpApiGroup.make("oauthClients")
     ),
   )
   .add(
-    HttpApiEndpoint.delete("deleteOAuthClient", "/oauth/clients/:clientId", {
-      params: OAuthClientIdParams,
-      success: OAuthClientAdmin,
-      error: [
-        HttpApiError.Unauthorized,
-        HttpApiError.Forbidden,
-        HttpApiError.NotFound,
-        HttpApiError.InternalServerError,
-      ],
-    }).annotateMerge(
+    HttpApiEndpoint.delete(
+      "deleteOAuthClient",
+      "/admin/oauth/clients/:clientId",
+      {
+        params: OAuthClientIdParams,
+        success: OAuthClientAdmin,
+        error: [
+          HttpApiError.Unauthorized,
+          HttpApiError.Forbidden,
+          HttpApiError.NotFound,
+          HttpApiError.InternalServerError,
+        ],
+      },
+    ).annotateMerge(
       OpenApi.annotations({
         title: "Delete OAuth client",
         summary: "Delete an OAuth client",
@@ -111,7 +119,7 @@ export const OAuthClientsApiGroup = HttpApiGroup.make("oauthClients")
   .add(
     HttpApiEndpoint.post(
       "presignOAuthClientLogoUpload",
-      "/oauth/clients/logo/presign",
+      "/admin/oauth/clients/logo/presign",
       {
         payload: PresignUploadPayload,
         success: PresignedUpload,
@@ -134,6 +142,6 @@ export const OAuthClientsApiGroup = HttpApiGroup.make("oauthClients")
   .annotateMerge(
     OpenApi.annotations({
       title: "OAuth clients",
-      description: "OAuth client white-label configuration endpoints.",
+      description: "Administrative OAuth client white-label endpoints.",
     }),
   );

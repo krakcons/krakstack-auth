@@ -1,7 +1,7 @@
 import { Atom, AsyncResult } from "effect/unstable/reactivity";
 import { useAtomSuspense } from "@effect/atom-react";
 
-import { ApiClient } from "@/lib/api-client";
+import { AdminApiClient } from "@/lib/admin-api-client";
 
 import type { OAuthClientPublicConfig } from "@/services/oauth/schema";
 
@@ -13,7 +13,7 @@ export const getOAuthClientIdFromSearch = (searchString: string) => {
 
 export const oauthClientConfigAtom = Atom.family((clientId: string | null) =>
   clientId
-    ? ApiClient.query("oauthClients", "getOAuthClientConfig", {
+    ? AdminApiClient.query("oauthClients", "getOAuthClientConfig", {
         params: { clientId },
         timeToLive: "5 minutes",
         reactivityKeys: ["oauth-client-config", clientId],

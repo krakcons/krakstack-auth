@@ -6,33 +6,10 @@ import {
   OpenApi,
 } from "effect/unstable/httpapi";
 
-import {
-  ActiveOrganization,
-  CreateOrganizationPayload,
-  Organization,
-  OrganizationIdParams,
-  UpdateOrganizationPayload,
-  UserIdParams,
-} from "./schema";
+import { ActiveOrganization, Organization, UserIdParams } from "./schema";
 import { PresignedUpload, PresignUploadPayload } from "@/services/s3/schema";
 
 export const OrganizationsApiGroup = HttpApiGroup.make("organizations")
-  .add(
-    HttpApiEndpoint.get("listOrganizations", "/organizations", {
-      success: Schema.Array(Organization),
-      error: [
-        HttpApiError.Unauthorized,
-        HttpApiError.Forbidden,
-        HttpApiError.InternalServerError,
-      ],
-    }).annotateMerge(
-      OpenApi.annotations({
-        title: "List organizations",
-        summary: "List organizations for administrators",
-        description: "Returns app-managed organization records.",
-      }),
-    ),
-  )
   .add(
     HttpApiEndpoint.get(
       "listUserOrganizations",
@@ -40,7 +17,11 @@ export const OrganizationsApiGroup = HttpApiGroup.make("organizations")
       {
         params: UserIdParams,
         success: Schema.Array(Organization),
-        error: [HttpApiError.Unauthorized, HttpApiError.InternalServerError],
+        error: [
+          HttpApiError.Unauthorized,
+          HttpApiError.Forbidden,
+          HttpApiError.InternalServerError,
+        ],
       },
     ).annotateMerge(
       OpenApi.annotations({
@@ -58,7 +39,11 @@ export const OrganizationsApiGroup = HttpApiGroup.make("organizations")
       {
         params: UserIdParams,
         success: ActiveOrganization,
-        error: [HttpApiError.Unauthorized, HttpApiError.InternalServerError],
+        error: [
+          HttpApiError.Unauthorized,
+          HttpApiError.Forbidden,
+          HttpApiError.InternalServerError,
+        ],
       },
     ).annotateMerge(
       OpenApi.annotations({
@@ -66,60 +51,6 @@ export const OrganizationsApiGroup = HttpApiGroup.make("organizations")
         summary: "Get active organization for a user",
         description:
           "Returns the active organization ID from the user's latest central auth session. Requires a service API key.",
-      }),
-    ),
-  )
-  .add(
-    HttpApiEndpoint.post("createOrganization", "/organizations", {
-      payload: CreateOrganizationPayload,
-      success: Organization,
-      error: [
-        HttpApiError.Unauthorized,
-        HttpApiError.Forbidden,
-        HttpApiError.InternalServerError,
-      ],
-    }).annotateMerge(
-      OpenApi.annotations({
-        title: "Create organization",
-        summary: "Create an organization",
-        description: "Creates an app-managed organization record.",
-      }),
-    ),
-  )
-  .add(
-    HttpApiEndpoint.patch("updateOrganization", "/organizations/:id", {
-      params: OrganizationIdParams,
-      payload: UpdateOrganizationPayload,
-      success: Organization,
-      error: [
-        HttpApiError.Unauthorized,
-        HttpApiError.Forbidden,
-        HttpApiError.NotFound,
-        HttpApiError.InternalServerError,
-      ],
-    }).annotateMerge(
-      OpenApi.annotations({
-        title: "Update organization",
-        summary: "Update an organization",
-        description: "Updates an app-managed organization record.",
-      }),
-    ),
-  )
-  .add(
-    HttpApiEndpoint.delete("deleteOrganization", "/organizations/:id", {
-      params: OrganizationIdParams,
-      success: Organization,
-      error: [
-        HttpApiError.Unauthorized,
-        HttpApiError.Forbidden,
-        HttpApiError.NotFound,
-        HttpApiError.InternalServerError,
-      ],
-    }).annotateMerge(
-      OpenApi.annotations({
-        title: "Delete organization",
-        summary: "Delete an organization",
-        description: "Deletes an app-managed organization record.",
       }),
     ),
   )
@@ -149,6 +80,7 @@ export const OrganizationsApiGroup = HttpApiGroup.make("organizations")
   .annotateMerge(
     OpenApi.annotations({
       title: "Organizations",
-      description: "Organization administration endpoints.",
+      description:
+        "Frontend organization endpoints. User session auth is accepted, and service API key auth is accepted for trusted services.",
     }),
   );

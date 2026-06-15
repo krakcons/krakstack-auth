@@ -8,13 +8,16 @@ import {
 } from "effect/unstable/http";
 import { HttpApiBuilder } from "effect/unstable/httpapi";
 
-import { Api } from "@/api";
+import { AdminApi, FrontendApi } from "@/api";
 import { corsMiddleware } from "@/lib/cors";
 import { adminApiHandler } from "@/services/admin/api.builder";
 import { authApiHandler } from "@/services/auth/api.builder";
 import { auth } from "@/services/auth/config";
+import { BackendAuth } from "@/services/backend-auth";
+import { backendAuthApiHandler } from "@/services/backend-auth/api.builder";
+import { BackendAuthApi } from "@/services/backend-auth/api.group";
 import { OAuthClients } from "@/services/oauth";
-import { oauthClientsApiHandler } from "@/services/oauth/api.builder";
+import { adminOAuthClientsApiHandler } from "@/services/oauth/api.builder";
 import { Organizations } from "@/services/organizations";
 import { organizationsApiHandler } from "@/services/organizations/api.builder";
 import { S3Service } from "@/services/s3";
@@ -90,9 +93,19 @@ const scalarDocsConfig = {
   theme: "default",
   sources: [
     {
-      title: "KrakStack API",
-      slug: "krakstack-api",
-      url: "/api/openapi.json",
+      title: "Admin API",
+      slug: "admin-api",
+      url: "/api/admin-openapi.json",
+    },
+    {
+      title: "Frontend API",
+      slug: "frontend-api",
+      url: "/api/frontend-openapi.json",
+    },
+    {
+      title: "Backend Auth API",
+      slug: "backend-auth-api",
+      url: "/api/backend-openapi.json",
     },
     {
       title: "Better Auth",
@@ -125,14 +138,21 @@ const docsLayer = HttpRouter.add(
 );
 
 const apiLayer = Layer.mergeAll(
-  HttpApiBuilder.layer(Api, {
-    openapiPath: "/api/openapi.json",
+  HttpApiBuilder.layer(AdminApi, {
+    openapiPath: "/api/admin-openapi.json",
+  }).pipe(
+    Layer.provide(adminApiHandler),
+    Layer.provide(adminOAuthClientsApiHandler),
+  ),
+  HttpApiBuilder.layer(FrontendApi, {
+    openapiPath: "/api/frontend-openapi.json",
   }).pipe(
     Layer.provide(authApiHandler),
-    Layer.provide(adminApiHandler),
-    Layer.provide(oauthClientsApiHandler),
     Layer.provide(organizationsApiHandler),
   ),
+  HttpApiBuilder.layer(BackendAuthApi, {
+    openapiPath: "/api/backend-openapi.json",
+  }).pipe(Layer.provide(backendAuthApiHandler)),
   docsLayer,
   logoAssetRoutesLayer,
   authRoutesLayer,
@@ -140,12 +160,17 @@ const apiLayer = Layer.mergeAll(
 
 const appServicesLayer = Layer.mergeAll(
   OAuthClients.layer,
+  BackendAuth.layer,
   Organizations.layer,
   S3Service.layer,
 );
 
 const apiWebHandler = HttpEffect.toWebHandlerLayerWith(appServicesLayer, {
-  toHandler: () => HttpRouter.toHttpEffect(apiLayer).pipe(Effect.scoped),
+  toHandler: (context) =>
+    HttpRouter.toHttpEffect(apiLayer).pipe(
+      Effect.provide(context),
+      Effect.scoped,
+    ),
 });
 
 export const apiHandler = corsMiddleware((request) =>

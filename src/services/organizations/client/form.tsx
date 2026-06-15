@@ -13,6 +13,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { AdminApiClient } from "@/lib/admin-api-client";
 import { ApiClient } from "@/lib/api-client";
 import { m } from "@/paraglide/messages";
 
@@ -33,12 +34,12 @@ const slugify = (value: string) =>
 
 const isFile = (value: unknown): value is File => value instanceof File;
 
-const createOrganizationAtom = ApiClient.mutation(
-  "organizations",
+const createOrganizationAtom = AdminApiClient.mutation(
+  "admin",
   "createOrganization",
 );
-const updateOrganizationAtom = ApiClient.mutation(
-  "organizations",
+const updateOrganizationAtom = AdminApiClient.mutation(
+  "admin",
   "updateOrganization",
 );
 const presignLogoUploadAtom = ApiClient.mutation(

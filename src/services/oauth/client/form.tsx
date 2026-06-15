@@ -13,7 +13,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { ApiClient } from "@/lib/api-client";
+import { AdminApiClient } from "@/lib/admin-api-client";
 import { m } from "@/paraglide/messages";
 
 import {
@@ -49,15 +49,15 @@ const scopeOptions = [
 
 const isFile = (value: unknown): value is File => value instanceof File;
 
-const createOAuthClientAtom = ApiClient.mutation(
+const createOAuthClientAtom = AdminApiClient.mutation(
   "oauthClients",
   "createOAuthClient",
 );
-const updateOAuthClientAtom = ApiClient.mutation(
+const updateOAuthClientAtom = AdminApiClient.mutation(
   "oauthClients",
   "updateOAuthClient",
 );
-const presignLogoUploadAtom = ApiClient.mutation(
+const presignLogoUploadAtom = AdminApiClient.mutation(
   "oauthClients",
   "presignOAuthClientLogoUpload",
 );

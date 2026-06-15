@@ -1,6 +1,9 @@
 {
   "name": "auth",
   "private": true,
+  "workspaces": [
+    "packages/*"
+  ],
   "type": "module",
   "imports": {
     "@/*": "./src/*"

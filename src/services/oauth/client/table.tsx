@@ -25,14 +25,14 @@ import type { OAuthClientAdmin } from "../schema";
 import { OAuthClientForm } from "./form";
 
 const listOAuthClients = async () => {
-  const response = await fetch("/api/oauth/clients");
+  const response = await fetch("/api/admin/oauth/clients");
   if (!response.ok) throw new Error(m.oauth_client_fetch_error());
   return (await response.json()) as OAuthClientAdmin[];
 };
 
 const deleteOAuthClient = async (clientId: string) => {
   const response = await fetch(
-    `/api/oauth/clients/${encodeURIComponent(clientId)}`,
+    `/api/admin/oauth/clients/${encodeURIComponent(clientId)}`,
     { method: "DELETE" },
   );
 

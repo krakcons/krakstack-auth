@@ -1,7 +1,7 @@
 import { Cause, Effect } from "effect";
 import { HttpApiBuilder, HttpApiError } from "effect/unstable/httpapi";
 
-import { Api } from "@/api";
+import { AdminApi } from "@/api";
 import { auth } from "@/services/auth/config";
 import { S3Service } from "@/services/s3";
 import { s3AssetUrl } from "@/services/s3/asset-url";
@@ -42,8 +42,8 @@ const safeFileName = (name: string) =>
     .replace(/[^a-z0-9._-]+/g, "-")
     .replace(/^-+|-+$/g, "") || "logo";
 
-export const oauthClientsApiHandler = HttpApiBuilder.group(
-  Api,
+export const adminOAuthClientsApiHandler = HttpApiBuilder.group(
+  AdminApi,
   "oauthClients",
   (handlers) =>
     handlers

@@ -9,7 +9,7 @@ import { m } from "@/paraglide/messages";
 import type { Organization } from "../schema";
 
 const listOrganizations = async () => {
-  const response = await fetch("/api/organizations");
+  const response = await fetch("/api/admin/organizations");
   if (!response.ok) throw new Error(m.organization_fetch_error());
   return (await response.json()) as Organization[];
 };

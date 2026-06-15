@@ -3,25 +3,12 @@ import { and, desc, eq, gt, isNotNull } from "drizzle-orm";
 import type { Headers } from "effect/unstable/http/Headers";
 import { HttpApiBuilder, HttpApiError } from "effect/unstable/httpapi";
 
-import { Api } from "@/api";
+import { FrontendApi } from "@/api";
 import { member, organization, session as authSession } from "@/db/auth-schema";
 import { auth } from "@/services/auth/config";
 import { db } from "@/services/database";
 import { S3Service } from "@/services/s3";
 import { s3AssetUrl } from "@/services/s3/asset-url";
-
-import { Organizations } from ".";
-
-const userRole = (value: unknown) => {
-  if (typeof value !== "object" || value === null || !("role" in value)) {
-    return undefined;
-  }
-  return Reflect.get(value, "role");
-};
-
-const hasAdminRole = (role: unknown) =>
-  typeof role === "string" &&
-  role.split(",").some((item) => item.trim() === "admin");
 
 const internalServerError = (error: unknown) => {
   const cause =
@@ -39,27 +26,17 @@ const internalServerError = (error: unknown) => {
   return new HttpApiError.InternalServerError({});
 };
 
-const requireAdmin = (headers: Headers) =>
-  Effect.gen(function* () {
-    const session = yield* Effect.tryPromise({
-      try: () => auth.api.getSession({ headers }),
-      catch: internalServerError,
-    });
-
-    if (!session) return yield* new HttpApiError.Unauthorized({});
-    if (!hasAdminRole(userRole(session.user))) {
-      return yield* new HttpApiError.Forbidden({});
-    }
+const currentSession = (headers: Headers) =>
+  Effect.tryPromise({
+    try: () => auth.api.getSession({ headers }),
+    catch: internalServerError,
   });
 
 const requireSession = (headers: Headers) =>
   Effect.gen(function* () {
-    const session = yield* Effect.tryPromise({
-      try: () => auth.api.getSession({ headers }),
-      catch: internalServerError,
-    });
-
+    const session = yield* currentSession(headers);
     if (!session) return yield* new HttpApiError.Unauthorized({});
+    return session;
   });
 
 const headerValue = (headers: Headers, name: string) => {
@@ -72,9 +49,16 @@ const headerValue = (headers: Headers, name: string) => {
   return record[name] ?? record[name.toLowerCase()];
 };
 
+const bearerToken = (value: string | undefined) => {
+  if (!value?.startsWith("Bearer ")) return undefined;
+  return value.slice("Bearer ".length).trim() || undefined;
+};
+
 const requireServiceApiKey = (headers: Headers) =>
   Effect.gen(function* () {
-    const key = headerValue(headers, "x-api-key");
+    const key =
+      bearerToken(headerValue(headers, "authorization")) ??
+      headerValue(headers, "x-api-key");
     if (!key) return yield* new HttpApiError.Unauthorized({});
 
     const result = yield* Effect.tryPromise({
@@ -85,6 +69,25 @@ const requireServiceApiKey = (headers: Headers) =>
     if (!result.valid) return yield* new HttpApiError.Unauthorized({});
   });
 
+const requireUserOrService = (headers: Headers, userId: string) =>
+  requireServiceApiKey(headers).pipe(
+    Effect.catchTag("Unauthorized", () =>
+      Effect.gen(function* () {
+        const session = yield* requireSession(headers);
+        if (session.user.id !== userId) {
+          return yield* new HttpApiError.Forbidden({});
+        }
+      }),
+    ),
+  );
+
+const requireSessionOrService = (headers: Headers) =>
+  requireServiceApiKey(headers).pipe(
+    Effect.catchTag("Unauthorized", () =>
+      requireSession(headers).pipe(Effect.asVoid),
+    ),
+  );
+
 const safeFileName = (name: string) =>
   name
     .trim()
@@ -93,23 +96,13 @@ const safeFileName = (name: string) =>
     .replace(/^-+|-+$/g, "") || "logo";
 
 export const organizationsApiHandler = HttpApiBuilder.group(
-  Api,
+  FrontendApi,
   "organizations",
   (handlers) =>
     handlers
-      .handle("listOrganizations", ({ request }) =>
-        Effect.gen(function* () {
-          yield* requireAdmin(request.headers);
-
-          const service = yield* Organizations;
-          return yield* service
-            .list({ headers: request.headers })
-            .pipe(Effect.mapError(internalServerError));
-        }),
-      )
       .handle("listUserOrganizations", ({ params, request }) =>
         Effect.gen(function* () {
-          yield* requireServiceApiKey(request.headers);
+          yield* requireUserOrService(request.headers, params.userId);
 
           const memberships = yield* Effect.tryPromise({
             try: () =>
@@ -136,7 +129,7 @@ export const organizationsApiHandler = HttpApiBuilder.group(
       )
       .handle("getUserActiveOrganization", ({ params, request }) =>
         Effect.gen(function* () {
-          yield* requireServiceApiKey(request.headers);
+          yield* requireUserOrService(request.headers, params.userId);
 
           const [activeSession] = yield* Effect.tryPromise({
             try: () =>
@@ -161,45 +154,9 @@ export const organizationsApiHandler = HttpApiBuilder.group(
           return { id: activeSession?.id ?? null };
         }),
       )
-      .handle("createOrganization", ({ payload, request }) =>
-        Effect.gen(function* () {
-          yield* requireAdmin(request.headers);
-
-          const service = yield* Organizations;
-          return yield* service
-            .create({ headers: request.headers, payload })
-            .pipe(Effect.mapError(internalServerError));
-        }),
-      )
-      .handle("updateOrganization", ({ params, payload, request }) =>
-        Effect.gen(function* () {
-          yield* requireAdmin(request.headers);
-
-          const service = yield* Organizations;
-          const organization = yield* service
-            .update({ headers: request.headers, id: params.id, payload })
-            .pipe(Effect.mapError(internalServerError));
-
-          if (!organization) return yield* new HttpApiError.NotFound({});
-          return organization;
-        }),
-      )
-      .handle("deleteOrganization", ({ params, request }) =>
-        Effect.gen(function* () {
-          yield* requireAdmin(request.headers);
-
-          const service = yield* Organizations;
-          const organization = yield* service
-            .delete({ headers: request.headers, id: params.id })
-            .pipe(Effect.mapError(internalServerError));
-
-          if (!organization) return yield* new HttpApiError.NotFound({});
-          return organization;
-        }),
-      )
       .handle("presignOrganizationLogoUpload", ({ payload, request }) =>
         Effect.gen(function* () {
-          yield* requireSession(request.headers);
+          yield* requireSessionOrService(request.headers);
 
           if (!payload.contentType.startsWith("image/")) {
             return yield* new HttpApiError.BadRequest({});
