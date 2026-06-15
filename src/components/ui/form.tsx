@@ -14,7 +14,7 @@ import {
 } from "@tanstack/react-form";
 import { Block } from "@tanstack/react-router";
 import { Loader2, Plus, Trash, Languages } from "lucide-react";
-import type { InputHTMLAttributes, JSX } from "react";
+import { useEffect, useState, type InputHTMLAttributes, type JSX } from "react";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -387,11 +387,27 @@ const ImageField = ({
   const { width, height } = size;
   const field = useFieldContext<File | string | null>();
   const invalid = !field.state.meta.isValid;
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+
+  useEffect(() => {
+    const value = field.state.value;
+
+    if (!(value instanceof Blob)) {
+      setPreviewUrl(null);
+      return;
+    }
+
+    const objectUrl = URL.createObjectURL(value);
+    setPreviewUrl(objectUrl);
+
+    return () => URL.revokeObjectURL(objectUrl);
+  }, [field.state.value]);
 
   const imageUrl =
-    field.state.value instanceof File
-      ? URL.createObjectURL(field.state.value).toString()
-      : (field.state.value ?? defaultImageUrl);
+    previewUrl ??
+    (typeof field.state.value === "string"
+      ? field.state.value
+      : (defaultImageUrl ?? null));
 
   return (
     <Field data-invalid={invalid}>
