@@ -8,6 +8,7 @@
   "home_heading": "One login for every Krakstack app.",
   "home_description": "This service owns user sessions, credentials, OAuth clients, and OIDC metadata. Other apps should redirect here instead of implementing their own auth stack.",
   "home_open_admin": "Open admin",
+  "home_github": "GitHub",
   "home_open_sign_in": "Open admin",
   "home_check_api_health": "Check API health",
   "home_integration_endpoints": "Integration endpoints",

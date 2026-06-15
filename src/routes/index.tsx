@@ -22,6 +22,14 @@ function Home() {
             icon={Users}
           />
           <div className="flex items-center gap-5 text-sm">
+            <a
+              className="text-muted-foreground hover:text-foreground underline-offset-4 transition-colors hover:underline"
+              href="https://github.com/krakcons/krakstack-auth"
+              target="_blank"
+              rel="noreferrer"
+            >
+              {m.home_github()}
+            </a>
             <Link
               className="text-muted-foreground hover:text-foreground underline-offset-4 transition-colors hover:underline"
               to="/admin"
