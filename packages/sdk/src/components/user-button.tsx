@@ -239,7 +239,7 @@ export const UserButton = ({
           }
         />
         <DropdownMenuContent
-          className="min-w-56 rounded-lg"
+          className="w-56 rounded-lg"
           side={side}
           align="end"
           sideOffset={4}
