@@ -6,46 +6,11 @@ import {
 } from "effect/unstable/httpapi";
 
 import {
-  FrontendActiveOrganization,
-  FrontendOrganizationsResponse,
   FrontendPresignedUpload,
   FrontendPresignUploadPayload,
-  FrontendUserIdParams,
 } from "./schema";
 
-export const FrontendOrganizationsApiGroup = HttpApiGroup.make(
-  "organizations",
-)
-  .add(
-    HttpApiEndpoint.get(
-      "listUserOrganizations",
-      "/organizations/user/:userId",
-      {
-        params: FrontendUserIdParams,
-        success: FrontendOrganizationsResponse,
-        error: [
-          HttpApiError.Unauthorized,
-          HttpApiError.Forbidden,
-          HttpApiError.InternalServerError,
-        ],
-      },
-    ),
-  )
-  .add(
-    HttpApiEndpoint.get(
-      "getUserActiveOrganization",
-      "/organizations/user/:userId/active",
-      {
-        params: FrontendUserIdParams,
-        success: FrontendActiveOrganization,
-        error: [
-          HttpApiError.Unauthorized,
-          HttpApiError.Forbidden,
-          HttpApiError.InternalServerError,
-        ],
-      },
-    ),
-  )
+export const FrontendOrganizationsApiGroup = HttpApiGroup.make("organizations")
   .add(
     HttpApiEndpoint.post(
       "presignOrganizationLogoUpload",
@@ -66,7 +31,7 @@ export const FrontendOrganizationsApiGroup = HttpApiGroup.make(
     OpenApi.annotations({
       title: "Frontend organizations",
       description:
-        "Frontend API organization endpoints that can be called with a service API key.",
+        "Frontend API organization endpoints for browser-facing organization actions.",
     }),
   );
 

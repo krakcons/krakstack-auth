@@ -23,9 +23,7 @@ import {
   createDataTableActionsColumn,
   DataTable,
 } from "@/components/ui/data-table";
-import {
-  EditingLocaleSwitcher,
-} from "@/components/ui/editing-locale-switcher";
+import { EditingLocaleSwitcher } from "@/components/ui/editing-locale-switcher";
 import { AppBrand } from "@/components/ui/app-brand";
 import { useAppForm } from "@/components/ui/form";
 import { Badge } from "@/components/ui/badge";

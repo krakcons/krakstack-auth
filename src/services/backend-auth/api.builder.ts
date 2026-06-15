@@ -51,6 +51,20 @@ const parseIds = (ids: string) =>
     .map((id) => id.trim())
     .filter(Boolean);
 
+const organizationQuery = (query: {
+  readonly ids?: string | undefined;
+  readonly userId?: string | undefined;
+}) => {
+  const ids = query.ids ? parseIds(query.ids) : [];
+  const userId = query.userId?.trim() || undefined;
+
+  if ((ids.length > 0 && userId) || (ids.length === 0 && !userId)) {
+    return undefined;
+  }
+
+  return { ids, userId };
+};
+
 const backendAuthUsersApiHandler = HttpApiBuilder.group(
   BackendAuthApi,
   "backendUsers",
@@ -79,6 +93,16 @@ const backendAuthUsersApiHandler = HttpApiBuilder.group(
 
           return user;
         }),
+      )
+      .handle("getUserActiveOrganization", ({ params, request }) =>
+        Effect.gen(function* () {
+          yield* requireServiceApiKey(request.headers);
+
+          const backendAuth = yield* BackendAuth;
+          return yield* backendAuth
+            .getUserActiveOrganization({ userId: params.userId })
+            .pipe(Effect.mapError(internalServerError));
+        }),
       ),
 );
 
@@ -87,13 +111,22 @@ const backendAuthOrganizationsApiHandler = HttpApiBuilder.group(
   "backendOrganizations",
   (handlers) =>
     handlers
-      .handle("listOrganizationsByIds", ({ query, request }) =>
+      .handle("listOrganizations", ({ query, request }) =>
         Effect.gen(function* () {
           yield* requireServiceApiKey(request.headers);
 
+          const parsedQuery = organizationQuery(query);
+          if (!parsedQuery) return yield* new HttpApiError.BadRequest({});
+
           const backendAuth = yield* BackendAuth;
+          if (parsedQuery.userId) {
+            return yield* backendAuth
+              .listOrganizationsByUserId({ userId: parsedQuery.userId })
+              .pipe(Effect.mapError(internalServerError));
+          }
+
           return yield* backendAuth
-            .listOrganizationsByIds({ ids: parseIds(query.ids) })
+            .listOrganizationsByIds({ ids: parsedQuery.ids })
             .pipe(Effect.mapError(internalServerError));
         }),
       )
@@ -109,6 +142,35 @@ const backendAuthOrganizationsApiHandler = HttpApiBuilder.group(
           if (!organization) return yield* new HttpApiError.NotFound({});
 
           return organization;
+        }),
+      )
+      .handle("getActiveMember", ({ params, request }) =>
+        Effect.gen(function* () {
+          yield* requireServiceApiKey(request.headers);
+
+          const backendAuth = yield* BackendAuth;
+          const member = yield* backendAuth
+            .getActiveMember({
+              organizationId: params.organizationId,
+              userId: params.userId,
+            })
+            .pipe(Effect.mapError(internalServerError));
+
+          if (!member) return yield* new HttpApiError.NotFound({});
+
+          return member;
+        }),
+      )
+      .handle("listOrganizationMembers", ({ params, request }) =>
+        Effect.gen(function* () {
+          yield* requireServiceApiKey(request.headers);
+
+          const backendAuth = yield* BackendAuth;
+          return yield* backendAuth
+            .listOrganizationMembers({
+              organizationId: params.organizationId,
+            })
+            .pipe(Effect.mapError(internalServerError));
         }),
       ),
 );

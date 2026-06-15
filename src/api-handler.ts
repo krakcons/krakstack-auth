@@ -103,7 +103,7 @@ const scalarDocsConfig = {
       url: "/api/frontend-openapi.json",
     },
     {
-      title: "Backend Auth API",
+      title: "Backend API",
       slug: "backend-auth-api",
       url: "/api/backend-openapi.json",
     },

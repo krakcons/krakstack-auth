@@ -6,12 +6,18 @@ import {
   OpenApi,
 } from "effect/unstable/httpapi";
 
-import { AuthOrganization, AuthUser } from "@/lib/auth-schema";
+import { AuthMember, AuthOrganization, AuthUser } from "@/lib/auth-schema";
 
 import {
+  BackendAuthActiveOrganization,
   BackendAuthIdParams,
   BackendAuthIdsQuery,
+  BackendAuthMemberParams,
+  BackendAuthMembersResponse,
+  BackendAuthOrganizationIdParams,
+  BackendAuthOrganizationsQuery,
   BackendAuthOrganizationsResponse,
+  BackendAuthUserIdParams,
   BackendAuthUsersResponse,
 } from "./schema";
 
@@ -48,6 +54,24 @@ export const BackendAuthUsersApiGroup = HttpApiGroup.make("backendUsers")
       }),
     ),
   )
+  .add(
+    HttpApiEndpoint.get(
+      "getUserActiveOrganization",
+      "/organizations/user/:userId/active",
+      {
+        params: BackendAuthUserIdParams,
+        success: BackendAuthActiveOrganization,
+        error: [HttpApiError.Unauthorized, HttpApiError.InternalServerError],
+      },
+    ).annotateMerge(
+      OpenApi.annotations({
+        title: "Get user active organization",
+        summary: "Get active organization for a user",
+        description:
+          "Returns the active organization ID from the user's latest auth session. Requires a service API key.",
+      }),
+    ),
+  )
   .annotateMerge(
     OpenApi.annotations({
       title: "Users",
@@ -59,16 +83,20 @@ export const BackendAuthOrganizationsApiGroup = HttpApiGroup.make(
   "backendOrganizations",
 )
   .add(
-    HttpApiEndpoint.get("listOrganizationsByIds", "/organizations", {
-      query: BackendAuthIdsQuery,
+    HttpApiEndpoint.get("listOrganizations", "/organizations", {
+      query: BackendAuthOrganizationsQuery,
       success: BackendAuthOrganizationsResponse,
-      error: [HttpApiError.Unauthorized, HttpApiError.InternalServerError],
+      error: [
+        HttpApiError.BadRequest,
+        HttpApiError.Unauthorized,
+        HttpApiError.InternalServerError,
+      ],
     }).annotateMerge(
       OpenApi.annotations({
-        title: "List organizations by IDs",
-        summary: "List organizations by IDs",
+        title: "List organizations",
+        summary: "List organizations by IDs or user ID",
         description:
-          "Returns trusted organization records for a comma-separated list of IDs. Requires a service API key.",
+          "Returns trusted organization records for either a comma-separated list of IDs or a user ID. Exactly one of ids or userId is required. Requires a service API key.",
       }),
     ),
   )
@@ -90,17 +118,58 @@ export const BackendAuthOrganizationsApiGroup = HttpApiGroup.make(
       }),
     ),
   )
+  .add(
+    HttpApiEndpoint.get(
+      "getActiveMember",
+      "/organizations/:organizationId/members/:userId",
+      {
+        params: BackendAuthMemberParams,
+        success: AuthMember,
+        error: [
+          HttpApiError.Unauthorized,
+          HttpApiError.NotFound,
+          HttpApiError.InternalServerError,
+        ],
+      },
+    ).annotateMerge(
+      OpenApi.annotations({
+        title: "Get active member",
+        summary: "Get a user's current organization membership",
+        description:
+          "Returns the member record and role for a user in an organization. Requires a service API key.",
+      }),
+    ),
+  )
+  .add(
+    HttpApiEndpoint.get(
+      "listOrganizationMembers",
+      "/organizations/:organizationId/members",
+      {
+        params: BackendAuthOrganizationIdParams,
+        success: BackendAuthMembersResponse,
+        error: [HttpApiError.Unauthorized, HttpApiError.InternalServerError],
+      },
+    ).annotateMerge(
+      OpenApi.annotations({
+        title: "List organization members",
+        summary: "List organization members",
+        description:
+          "Returns organization members with user contact details. Requires a service API key.",
+      }),
+    ),
+  )
   .annotateMerge(
     OpenApi.annotations({
       title: "Organizations",
-      description: "Server-to-server organization endpoints for trusted services.",
+      description:
+        "Server-to-server organization and membership endpoints for trusted services.",
     }),
   );
 
 export const BackendAuthApi = HttpApi.make("BackendAuthApi")
   .annotateMerge(
     OpenApi.annotations({
-      title: "KrakStack Backend Auth API",
+      title: "KrakStack Backend API",
       version: "1.0.0",
       description:
         "Server-to-server KrakStack Auth API for trusted services that need identity records by ID.",

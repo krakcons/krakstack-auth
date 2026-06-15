@@ -5,11 +5,17 @@ import {
   HttpApiGroup,
 } from "effect/unstable/httpapi";
 
-import { Organization, User } from "../schema";
+import { Member, Organization, User } from "../schema";
 import {
+  BackendActiveOrganization,
   BackendIdParams,
   BackendIdsQuery,
+  BackendMemberParams,
+  BackendMembersResponse,
+  BackendOrganizationIdParams,
+  BackendOrganizationsQuery,
   BackendOrganizationsResponse,
+  BackendUserIdParams,
   BackendUsersResponse,
 } from "./schema";
 
@@ -47,16 +53,38 @@ export const BackendApiGroup = HttpApiGroup.make("backend")
     ),
   )
   .add(
-    HttpApiEndpoint.get("listOrganizationsByIds", "/organizations", {
-      query: BackendIdsQuery,
+    HttpApiEndpoint.get(
+      "getUserActiveOrganization",
+      "/organizations/user/:userId/active",
+      {
+        params: BackendUserIdParams,
+        success: BackendActiveOrganization,
+        error: [HttpApiError.Unauthorized, HttpApiError.InternalServerError],
+      },
+    ).annotateMerge(
+      OpenApi.annotations({
+        title: "Get user active organization",
+        summary: "Get active organization for a user",
+        description:
+          "Returns the active organization ID from the user's latest auth session. Requires a service API key.",
+      }),
+    ),
+  )
+  .add(
+    HttpApiEndpoint.get("listOrganizations", "/organizations", {
+      query: BackendOrganizationsQuery,
       success: BackendOrganizationsResponse,
-      error: [HttpApiError.Unauthorized, HttpApiError.InternalServerError],
+      error: [
+        HttpApiError.BadRequest,
+        HttpApiError.Unauthorized,
+        HttpApiError.InternalServerError,
+      ],
     }).annotateMerge(
       OpenApi.annotations({
-        title: "List organizations by IDs",
-        summary: "List organizations by IDs",
+        title: "List organizations",
+        summary: "List organizations by IDs or user ID",
         description:
-          "Returns trusted organization records for a comma-separated list of IDs. Requires a service API key.",
+          "Returns trusted organization records for either a comma-separated list of IDs or a user ID. Exactly one of ids or userId is required. Requires a service API key.",
       }),
     ),
   )
@@ -75,6 +103,46 @@ export const BackendApiGroup = HttpApiGroup.make("backend")
         summary: "Get an organization by ID",
         description:
           "Returns a trusted organization record by ID. Requires a service API key.",
+      }),
+    ),
+  )
+  .add(
+    HttpApiEndpoint.get(
+      "getActiveMember",
+      "/organizations/:organizationId/members/:userId",
+      {
+        params: BackendMemberParams,
+        success: Member,
+        error: [
+          HttpApiError.Unauthorized,
+          HttpApiError.NotFound,
+          HttpApiError.InternalServerError,
+        ],
+      },
+    ).annotateMerge(
+      OpenApi.annotations({
+        title: "Get active member",
+        summary: "Get a user's current organization membership",
+        description:
+          "Returns the member record and role for a user in an organization. Requires a service API key.",
+      }),
+    ),
+  )
+  .add(
+    HttpApiEndpoint.get(
+      "listOrganizationMembers",
+      "/organizations/:organizationId/members",
+      {
+        params: BackendOrganizationIdParams,
+        success: BackendMembersResponse,
+        error: [HttpApiError.Unauthorized, HttpApiError.InternalServerError],
+      },
+    ).annotateMerge(
+      OpenApi.annotations({
+        title: "List organization members",
+        summary: "List organization members",
+        description:
+          "Returns organization members with user contact details. Requires a service API key.",
       }),
     ),
   )

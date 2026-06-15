@@ -1,4 +1,3 @@
-import { Schema } from "effect";
 import {
   HttpApiEndpoint,
   HttpApiError,
@@ -6,54 +5,9 @@ import {
   OpenApi,
 } from "effect/unstable/httpapi";
 
-import { ActiveOrganization, Organization, UserIdParams } from "./schema";
 import { PresignedUpload, PresignUploadPayload } from "@/services/s3/schema";
 
 export const OrganizationsApiGroup = HttpApiGroup.make("organizations")
-  .add(
-    HttpApiEndpoint.get(
-      "listUserOrganizations",
-      "/organizations/user/:userId",
-      {
-        params: UserIdParams,
-        success: Schema.Array(Organization),
-        error: [
-          HttpApiError.Unauthorized,
-          HttpApiError.Forbidden,
-          HttpApiError.InternalServerError,
-        ],
-      },
-    ).annotateMerge(
-      OpenApi.annotations({
-        title: "List user organizations",
-        summary: "List organizations for a user",
-        description:
-          "Returns organization records for a user. Requires a service API key.",
-      }),
-    ),
-  )
-  .add(
-    HttpApiEndpoint.get(
-      "getUserActiveOrganization",
-      "/organizations/user/:userId/active",
-      {
-        params: UserIdParams,
-        success: ActiveOrganization,
-        error: [
-          HttpApiError.Unauthorized,
-          HttpApiError.Forbidden,
-          HttpApiError.InternalServerError,
-        ],
-      },
-    ).annotateMerge(
-      OpenApi.annotations({
-        title: "Get user active organization",
-        summary: "Get active organization for a user",
-        description:
-          "Returns the active organization ID from the user's latest central auth session. Requires a service API key.",
-      }),
-    ),
-  )
   .add(
     HttpApiEndpoint.post(
       "presignOrganizationLogoUpload",

@@ -1,12 +1,9 @@
 import { Cause, Effect } from "effect";
-import { and, desc, eq, gt, isNotNull } from "drizzle-orm";
 import type { Headers } from "effect/unstable/http/Headers";
 import { HttpApiBuilder, HttpApiError } from "effect/unstable/httpapi";
 
 import { FrontendApi } from "@/api";
-import { member, organization, session as authSession } from "@/db/auth-schema";
 import { auth } from "@/services/auth/config";
-import { db } from "@/services/database";
 import { S3Service } from "@/services/s3";
 import { s3AssetUrl } from "@/services/s3/asset-url";
 
@@ -69,18 +66,6 @@ const requireServiceApiKey = (headers: Headers) =>
     if (!result.valid) return yield* new HttpApiError.Unauthorized({});
   });
 
-const requireUserOrService = (headers: Headers, userId: string) =>
-  requireServiceApiKey(headers).pipe(
-    Effect.catchTag("Unauthorized", () =>
-      Effect.gen(function* () {
-        const session = yield* requireSession(headers);
-        if (session.user.id !== userId) {
-          return yield* new HttpApiError.Forbidden({});
-        }
-      }),
-    ),
-  );
-
 const requireSessionOrService = (headers: Headers) =>
   requireServiceApiKey(headers).pipe(
     Effect.catchTag("Unauthorized", () =>
@@ -99,80 +84,25 @@ export const organizationsApiHandler = HttpApiBuilder.group(
   FrontendApi,
   "organizations",
   (handlers) =>
-    handlers
-      .handle("listUserOrganizations", ({ params, request }) =>
-        Effect.gen(function* () {
-          yield* requireUserOrService(request.headers, params.userId);
+    handlers.handle("presignOrganizationLogoUpload", ({ payload, request }) =>
+      Effect.gen(function* () {
+        yield* requireSessionOrService(request.headers);
 
-          const memberships = yield* Effect.tryPromise({
-            try: () =>
-              db
-                .select({
-                  id: organization.id,
-                  name: organization.name,
-                  slug: organization.slug,
-                  logo: organization.logo,
-                  metadata: organization.metadata,
-                  createdAt: organization.createdAt,
-                })
-                .from(member)
-                .innerJoin(
-                  organization,
-                  eq(member.organizationId, organization.id),
-                )
-                .where(eq(member.userId, params.userId)),
-            catch: internalServerError,
-          });
+        if (!payload.contentType.startsWith("image/")) {
+          return yield* new HttpApiError.BadRequest({});
+        }
 
-          return memberships;
-        }),
-      )
-      .handle("getUserActiveOrganization", ({ params, request }) =>
-        Effect.gen(function* () {
-          yield* requireUserOrService(request.headers, params.userId);
+        const s3 = yield* S3Service;
+        const key = `logos/organizations/${crypto.randomUUID()}-${safeFileName(payload.fileName)}`;
+        const uploadUrl = yield* s3
+          .presign(key, {
+            expiresIn: 300,
+            method: "PUT",
+            type: payload.contentType,
+          })
+          .pipe(Effect.mapError(internalServerError));
 
-          const [activeSession] = yield* Effect.tryPromise({
-            try: () =>
-              db
-                .select({ id: authSession.activeOrganizationId })
-                .from(authSession)
-                .where(
-                  and(
-                    eq(authSession.userId, params.userId),
-                    isNotNull(authSession.activeOrganizationId),
-                    gt(authSession.expiresAt, new Date()),
-                  ),
-                )
-                .orderBy(
-                  desc(authSession.updatedAt),
-                  desc(authSession.createdAt),
-                )
-                .limit(1),
-            catch: internalServerError,
-          });
-
-          return { id: activeSession?.id ?? null };
-        }),
-      )
-      .handle("presignOrganizationLogoUpload", ({ payload, request }) =>
-        Effect.gen(function* () {
-          yield* requireSessionOrService(request.headers);
-
-          if (!payload.contentType.startsWith("image/")) {
-            return yield* new HttpApiError.BadRequest({});
-          }
-
-          const s3 = yield* S3Service;
-          const key = `logos/organizations/${crypto.randomUUID()}-${safeFileName(payload.fileName)}`;
-          const uploadUrl = yield* s3
-            .presign(key, {
-              expiresIn: 300,
-              method: "PUT",
-              type: payload.contentType,
-            })
-            .pipe(Effect.mapError(internalServerError));
-
-          return { uploadUrl, url: s3AssetUrl(key) };
-        }),
-      ),
+        return { uploadUrl, url: s3AssetUrl(key) };
+      }),
+    ),
 );

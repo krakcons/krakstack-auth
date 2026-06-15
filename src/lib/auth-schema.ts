@@ -52,5 +52,39 @@ export const AuthOrganization = Schema.Struct({
   ],
 });
 
+export const AuthMember = Schema.Struct({
+  id: Schema.String,
+  organizationId: Schema.String,
+  userId: Schema.String,
+  role: Schema.String,
+  createdAt: Schema.Date,
+  user: AuthUser,
+}).annotate({
+  identifier: "AuthMember",
+  title: "Auth member",
+  description: "Stable central auth organization member record.",
+  examples: [
+    {
+      id: "member_1",
+      organizationId: "org_1",
+      userId: "user_1",
+      role: "admin",
+      createdAt: new Date("2026-01-01T00:00:00.000Z"),
+      user: {
+        id: "user_1",
+        name: "Ada Lovelace",
+        email: "ada@example.com",
+        emailVerified: true,
+        image: null,
+        role: "admin",
+        banned: false,
+        createdAt: new Date("2026-01-01T00:00:00.000Z"),
+        updatedAt: new Date("2026-01-01T00:00:00.000Z"),
+      },
+    },
+  ],
+});
+
 export type AuthUser = typeof AuthUser.Type;
 export type AuthOrganization = typeof AuthOrganization.Type;
+export type AuthMember = typeof AuthMember.Type;
