@@ -25,6 +25,7 @@ export const OAuthClientStats = Schema.Struct({
 
 export const OAuthStatsResponse = Schema.Struct({
   totalUsers: Schema.Number,
+  totalProjects: Schema.Number,
   totalClients: Schema.Number,
   clients: Schema.Array(OAuthClientStats),
 }).annotate({
@@ -34,6 +35,7 @@ export const OAuthStatsResponse = Schema.Struct({
   examples: [
     {
       totalUsers: 42,
+      totalProjects: 2,
       totalClients: 1,
       clients: [
         {

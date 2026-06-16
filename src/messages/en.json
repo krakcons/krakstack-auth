@@ -455,5 +455,7 @@
   "actions_cancel": "Cancel",
   "admin_action_preview": "Preview",
   "sign_up_disabled_title": "Sign-up is unavailable",
-  "sign_up_disabled_description": "New account registration is currently disabled for this project."
+  "sign_up_disabled_description": "New account registration is currently disabled for this project.",
+  "admin_total_projects": "Total Projects",
+  "sidebar_group_manage": "Manage"
 }

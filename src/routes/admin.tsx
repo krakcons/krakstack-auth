@@ -65,34 +65,34 @@ export const Route = createFileRoute("/admin")({
 
 const adminNavGroups: NavGroup[] = [
   {
-    label: m.sidebar_group_admin,
+    label: m.sidebar_group_manage,
     items: [
       { label: m.sidebar_nav_dashboard, href: "/admin", icon: LayoutDashboard },
-      { label: m.sidebar_nav_users, href: "/admin/users", icon: Users },
+      {
+        label: m.sidebar_nav_projects,
+        href: "/admin/projects",
+        icon: FolderKanban,
+      },
       {
         label: m.sidebar_nav_api_keys,
         href: "/admin/api-keys",
         icon: KeySquare,
       },
       {
-        label: m.sidebar_nav_organizations,
-        href: "/admin/organizations",
-        icon: Building2,
-      },
-      {
-        label: m.sidebar_nav_projects,
-        href: "/admin/projects",
-        icon: FolderKanban,
+        label: m.sidebar_nav_clients,
+        href: "/admin/oauth/clients",
+        icon: KeyRound,
       },
     ],
   },
   {
-    label: m.sidebar_group_oauth,
+    label: m.sidebar_group_admin,
     items: [
+      { label: m.sidebar_nav_users, href: "/admin/users", icon: Users },
       {
-        label: m.sidebar_nav_clients,
-        href: "/admin/oauth/clients",
-        icon: KeyRound,
+        label: m.sidebar_nav_organizations,
+        href: "/admin/organizations",
+        icon: Building2,
       },
     ],
   },

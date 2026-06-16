@@ -455,5 +455,7 @@
   "actions_cancel": "Annuler",
   "admin_action_preview": "Aperçu",
   "sign_up_disabled_title": "L'inscription est indisponible",
-  "sign_up_disabled_description": "La création de nouveaux comptes est actuellement désactivée pour ce projet."
+  "sign_up_disabled_description": "La création de nouveaux comptes est actuellement désactivée pour ce projet.",
+  "admin_total_projects": "Total des projets",
+  "sidebar_group_manage": "Gestion"
 }

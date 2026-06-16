@@ -4,7 +4,7 @@ import type { Headers } from "effect/unstable/http/Headers";
 import { HttpApiBuilder, HttpApiError } from "effect/unstable/httpapi";
 
 import { AdminApi } from "@/api";
-import { oauthClient, oauthConsent, user } from "@/db/auth-schema";
+import { oauthClient, oauthConsent, project, user } from "@/db/auth-schema";
 import { auth } from "@/services/auth/config";
 import { db } from "@/services/database";
 import { Organizations } from "@/services/organizations";
@@ -79,7 +79,13 @@ export const adminApiHandler = HttpApiBuilder.group(
             catch: internalServerError,
           });
 
+          const projectTotals = yield* Effect.tryPromise({
+            try: () => db.select({ count: count() }).from(project),
+            catch: internalServerError,
+          });
+
           const totalUsers = Number(userTotals[0]?.count ?? 0);
+          const totalProjects = Number(projectTotals[0]?.count ?? 0);
           const consentMap = new Map(
             consentCounts.map((c) => [c.clientId, Number(c.userCount)]),
           );
@@ -91,6 +97,7 @@ export const adminApiHandler = HttpApiBuilder.group(
 
           return {
             totalUsers,
+            totalProjects,
             totalClients: clients.length,
             clients: clientStats,
           };

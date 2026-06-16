@@ -1,7 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { Bar, BarChart, CartesianGrid, XAxis, YAxis } from "recharts";
-import { KeyRound, Loader2, Users } from "lucide-react";
+import { FolderKanban, KeyRound, Loader2, Users } from "lucide-react";
 
 import { m } from "@/paraglide/messages";
 import { SidebarPageHeader } from "@/components/ui/sidebar-layout";
@@ -34,6 +34,7 @@ type ClientStats = {
 
 type DashboardStats = {
   totalUsers: number;
+  totalProjects: number;
   totalClients: number;
   clients: ClientStats[];
 };
@@ -80,7 +81,10 @@ function DashboardPage() {
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
             <Card>
               <CardHeader>
-                <CardDescription>{m.admin_total_users()}</CardDescription>
+                <div className="flex items-center justify-between gap-3">
+                  <CardDescription>{m.admin_total_users()}</CardDescription>
+                  <Users className="text-muted-foreground size-4" />
+                </div>
                 <CardTitle className="text-3xl font-bold tabular-nums">
                   {isLoading ? (
                     <Loader2 className="size-6 animate-spin" />
@@ -89,16 +93,28 @@ function DashboardPage() {
                   )}
                 </CardTitle>
               </CardHeader>
-              <CardContent>
-                <div className="text-muted-foreground flex items-center gap-2 text-sm">
-                  <Users className="size-4" />
-                  <span>{m.admin_registered_users()}</span>
-                </div>
-              </CardContent>
             </Card>
             <Card>
               <CardHeader>
-                <CardDescription>{m.admin_oauth_clients()}</CardDescription>
+                <div className="flex items-center justify-between gap-3">
+                  <CardDescription>{m.admin_total_projects()}</CardDescription>
+                  <FolderKanban className="text-muted-foreground size-4" />
+                </div>
+                <CardTitle className="text-3xl font-bold tabular-nums">
+                  {isLoading ? (
+                    <Loader2 className="size-6 animate-spin" />
+                  ) : (
+                    (stats?.totalProjects ?? 0).toLocaleString()
+                  )}
+                </CardTitle>
+              </CardHeader>
+            </Card>
+            <Card>
+              <CardHeader>
+                <div className="flex items-center justify-between gap-3">
+                  <CardDescription>{m.admin_oauth_clients()}</CardDescription>
+                  <KeyRound className="text-muted-foreground size-4" />
+                </div>
                 <CardTitle className="text-3xl font-bold tabular-nums">
                   {isLoading ? (
                     <Loader2 className="size-6 animate-spin" />
@@ -107,12 +123,6 @@ function DashboardPage() {
                   )}
                 </CardTitle>
               </CardHeader>
-              <CardContent>
-                <div className="text-muted-foreground flex items-center gap-2 text-sm">
-                  <KeyRound className="size-4" />
-                  <span>{m.admin_registered_clients()}</span>
-                </div>
-              </CardContent>
             </Card>
           </div>
 
