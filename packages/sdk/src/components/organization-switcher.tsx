@@ -55,14 +55,16 @@ import { Separator } from "@/components/ui/separator";
 import { cn } from "@/lib/utils";
 import { m } from "@/paraglide/messages";
 import { getLocale } from "@/paraglide/runtime";
-import { centralAuthClient } from "@/services/auth/client/central";
 import {
   OrganizationMetadata,
   type OrganizationLocale,
   type OrganizationTranslation,
 } from "@krak-stack/auth/schema";
 
+import type { AuthUiClient } from "./auth-client";
+
 type OrganizationSwitcherProps = {
+  authClient: AuthUiClient;
   side?: ComponentProps<typeof DropdownMenuContent>["side"];
   className?: string;
   renderUnauthenticated?: () => ReactNode;
@@ -79,7 +81,7 @@ type OrganizationSummary = {
 type OrganizationDialog = "create" | "manage" | "members" | "apiKeys";
 type ApiKeySummary = Omit<ApiKey, "key">;
 type ActiveOrganization = NonNullable<
-  ReturnType<typeof centralAuthClient.useActiveOrganization>["data"]
+  ReturnType<AuthUiClient["useActiveOrganization"]>["data"]
 >;
 type OrganizationMemberSummary = ActiveOrganization["members"][number];
 type OrganizationInvitationSummary = ActiveOrganization["invitations"][number];
@@ -290,14 +292,15 @@ const organizationMetadataFromForm = async (
 };
 
 export function OrganizationSwitcher({
+  authClient,
   side = "bottom",
   className,
   renderUnauthenticated,
   locked = false,
 }: OrganizationSwitcherProps) {
-  const session = centralAuthClient.useSession();
-  const organizations = centralAuthClient.useListOrganizations();
-  const activeOrganization = centralAuthClient.useActiveOrganization();
+  const session = authClient.useSession();
+  const organizations = authClient.useListOrganizations();
+  const activeOrganization = authClient.useActiveOrganization();
   const [dialog, setDialog] = useState<OrganizationDialog | null>(null);
 
   if (!session.data) {
@@ -391,10 +394,9 @@ export function OrganizationSwitcher({
                   <DropdownMenuItem
                     key={organization.id}
                     onClick={async () => {
-                      const result =
-                        await centralAuthClient.organization.setActive({
-                          organizationId: organization.id,
-                        });
+                      const result = await authClient.organization.setActive({
+                        organizationId: organization.id,
+                      });
                       if (!result.error) await refresh();
                     }}
                   >
@@ -464,6 +466,7 @@ export function OrganizationSwitcher({
           </DialogHeader>
           <Separator />
           <CreateOrganizationSection
+            authClient={authClient}
             onCreated={async () => {
               await refresh();
               setDialog(null);
@@ -491,6 +494,7 @@ export function OrganizationSwitcher({
           <Separator />
           {activeOrganization.data ? (
             <EditOrganizationSection
+              authClient={authClient}
               organization={activeOrganization.data}
               onUpdated={refresh}
             />
@@ -517,6 +521,7 @@ export function OrganizationSwitcher({
           <Separator />
           {activeOrganization.data ? (
             <OrganizationMembersManager
+              authClient={authClient}
               organization={activeOrganization.data}
               currentUserId={session.data.user.id}
             />
@@ -542,7 +547,10 @@ export function OrganizationSwitcher({
           </DialogHeader>
           <Separator />
           {activeOrganization.data ? (
-            <OrganizationApiKeyManager organization={activeOrganization.data} />
+            <OrganizationApiKeyManager
+              authClient={authClient}
+              organization={activeOrganization.data}
+            />
           ) : null}
         </DialogContent>
       </Dialog>
@@ -551,9 +559,11 @@ export function OrganizationSwitcher({
 }
 
 function EditOrganizationSection({
+  authClient,
   organization,
   onUpdated,
 }: {
+  authClient: AuthUiClient;
   organization: OrganizationSummary;
   onUpdated: () => Promise<void>;
 }) {
@@ -569,7 +579,7 @@ function EditOrganizationSection({
       const slug = value.slug.trim().toLowerCase();
       const metadata = await organizationMetadataFromForm(value);
 
-      const result = await centralAuthClient.organization.update({
+      const result = await authClient.organization.update({
         organizationId: organization.id,
         data: { name, slug, metadata },
       });
@@ -705,8 +715,10 @@ function EditOrganizationSection({
 }
 
 function CreateOrganizationSection({
+  authClient,
   onCreated,
 }: {
+  authClient: AuthUiClient;
   onCreated: () => Promise<void>;
 }) {
   const [editingLocale, setEditingLocale] = useState<OrganizationLocale>(
@@ -725,7 +737,7 @@ function CreateOrganizationSection({
         slug,
       });
 
-      const result = await centralAuthClient.organization.create({
+      const result = await authClient.organization.create({
         name,
         slug,
         metadata,
@@ -896,9 +908,11 @@ function OrganizationTranslationHeader({
 }
 
 function OrganizationMembersManager({
+  authClient,
   organization,
   currentUserId,
 }: {
+  authClient: AuthUiClient;
   organization: OrganizationSummary;
   currentUserId: string;
 }) {
@@ -918,10 +932,10 @@ function OrganizationMembersManager({
     setError(null);
 
     const [membersResult, invitationsResult] = await Promise.all([
-      centralAuthClient.organization.listMembers({
+      authClient.organization.listMembers({
         query: { organizationId: organization.id },
       }),
-      centralAuthClient.organization.listInvitations({
+      authClient.organization.listInvitations({
         query: { organizationId: organization.id },
       }),
     ]);
@@ -956,7 +970,7 @@ function OrganizationMembersManager({
     defaultValues: { email: "", role: "member" },
     onSubmit: async ({ value, formApi }) => {
       formApi.setErrorMap({ onSubmit: undefined });
-      const result = await centralAuthClient.organization.inviteMember({
+      const result = await authClient.organization.inviteMember({
         email: value.email.trim(),
         role: normalizeOrganizationRole(value.role),
         organizationId: organization.id,
@@ -984,7 +998,7 @@ function OrganizationMembersManager({
     setUpdatingMemberId(member.id);
     setError(null);
 
-    const result = await centralAuthClient.organization.updateMemberRole({
+    const result = await authClient.organization.updateMemberRole({
       memberId: member.id,
       role,
       organizationId: organization.id,
@@ -1004,7 +1018,7 @@ function OrganizationMembersManager({
     setUpdatingMemberId(member.id);
     setError(null);
 
-    const result = await centralAuthClient.organization.removeMember({
+    const result = await authClient.organization.removeMember({
       memberIdOrEmail: member.id,
       organizationId: organization.id,
     });
@@ -1025,7 +1039,7 @@ function OrganizationMembersManager({
     setCancellingInvitationId(invitation.id);
     setError(null);
 
-    const result = await centralAuthClient.organization.cancelInvitation({
+    const result = await authClient.organization.cancelInvitation({
       invitationId: invitation.id,
     });
 
@@ -1283,8 +1297,10 @@ const invitationColumns = ({
 ];
 
 function OrganizationApiKeyManager({
+  authClient,
   organization,
 }: {
+  authClient: AuthUiClient;
   organization: OrganizationSummary;
 }) {
   const [keys, setKeys] = useState<ApiKeySummary[]>([]);
@@ -1295,7 +1311,7 @@ function OrganizationApiKeyManager({
   const loadKeys = useEffectEvent(async () => {
     setLoading(true);
     setError(null);
-    const result = await centralAuthClient.apiKey.list({
+    const result = await authClient.apiKey.list({
       query: { configId: "organization", organizationId: organization.id },
     });
 
@@ -1318,7 +1334,7 @@ function OrganizationApiKeyManager({
     onSubmit: async ({ value, formApi }) => {
       formApi.setErrorMap({ onSubmit: undefined });
       setCreatedKey(null);
-      const result = await centralAuthClient.apiKey.create({
+      const result = await authClient.apiKey.create({
         configId: "organization",
         organizationId: organization.id,
         name: value.name.trim(),
@@ -1341,7 +1357,7 @@ function OrganizationApiKeyManager({
   });
 
   const deleteKey = async (key: ApiKeySummary) => {
-    const result = await centralAuthClient.apiKey.delete({
+    const result = await authClient.apiKey.delete({
       configId: "organization",
       keyId: key.id,
     });

@@ -138,7 +138,7 @@ function Admin() {
   return (
     <SidebarLayout
       sidebarHeader={<AdminOrganizationSwitcher />}
-      headerActions={<UserButton />}
+      headerActions={<UserButton authClient={authClient} />}
       groups={adminNavGroups}
     >
       <Outlet />
@@ -149,7 +149,13 @@ function Admin() {
 function AdminOrganizationSwitcher() {
   const { isMobile } = useSidebar();
 
-  return <OrganizationSwitcher locked side={isMobile ? "bottom" : "right"} />;
+  return (
+    <OrganizationSwitcher
+      authClient={authClient}
+      locked
+      side={isMobile ? "bottom" : "right"}
+    />
+  );
 }
 
 function AdminAccessDenied({ isSignedIn }: { isSignedIn: boolean }) {

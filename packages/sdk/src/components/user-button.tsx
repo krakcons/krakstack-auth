@@ -21,6 +21,7 @@ import {
   type ComponentProps,
   type ReactNode,
   useEffect,
+  useEffectEvent,
   useState,
 } from "react";
 
@@ -60,8 +61,8 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Separator } from "@/components/ui/separator";
 import { m } from "@/paraglide/messages";
-import { authClient } from "@/services/auth/client";
-import { centralAuthClient } from "@/services/auth/client/central";
+
+import type { AuthUiClient } from "./auth-client";
 
 type UserFormType = {
   name: string;
@@ -126,6 +127,7 @@ type LinkedAccount = {
 };
 
 type UserDropdownProps = {
+  authClient: AuthUiClient;
   signOutRedirect?: string;
   side?: ComponentProps<typeof DropdownMenuContent>["side"];
   renderUnauthenticated?: () => ReactNode;
@@ -135,6 +137,7 @@ type UserDropdownProps = {
 type SettingsDialog = "account" | "security" | "apiKeys";
 
 export const UserButton = ({
+  authClient,
   signOutRedirect = "/",
   side = "bottom",
   renderUnauthenticated,
@@ -145,12 +148,10 @@ export const UserButton = ({
     select: (state) => `${import.meta.env.VITE_SITE_URL}${state.location.href}`,
   });
   const { data: session, isPending, refetch } = authClient.useSession();
-  const centralSession = centralAuthClient.useSession();
   const [settingsDialog, setSettingsDialog] = useState<SettingsDialog | null>(
     null,
   );
   const [formError, setFormError] = useState<string | null>(null);
-  const [centralAuthError, setCentralAuthError] = useState<string | null>(null);
 
   if (!session) {
     return <>{renderUnauthenticated?.()}</>;
@@ -167,10 +168,7 @@ export const UserButton = ({
       ? signOutRedirect
       : `${import.meta.env.VITE_SITE_URL}${signOutRedirect.startsWith("/") ? signOutRedirect : `/${signOutRedirect}`}`;
 
-    await Promise.allSettled([
-      authClient.signOut(),
-      centralAuthClient.signOut(),
-    ]);
+    await authClient.signOut();
     await navigate({ href: redirectUrl });
   };
 
@@ -195,7 +193,7 @@ export const UserButton = ({
       : typeof values.image === "string"
         ? values.image
         : null;
-    const result = await centralAuthClient.updateUser({
+    const result = await authClient.updateUser({
       name: values.name.trim(),
       image: image?.trim() ?? "",
     });
@@ -204,27 +202,9 @@ export const UserButton = ({
       throw new Error(result.error.message || m.user_form_update_error());
     }
 
-    await centralSession.refetch();
     await refetch();
 
     setSettingsDialog(null);
-  };
-
-  const reconnectCentralAuth = async () => {
-    setCentralAuthError(null);
-    const result = await authClient.signIn.oauth2({
-      providerId: "krakstack-auth",
-      callbackURL: currentSiteHref,
-    });
-
-    if (result.error) {
-      setCentralAuthError(
-        result.error.message ?? m.user_central_auth_reconnect_error(),
-      );
-      return;
-    }
-
-    if (result.data?.url) await navigate({ href: result.data.url });
   };
 
   return (
@@ -295,24 +275,8 @@ export const UserButton = ({
             <DialogDescription>{m.user_form_description()}</DialogDescription>
           </DialogHeader>
           <Separator />
-          {centralSession.isPending ? (
+          {isPending ? (
             <p className="text-muted-foreground text-sm">{m.user_loading()}</p>
-          ) : !centralSession.data ? (
-            <div className="flex flex-col gap-3">
-              <p className="text-muted-foreground text-sm">
-                {m.user_central_auth_required()}
-              </p>
-              {centralAuthError ? (
-                <p className="text-destructive text-sm">{centralAuthError}</p>
-              ) : null}
-              <Button
-                type="button"
-                className="self-start"
-                onClick={reconnectCentralAuth}
-              >
-                {m.user_central_auth_reconnect()}
-              </Button>
-            </div>
           ) : (
             <div className="flex flex-col gap-6">
               <UserForm
@@ -335,11 +299,12 @@ export const UserButton = ({
               />
               <Separator />
               <ConnectedAccounts
+                authClient={authClient}
                 currentSiteHref={currentSiteHref}
                 navigate={navigate}
               />
               <Separator />
-              <PasswordSettings />
+              <PasswordSettings authClient={authClient} />
             </div>
           )}
         </DialogContent>
@@ -362,7 +327,7 @@ export const UserButton = ({
             </DialogDescription>
           </DialogHeader>
           <Separator />
-          <AccountSecuritySettings />
+          <AccountSecuritySettings authClient={authClient} />
         </DialogContent>
       </Dialog>
       <Dialog
@@ -383,7 +348,10 @@ export const UserButton = ({
             </DialogDescription>
           </DialogHeader>
           <Separator />
-          <ApiKeyManager permissions={apiKeyPermissions ?? {}} />
+          <ApiKeyManager
+            authClient={authClient}
+            permissions={apiKeyPermissions ?? {}}
+          />
         </DialogContent>
       </Dialog>
     </>
@@ -391,9 +359,11 @@ export const UserButton = ({
 };
 
 function ConnectedAccounts({
+  authClient,
   currentSiteHref,
   navigate,
 }: {
+  authClient: AuthUiClient;
   currentSiteHref: string;
   navigate: UseNavigateResult<string>;
 }) {
@@ -405,10 +375,10 @@ function ConnectedAccounts({
     null,
   );
 
-  const loadAccounts = async () => {
+  const loadAccounts = useEffectEvent(async () => {
     setLoading(true);
     setError(null);
-    const result = await centralAuthClient.listAccounts();
+    const result = await authClient.listAccounts();
 
     if (result.error) {
       setError(result.error.message ?? m.user_accounts_load_error());
@@ -418,7 +388,7 @@ function ConnectedAccounts({
 
     setAccounts(result.data ?? []);
     setLoading(false);
-  };
+  });
 
   useEffect(() => {
     void loadAccounts();
@@ -436,7 +406,7 @@ function ConnectedAccounts({
     setError(null);
     setIsLinking(true);
 
-    const result = await centralAuthClient.linkSocial({
+    const result = await authClient.linkSocial({
       provider: "google",
       callbackURL: currentSiteHref,
     });
@@ -457,7 +427,7 @@ function ConnectedAccounts({
 
   const revokeAccount = async (account: LinkedAccount) => {
     setError(null);
-    const result = await centralAuthClient.unlinkAccount({
+    const result = await authClient.unlinkAccount({
       providerId: account.providerId,
       accountId: account.accountId,
     });
@@ -501,6 +471,7 @@ function ConnectedAccounts({
       />
       {revokingAccount ? (
         <RevokeAccountForm
+          authClient={authClient}
           account={revokingAccount}
           requirePassword={hasPassword}
           onCancel={() => setRevokingAccount(null)}
@@ -586,7 +557,7 @@ function AccountProviderRow({
   );
 }
 
-function PasswordSettings() {
+function PasswordSettings({ authClient }: { authClient: AuthUiClient }) {
   const [accounts, setAccounts] = useState<LinkedAccount[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -594,10 +565,10 @@ function PasswordSettings() {
     null,
   );
 
-  const loadAccounts = async () => {
+  const loadAccounts = useEffectEvent(async () => {
     setLoading(true);
     setError(null);
-    const result = await centralAuthClient.listAccounts();
+    const result = await authClient.listAccounts();
 
     if (result.error) {
       setError(result.error.message ?? m.user_accounts_load_error());
@@ -607,7 +578,7 @@ function PasswordSettings() {
 
     setAccounts(result.data ?? []);
     setLoading(false);
-  };
+  });
 
   useEffect(() => {
     void loadAccounts();
@@ -621,7 +592,7 @@ function PasswordSettings() {
 
   const revokePassword = async (account: LinkedAccount) => {
     setError(null);
-    const result = await centralAuthClient.unlinkAccount({
+    const result = await authClient.unlinkAccount({
       providerId: account.providerId,
       accountId: account.accountId,
     });
@@ -673,6 +644,7 @@ function PasswordSettings() {
           </div>
           {revokingAccount ? (
             <RevokeAccountForm
+              authClient={authClient}
               account={revokingAccount}
               requirePassword
               onCancel={() => setRevokingAccount(null)}
@@ -680,24 +652,24 @@ function PasswordSettings() {
             />
           ) : null}
           <Separator />
-          <ChangePasswordForm />
+          <ChangePasswordForm authClient={authClient} />
         </div>
       ) : (
-        <SetPasswordForm onSaved={loadAccounts} />
+        <SetPasswordForm authClient={authClient} onSaved={loadAccounts} />
       )}
       {error ? <p className="text-destructive text-sm">{error}</p> : null}
     </section>
   );
 }
 
-function ChangePasswordForm() {
+function ChangePasswordForm({ authClient }: { authClient: AuthUiClient }) {
   const [saved, setSaved] = useState(false);
   const form = useAppForm({
     defaultValues: { currentPassword: "", newPassword: "" },
     onSubmit: async ({ value, formApi }) => {
       setSaved(false);
       formApi.setErrorMap({ onSubmit: undefined });
-      const result = await centralAuthClient.changePassword({
+      const result = await authClient.changePassword({
         currentPassword: value.currentPassword,
         newPassword: value.newPassword,
       });
@@ -770,12 +742,18 @@ function ChangePasswordForm() {
   );
 }
 
-function SetPasswordForm({ onSaved }: { onSaved: () => Promise<void> }) {
+function SetPasswordForm({
+  authClient,
+  onSaved,
+}: {
+  authClient: AuthUiClient;
+  onSaved: () => Promise<void>;
+}) {
   const form = useAppForm({
     defaultValues: { password: "" },
     onSubmit: async ({ value, formApi }) => {
       formApi.setErrorMap({ onSubmit: undefined });
-      const result = await centralAuthClient.$fetch("/set-password", {
+      const result = await authClient.$fetch("/set-password", {
         method: "POST",
         body: { newPassword: value.password },
       });
@@ -825,11 +803,13 @@ function SetPasswordForm({ onSaved }: { onSaved: () => Promise<void> }) {
 }
 
 function RevokeAccountForm({
+  authClient,
   account,
   requirePassword,
   onCancel,
   onRevoke,
 }: {
+  authClient: AuthUiClient;
   account: LinkedAccount;
   requirePassword: boolean;
   onCancel: () => void;
@@ -841,7 +821,7 @@ function RevokeAccountForm({
       formApi.setErrorMap({ onSubmit: undefined });
 
       if (requirePassword) {
-        const verified = await centralAuthClient.$fetch("/verify-password", {
+        const verified = await authClient.$fetch("/verify-password", {
           method: "POST",
           body: { password: value.password },
         });
@@ -976,8 +956,8 @@ const UserForm = ({
   );
 };
 
-function AccountSecuritySettings() {
-  const session = centralAuthClient.useSession();
+function AccountSecuritySettings({ authClient }: { authClient: AuthUiClient }) {
+  const session = authClient.useSession();
   const [setup, setSetup] = useState<TotpSetup | null>(null);
   const [message, setMessage] = useState<string | null>(null);
   const twoFactorEnabled = hasTwoFactorEnabled(session.data?.user);
@@ -1001,6 +981,7 @@ function AccountSecuritySettings() {
       </div>
       {twoFactorEnabled ? (
         <DisableTotpForm
+          authClient={authClient}
           onDisabled={async () => {
             setMessage(m.user_two_factor_disabled_message());
             await session.refetch();
@@ -1008,6 +989,7 @@ function AccountSecuritySettings() {
         />
       ) : setup ? (
         <VerifyTotpSetup
+          authClient={authClient}
           setup={setup}
           onVerified={async () => {
             setSetup(null);
@@ -1016,7 +998,7 @@ function AccountSecuritySettings() {
           }}
         />
       ) : (
-        <EnableTotpForm onEnabled={setSetup} />
+        <EnableTotpForm authClient={authClient} onEnabled={setSetup} />
       )}
       {message ? (
         <p className="text-muted-foreground text-sm">{message}</p>
@@ -1026,15 +1008,17 @@ function AccountSecuritySettings() {
 }
 
 function EnableTotpForm({
+  authClient,
   onEnabled,
 }: {
+  authClient: AuthUiClient;
   onEnabled: (setup: TotpSetup) => void;
 }) {
   const form = useAppForm({
     defaultValues: { password: "" },
     onSubmit: async ({ value, formApi }) => {
       formApi.setErrorMap({ onSubmit: undefined });
-      const result = await centralAuthClient.twoFactor.enable({
+      const result = await authClient.twoFactor.enable({
         password: value.password,
       });
 
@@ -1083,9 +1067,11 @@ function EnableTotpForm({
 }
 
 function VerifyTotpSetup({
+  authClient,
   setup,
   onVerified,
 }: {
+  authClient: AuthUiClient;
   setup: TotpSetup;
   onVerified: () => Promise<void>;
 }) {
@@ -1093,7 +1079,7 @@ function VerifyTotpSetup({
     defaultValues: { code: "" },
     onSubmit: async ({ value, formApi }) => {
       formApi.setErrorMap({ onSubmit: undefined });
-      const result = await centralAuthClient.twoFactor.verifyTotp({
+      const result = await authClient.twoFactor.verifyTotp({
         code: value.code.trim(),
       });
 
@@ -1162,12 +1148,18 @@ function VerifyTotpSetup({
   );
 }
 
-function DisableTotpForm({ onDisabled }: { onDisabled: () => Promise<void> }) {
+function DisableTotpForm({
+  authClient,
+  onDisabled,
+}: {
+  authClient: AuthUiClient;
+  onDisabled: () => Promise<void>;
+}) {
   const form = useAppForm({
     defaultValues: { password: "" },
     onSubmit: async ({ value, formApi }) => {
       formApi.setErrorMap({ onSubmit: undefined });
-      const result = await centralAuthClient.twoFactor.disable({
+      const result = await authClient.twoFactor.disable({
         password: value.password,
       });
 
@@ -1213,8 +1205,10 @@ function DisableTotpForm({ onDisabled }: { onDisabled: () => Promise<void> }) {
 }
 
 function ApiKeyManager({
+  authClient,
   permissions = {},
 }: {
+  authClient: AuthUiClient;
   permissions?: Record<string, string[]>;
 }) {
   const [keys, setKeys] = useState<ApiKeySummary[]>([]);
@@ -1227,10 +1221,10 @@ function ApiKeyManager({
     Record<string, boolean>
   >({});
 
-  const loadKeys = async () => {
+  const loadKeys = useEffectEvent(async () => {
     setLoading(true);
     setError(null);
-    const result = await centralAuthClient.apiKey.list({
+    const result = await authClient.apiKey.list({
       query: { configId: "user" },
     });
 
@@ -1242,7 +1236,7 @@ function ApiKeyManager({
 
     setKeys(result.data?.apiKeys ?? []);
     setLoading(false);
-  };
+  });
 
   useEffect(() => {
     void loadKeys();
@@ -1258,7 +1252,7 @@ function ApiKeyManager({
         permissionOptions,
         selectedPermissions,
       );
-      const result = await centralAuthClient.$fetch("/create-api-key", {
+      const result = await authClient.$fetch("/create-api-key", {
         method: "POST",
         body: {
           configId: "user",
@@ -1299,7 +1293,7 @@ function ApiKeyManager({
   };
 
   const deleteKey = async (key: ApiKeySummary) => {
-    const result = await centralAuthClient.apiKey.delete({
+    const result = await authClient.apiKey.delete({
       configId: "user",
       keyId: key.id,
     });
