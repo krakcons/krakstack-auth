@@ -1,3 +1,5 @@
+import "./instrumentation";
+
 import { paraglideMiddleware } from "./paraglide/server.js";
 import handler from "@tanstack/react-start/server-entry";
 

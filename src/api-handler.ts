@@ -2,6 +2,7 @@ import { Effect, FileSystem, Layer, Path } from "effect";
 import {
   Etag,
   HttpEffect,
+  HttpMiddleware,
   HttpPlatform,
   HttpRouter,
   HttpServerResponse,
@@ -18,6 +19,7 @@ import { backendAuthApiHandler } from "@/services/backend-auth/api.builder";
 import { BackendAuthApi } from "@/services/backend-auth/api.group";
 import { OAuthClients } from "@/services/oauth";
 import { adminOAuthClientsApiHandler } from "@/services/oauth/api.builder";
+import { OpenTelemetry } from "@/services/opentelemetry";
 import { Organizations } from "@/services/organizations";
 import { organizationsApiHandler } from "@/services/organizations/api.builder";
 import { Projects } from "@/services/projects";
@@ -165,6 +167,7 @@ const apiLayer = Layer.mergeAll(
 ).pipe(Layer.provide(platformLayer));
 
 const appServicesLayer = Layer.mergeAll(
+  OpenTelemetry.layer,
   OAuthClients.layer,
   BackendAuth.layer,
   Organizations.layer,
@@ -173,6 +176,8 @@ const appServicesLayer = Layer.mergeAll(
 );
 
 const apiWebHandler = HttpEffect.toWebHandlerLayerWith(appServicesLayer, {
+  middleware: (httpApp) =>
+    HttpMiddleware.logger(HttpMiddleware.tracer(httpApp)),
   toHandler: (context) =>
     HttpRouter.toHttpEffect(apiLayer).pipe(
       Effect.provide(context),
