@@ -9,6 +9,7 @@ import {
 import { HttpApiBuilder } from "effect/unstable/httpapi";
 
 import { AdminApi, FrontendApi } from "@/api";
+import { isAuthorizedAuthHost } from "@/lib/auth-domains";
 import { corsMiddleware } from "@/lib/cors";
 import { adminApiHandler } from "@/services/admin/api.builder";
 import { authApiHandler } from "@/services/auth/api.builder";
@@ -34,8 +35,16 @@ const platformLayer = Layer.mergeAll(
   httpPlatformLayer,
 );
 
+export const authWebHandler = async (request: Request) => {
+  if (!(await isAuthorizedAuthHost(request))) {
+    return Response.json({ error: "Unknown auth host" }, { status: 404 });
+  }
+
+  return auth.handler(request);
+};
+
 const authHandlerEffect = HttpEffect.fromWebHandler((request) =>
-  Promise.resolve(auth.handler(request)),
+  Promise.resolve(authWebHandler(request)),
 ).pipe(
   Effect.catch((error) =>
     Effect.sync(() => {

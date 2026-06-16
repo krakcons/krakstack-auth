@@ -1,6 +1,7 @@
 import { Schema } from "effect";
 
 export const OAuthClientMetadata = Schema.Struct({
+  domains: Schema.optional(Schema.Array(Schema.NonEmptyString)),
   branding: Schema.optional(
     Schema.Struct({
       themeCss: Schema.optional(Schema.String),
@@ -21,6 +22,7 @@ export const OAuthClientMetadata = Schema.Struct({
     "White-label theme and authentication option settings for an OAuth client.",
   examples: [
     {
+      domains: ["auth.example.com"],
       branding: { themeCss: ":root { --primary: oklch(0.5 0.1 240); }" },
       authOptions: {
         emailPassword: true,
@@ -59,6 +61,7 @@ export const OAuthClientPublicConfig = Schema.Struct({
   clientId: Schema.String,
   name: Schema.NullOr(Schema.String),
   logoUrl: Schema.NullOr(Schema.String),
+  domains: Schema.Array(Schema.String),
   themeCss: Schema.NullOr(Schema.String),
   authOptions: OAuthAuthOptions,
 }).annotate({
@@ -71,6 +74,7 @@ export const OAuthClientPublicConfig = Schema.Struct({
       clientId: "oauth-client-id",
       name: "Example app",
       logoUrl: "https://example.com/logo.svg",
+      domains: ["auth.example.com"],
       themeCss:
         '[data-oauth-client-theme="oauth-client-id"] { --primary: oklch(0.5 0.1 240); }',
       authOptions: {
@@ -89,6 +93,7 @@ export const OAuthClientAdmin = Schema.Struct({
   name: Schema.NullOr(Schema.String),
   icon: Schema.NullOr(Schema.String),
   redirectUris: Schema.Array(Schema.String),
+  domains: Schema.Array(Schema.String),
   scope: Schema.NullOr(Schema.String),
   disabled: Schema.NullOr(Schema.Boolean),
   metadata: OAuthClientMetadata,
@@ -103,6 +108,7 @@ export const OAuthClientAdmin = Schema.Struct({
       name: "Example app",
       icon: null,
       redirectUris: ["https://example.com/callback"],
+      domains: ["auth.example.com"],
       scope: "openid profile email",
       disabled: false,
       metadata: {
@@ -125,6 +131,7 @@ export const OAuthClientCreated = Schema.Struct({
   name: Schema.NullOr(Schema.String),
   icon: Schema.NullOr(Schema.String),
   redirectUris: Schema.Array(Schema.String),
+  domains: Schema.Array(Schema.String),
   scope: Schema.NullOr(Schema.String),
   disabled: Schema.NullOr(Schema.Boolean),
   metadata: OAuthClientMetadata,
@@ -141,9 +148,11 @@ export const OAuthClientCreated = Schema.Struct({
       name: "Example app",
       icon: null,
       redirectUris: ["https://example.com/callback"],
+      domains: ["auth.example.com"],
       scope: "openid profile email",
       disabled: false,
       metadata: {
+        domains: ["auth.example.com"],
         branding: { themeCss: ":root { --primary: oklch(0.5 0.1 240); }" },
         authOptions: {
           emailPassword: true,
@@ -174,6 +183,7 @@ export const CreateOAuthClientPayload = Schema.Struct({
       redirectUris: ["https://example.com/callback"],
       scope: "openid profile email",
       metadata: {
+        domains: ["auth.example.com"],
         branding: { themeCss: ":root { --primary: oklch(0.5 0.1 240); }" },
         authOptions: {
           emailPassword: true,

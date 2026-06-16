@@ -98,7 +98,7 @@ function SignIn() {
 
         if (hasTwoFactorRedirect(result.data)) {
           navigate({
-            href: `${import.meta.env.VITE_SITE_URL}/2fa${oauthQuery ? `?${oauthQuery}` : `?callbackURL=${encodeURIComponent(redirectTarget)}`}`,
+            href: `/2fa${oauthQuery ? `?${oauthQuery}` : `?callbackURL=${encodeURIComponent(redirectTarget)}`}`,
           });
           return;
         }
@@ -294,11 +294,10 @@ const getOAuthQuery = (searchString: string) => {
 };
 
 const shouldUseDocumentRedirect = (target: string) => {
-  const siteUrl = import.meta.env.VITE_SITE_URL;
   if (target.startsWith("/api/")) return true;
   if (target.startsWith("/")) return false;
-  if (siteUrl && target.startsWith(siteUrl)) {
-    return target.slice(siteUrl.length).startsWith("/api/");
+  if (target.startsWith(window.location.origin)) {
+    return target.slice(window.location.origin.length).startsWith("/api/");
   }
   return target.startsWith("http://") || target.startsWith("https://");
 };

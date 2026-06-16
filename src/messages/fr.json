@@ -429,5 +429,8 @@
   "admin_api_key_starts_with": "Commence par {start}",
   "admin_api_key_hidden": "Secret masqué",
   "admin_api_key_unnamed": "Clé sans nom",
-  "home_github": "GitHub"
+  "home_github": "GitHub",
+  "oauth_client_domains": "Domaines d'authentification",
+  "oauth_client_domains_description": "Hôtes personnalisés facultatifs pour ce client, un par ligne. Utilisez uniquement des noms d'hôte, comme auth.kokobi.org.",
+  "oauth_client_domains_invalid": "Domaine d'authentification invalide : {domain}"
 }

@@ -14,6 +14,10 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { AdminApiClient } from "@/lib/admin-api-client";
+import {
+  normalizeOAuthClientDomain,
+  normalizeOAuthClientDomains,
+} from "@/lib/domain-utils";
 import { m } from "@/paraglide/messages";
 
 import {
@@ -29,6 +33,7 @@ export type OAuthClientFormSaved = OAuthClientAdmin | OAuthClientCreated;
 type OAuthClientFormValues = {
   name: string;
   redirectUris: string;
+  domains: string;
   scope: string[];
   icon: File | string | null;
   themeCss: string;
@@ -79,8 +84,21 @@ const redirectUrisFromValue = (value: string): [string, ...string[]] => {
   return [firstRedirectUri, ...redirectUris.slice(1)];
 };
 
+const domainsFromValue = (value: string) => {
+  const domains = parseList(value);
+  const invalid = domains.find((domain) => !normalizeOAuthClientDomain(domain));
+
+  if (invalid) {
+    throw new Error(m.oauth_client_domains_invalid({ domain: invalid }));
+  }
+
+  return normalizeOAuthClientDomains(domains);
+};
+
 const valuesToPayload = (value: OAuthClientFormValues, icon: string | null) => {
+  const domains = domainsFromValue(value.domains);
   const metadata = Schema.decodeUnknownSync(OAuthClientMetadata)({
+    ...(domains.length ? { domains } : {}),
     branding: {
       themeCss: value.themeCss.trim() || undefined,
     },
@@ -135,6 +153,7 @@ export function OAuthClientForm({
     defaultValues: {
       name: client?.name ?? "",
       redirectUris: client?.redirectUris.join("\n") ?? "",
+      domains: client?.domains.join("\n") ?? "",
       scope: client?.scope
         ? parseList(client.scope.replaceAll(" ", "\n"))
         : defaultScope,
@@ -232,6 +251,15 @@ export function OAuthClientForm({
                   label={m.admin_field_redirect_uris()}
                   description={m.admin_field_redirect_uris_description()}
                   rows={4}
+                />
+              )}
+            </form.AppField>
+            <form.AppField name="domains">
+              {(field) => (
+                <field.TextAreaField
+                  label={m.oauth_client_domains()}
+                  description={m.oauth_client_domains_description()}
+                  rows={3}
                 />
               )}
             </form.AppField>

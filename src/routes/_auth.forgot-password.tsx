@@ -25,7 +25,7 @@ function ForgotPassword() {
 
       const result = await authClient.requestPasswordReset({
         email: value.email.trim(),
-        redirectTo: `${import.meta.env.VITE_SITE_URL}/reset-password`,
+        redirectTo: `${window.location.origin}/reset-password`,
       });
 
       if (result.error) {

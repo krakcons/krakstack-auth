@@ -13,7 +13,11 @@ import { apiKey } from "@better-auth/api-key";
 
 import { db } from "../../services/database";
 import { schema } from "../../db/schema";
-import { parseCsv, trustedOrigins } from "@/lib/trusted-origins";
+import {
+  normalizeAuthHost,
+  parseCsv,
+  trustedOriginsForRequest,
+} from "@/lib/auth-domains";
 import {
   sendResetPasswordEmail,
   sendEmailVerificationOtpEmail,
@@ -31,10 +35,26 @@ const apiKeyRateLimit = {
 
 const googleClientId = process.env.GOOGLE_CLIENT_ID;
 const googleClientSecret = process.env.GOOGLE_CLIENT_SECRET;
+const betterAuthUrl = process.env.BETTER_AUTH_URL ?? "http://localhost:3000";
+const allowedHosts = Array.from(
+  new Set(
+    [
+      ...(parseCsv(process.env.BETTER_AUTH_TRUSTED_ORIGINS) ?? []).map(
+        normalizeAuthHost,
+      ),
+      normalizeAuthHost(betterAuthUrl),
+      ...(isDev ? ["localhost:3001", "localhost:3000"] : []),
+    ].filter((host): host is string => Boolean(host)),
+  ),
+);
 
 export const auth = betterAuth({
   appName: "Krakstack Auth",
-  baseURL: process.env.BETTER_AUTH_URL ?? "http://localhost:3000",
+  baseURL: {
+    allowedHosts,
+    protocol: isDev ? "http" : "https",
+    fallback: betterAuthUrl,
+  },
   database: drizzleAdapter(db, {
     provider: "pg",
     schema,
@@ -47,7 +67,7 @@ export const auth = betterAuth({
       httpOnly: true,
     },
   },
-  trustedOrigins,
+  trustedOrigins: trustedOriginsForRequest,
   emailAndPassword: {
     enabled: true,
     requireEmailVerification: true,

@@ -180,6 +180,28 @@ const clientColumns = ({
     ),
   },
   {
+    accessorKey: "domains",
+    header: m.oauth_client_domains(),
+    cell: ({ row }) => (
+      <div className="flex max-w-64 flex-col gap-1">
+        {row.original.domains.length ? (
+          row.original.domains.map((domain) => (
+            <code
+              key={domain}
+              className="text-muted-foreground truncate text-xs"
+            >
+              {domain}
+            </code>
+          ))
+        ) : (
+          <span className="text-muted-foreground text-sm">
+            {m.admin_none()}
+          </span>
+        )}
+      </div>
+    ),
+  },
+  {
     id: "branding",
     header: m.oauth_client_branding(),
     cell: ({ row }) => (

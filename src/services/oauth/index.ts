@@ -3,6 +3,7 @@ import type { Headers } from "effect/unstable/http/Headers";
 import { eq } from "drizzle-orm";
 
 import { oauthClient } from "@/db/auth-schema";
+import { normalizeOAuthClientDomains } from "@/lib/domain-utils";
 import { DB } from "@/services/database";
 import { auth } from "@/services/auth/config";
 
@@ -20,7 +21,13 @@ const googleConfigured = Boolean(
 const emptyMetadata: OAuthClientMetadata = {};
 
 const decodeMetadata = (value: unknown) =>
-  Schema.decodeUnknownSync(OAuthClientMetadata)(value ?? emptyMetadata);
+  (() => {
+    const metadata = Schema.decodeUnknownSync(OAuthClientMetadata)(
+      value ?? emptyMetadata,
+    );
+    const domains = normalizeOAuthClientDomains(metadata.domains ?? []);
+    return { ...metadata, ...(domains.length ? { domains } : {}) };
+  })();
 
 const decodeMetadataOrEmpty = (value: unknown) => {
   try {
@@ -60,6 +67,9 @@ const metadataFromClient = (client: object) => {
   });
 };
 
+const domainsFromMetadata = (metadata: OAuthClientMetadata) =>
+  normalizeOAuthClientDomains(metadata.domains ?? []);
+
 const adminRow = (client: {
   client_id: string;
   client_name?: string;
@@ -67,16 +77,21 @@ const adminRow = (client: {
   redirect_uris?: ReadonlyArray<string>;
   scope?: string;
   disabled?: boolean;
-}) => ({
-  id: client.client_id,
-  clientId: client.client_id,
-  name: client.client_name ?? null,
-  icon: client.logo_uri ?? null,
-  redirectUris: Array.from(client.redirect_uris ?? []),
-  scope: client.scope ?? null,
-  disabled: client.disabled ?? null,
-  metadata: metadataFromClient(client),
-});
+}) => {
+  const metadata = metadataFromClient(client);
+
+  return {
+    id: client.client_id,
+    clientId: client.client_id,
+    name: client.client_name ?? null,
+    icon: client.logo_uri ?? null,
+    redirectUris: Array.from(client.redirect_uris ?? []),
+    domains: domainsFromMetadata(metadata),
+    scope: client.scope ?? null,
+    disabled: client.disabled ?? null,
+    metadata,
+  };
+};
 
 const createdRow = (
   client: Parameters<typeof adminRow>[0],
@@ -144,11 +159,13 @@ export class OAuthClients extends Context.Service<OAuthClients>()(
           if (!client || client.disabled) return null;
 
           const metadata = metadataFromClient(client);
+          const domains = domainsFromMetadata(metadata);
 
           return {
             clientId: client.clientId,
             name: client.name ?? null,
             logoUrl: client.icon ?? null,
+            domains,
             themeCss: sanitizeThemeCss(metadata.branding?.themeCss, clientId),
             authOptions: authOptions(metadata),
           };
