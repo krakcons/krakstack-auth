@@ -1,14 +1,13 @@
 import { eq, isNull, or } from "drizzle-orm";
-import { Schema } from "effect";
 
-import { oauthClient } from "@/db/auth-schema";
+import { oauthClient, project } from "@/db/auth-schema";
 import { db } from "@/services/database";
 import {
   normalizeAuthHost,
   normalizeOAuthClientDomains,
   parseCsv,
 } from "@/lib/domain-utils";
-import { OAuthClientMetadata } from "@/services/oauth/schema";
+import { decodeProjectDataOrEmpty } from "@/services/projects";
 
 export { normalizeAuthHost, normalizeOAuthClientDomains, parseCsv };
 
@@ -40,36 +39,17 @@ const configuredPrimaryHosts = () => {
 export const isPrimaryAuthHost = (host: string | null | undefined) =>
   Boolean(host && configuredPrimaryHosts().has(host));
 
-const OAuthClientStoredMetadata = Schema.Union([
-  OAuthClientMetadata,
-  Schema.fromJsonString(OAuthClientMetadata),
-]);
-const decodeMetadata = Schema.decodeUnknownSync(OAuthClientStoredMetadata);
-
-const metadataDomains = (metadata: unknown) => {
-  try {
-    return normalizeOAuthClientDomains(decodeMetadata(metadata).domains ?? []);
-  } catch {
-    return [];
-  }
-};
+const dataDomains = (data: unknown) =>
+  normalizeOAuthClientDomains(decodeProjectDataOrEmpty(data).domains ?? []);
 
 export const isOAuthClientAuthHost = async (host: string) => {
   const clients = await db
-    .select({ metadata: oauthClient.metadata })
+    .select({ data: project.data })
     .from(oauthClient)
+    .leftJoin(project, eq(oauthClient.projectId, project.id))
     .where(or(eq(oauthClient.disabled, false), isNull(oauthClient.disabled)));
 
-  return clients.some((client) =>
-    metadataDomains(client.metadata).includes(host),
-  );
-};
-
-export const isAuthorizedAuthHost = async (request: Request) => {
-  const host = hostFromRequest(request);
-  if (!host) return false;
-  if (isPrimaryAuthHost(host)) return true;
-  return isOAuthClientAuthHost(host);
+  return clients.some((client) => dataDomains(client.data).includes(host));
 };
 
 export const trustedOriginsForRequest = async (request?: Request) => {

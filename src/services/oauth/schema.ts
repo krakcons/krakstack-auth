@@ -1,38 +1,6 @@
 import { Schema } from "effect";
 
-export const OAuthClientMetadata = Schema.Struct({
-  domains: Schema.optional(Schema.Array(Schema.NonEmptyString)),
-  branding: Schema.optional(
-    Schema.Struct({
-      themeCss: Schema.optional(Schema.String),
-    }),
-  ),
-  authOptions: Schema.optional(
-    Schema.Struct({
-      emailPassword: Schema.optional(Schema.Boolean),
-      google: Schema.optional(Schema.Boolean),
-      signUp: Schema.optional(Schema.Boolean),
-      signUpName: Schema.optional(Schema.Boolean),
-    }),
-  ),
-}).annotate({
-  identifier: "OAuthClientMetadata",
-  title: "OAuth client metadata",
-  description:
-    "White-label theme and authentication option settings for an OAuth client.",
-  examples: [
-    {
-      domains: ["auth.example.com"],
-      branding: { themeCss: ":root { --primary: oklch(0.5 0.1 240); }" },
-      authOptions: {
-        emailPassword: true,
-        google: true,
-        signUp: false,
-        signUpName: true,
-      },
-    },
-  ],
-});
+import { ProjectData } from "@/services/projects/schema";
 
 export const OAuthClientIdParams = Schema.Struct({
   clientId: Schema.String,
@@ -92,11 +60,14 @@ export const OAuthClientAdmin = Schema.Struct({
   clientId: Schema.String,
   name: Schema.NullOr(Schema.String),
   icon: Schema.NullOr(Schema.String),
+  projectId: Schema.NullOr(Schema.String),
+  projectName: Schema.NullOr(Schema.String),
+  projectLogo: Schema.NullOr(Schema.String),
   redirectUris: Schema.Array(Schema.String),
   domains: Schema.Array(Schema.String),
   scope: Schema.NullOr(Schema.String),
   disabled: Schema.NullOr(Schema.Boolean),
-  metadata: OAuthClientMetadata,
+  projectData: ProjectData,
 }).annotate({
   identifier: "OAuthClientAdmin",
   title: "OAuth client admin record",
@@ -107,11 +78,14 @@ export const OAuthClientAdmin = Schema.Struct({
       clientId: "oauth-client-id",
       name: "Example app",
       icon: null,
+      projectId: "project-id",
+      projectName: "Example project",
+      projectLogo: null,
       redirectUris: ["https://example.com/callback"],
       domains: ["auth.example.com"],
       scope: "openid profile email",
       disabled: false,
-      metadata: {
+      projectData: {
         branding: { themeCss: ":root { --primary: oklch(0.5 0.1 240); }" },
         authOptions: {
           emailPassword: true,
@@ -130,11 +104,14 @@ export const OAuthClientCreated = Schema.Struct({
   clientSecret: Schema.String,
   name: Schema.NullOr(Schema.String),
   icon: Schema.NullOr(Schema.String),
+  projectId: Schema.NullOr(Schema.String),
+  projectName: Schema.NullOr(Schema.String),
+  projectLogo: Schema.NullOr(Schema.String),
   redirectUris: Schema.Array(Schema.String),
   domains: Schema.Array(Schema.String),
   scope: Schema.NullOr(Schema.String),
   disabled: Schema.NullOr(Schema.Boolean),
-  metadata: OAuthClientMetadata,
+  projectData: ProjectData,
 }).annotate({
   identifier: "OAuthClientCreated",
   title: "Created OAuth client credentials",
@@ -147,11 +124,14 @@ export const OAuthClientCreated = Schema.Struct({
       clientSecret: "oauth-client-secret",
       name: "Example app",
       icon: null,
+      projectId: "project-id",
+      projectName: "Example project",
+      projectLogo: null,
       redirectUris: ["https://example.com/callback"],
       domains: ["auth.example.com"],
       scope: "openid profile email",
       disabled: false,
-      metadata: {
+      projectData: {
         domains: ["auth.example.com"],
         branding: { themeCss: ":root { --primary: oklch(0.5 0.1 240); }" },
         authOptions: {
@@ -168,9 +148,9 @@ export const OAuthClientCreated = Schema.Struct({
 export const CreateOAuthClientPayload = Schema.Struct({
   name: Schema.optional(Schema.String),
   icon: Schema.optional(Schema.NullOr(Schema.String)),
+  projectId: Schema.optional(Schema.NullOr(Schema.String)),
   redirectUris: Schema.NonEmptyArray(Schema.NonEmptyString),
   scope: Schema.optional(Schema.String),
-  metadata: OAuthClientMetadata,
 }).annotate({
   identifier: "CreateOAuthClientPayload",
   title: "Create OAuth client payload",
@@ -180,18 +160,9 @@ export const CreateOAuthClientPayload = Schema.Struct({
     {
       name: "Example app",
       icon: "https://example.com/logo.svg",
+      projectId: "project-id",
       redirectUris: ["https://example.com/callback"],
       scope: "openid profile email",
-      metadata: {
-        domains: ["auth.example.com"],
-        branding: { themeCss: ":root { --primary: oklch(0.5 0.1 240); }" },
-        authOptions: {
-          emailPassword: true,
-          google: true,
-          signUp: true,
-          signUpName: true,
-        },
-      },
     },
   ],
 });
@@ -199,9 +170,9 @@ export const CreateOAuthClientPayload = Schema.Struct({
 export const UpdateOAuthClientPayload = Schema.Struct({
   name: Schema.optional(Schema.String),
   icon: Schema.optional(Schema.NullOr(Schema.String)),
+  projectId: Schema.optional(Schema.NullOr(Schema.String)),
   redirectUris: Schema.optional(Schema.NonEmptyArray(Schema.NonEmptyString)),
   scope: Schema.optional(Schema.String),
-  metadata: OAuthClientMetadata,
 }).annotate({
   identifier: "UpdateOAuthClientPayload",
   title: "Update OAuth client payload",
@@ -211,25 +182,13 @@ export const UpdateOAuthClientPayload = Schema.Struct({
     {
       name: "Example app",
       icon: "https://example.com/logo.svg",
+      projectId: "project-id",
       redirectUris: ["https://example.com/callback"],
       scope: "openid profile email",
-      metadata: {
-        branding: { themeCss: ":root { --primary: oklch(0.5 0.1 240); }" },
-        authOptions: {
-          emailPassword: true,
-          google: false,
-          signUp: true,
-          signUpName: false,
-        },
-      },
     },
   ],
 });
 
-export const OAuthClientMetadataStandard =
-  Schema.toStandardSchemaV1(OAuthClientMetadata);
-
-export type OAuthClientMetadata = typeof OAuthClientMetadata.Type;
 export type OAuthClientAdmin = typeof OAuthClientAdmin.Type;
 export type OAuthClientCreated = typeof OAuthClientCreated.Type;
 export type OAuthClientPublicConfig = typeof OAuthClientPublicConfig.Type;

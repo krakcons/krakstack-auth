@@ -61,6 +61,9 @@ export const auth = betterAuth({
   }),
   advanced: {
     cookiePrefix: "krakstack-auth",
+    crossSubDomainCookies: {
+      enabled: !isDev,
+    },
     defaultCookieAttributes: {
       sameSite: isDev ? "lax" : "none",
       secure: !isDev,

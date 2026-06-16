@@ -233,9 +233,32 @@ export const oauthClient = pgTable(
     type: text("type"),
     requirePKCE: boolean("require_pkce"),
     referenceId: text("reference_id"),
+    projectId: text("project_id").references(() => project.id, {
+      onDelete: "set null",
+    }),
     metadata: jsonb("metadata"),
   },
-  (table) => [index("oauthClient_userId_idx").on(table.userId)],
+  (table) => [
+    index("oauthClient_userId_idx").on(table.userId),
+    index("oauthClient_projectId_idx").on(table.projectId),
+  ],
+);
+
+export const project = pgTable(
+  "project",
+  {
+    id: text("id").primaryKey(),
+    name: text("name").notNull(),
+    slug: text("slug").notNull().unique(),
+    logo: text("logo"),
+    data: jsonb("data").notNull().default({}),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    updatedAt: timestamp("updated_at")
+      .defaultNow()
+      .$onUpdate(() => /* @__PURE__ */ new Date())
+      .notNull(),
+  },
+  (table) => [uniqueIndex("project_slug_uidx").on(table.slug)],
 );
 
 export const oauthRefreshToken = pgTable(
@@ -326,6 +349,7 @@ export const relations = defineRelations(
     invitation,
     apikey,
     oauthClient,
+    project,
     oauthRefreshToken,
     oauthAccessToken,
     oauthConsent,
@@ -367,6 +391,12 @@ export const relations = defineRelations(
       oauthConsents: r.many.oauthConsent({
         from: r.user.id,
         to: r.oauthConsent.userId,
+      }),
+    },
+    project: {
+      oauthClients: r.many.oauthClient({
+        from: r.project.id,
+        to: r.oauthClient.projectId,
       }),
     },
     session: {
@@ -429,6 +459,10 @@ export const relations = defineRelations(
       user: r.one.user({
         from: r.oauthClient.userId,
         to: r.user.id,
+      }),
+      project: r.one.project({
+        from: r.oauthClient.projectId,
+        to: r.project.id,
       }),
       oauthRefreshTokens: r.many.oauthRefreshToken({
         from: r.oauthClient.id,

@@ -15,6 +15,7 @@ import { Route as IndexRouteImport } from './routes/index'
 import { Route as AdminIndexRouteImport } from './routes/admin/index'
 import { Route as ApiSplatRouteImport } from './routes/api/$'
 import { Route as AdminUsersRouteImport } from './routes/admin/users'
+import { Route as AdminProjectsRouteImport } from './routes/admin/projects'
 import { Route as AdminOrganizationsRouteImport } from './routes/admin/organizations'
 import { Route as AdminApiKeysRouteImport } from './routes/admin/api-keys'
 import { Route as AuthVerifyEmailRouteImport } from './routes/_auth.verify-email'
@@ -56,6 +57,11 @@ const ApiSplatRoute = ApiSplatRouteImport.update({
 const AdminUsersRoute = AdminUsersRouteImport.update({
   id: '/users',
   path: '/users',
+  getParentRoute: () => AdminRoute,
+} as any)
+const AdminProjectsRoute = AdminProjectsRouteImport.update({
+  id: '/projects',
+  path: '/projects',
   getParentRoute: () => AdminRoute,
 } as any)
 const AdminOrganizationsRoute = AdminOrganizationsRouteImport.update({
@@ -141,6 +147,7 @@ export interface FileRoutesByFullPath {
   '/verify-email': typeof AuthVerifyEmailRoute
   '/admin/api-keys': typeof AdminApiKeysRoute
   '/admin/organizations': typeof AdminOrganizationsRoute
+  '/admin/projects': typeof AdminProjectsRoute
   '/admin/users': typeof AdminUsersRoute
   '/api/$': typeof ApiSplatRoute
   '/admin/': typeof AdminIndexRoute
@@ -160,6 +167,7 @@ export interface FileRoutesByTo {
   '/verify-email': typeof AuthVerifyEmailRoute
   '/admin/api-keys': typeof AdminApiKeysRoute
   '/admin/organizations': typeof AdminOrganizationsRoute
+  '/admin/projects': typeof AdminProjectsRoute
   '/admin/users': typeof AdminUsersRoute
   '/api/$': typeof ApiSplatRoute
   '/admin': typeof AdminIndexRoute
@@ -182,6 +190,7 @@ export interface FileRoutesById {
   '/_auth/verify-email': typeof AuthVerifyEmailRoute
   '/admin/api-keys': typeof AdminApiKeysRoute
   '/admin/organizations': typeof AdminOrganizationsRoute
+  '/admin/projects': typeof AdminProjectsRoute
   '/admin/users': typeof AdminUsersRoute
   '/api/$': typeof ApiSplatRoute
   '/admin/': typeof AdminIndexRoute
@@ -204,6 +213,7 @@ export interface FileRouteTypes {
     | '/verify-email'
     | '/admin/api-keys'
     | '/admin/organizations'
+    | '/admin/projects'
     | '/admin/users'
     | '/api/$'
     | '/admin/'
@@ -223,6 +233,7 @@ export interface FileRouteTypes {
     | '/verify-email'
     | '/admin/api-keys'
     | '/admin/organizations'
+    | '/admin/projects'
     | '/admin/users'
     | '/api/$'
     | '/admin'
@@ -244,6 +255,7 @@ export interface FileRouteTypes {
     | '/_auth/verify-email'
     | '/admin/api-keys'
     | '/admin/organizations'
+    | '/admin/projects'
     | '/admin/users'
     | '/api/$'
     | '/admin/'
@@ -302,6 +314,13 @@ declare module '@tanstack/react-router' {
       path: '/users'
       fullPath: '/admin/users'
       preLoaderRoute: typeof AdminUsersRouteImport
+      parentRoute: typeof AdminRoute
+    }
+    '/admin/projects': {
+      id: '/admin/projects'
+      path: '/projects'
+      fullPath: '/admin/projects'
+      preLoaderRoute: typeof AdminProjectsRouteImport
       parentRoute: typeof AdminRoute
     }
     '/admin/organizations': {
@@ -423,6 +442,7 @@ const AuthRouteWithChildren = AuthRoute._addFileChildren(AuthRouteChildren)
 interface AdminRouteChildren {
   AdminApiKeysRoute: typeof AdminApiKeysRoute
   AdminOrganizationsRoute: typeof AdminOrganizationsRoute
+  AdminProjectsRoute: typeof AdminProjectsRoute
   AdminUsersRoute: typeof AdminUsersRoute
   AdminIndexRoute: typeof AdminIndexRoute
   AdminOauthClientsRoute: typeof AdminOauthClientsRoute
@@ -431,6 +451,7 @@ interface AdminRouteChildren {
 const AdminRouteChildren: AdminRouteChildren = {
   AdminApiKeysRoute: AdminApiKeysRoute,
   AdminOrganizationsRoute: AdminOrganizationsRoute,
+  AdminProjectsRoute: AdminProjectsRoute,
   AdminUsersRoute: AdminUsersRoute,
   AdminIndexRoute: AdminIndexRoute,
   AdminOauthClientsRoute: AdminOauthClientsRoute,

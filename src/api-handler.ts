@@ -9,7 +9,6 @@ import {
 import { HttpApiBuilder } from "effect/unstable/httpapi";
 
 import { AdminApi, FrontendApi } from "@/api";
-import { isAuthorizedAuthHost } from "@/lib/auth-domains";
 import { corsMiddleware } from "@/lib/cors";
 import { adminApiHandler } from "@/services/admin/api.builder";
 import { authApiHandler } from "@/services/auth/api.builder";
@@ -21,6 +20,8 @@ import { OAuthClients } from "@/services/oauth";
 import { adminOAuthClientsApiHandler } from "@/services/oauth/api.builder";
 import { Organizations } from "@/services/organizations";
 import { organizationsApiHandler } from "@/services/organizations/api.builder";
+import { Projects } from "@/services/projects";
+import { adminProjectsApiHandler } from "@/services/projects/api.builder";
 import { S3Service } from "@/services/s3";
 
 const fileSystemLayer = FileSystem.layerNoop({});
@@ -35,13 +36,7 @@ const platformLayer = Layer.mergeAll(
   httpPlatformLayer,
 );
 
-export const authWebHandler = async (request: Request) => {
-  if (!(await isAuthorizedAuthHost(request))) {
-    return Response.json({ error: "Unknown auth host" }, { status: 404 });
-  }
-
-  return auth.handler(request);
-};
+export const authWebHandler = (request: Request) => auth.handler(request);
 
 const authHandlerEffect = HttpEffect.fromWebHandler((request) =>
   Promise.resolve(authWebHandler(request)),
@@ -152,6 +147,7 @@ const apiLayer = Layer.mergeAll(
   }).pipe(
     Layer.provide(adminApiHandler),
     Layer.provide(adminOAuthClientsApiHandler),
+    Layer.provide(adminProjectsApiHandler),
   ),
   HttpApiBuilder.layer(FrontendApi, {
     openapiPath: "/api/frontend-openapi.json",
@@ -171,6 +167,7 @@ const appServicesLayer = Layer.mergeAll(
   OAuthClients.layer,
   BackendAuth.layer,
   Organizations.layer,
+  Projects.layer,
   S3Service.layer,
 );
 

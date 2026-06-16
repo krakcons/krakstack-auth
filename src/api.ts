@@ -4,6 +4,7 @@ import { AdminApiGroup } from "@/services/admin/api.group";
 import { AuthApiGroup } from "@/services/auth/api.group";
 import { AdminOAuthClientsApiGroup } from "@/services/oauth/api.group";
 import { OrganizationsApiGroup } from "@/services/organizations/api.group";
+import { AdminProjectsApiGroup } from "@/services/projects/api.group";
 
 export const AdminApi = HttpApi.make("AdminApi")
   .annotateMerge(
@@ -15,6 +16,7 @@ export const AdminApi = HttpApi.make("AdminApi")
   )
   .add(AdminApiGroup)
   .add(AdminOAuthClientsApiGroup)
+  .add(AdminProjectsApiGroup)
   .prefix("/api");
 
 export const FrontendApi = HttpApi.make("FrontendApi")

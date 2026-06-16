@@ -162,12 +162,14 @@ const CheckboxField = (props: DefaultOptions) => {
 
 const SelectField = ({
   options,
+  required = true,
   ...props
 }: DefaultOptions & {
   options: {
     label: string;
     value: string;
   }[];
+  required?: boolean;
 }) => {
   const field = useFieldContext<string>();
   const invalid = !field.state.meta.isValid;
@@ -177,7 +179,7 @@ const SelectField = ({
       <FieldLabel htmlFor={field.name}>{props.label}</FieldLabel>
       <Select
         items={options}
-        required
+        required={required}
         onValueChange={(value) => field.handleChange(value ?? "")}
         defaultValue={field.state.value}
       >

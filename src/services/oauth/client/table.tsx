@@ -1,6 +1,8 @@
+import { useAtomSet, useAtomValue } from "@effect/atom-react";
 import { type ColumnDef } from "@tanstack/react-table";
+import { Atom, AsyncResult } from "effect/unstable/reactivity";
 import { Pencil, Trash2 } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { toast } from "sonner";
 
 import {
@@ -18,52 +20,49 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { Badge } from "@/components/ui/badge";
 import { m } from "@/paraglide/messages";
+import { AdminApiClient } from "@/lib/admin-api-client";
 
 import type { OAuthClientAdmin } from "../schema";
 import { OAuthClientForm } from "./form";
 
-const listOAuthClients = async () => {
-  const response = await fetch("/api/admin/oauth/clients");
-  if (!response.ok) throw new Error(m.oauth_client_fetch_error());
-  return (await response.json()) as OAuthClientAdmin[];
-};
+const oauthClientsAtom = Atom.family((reloadKey: number) =>
+  AdminApiClient.query("oauthClients", "listOAuthClients", {
+    timeToLive: "1 minute",
+    reactivityKeys: ["oauth-clients"],
+    serializationKey: `oauth-clients:${reloadKey}`,
+  }),
+);
 
-const deleteOAuthClient = async (clientId: string) => {
-  const response = await fetch(
-    `/api/admin/oauth/clients/${encodeURIComponent(clientId)}`,
-    { method: "DELETE" },
-  );
-
-  if (!response.ok) throw new Error(m.admin_error_delete_client());
-  return (await response.json()) as OAuthClientAdmin;
-};
+const deleteOAuthClientAtom = AdminApiClient.mutation(
+  "oauthClients",
+  "deleteOAuthClient",
+);
 
 export function OAuthClientsTable({ reloadKey = 0 }: { reloadKey?: number }) {
-  const [clients, setClients] = useState<OAuthClientAdmin[]>([]);
+  const result = useAtomValue(oauthClientsAtom(reloadKey));
+  const deleteOAuthClient = useAtomSet(deleteOAuthClientAtom, {
+    mode: "promise",
+  });
+  const [clients, setClients] = useState<OAuthClientAdmin[] | null>(null);
   const [editingClient, setEditingClient] = useState<OAuthClientAdmin | null>(
     null,
   );
   const [deletingClient, setDeletingClient] = useState<OAuthClientAdmin | null>(
     null,
   );
-  const [error, setError] = useState("");
-
-  const loadClients = async () => {
-    setError("");
-    try {
-      setClients(await listOAuthClients());
-    } catch (cause) {
-      setError(
-        cause instanceof Error ? cause.message : m.oauth_client_fetch_error(),
-      );
-    }
-  };
-
-  useEffect(() => {
-    void loadClients();
-  }, [reloadKey]);
+  const rows =
+    clients ??
+    AsyncResult.match(result, {
+      onInitial: () => [],
+      onFailure: () => [],
+      onSuccess: ({ value }) => Array.from(value),
+    });
+  const error = AsyncResult.match(result, {
+    onInitial: () => "",
+    onFailure: () => m.oauth_client_fetch_error(),
+    onSuccess: () => "",
+  });
 
   return (
     <div className="flex flex-col gap-4">
@@ -73,7 +72,7 @@ export function OAuthClientsTable({ reloadKey = 0 }: { reloadKey?: number }) {
           onEdit: setEditingClient,
           onDelete: setDeletingClient,
         })}
-        data={clients}
+        data={rows}
         exportFileName="oauth-clients.csv"
         features={{ gallery: false }}
         from="/admin/oauth/clients"
@@ -84,7 +83,7 @@ export function OAuthClientsTable({ reloadKey = 0 }: { reloadKey?: number }) {
           onClose={() => setEditingClient(null)}
           onSaved={(updated) => {
             setClients((current) =>
-              current.map((client) =>
+              (current ?? rows).map((client) =>
                 client.clientId === updated.clientId ? updated : client,
               ),
             );
@@ -97,9 +96,12 @@ export function OAuthClientsTable({ reloadKey = 0 }: { reloadKey?: number }) {
           onClose={() => setDeletingClient(null)}
           onDeleted={(deleted) => {
             setClients((current) =>
-              current.filter((client) => client.clientId !== deleted.clientId),
+              (current ?? rows).filter(
+                (client) => client.clientId !== deleted.clientId,
+              ),
             );
           }}
+          deleteOAuthClient={deleteOAuthClient}
         />
       ) : null}
     </div>
@@ -139,24 +141,22 @@ const clientColumns = ({
     ),
   },
   {
-    id: "authOptions",
-    header: m.oauth_client_auth_options(),
+    id: "project",
+    header: m.project(),
     cell: ({ row }) => (
-      <div className="flex flex-wrap gap-1.5">
-        {row.original.metadata.authOptions?.emailPassword !== false ? (
-          <Badge variant="secondary">
-            {m.oauth_client_auth_email_password()}
-          </Badge>
-        ) : null}
-        {row.original.metadata.authOptions?.google !== false ? (
-          <Badge variant="secondary">{m.oauth_client_auth_google()}</Badge>
-        ) : null}
-        {row.original.metadata.authOptions?.signUp !== false ? (
-          <Badge variant="outline">{m.oauth_client_auth_sign_up()}</Badge>
-        ) : null}
-        {row.original.metadata.authOptions?.signUpName !== false ? (
-          <Badge variant="outline">{m.oauth_client_auth_sign_up_name()}</Badge>
-        ) : null}
+      <div className="flex min-w-48 items-center gap-3">
+        {row.original.projectLogo ? (
+          <img
+            src={row.original.projectLogo}
+            alt=""
+            className="size-8 rounded-md border object-contain"
+          />
+        ) : (
+          <div className="bg-muted size-8 rounded-md border" />
+        )}
+        <span className="truncate text-sm">
+          {row.original.projectName ?? m.project_none()}
+        </span>
       </div>
     ),
   },
@@ -176,47 +176,6 @@ const clientColumns = ({
             {m.admin_none()}
           </span>
         )}
-      </div>
-    ),
-  },
-  {
-    accessorKey: "domains",
-    header: m.oauth_client_domains(),
-    cell: ({ row }) => (
-      <div className="flex max-w-64 flex-col gap-1">
-        {row.original.domains.length ? (
-          row.original.domains.map((domain) => (
-            <code
-              key={domain}
-              className="text-muted-foreground truncate text-xs"
-            >
-              {domain}
-            </code>
-          ))
-        ) : (
-          <span className="text-muted-foreground text-sm">
-            {m.admin_none()}
-          </span>
-        )}
-      </div>
-    ),
-  },
-  {
-    id: "branding",
-    header: m.oauth_client_branding(),
-    cell: ({ row }) => (
-      <div className="flex flex-wrap gap-1.5">
-        {row.original.icon ? (
-          <Badge variant="outline">{m.oauth_client_logo_configured()}</Badge>
-        ) : null}
-        {row.original.metadata.branding?.themeCss ? (
-          <Badge variant="outline">{m.oauth_client_theme_configured()}</Badge>
-        ) : null}
-        {!row.original.icon && !row.original.metadata.branding?.themeCss ? (
-          <span className="text-muted-foreground text-sm">
-            {m.admin_none()}
-          </span>
-        ) : null}
       </div>
     ),
   },
@@ -248,10 +207,15 @@ function DeleteOAuthClientDialog({
   client,
   onClose,
   onDeleted,
+  deleteOAuthClient,
 }: {
   client: OAuthClientAdmin;
   onClose: () => void;
   onDeleted: (client: OAuthClientAdmin) => void;
+  deleteOAuthClient: (input: {
+    params: { clientId: string };
+    reactivityKeys?: ReadonlyArray<string>;
+  }) => Promise<OAuthClientAdmin>;
 }) {
   const [error, setError] = useState("");
   const name = client.name ?? client.clientId;
@@ -275,7 +239,10 @@ function DeleteOAuthClientDialog({
               event.preventDefault();
               setError("");
               try {
-                const deleted = await deleteOAuthClient(client.clientId);
+                const deleted = await deleteOAuthClient({
+                  params: { clientId: client.clientId },
+                  reactivityKeys: ["oauth-clients"],
+                });
                 toast.success(m.admin_client_deleted_toast());
                 onDeleted(deleted);
                 onClose();

@@ -2,15 +2,16 @@ import { Context, Effect, Layer, Schema } from "effect";
 import type { Headers } from "effect/unstable/http/Headers";
 import { eq } from "drizzle-orm";
 
-import { oauthClient } from "@/db/auth-schema";
+import { oauthClient, project } from "@/db/auth-schema";
 import { normalizeOAuthClientDomains } from "@/lib/domain-utils";
 import { DB } from "@/services/database";
 import { auth } from "@/services/auth/config";
+import { decodeProjectDataOrEmpty } from "@/services/projects";
+import type { ProjectData } from "@/services/projects/schema";
 
-import {
-  OAuthClientMetadata,
-  type CreateOAuthClientPayload,
-  type UpdateOAuthClientPayload,
+import type {
+  CreateOAuthClientPayload,
+  UpdateOAuthClientPayload,
 } from "./schema";
 import { sanitizeThemeCss } from "./theme";
 
@@ -18,30 +19,11 @@ const googleConfigured = Boolean(
   process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET,
 );
 
-const emptyMetadata: OAuthClientMetadata = {};
-
-const decodeMetadata = (value: unknown) =>
-  (() => {
-    const metadata = Schema.decodeUnknownSync(OAuthClientMetadata)(
-      value ?? emptyMetadata,
-    );
-    const domains = normalizeOAuthClientDomains(metadata.domains ?? []);
-    return { ...metadata, ...(domains.length ? { domains } : {}) };
-  })();
-
-const decodeMetadataOrEmpty = (value: unknown) => {
-  try {
-    return decodeMetadata(value);
-  } catch {
-    return emptyMetadata;
-  }
-};
-
-const authOptions = (metadata: OAuthClientMetadata) => ({
-  emailPassword: metadata.authOptions?.emailPassword ?? true,
-  google: googleConfigured && (metadata.authOptions?.google ?? true),
-  signUp: metadata.authOptions?.signUp ?? true,
-  signUpName: metadata.authOptions?.signUpName ?? true,
+const authOptions = (data: ProjectData) => ({
+  emailPassword: data.authOptions?.emailPassword ?? true,
+  google: googleConfigured && (data.authOptions?.google ?? true),
+  signUp: data.authOptions?.signUp ?? true,
+  signUpName: data.authOptions?.signUpName ?? true,
 });
 
 const scopesFromString = (value: string | undefined) =>
@@ -55,8 +37,8 @@ const scopesFromString = (value: string | undefined) =>
         .filter(Boolean)
     : ["openid", "profile", "email"];
 
-const domainsFromMetadata = (metadata: OAuthClientMetadata) =>
-  normalizeOAuthClientDomains(metadata.domains ?? []);
+const domainsFromData = (data: ProjectData) =>
+  normalizeOAuthClientDomains(data.domains ?? []);
 
 const RawOAuthClient = Schema.Struct({
   client_id: Schema.optional(Schema.String),
@@ -72,59 +54,83 @@ const RawOAuthClient = Schema.Struct({
   scope: Schema.optional(Schema.String),
   scopes: Schema.optional(Schema.Array(Schema.String)),
   disabled: Schema.optional(Schema.Boolean),
+  project_id: Schema.optional(Schema.NullOr(Schema.String)),
+  projectId: Schema.optional(Schema.NullOr(Schema.String)),
   metadata: Schema.optional(Schema.NullOr(Schema.Unknown)),
-  domains: Schema.optional(Schema.Array(Schema.String)),
-  branding: Schema.optional(Schema.Unknown),
-  authOptions: Schema.optional(Schema.Unknown),
 });
 
 const decodeRawOAuthClient = Schema.decodeUnknownSync(RawOAuthClient);
 
-const metadataFromRawOAuthClient = (client: typeof RawOAuthClient.Type) =>
-  client.metadata !== undefined && client.metadata !== null
-    ? decodeMetadataOrEmpty(client.metadata)
-    : decodeMetadataOrEmpty({
-        domains: client.domains,
-        branding: client.branding,
-        authOptions: client.authOptions,
-      });
+type ProjectSummary = {
+  id: string | null;
+  name: string | null;
+  logo: string | null;
+  data: ProjectData;
+};
 
-const adminRow = (client: object) => {
+const adminRow = (client: object, projectSummary?: ProjectSummary) => {
   const decoded = decodeRawOAuthClient(client);
   const clientId = decoded.client_id ?? decoded.clientId;
   if (!clientId) throw new Error("OAuth client response is missing client ID");
 
-  const metadata = metadataFromRawOAuthClient(decoded);
+  const data = projectSummary?.data ?? {};
 
   return {
     id: clientId,
     clientId,
     name: decoded.client_name ?? decoded.name ?? null,
     icon: decoded.logo_uri ?? decoded.icon ?? null,
+    projectId:
+      projectSummary?.id ?? decoded.project_id ?? decoded.projectId ?? null,
+    projectName: projectSummary?.name ?? null,
+    projectLogo: projectSummary?.logo ?? null,
     redirectUris: Array.from(
       decoded.redirect_uris ?? decoded.redirectUris ?? [],
     ),
-    domains: domainsFromMetadata(metadata),
+    domains: domainsFromData(data),
     scope: decoded.scope ?? decoded.scopes?.join(" ") ?? null,
     disabled: decoded.disabled ?? null,
-    metadata,
+    projectData: data,
   };
 };
 
-const createdRow = (client: object) => {
+const createdRow = (client: object, projectSummary?: ProjectSummary) => {
   const decoded = decodeRawOAuthClient(client);
 
   return {
-    ...adminRow(client),
+    ...adminRow(client, projectSummary),
     clientSecret: decoded.client_secret ?? decoded.clientSecret ?? "",
   };
 };
+
+const projectSummary = (value: typeof project.$inferSelect | null) =>
+  value
+    ? {
+        id: value.id,
+        name: value.name,
+        logo: value.logo ?? null,
+        data: decodeProjectDataOrEmpty(value.data),
+      }
+    : undefined;
 
 export class OAuthClients extends Context.Service<OAuthClients>()(
   "OAuthClients",
   {
     make: Effect.gen(function* () {
       const db = yield* DB;
+
+      const clientProject = Effect.fn("OAuthClients.clientProject")(function* ({
+        projectId,
+      }: {
+        projectId: string | null | undefined;
+      }) {
+        if (!projectId) return undefined;
+
+        const value = yield* db.query.project.findFirst({
+          where: { id: projectId },
+        });
+        return projectSummary(value ?? null);
+      });
 
       const list = Effect.fn("OAuthClients.list")(function* ({
         headers,
@@ -135,7 +141,22 @@ export class OAuthClients extends Context.Service<OAuthClients>()(
           auth.api.getOAuthClients({ headers }),
         );
 
-        return (clients ?? []).map(adminRow);
+        return yield* Effect.all(
+          (clients ?? []).map((client) =>
+            Effect.gen(function* () {
+              const decoded = decodeRawOAuthClient(client);
+              const clientId = decoded.client_id ?? decoded.clientId;
+              const stored = clientId
+                ? yield* db.query.oauthClient.findFirst({ where: { clientId } })
+                : null;
+              const summary = yield* clientProject({
+                projectId:
+                  stored?.projectId ?? decoded.project_id ?? decoded.projectId,
+              });
+              return adminRow(client, summary);
+            }),
+          ),
+        );
       });
 
       const create = Effect.fn("OAuthClients.create")(function* ({
@@ -145,7 +166,6 @@ export class OAuthClients extends Context.Service<OAuthClients>()(
         headers: Headers;
         payload: CreateOAuthClientPayload;
       }) {
-        const metadata = decodeMetadata(payload.metadata);
         const client = yield* Effect.promise(() =>
           auth.api.adminCreateOAuthClient({
             headers,
@@ -159,12 +179,22 @@ export class OAuthClients extends Context.Service<OAuthClients>()(
               response_types: ["code"],
               type: "web",
               require_pkce: true,
-              metadata,
+              metadata: {},
             },
           }),
         );
 
-        return createdRow(client);
+        const decoded = decodeRawOAuthClient(client);
+        const clientId = decoded.client_id ?? decoded.clientId;
+        if (clientId && payload.projectId !== undefined) {
+          yield* db
+            .update(oauthClient)
+            .set({ projectId: payload.projectId, metadata: {} })
+            .where(eq(oauthClient.clientId, clientId));
+        }
+
+        const summary = yield* clientProject({ projectId: payload.projectId });
+        return createdRow(client, summary);
       });
 
       const getPublicConfig = Effect.fn("OAuthClients.getPublicConfig")(
@@ -177,18 +207,19 @@ export class OAuthClients extends Context.Service<OAuthClients>()(
 
           if (!client || client.disabled) return null;
 
-          const metadata = metadataFromRawOAuthClient(
-            decodeRawOAuthClient(client),
-          );
-          const domains = domainsFromMetadata(metadata);
+          const summary = yield* clientProject({
+            projectId: client.projectId,
+          });
+          const data = summary?.data ?? {};
+          const domains = domainsFromData(data);
 
           return {
             clientId: client.clientId,
-            name: client.name ?? null,
-            logoUrl: client.icon ?? null,
+            name: summary?.name ?? client.name ?? null,
+            logoUrl: summary?.logo ?? null,
             domains,
-            themeCss: sanitizeThemeCss(metadata.branding?.themeCss, clientId),
-            authOptions: authOptions(metadata),
+            themeCss: sanitizeThemeCss(data.branding?.themeCss, clientId),
+            authOptions: authOptions(data),
           };
         },
       );
@@ -202,7 +233,6 @@ export class OAuthClients extends Context.Service<OAuthClients>()(
         headers: Headers;
         payload: UpdateOAuthClientPayload;
       }) {
-        const metadata = decodeMetadata(payload.metadata);
         const client = yield* Effect.promise(() =>
           auth.api.adminUpdateOAuthClient({
             headers,
@@ -217,13 +247,29 @@ export class OAuthClients extends Context.Service<OAuthClients>()(
                 scope: payload.scope
                   ? scopesFromString(payload.scope).join(" ")
                   : undefined,
-                metadata,
+                metadata: {},
               },
             },
           }),
         );
 
-        return adminRow(client);
+        if (payload.projectId !== undefined) {
+          yield* db
+            .update(oauthClient)
+            .set({ projectId: payload.projectId, metadata: {} })
+            .where(eq(oauthClient.clientId, clientId));
+        }
+
+        const storedProjectId =
+          payload.projectId === undefined
+            ? (yield* db.query.oauthClient.findFirst({
+                where: { clientId },
+                columns: { projectId: true },
+              }))?.projectId
+            : payload.projectId;
+
+        const summary = yield* clientProject({ projectId: storedProjectId });
+        return adminRow(client, summary);
       });
 
       const _delete = Effect.fn("OAuthClients.delete")(function* ({
