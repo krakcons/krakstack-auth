@@ -12,7 +12,7 @@ import { AdminApi, FrontendApi } from "@/api";
 import { corsMiddleware } from "@/lib/cors";
 import { adminApiHandler } from "@/services/admin/api.builder";
 import { authApiHandler } from "@/services/auth/api.builder";
-import { auth } from "@/services/auth/config";
+import { authForRequest } from "@/services/auth/config";
 import { BackendAuth } from "@/services/backend-auth";
 import { backendAuthApiHandler } from "@/services/backend-auth/api.builder";
 import { BackendAuthApi } from "@/services/backend-auth/api.group";
@@ -36,7 +36,8 @@ const platformLayer = Layer.mergeAll(
   httpPlatformLayer,
 );
 
-export const authWebHandler = (request: Request) => auth.handler(request);
+export const authWebHandler = async (request: Request) =>
+  (await authForRequest(request)).handler(request);
 
 const authHandlerEffect = HttpEffect.fromWebHandler((request) =>
   Promise.resolve(authWebHandler(request)),

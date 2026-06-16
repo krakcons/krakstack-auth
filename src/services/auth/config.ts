@@ -14,6 +14,10 @@ import { apiKey } from "@better-auth/api-key";
 import { db } from "../../services/database";
 import { schema } from "../../db/schema";
 import {
+  cookieDomainFromRequest,
+  hostFromRequest,
+  isOAuthClientAuthHost,
+  isPrimaryAuthHost,
   normalizeAuthHost,
   parseCsv,
   trustedOriginsForRequest,
@@ -48,141 +52,165 @@ const allowedHosts = Array.from(
   ),
 );
 
-export const auth = betterAuth({
-  appName: "Krakstack Auth",
-  baseURL: {
-    allowedHosts,
-    protocol: isDev ? "http" : "https",
-    fallback: betterAuthUrl,
-  },
-  database: drizzleAdapter(db, {
-    provider: "pg",
-    schema,
-  }),
-  advanced: {
-    cookiePrefix: "krakstack-auth",
-    crossSubDomainCookies: {
-      enabled: !isDev,
+const createAuth = (cookieDomain?: string) =>
+  betterAuth({
+    appName: "Krakstack Auth",
+    baseURL: {
+      allowedHosts,
+      protocol: isDev ? "http" : "https",
+      fallback: betterAuthUrl,
     },
-    defaultCookieAttributes: {
-      sameSite: isDev ? "lax" : "none",
-      secure: !isDev,
-      httpOnly: true,
-    },
-  },
-  trustedOrigins: trustedOriginsForRequest,
-  emailAndPassword: {
-    enabled: true,
-    requireEmailVerification: true,
-    revokeSessionsOnPasswordReset: true,
-    resetPasswordTokenExpiresIn: 60 * 60,
-    sendResetPassword: async ({ user, url }, request) => {
-      await sendResetPasswordEmail({ request, to: user.email, url });
-    },
-  },
-  ...(googleClientId && googleClientSecret
-    ? {
-        socialProviders: {
-          google: {
-            clientId: googleClientId,
-            clientSecret: googleClientSecret,
-          },
-        },
-      }
-    : {}),
-  account: {
-    encryptOAuthTokens: true,
-  },
-  session: {
-    cookieCache: {
-      enabled: true,
-      maxAge: 60 * 5,
-    },
-  },
-  plugins: [
-    openAPI(),
-    admin(),
-    jwt(),
-    emailOTP({
-      overrideDefaultEmailVerification: true,
-      sendVerificationOnSignUp: true,
-      storeOTP: "encrypted",
-      allowedAttempts: 5,
-      sendVerificationOTP: async ({ email, otp, type }, context) => {
-        await sendEmailVerificationOtpEmail({
-          request: context?.request,
-          to: email,
-          otp,
-          type,
-        });
-      },
+    database: drizzleAdapter(db, {
+      provider: "pg",
+      schema,
     }),
-    twoFactor({
-      issuer: "Krakstack Auth",
-      otpOptions: {
-        sendOTP: async ({ user, otp }, context) => {
-          await sendTwoFactorOtpEmail({
+    advanced: {
+      cookiePrefix: "krakstack-auth",
+      crossSubDomainCookies: {
+        enabled: !isDev,
+        ...(cookieDomain ? { domain: cookieDomain } : {}),
+      },
+      defaultCookieAttributes: {
+        sameSite: isDev ? "lax" : "none",
+        secure: !isDev,
+        httpOnly: true,
+      },
+    },
+    trustedOrigins: trustedOriginsForRequest,
+    emailAndPassword: {
+      enabled: true,
+      requireEmailVerification: true,
+      revokeSessionsOnPasswordReset: true,
+      resetPasswordTokenExpiresIn: 60 * 60,
+      sendResetPassword: async ({ user, url }, request) => {
+        await sendResetPasswordEmail({ request, to: user.email, url });
+      },
+    },
+    ...(googleClientId && googleClientSecret
+      ? {
+          socialProviders: {
+            google: {
+              clientId: googleClientId,
+              clientSecret: googleClientSecret,
+            },
+          },
+        }
+      : {}),
+    account: {
+      encryptOAuthTokens: true,
+    },
+    session: {
+      cookieCache: {
+        enabled: true,
+        maxAge: 60 * 5,
+      },
+    },
+    plugins: [
+      openAPI(),
+      admin(),
+      jwt(),
+      emailOTP({
+        overrideDefaultEmailVerification: true,
+        sendVerificationOnSignUp: true,
+        storeOTP: "encrypted",
+        allowedAttempts: 5,
+        sendVerificationOTP: async ({ email, otp, type }, context) => {
+          await sendEmailVerificationOtpEmail({
             request: context?.request,
-            to: user.email,
+            to: email,
             otp,
+            type,
           });
         },
-        period: 5,
-        allowedAttempts: 5,
-        storeOTP: "encrypted",
-      },
-    }),
-    organization({
-      allowUserToCreateOrganization: true,
-      organizationLimit: 10,
-      membershipLimit: 100,
-    }),
-    apiKey([
-      {
-        configId: "user",
-        defaultPrefix: "user_",
-        references: "user",
-        rateLimit: apiKeyRateLimit,
-      },
-      {
-        configId: "organization",
-        defaultPrefix: "org_",
-        references: "organization",
-        rateLimit: apiKeyRateLimit,
-      },
-      {
-        configId: "service",
-        defaultPrefix: "svc_",
-        references: "user",
-        rateLimit: {
-          enabled: true,
-          timeWindow: 1000 * 60 * 60 * 24,
-          maxRequests: 10000,
+      }),
+      twoFactor({
+        issuer: "Krakstack Auth",
+        otpOptions: {
+          sendOTP: async ({ user, otp }, context) => {
+            await sendTwoFactorOtpEmail({
+              request: context?.request,
+              to: user.email,
+              otp,
+            });
+          },
+          period: 5,
+          allowedAttempts: 5,
+          storeOTP: "encrypted",
         },
-      },
-    ]),
-    oauthProvider({
-      loginPage: "/sign-in",
-      consentPage: "/consent",
-      allowDynamicClientRegistration: false,
-      silenceWarnings: {
-        oauthAuthServerConfig: true,
-      },
-      clientReference: ({ session }) => {
-        return (
-          (session?.activeOrganizationId as string | undefined) ?? undefined
-        );
-      },
-      clientPrivileges: async ({ user }) => {
-        const role = (user as { role?: unknown } | undefined)?.role;
-        if (typeof role !== "string") return false;
+      }),
+      organization({
+        allowUserToCreateOrganization: true,
+        organizationLimit: 10,
+        membershipLimit: 100,
+      }),
+      apiKey([
+        {
+          configId: "user",
+          defaultPrefix: "user_",
+          references: "user",
+          rateLimit: apiKeyRateLimit,
+        },
+        {
+          configId: "organization",
+          defaultPrefix: "org_",
+          references: "organization",
+          rateLimit: apiKeyRateLimit,
+        },
+        {
+          configId: "service",
+          defaultPrefix: "svc_",
+          references: "user",
+          rateLimit: {
+            enabled: true,
+            timeWindow: 1000 * 60 * 60 * 24,
+            maxRequests: 10000,
+          },
+        },
+      ]),
+      oauthProvider({
+        loginPage: "/sign-in",
+        consentPage: "/consent",
+        allowDynamicClientRegistration: false,
+        silenceWarnings: {
+          oauthAuthServerConfig: true,
+        },
+        clientReference: ({ session }) => {
+          return (
+            (session?.activeOrganizationId as string | undefined) ?? undefined
+          );
+        },
+        clientPrivileges: async ({ user }) => {
+          const role = (user as { role?: unknown } | undefined)?.role;
+          if (typeof role !== "string") return false;
 
-        return role.split(",").some((item) => item.trim() === "admin");
-      },
-      scopes: ["openid", "profile", "email", "offline_access"],
-      ...(validAudiences ? { validAudiences } : {}),
-    }),
-  ],
-});
+          return role.split(",").some((item) => item.trim() === "admin");
+        },
+        scopes: ["openid", "profile", "email", "offline_access"],
+        ...(validAudiences ? { validAudiences } : {}),
+      }),
+    ],
+  });
+
+export const auth = createAuth();
+
+const authByCookieDomain = new Map<string, ReturnType<typeof createAuth>>();
+
+export const authForRequest = async (request: Request) => {
+  const host = hostFromRequest(request);
+  if (!host) return auth;
+  if (!isPrimaryAuthHost(host) && !(await isOAuthClientAuthHost(host))) {
+    return auth;
+  }
+
+  const cookieDomain = cookieDomainFromRequest(request);
+  if (!cookieDomain) return auth;
+
+  const cached = authByCookieDomain.get(cookieDomain);
+  if (cached) return cached;
+
+  const next = createAuth(cookieDomain);
+  authByCookieDomain.set(cookieDomain, next);
+  return next;
+};
 
 export type AuthSession = typeof auth.$Infer.Session;

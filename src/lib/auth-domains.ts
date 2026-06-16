@@ -1,4 +1,5 @@
 import { eq, isNull, or } from "drizzle-orm";
+import { getDomain } from "tldts";
 
 import { oauthClient, project } from "@/db/auth-schema";
 import { db } from "@/services/database";
@@ -15,6 +16,17 @@ export const hostFromRequest = (request: Request) =>
   normalizeAuthHost(
     request.headers.get("x-forwarded-host") ?? request.headers.get("host"),
   ) ?? normalizeAuthHost(request.url);
+
+export const cookieDomainFromRequest = (request: Request) => {
+  const host = hostFromRequest(request);
+  if (!host) return undefined;
+
+  const hostname = normalizeAuthHost(host)?.split(":")[0];
+  if (!hostname) return undefined;
+
+  const domain = getDomain(hostname);
+  return domain ? `.${domain}` : undefined;
+};
 
 const configuredPrimaryHosts = () => {
   const hosts = new Set<string>();
