@@ -60,6 +60,18 @@ export const adminProjectsApiHandler = HttpApiBuilder.group(
   "projects",
   (handlers) =>
     handlers
+      .handle("getProjectPublicConfig", ({ query }) =>
+        Effect.gen(function* () {
+          const projects = yield* Projects;
+          return yield* projects
+            .getPublicConfig({
+              projectId: query.projectId,
+              clientId: query.clientId,
+              host: query.host,
+            })
+            .pipe(Effect.mapError(internalServerError));
+        }),
+      )
       .handle("listProjects", ({ request }) =>
         Effect.gen(function* () {
           yield* requireAdmin(request.headers);

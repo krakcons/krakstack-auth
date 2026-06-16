@@ -452,5 +452,8 @@
   "project_deleted_toast": "Project deleted",
   "project_delete_title": "Delete project",
   "project_delete_description": "Are you sure you want to delete {name}? OAuth clients linked to this project will keep working but lose project branding.",
-  "actions_cancel": "Cancel"
+  "actions_cancel": "Cancel",
+  "admin_action_preview": "Preview",
+  "sign_up_disabled_title": "Sign-up is unavailable",
+  "sign_up_disabled_description": "New account registration is currently disabled for this project."
 }

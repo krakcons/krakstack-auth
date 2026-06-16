@@ -132,6 +132,27 @@ export class OAuthClients extends Context.Service<OAuthClients>()(
         return projectSummary(value ?? null);
       });
 
+      const publicConfigFrom = ({
+        projectKey,
+        summary,
+        client,
+      }: {
+        projectKey: string;
+        summary: ProjectSummary | undefined;
+        client?: typeof oauthClient.$inferSelect;
+      }) => {
+        const data = summary?.data ?? {};
+
+        return {
+          projectKey,
+          name: summary?.name ?? client?.name ?? null,
+          logoUrl: summary?.logo ?? client?.icon ?? null,
+          domains: domainsFromData(data),
+          themeCss: sanitizeThemeCss(data.branding?.themeCss, projectKey),
+          authOptions: authOptions(data),
+        };
+      };
+
       const list = Effect.fn("OAuthClients.list")(function* ({
         headers,
       }: {
@@ -210,17 +231,12 @@ export class OAuthClients extends Context.Service<OAuthClients>()(
           const summary = yield* clientProject({
             projectId: client.projectId,
           });
-          const data = summary?.data ?? {};
-          const domains = domainsFromData(data);
 
-          return {
-            clientId: client.clientId,
-            name: summary?.name ?? client.name ?? null,
-            logoUrl: summary?.logo ?? null,
-            domains,
-            themeCss: sanitizeThemeCss(data.branding?.themeCss, clientId),
-            authOptions: authOptions(data),
-          };
+          return publicConfigFrom({
+            projectKey: summary?.id ?? client.clientId,
+            summary,
+            client,
+          });
         },
       );
 
@@ -296,7 +312,13 @@ export class OAuthClients extends Context.Service<OAuthClients>()(
         return adminRow(client);
       });
 
-      return { list, create, getPublicConfig, update, delete: _delete };
+      return {
+        list,
+        create,
+        getPublicConfig,
+        update,
+        delete: _delete,
+      };
     }),
   },
 ) {

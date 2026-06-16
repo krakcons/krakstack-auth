@@ -12,10 +12,26 @@ import {
   CreateProjectPayload,
   Project,
   ProjectIdParams,
+  ProjectPublicConfig,
+  ProjectPublicConfigQuery,
   UpdateProjectPayload,
 } from "./schema";
 
 export const AdminProjectsApiGroup = HttpApiGroup.make("projects")
+  .add(
+    HttpApiEndpoint.get("getProjectPublicConfig", "/projects/config", {
+      query: ProjectPublicConfigQuery,
+      success: ProjectPublicConfig,
+      error: [HttpApiError.InternalServerError],
+    }).annotateMerge(
+      OpenApi.annotations({
+        title: "Get project public config",
+        summary: "Get host-aware project white-label config",
+        description:
+          "Returns resolved public branding and authentication options using project domain, OAuth client project, then platform defaults.",
+      }),
+    ),
+  )
   .add(
     HttpApiEndpoint.get("listProjects", "/admin/projects", {
       success: Schema.Array(Project),

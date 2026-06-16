@@ -11,50 +11,6 @@ export const OAuthClientIdParams = Schema.Struct({
   examples: [{ clientId: "oauth-client-id" }],
 });
 
-export const OAuthAuthOptions = Schema.Struct({
-  emailPassword: Schema.Boolean,
-  google: Schema.Boolean,
-  signUp: Schema.Boolean,
-  signUpName: Schema.Boolean,
-}).annotate({
-  identifier: "OAuthAuthOptions",
-  title: "OAuth authentication options",
-  description: "Resolved authentication methods visible for an OAuth client.",
-  examples: [
-    { emailPassword: true, google: true, signUp: true, signUpName: true },
-  ],
-});
-
-export const OAuthClientPublicConfig = Schema.Struct({
-  clientId: Schema.String,
-  name: Schema.NullOr(Schema.String),
-  logoUrl: Schema.NullOr(Schema.String),
-  domains: Schema.Array(Schema.String),
-  themeCss: Schema.NullOr(Schema.String),
-  authOptions: OAuthAuthOptions,
-}).annotate({
-  identifier: "OAuthClientPublicConfig",
-  title: "OAuth client public config",
-  description:
-    "Public white-label configuration used by auth pages for an OAuth client.",
-  examples: [
-    {
-      clientId: "oauth-client-id",
-      name: "Example app",
-      logoUrl: "https://example.com/logo.svg",
-      domains: ["auth.example.com"],
-      themeCss:
-        '[data-oauth-client-theme="oauth-client-id"] { --primary: oklch(0.5 0.1 240); }',
-      authOptions: {
-        emailPassword: true,
-        google: true,
-        signUp: false,
-        signUpName: true,
-      },
-    },
-  ],
-});
-
 export const OAuthClientAdmin = Schema.Struct({
   id: Schema.String,
   clientId: Schema.String,
@@ -191,6 +147,5 @@ export const UpdateOAuthClientPayload = Schema.Struct({
 
 export type OAuthClientAdmin = typeof OAuthClientAdmin.Type;
 export type OAuthClientCreated = typeof OAuthClientCreated.Type;
-export type OAuthClientPublicConfig = typeof OAuthClientPublicConfig.Type;
 export type CreateOAuthClientPayload = typeof CreateOAuthClientPayload.Type;
 export type UpdateOAuthClientPayload = typeof UpdateOAuthClientPayload.Type;

@@ -452,5 +452,8 @@
   "project_deleted_toast": "Projet supprimé",
   "project_delete_title": "Supprimer le projet",
   "project_delete_description": "Êtes-vous sûr de vouloir supprimer {name} ? Les clients OAuth liés à ce projet continueront de fonctionner, mais perdront la marque du projet.",
-  "actions_cancel": "Annuler"
+  "actions_cancel": "Annuler",
+  "admin_action_preview": "Aperçu",
+  "sign_up_disabled_title": "L'inscription est indisponible",
+  "sign_up_disabled_description": "La création de nouveaux comptes est actuellement désactivée pour ce projet."
 }

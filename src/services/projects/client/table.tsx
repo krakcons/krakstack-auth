@@ -1,7 +1,7 @@
 import { useAtomSet, useAtomValue } from "@effect/atom-react";
 import { type ColumnDef } from "@tanstack/react-table";
 import { Atom, AsyncResult } from "effect/unstable/reactivity";
-import { Pencil, Trash2 } from "lucide-react";
+import { Eye, Pencil, Trash2 } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
 
@@ -63,6 +63,13 @@ export function ProjectsTable({ reloadKey = 0 }: { reloadKey?: number }) {
         columns={projectColumns({
           onEdit: setEditingProject,
           onDelete: setDeletingProject,
+          onPreview: (project) => {
+            window.open(
+              `/sign-in?projectId=${encodeURIComponent(project.id)}`,
+              "_blank",
+              "noopener,noreferrer",
+            );
+          },
         })}
         data={rows}
         exportFileName="projects.csv"
@@ -101,9 +108,11 @@ export function ProjectsTable({ reloadKey = 0 }: { reloadKey?: number }) {
 const projectColumns = ({
   onEdit,
   onDelete,
+  onPreview,
 }: {
   onEdit: (project: Project) => void;
   onDelete: (project: Project) => void;
+  onPreview: (project: Project) => void;
 }): ColumnDef<Project>[] => [
   {
     accessorKey: "name",
@@ -192,6 +201,11 @@ const projectColumns = ({
     ),
   },
   createDataTableActionsColumn<Project>([
+    {
+      name: m.admin_action_preview(),
+      icon: <Eye className="size-4" />,
+      onClick: onPreview,
+    },
     {
       name: m.admin_action_edit(),
       icon: <Pencil className="size-4" />,

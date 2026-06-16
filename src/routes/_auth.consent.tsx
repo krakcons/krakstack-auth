@@ -13,7 +13,7 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { useOAuthClientConfigSuspense } from "@/services/auth/client/atoms";
+import { useAuthBrandingConfig } from "@/services/auth/client/branding";
 
 export const Route = createFileRoute("/_auth/consent")({
   validateSearch: (search: Record<string, unknown>) => ({
@@ -31,9 +31,9 @@ function Consent() {
   const navigate = useNavigate();
   const { clientId, scope } = Route.useSearch();
   const scopes = scope.split(" ").filter(Boolean);
-  const clientConfig = useOAuthClientConfigSuspense(clientId);
+  const projectConfig = useAuthBrandingConfig();
   const fallbackClientName = useOAuthClientName(clientId);
-  const clientName = clientConfig?.name ?? fallbackClientName;
+  const clientName = projectConfig?.name ?? fallbackClientName;
   const form = useAppForm({
     defaultValues: {},
     onSubmitMeta: { accept: true },

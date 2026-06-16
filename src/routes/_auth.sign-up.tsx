@@ -15,10 +15,7 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import {
-  getOAuthClientIdFromSearch,
-  useOAuthClientConfigSuspense,
-} from "@/services/auth/client/atoms";
+import { useAuthBrandingConfig } from "@/services/auth/client/branding";
 
 export const Route = createFileRoute("/_auth/sign-up")({
   component: SignUp,
@@ -30,9 +27,8 @@ function SignUp() {
     select: (state) => state.location.searchStr,
   });
   const redirectTarget = getRedirectTarget(searchString);
-  const clientId = getOAuthClientIdFromSearch(searchString);
-  const clientConfig = useOAuthClientConfigSuspense(clientId);
-  const authOptions = clientConfig?.authOptions ?? {
+  const projectConfig = useAuthBrandingConfig();
+  const authOptions = projectConfig?.authOptions ?? {
     emailPassword: true,
     google: true,
     signUp: true,
@@ -76,6 +72,16 @@ function SignUp() {
     onSubmit: async ({ value, formApi }) => {
       formApi.setErrorMap({ onSubmit: undefined });
 
+      if (!authOptions.signUp) {
+        formApi.setErrorMap({
+          onSubmit: {
+            form: m.sign_up_disabled_description(),
+            fields: {},
+          },
+        });
+        return;
+      }
+
       try {
         const result = await authClient.signUp.email({
           name: showName ? value.name.trim() : nameFromEmail(value.email),
@@ -108,6 +114,30 @@ function SignUp() {
       }
     },
   });
+
+  if (!authOptions.signUp) {
+    return (
+      <Card className="w-full max-w-md">
+        <CardHeader>
+          <CardTitle className="text-3xl">
+            {m.sign_up_disabled_title()}
+          </CardTitle>
+          <CardDescription>{m.sign_up_disabled_description()}</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <p className="text-muted-foreground text-center text-sm">
+            {m.sign_up_have_account()}{" "}
+            <a
+              className="text-foreground font-medium underline-offset-4 hover:underline"
+              href={`/sign-in${searchString}`}
+            >
+              {m.auth_sign_in()}
+            </a>
+          </p>
+        </CardContent>
+      </Card>
+    );
+  }
 
   return (
     <Card className="w-full max-w-md">

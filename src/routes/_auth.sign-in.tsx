@@ -16,10 +16,7 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import {
-  getOAuthClientIdFromSearch,
-  useOAuthClientConfigSuspense,
-} from "@/services/auth/client/atoms";
+import { useAuthBrandingConfig } from "@/services/auth/client/branding";
 
 export const Route = createFileRoute("/_auth/sign-in")({
   component: SignIn,
@@ -43,9 +40,8 @@ function SignIn() {
   const redirectTarget = getRedirectTarget(searchString);
   const socialRedirectTarget = getSocialRedirectTarget(searchString);
   const oauthQuery = getOAuthQuery(searchString);
-  const clientId = getOAuthClientIdFromSearch(searchString);
-  const clientConfig = useOAuthClientConfigSuspense(clientId);
-  const authOptions = clientConfig?.authOptions ?? {
+  const projectConfig = useAuthBrandingConfig();
+  const authOptions = projectConfig?.authOptions ?? {
     emailPassword: true,
     google: true,
     signUp: true,

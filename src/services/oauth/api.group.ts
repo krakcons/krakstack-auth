@@ -11,9 +11,9 @@ import {
   OAuthClientAdmin,
   OAuthClientCreated,
   OAuthClientIdParams,
-  OAuthClientPublicConfig,
   UpdateOAuthClientPayload,
 } from "./schema";
+import { ProjectPublicConfig } from "@/services/projects/schema";
 import { PresignedUpload, PresignUploadPayload } from "@/services/s3/schema";
 
 export const AdminOAuthClientsApiGroup = HttpApiGroup.make("oauthClients")
@@ -58,7 +58,7 @@ export const AdminOAuthClientsApiGroup = HttpApiGroup.make("oauthClients")
       "/oauth/clients/:clientId/config",
       {
         params: OAuthClientIdParams,
-        success: OAuthClientPublicConfig,
+        success: ProjectPublicConfig,
         error: [HttpApiError.NotFound, HttpApiError.InternalServerError],
       },
     ).annotateMerge(

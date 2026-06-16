@@ -75,7 +75,10 @@ const readDeclarations = (body: string) =>
       return [`  ${name}: ${value};`];
     });
 
-export const sanitizeThemeCss = (css: string | undefined, clientId: string) => {
+export const sanitizeThemeCss = (
+  css: string | undefined,
+  projectKey: string,
+) => {
   if (!css?.trim()) return null;
 
   const light: string[] = [];
@@ -91,13 +94,13 @@ export const sanitizeThemeCss = (css: string | undefined, clientId: string) => {
     if (selector === ".dark") dark.push(...declarations);
   }
 
-  const escapedClientId = escapeAttribute(clientId);
+  const escapedProjectKey = escapeAttribute(projectKey);
   const blocks = [
     light.length
-      ? `[data-oauth-client-theme="${escapedClientId}"] {\n${light.join("\n")}\n}`
+      ? `[data-project-theme="${escapedProjectKey}"] {\n${light.join("\n")}\n}`
       : null,
     dark.length
-      ? `.dark [data-oauth-client-theme="${escapedClientId}"] {\n${dark.join("\n")}\n}`
+      ? `.dark [data-project-theme="${escapedProjectKey}"] {\n${dark.join("\n")}\n}`
       : null,
   ].filter((block): block is string => Boolean(block));
 

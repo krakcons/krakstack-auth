@@ -1,9 +1,13 @@
 import { Context, Effect, Layer, Schema } from "effect";
 import { eq } from "drizzle-orm";
 
-import { project } from "@/db/auth-schema";
-import { normalizeOAuthClientDomains } from "@/lib/domain-utils";
+import { oauthClient, project } from "@/db/auth-schema";
+import {
+  normalizeAuthHost,
+  normalizeOAuthClientDomains,
+} from "@/lib/domain-utils";
 import { DB } from "@/services/database";
+import { sanitizeThemeCss } from "@/services/oauth/theme";
 
 import {
   ProjectData,
@@ -12,6 +16,17 @@ import {
 } from "./schema";
 
 const emptyData: ProjectData = {};
+
+const googleConfigured = Boolean(
+  process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET,
+);
+
+const authOptions = (data: ProjectData) => ({
+  emailPassword: data.authOptions?.emailPassword ?? true,
+  google: googleConfigured && (data.authOptions?.google ?? true),
+  signUp: data.authOptions?.signUp ?? true,
+  signUpName: data.authOptions?.signUpName ?? true,
+});
 
 export const decodeProjectData = (value: unknown) => {
   const data = Schema.decodeUnknownSync(ProjectData)(value ?? emptyData);
@@ -33,6 +48,18 @@ const row = (value: typeof project.$inferSelect) => ({
   data: decodeProjectDataOrEmpty(value.data),
 });
 
+const domainsFromData = (data: ProjectData) =>
+  normalizeOAuthClientDomains(data.domains ?? []);
+
+const fallbackPublicConfig = (projectKey: string) => ({
+  projectKey,
+  name: null,
+  logoUrl: null,
+  domains: [],
+  themeCss: null,
+  authOptions: authOptions({}),
+});
+
 export class Projects extends Context.Service<Projects>()("Projects", {
   make: Effect.gen(function* () {
     const db = yield* DB;
@@ -47,6 +74,99 @@ export class Projects extends Context.Service<Projects>()("Projects", {
     const get = Effect.fn("Projects.get")(function* ({ id }: { id: string }) {
       const value = yield* db.query.project.findFirst({ where: { id } });
       return value ? row(value) : null;
+    });
+
+    const projectByHost = Effect.fn("Projects.projectByHost")(function* ({
+      host,
+    }: {
+      host: string | null | undefined;
+    }) {
+      const normalizedHost = normalizeAuthHost(host);
+      if (!normalizedHost) return null;
+
+      const projects = yield* db.query.project.findMany();
+      return (
+        projects
+          .map(row)
+          .find((value) =>
+            domainsFromData(value.data).includes(normalizedHost),
+          ) ?? null
+      );
+    });
+
+    const publicConfigFrom = ({
+      projectKey,
+      value,
+      client,
+    }: {
+      projectKey: string;
+      value: ReturnType<typeof row> | null;
+      client?: typeof oauthClient.$inferSelect;
+    }) => {
+      const data = value?.data ?? {};
+
+      return {
+        projectKey,
+        name: value?.name ?? client?.name ?? null,
+        logoUrl: value?.logo ?? client?.icon ?? null,
+        domains: domainsFromData(data),
+        themeCss: sanitizeThemeCss(data.branding?.themeCss, projectKey),
+        authOptions: authOptions(data),
+      };
+    };
+
+    const getPublicConfig = Effect.fn("Projects.getPublicConfig")(function* ({
+      projectId,
+      clientId,
+      host,
+    }: {
+      projectId?: string | undefined;
+      clientId?: string | undefined;
+      host?: string | undefined;
+    }) {
+      if (projectId) {
+        const value = yield* db.query.project.findFirst({
+          where: { id: projectId },
+        });
+        if (value) {
+          return publicConfigFrom({
+            projectKey: value.id,
+            value: row(value),
+          });
+        }
+      }
+
+      const hostProject = yield* projectByHost({ host });
+      if (hostProject) {
+        return publicConfigFrom({
+          projectKey: normalizeAuthHost(host) ?? hostProject.id,
+          value: hostProject,
+        });
+      }
+
+      if (clientId) {
+        const client = yield* db.query.oauthClient.findFirst({
+          where: { clientId },
+        });
+
+        if (client && !client.disabled) {
+          const value = client.projectId
+            ? yield* db.query.project.findFirst({
+                where: { id: client.projectId },
+              })
+            : null;
+
+          return publicConfigFrom({
+            projectKey: value?.id ?? client.clientId,
+            value: value ? row(value) : null,
+            client,
+          });
+        }
+      }
+
+      return fallbackPublicConfig(
+        projectId ?? clientId ?? normalizeAuthHost(host) ?? "default",
+      );
     });
 
     const create = Effect.fn("Projects.create")(function* ({
@@ -103,7 +223,7 @@ export class Projects extends Context.Service<Projects>()("Projects", {
       return value ? row(value) : null;
     });
 
-    return { list, get, create, update, delete: _delete };
+    return { list, get, getPublicConfig, create, update, delete: _delete };
   }),
 }) {
   static readonly layer = Layer.effect(this, this.make).pipe(
