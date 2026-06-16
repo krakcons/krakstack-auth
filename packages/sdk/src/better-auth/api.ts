@@ -6,15 +6,13 @@ import {
 } from "effect/unstable/httpapi";
 
 import {
-  GetSessionPayload,
   GetSessionResponse,
   TooManyRequests,
 } from "./schema";
 
 export const BetterAuthApiGroup = HttpApiGroup.make("betterAuth")
   .add(
-    HttpApiEndpoint.post("getSession", "/get-session", {
-      payload: GetSessionPayload,
+    HttpApiEndpoint.get("getSession", "/get-session", {
       success: GetSessionResponse,
       error: [
         HttpApiError.BadRequest,

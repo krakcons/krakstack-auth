@@ -11,6 +11,38 @@ import { readClientConfig } from "./config";
 import { ExtraApi } from "./extra/api";
 import { ServerApi } from "./server/api";
 
+const forwardedAuthHeaderNames = [
+  "accept-language",
+  "baggage",
+  "cookie",
+  "traceparent",
+  "tracestate",
+  "user-agent",
+] as const;
+
+const forwardedAuthHeaders = (headers: Record<string, string>) => {
+  const forwarded: Record<string, string> = {};
+
+  for (const name of forwardedAuthHeaderNames) {
+    const value = headers[name];
+    if (value) forwarded[name] = value;
+  }
+
+  return forwarded;
+};
+
+const authHttpClientLayer = (headers: Record<string, string>) =>
+  Layer.effect(
+    HttpClient.HttpClient,
+    Effect.gen(function* () {
+      const http = yield* HttpClient.HttpClient;
+
+      return HttpClient.mapRequest(http, (request) =>
+        HttpClientRequest.setHeaders(request, forwardedAuthHeaders(headers)),
+      );
+    }),
+  ).pipe(Layer.provide(FetchHttpClient.layer));
+
 export class AuthClientConfig extends Context.Service<AuthClientConfig>()(
   "@krak-stack/auth/AuthClientConfig",
   { make: readClientConfig },
@@ -60,8 +92,9 @@ export class AuthClient extends Context.Service<AuthClient>()(
     }),
   },
 ) {
-  static readonly layer = Layer.effect(this, this.make).pipe(
-    Layer.provide(AuthClientConfig.layer),
-    Layer.provide(FetchHttpClient.layer),
-  );
+  static readonly layer = (headers: Record<string, string> = {}) =>
+    Layer.effect(this, this.make).pipe(
+      Layer.provide(AuthClientConfig.layer),
+      Layer.provide(authHttpClientLayer(headers)),
+    );
 }
