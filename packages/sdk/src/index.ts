@@ -5,6 +5,6 @@ export {
   UserButton,
   type AuthUiClient,
 } from "./components";
-export * as Backend from "./backend";
 export * as BetterAuth from "./better-auth";
-export * as Frontend from "./frontend";
+export * as Extra from "./extra";
+export * as Server from "./server";

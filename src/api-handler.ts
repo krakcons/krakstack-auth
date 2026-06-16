@@ -7,9 +7,9 @@ import {
   HttpRouter,
   HttpServerResponse,
 } from "effect/unstable/http";
-import { HttpApiBuilder } from "effect/unstable/httpapi";
+import { HttpApiBuilder, OpenApi } from "effect/unstable/httpapi";
 
-import { AdminApi, FrontendApi } from "@/api";
+import { AdminApi, AuthDocsApi, FrontendApi } from "@/api";
 import { corsMiddleware } from "@/lib/cors";
 import { adminApiHandler } from "@/services/admin/api.builder";
 import { authApiHandler } from "@/services/auth/api.builder";
@@ -100,19 +100,14 @@ const scalarDocsConfig = {
   theme: "default",
   sources: [
     {
+      title: "Auth API",
+      slug: "auth-api",
+      url: "/api/auth-openapi.json",
+    },
+    {
       title: "Admin API",
       slug: "admin-api",
       url: "/api/admin-openapi.json",
-    },
-    {
-      title: "Frontend API",
-      slug: "frontend-api",
-      url: "/api/frontend-openapi.json",
-    },
-    {
-      title: "Backend API",
-      slug: "backend-auth-api",
-      url: "/api/backend-openapi.json",
     },
     {
       title: "Better Auth",
@@ -144,6 +139,12 @@ const docsLayer = HttpRouter.add(
   Effect.succeed(HttpServerResponse.html(docsHtml)),
 );
 
+const authDocsOpenApiLayer = HttpRouter.add(
+  "GET",
+  "/api/auth-openapi.json",
+  Effect.succeed(HttpServerResponse.jsonUnsafe(OpenApi.fromApi(AuthDocsApi))),
+);
+
 const apiLayer = Layer.mergeAll(
   HttpApiBuilder.layer(AdminApi, {
     openapiPath: "/api/admin-openapi.json",
@@ -152,9 +153,7 @@ const apiLayer = Layer.mergeAll(
     Layer.provide(adminOAuthClientsApiHandler),
     Layer.provide(adminProjectsApiHandler),
   ),
-  HttpApiBuilder.layer(FrontendApi, {
-    openapiPath: "/api/frontend-openapi.json",
-  }).pipe(
+  HttpApiBuilder.layer(FrontendApi).pipe(
     Layer.provide(authApiHandler),
     Layer.provide(organizationsApiHandler),
   ),
@@ -162,6 +161,7 @@ const apiLayer = Layer.mergeAll(
     openapiPath: "/api/backend-openapi.json",
   }).pipe(Layer.provide(backendAuthApiHandler)),
   docsLayer,
+  authDocsOpenApiLayer,
   logoAssetRoutesLayer,
   authRoutesLayer,
 ).pipe(Layer.provide(platformLayer));

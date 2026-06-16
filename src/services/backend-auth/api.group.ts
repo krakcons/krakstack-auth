@@ -74,7 +74,7 @@ export const BackendAuthUsersApiGroup = HttpApiGroup.make("backendUsers")
   )
   .annotateMerge(
     OpenApi.annotations({
-      title: "Users",
+      title: "Users (Server)",
       description: "Server-to-server user endpoints for trusted services.",
     }),
   );
@@ -160,7 +160,7 @@ export const BackendAuthOrganizationsApiGroup = HttpApiGroup.make(
   )
   .annotateMerge(
     OpenApi.annotations({
-      title: "Organizations",
+      title: "Organizations (Server)",
       description:
         "Server-to-server organization and membership endpoints for trusted services.",
     }),
@@ -169,7 +169,7 @@ export const BackendAuthOrganizationsApiGroup = HttpApiGroup.make(
 export const BackendAuthApi = HttpApi.make("BackendAuthApi")
   .annotateMerge(
     OpenApi.annotations({
-      title: "KrakStack Backend API",
+      title: "KrakStack Server API",
       version: "1.0.0",
       description:
         "Server-to-server KrakStack Auth API for trusted services that need identity records by ID.",

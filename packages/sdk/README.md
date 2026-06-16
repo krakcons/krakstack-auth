@@ -15,23 +15,27 @@ bun add @krak-stack/auth effect
 
 ## Auth Client
 
+Better Auth:
+
+- `getSession({ payload: {} })` - returns the current Better Auth session and user.
+
 Users:
 
-- `backend.listUsersByIds({ query: { ids } })` - returns matching users and missing IDs for a comma-separated ID list.
-- `backend.getUser({ params: { id } })` - returns one user by ID.
+- `server.listUsersByIds({ query: { ids } })` - returns matching users and missing IDs for a comma-separated ID list.
+- `server.getUser({ params: { id } })` - returns one user by ID.
 
 Organizations:
 
-- `backend.listOrganizations({ query: { ids } })` - returns matching organizations and missing IDs for a comma-separated ID list.
-- `backend.listOrganizations({ query: { userId } })` - returns organizations for one user.
-- `backend.getOrganization({ params: { id } })` - returns one organization by ID.
-- `backend.getUserActiveOrganization({ params: { userId } })` - returns the active organization ID for one user.
-- `frontend.presignOrganizationLogoUpload({ payload })` - returns a presigned organization logo upload URL.
+- `server.listOrganizations({ query: { ids } })` - returns matching organizations and missing IDs for a comma-separated ID list.
+- `server.listOrganizations({ query: { userId } })` - returns organizations for one user.
+- `server.getOrganization({ params: { id } })` - returns one organization by ID.
+- `server.getUserActiveOrganization({ params: { userId } })` - returns the active organization ID for one user.
+- `extra.presign({ payload })` - returns a presigned organization logo upload URL.
 
 Members:
 
-- `backend.getActiveMember({ params: { organizationId, userId } })` - returns one user's membership and role in an organization.
-- `backend.listOrganizationMembers({ params: { organizationId } })` - returns organization members with user contact details.
+- `server.getActiveMember({ params: { organizationId, userId } })` - returns one user's membership and role in an organization.
+- `server.listOrganizationMembers({ params: { organizationId } })` - returns organization members with user contact details.
 
 ```ts
 import { Effect } from "effect";
@@ -39,8 +43,8 @@ import { AuthClient } from "@krak-stack/auth";
 
 const users = await Effect.runPromise(
   Effect.gen(function* () {
-    const client = yield* AuthClient;
-    return yield* client.backend.listUsersByIds({
+    const auth = yield* AuthClient;
+    return yield* auth.server.listUsersByIds({
       query: { ids: "user_1,user_2" },
     });
   }).pipe(Effect.provide(AuthClient.layer)),
@@ -48,15 +52,15 @@ const users = await Effect.runPromise(
 
 const organizations = await Effect.runPromise(
   Effect.gen(function* () {
-    const client = yield* AuthClient;
-    return yield* client.backend.listOrganizations({
+    const auth = yield* AuthClient;
+    return yield* auth.server.listOrganizations({
       query: { userId: "user_1" },
     });
   }).pipe(Effect.provide(AuthClient.layer)),
 );
 ```
 
-The frontend subpath also exports `FrontendApiClient` for Atom-based browser state.
+The extra subpath also exports `ExtraApiClient` for Atom-based browser state.
 
 ## Components
 

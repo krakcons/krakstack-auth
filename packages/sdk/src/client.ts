@@ -6,10 +6,10 @@ import {
 } from "effect/unstable/http";
 import { HttpApiClient } from "effect/unstable/httpapi";
 
-import { BackendApi } from "./backend/api";
 import { BetterAuthApi } from "./better-auth/api";
 import { readClientConfig } from "./config";
-import { FrontendApi } from "./frontend/api";
+import { ExtraApi } from "./extra/api";
+import { ServerApi } from "./server/api";
 
 export class AuthClientConfig extends Context.Service<AuthClientConfig>()(
   "@krak-stack/auth/AuthClientConfig",
@@ -28,13 +28,18 @@ export class AuthClient extends Context.Service<AuthClient>()(
         HttpClientRequest.bearerToken(request, Redacted.value(config.apiKey)),
       );
 
-      const backend = yield* HttpApiClient.group(BackendApi, {
-        group: "backend",
+      const serverUsers = yield* HttpApiClient.group(ServerApi, {
+        group: "serverUsers",
         baseUrl: config.baseUrl,
         httpClient,
       });
-      const frontend = yield* HttpApiClient.group(FrontendApi, {
-        group: "organizations",
+      const serverOrganizations = yield* HttpApiClient.group(ServerApi, {
+        group: "serverOrganizations",
+        baseUrl: config.baseUrl,
+        httpClient,
+      });
+      const extra = yield* HttpApiClient.group(ExtraApi, {
+        group: "extra",
         baseUrl: config.baseUrl,
         httpClient,
       });
@@ -45,11 +50,12 @@ export class AuthClient extends Context.Service<AuthClient>()(
       });
 
       return {
-        backend,
-        betterAuth,
-        frontend: {
-          presignOrganizationLogoUpload: frontend.presignOrganizationLogoUpload,
+        ...betterAuth,
+        server: {
+          ...serverUsers,
+          ...serverOrganizations,
         },
+        extra,
       };
     }),
   },

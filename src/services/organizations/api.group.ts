@@ -33,8 +33,8 @@ export const OrganizationsApiGroup = HttpApiGroup.make("organizations")
   )
   .annotateMerge(
     OpenApi.annotations({
-      title: "Organizations",
+      title: "Extra",
       description:
-        "Frontend organization endpoints. User session auth is accepted, and service API key auth is accepted for trusted services.",
+        "KrakStack-specific endpoints layered on top of Better Auth.",
     }),
   );

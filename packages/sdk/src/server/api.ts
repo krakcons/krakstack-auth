@@ -7,23 +7,23 @@ import {
 
 import { Member, Organization, User } from "../schema";
 import {
-  BackendActiveOrganization,
-  BackendIdParams,
-  BackendIdsQuery,
-  BackendMemberParams,
-  BackendMembersResponse,
-  BackendOrganizationIdParams,
-  BackendOrganizationsQuery,
-  BackendOrganizationsResponse,
-  BackendUserIdParams,
-  BackendUsersResponse,
+  ServerActiveOrganization,
+  ServerIdParams,
+  ServerIdsQuery,
+  ServerMemberParams,
+  ServerMembersResponse,
+  ServerOrganizationIdParams,
+  ServerOrganizationsQuery,
+  ServerOrganizationsResponse,
+  ServerUserIdParams,
+  ServerUsersResponse,
 } from "./schema";
 
-export const BackendApiGroup = HttpApiGroup.make("backend")
+export const ServerUsersApiGroup = HttpApiGroup.make("serverUsers")
   .add(
     HttpApiEndpoint.get("listUsersByIds", "/users", {
-      query: BackendIdsQuery,
-      success: BackendUsersResponse,
+      query: ServerIdsQuery,
+      success: ServerUsersResponse,
       error: [HttpApiError.Unauthorized, HttpApiError.InternalServerError],
     }).annotateMerge(
       OpenApi.annotations({
@@ -36,7 +36,7 @@ export const BackendApiGroup = HttpApiGroup.make("backend")
   )
   .add(
     HttpApiEndpoint.get("getUser", "/users/:id", {
-      params: BackendIdParams,
+      params: ServerIdParams,
       success: User,
       error: [
         HttpApiError.Unauthorized,
@@ -57,8 +57,8 @@ export const BackendApiGroup = HttpApiGroup.make("backend")
       "getUserActiveOrganization",
       "/organizations/user/:userId/active",
       {
-        params: BackendUserIdParams,
-        success: BackendActiveOrganization,
+        params: ServerUserIdParams,
+        success: ServerActiveOrganization,
         error: [HttpApiError.Unauthorized, HttpApiError.InternalServerError],
       },
     ).annotateMerge(
@@ -70,10 +70,20 @@ export const BackendApiGroup = HttpApiGroup.make("backend")
       }),
     ),
   )
+  .annotateMerge(
+    OpenApi.annotations({
+      title: "Users (Server)",
+      description: "Server-to-server user endpoints for trusted services.",
+    }),
+  );
+
+export const ServerOrganizationsApiGroup = HttpApiGroup.make(
+  "serverOrganizations",
+)
   .add(
     HttpApiEndpoint.get("listOrganizations", "/organizations", {
-      query: BackendOrganizationsQuery,
-      success: BackendOrganizationsResponse,
+      query: ServerOrganizationsQuery,
+      success: ServerOrganizationsResponse,
       error: [
         HttpApiError.BadRequest,
         HttpApiError.Unauthorized,
@@ -90,7 +100,7 @@ export const BackendApiGroup = HttpApiGroup.make("backend")
   )
   .add(
     HttpApiEndpoint.get("getOrganization", "/organizations/:id", {
-      params: BackendIdParams,
+      params: ServerIdParams,
       success: Organization,
       error: [
         HttpApiError.Unauthorized,
@@ -111,7 +121,7 @@ export const BackendApiGroup = HttpApiGroup.make("backend")
       "getActiveMember",
       "/organizations/:organizationId/members/:userId",
       {
-        params: BackendMemberParams,
+        params: ServerMemberParams,
         success: Member,
         error: [
           HttpApiError.Unauthorized,
@@ -133,8 +143,8 @@ export const BackendApiGroup = HttpApiGroup.make("backend")
       "listOrganizationMembers",
       "/organizations/:organizationId/members",
       {
-        params: BackendOrganizationIdParams,
-        success: BackendMembersResponse,
+        params: ServerOrganizationIdParams,
+        success: ServerMembersResponse,
         error: [HttpApiError.Unauthorized, HttpApiError.InternalServerError],
       },
     ).annotateMerge(
@@ -148,12 +158,13 @@ export const BackendApiGroup = HttpApiGroup.make("backend")
   )
   .annotateMerge(
     OpenApi.annotations({
-      title: "Backend",
+      title: "Organizations (Server)",
       description:
-        "Server-to-server authentication and identity endpoints for trusted services.",
+        "Server-to-server organization and membership endpoints for trusted services.",
     }),
   );
 
-export const BackendApi = HttpApi.make("BackendApi")
-  .add(BackendApiGroup)
+export const ServerApi = HttpApi.make("ServerApi")
+  .add(ServerUsersApiGroup)
+  .add(ServerOrganizationsApiGroup)
   .prefix("/api");

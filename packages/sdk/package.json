@@ -21,17 +21,17 @@
       "types": "./dist/components/index.d.ts",
       "default": "./dist/components/index.js"
     },
-    "./backend": {
-      "types": "./dist/backend/index.d.ts",
-      "default": "./dist/backend/index.js"
-    },
     "./better-auth": {
       "types": "./dist/better-auth/index.d.ts",
       "default": "./dist/better-auth/index.js"
     },
-    "./frontend": {
-      "types": "./dist/frontend/index.d.ts",
-      "default": "./dist/frontend/index.js"
+    "./extra": {
+      "types": "./dist/extra/index.d.ts",
+      "default": "./dist/extra/index.js"
+    },
+    "./server": {
+      "types": "./dist/server/index.d.ts",
+      "default": "./dist/server/index.js"
     }
   },
   "publishConfig": {

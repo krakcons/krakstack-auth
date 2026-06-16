@@ -2,6 +2,13 @@ import { Schema } from "effect";
 
 import { Session, User } from "../schema";
 
+export const GetSessionPayload = Schema.Struct({}).annotate({
+  identifier: "GetSessionPayload",
+  title: "Get session payload",
+  description: "Empty JSON object payload for Better Auth get-session.",
+  examples: [{}],
+});
+
 export const GetSessionResponse = Schema.NullOr(
   Schema.Struct({
     session: Session,
@@ -41,4 +48,19 @@ export const GetSessionResponse = Schema.NullOr(
   ],
 });
 
+export class TooManyRequests extends Schema.ErrorClass<TooManyRequests>(
+  "TooManyRequests",
+)(
+  {
+    _tag: Schema.tag("TooManyRequests"),
+  },
+  {
+    identifier: "TooManyRequests",
+    title: "Too many requests",
+    description: "Rate limit exceeded. Try again later.",
+    httpApiStatus: 429,
+  },
+) {}
+
 export type GetSessionResponse = typeof GetSessionResponse.Type;
+export type GetSessionPayload = typeof GetSessionPayload.Type;
