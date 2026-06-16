@@ -13,10 +13,7 @@ import { ServerApi } from "./server/api";
 
 const forwardedAuthHeaderNames = [
   "accept-language",
-  "baggage",
   "cookie",
-  "traceparent",
-  "tracestate",
   "user-agent",
 ] as const;
 
