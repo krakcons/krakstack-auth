@@ -20,6 +20,21 @@ export const getProjectIdFromSearch = (searchString: string) => {
 export const getBrowserAuthHost = () =>
   typeof window === "undefined" ? null : window.location.host;
 
+const projectPublicConfigReactivityKeys = ({
+  projectId,
+  clientId,
+  host,
+}: {
+  projectId: string | null;
+  clientId: string | null;
+  host: string | null;
+}) => [
+  "project-public-config",
+  ...(projectId ? [`project:${projectId}`] : []),
+  ...(clientId ? [`client:${clientId}`] : []),
+  ...(host ? [`host:${host}`] : []),
+];
+
 export const projectPublicConfigAtom = Atom.family(
   ({
     projectId,
@@ -38,12 +53,11 @@ export const projectPublicConfigAtom = Atom.family(
             ...(host ? { host } : {}),
           },
           timeToLive: "5 minutes",
-          reactivityKeys: [
-            "project-public-config",
-            projectId ?? "",
-            clientId ?? "",
-            host ?? "",
-          ],
+          reactivityKeys: projectPublicConfigReactivityKeys({
+            projectId,
+            clientId,
+            host,
+          }),
           serializationKey: `project-public-config:${projectId ?? ""}:${clientId ?? ""}:${host ?? ""}`,
         })
       : Atom.make(AsyncResult.success<ProjectPublicConfig | null, never>(null)),
