@@ -55,51 +55,70 @@ const scopesFromString = (value: string | undefined) =>
         .filter(Boolean)
     : ["openid", "profile", "email"];
 
-const metadataFromClient = (client: object) => {
-  const metadata = Reflect.get(client, "metadata");
-  if (metadata !== undefined && metadata !== null) {
-    return decodeMetadataOrEmpty(metadata);
-  }
-
-  return decodeMetadataOrEmpty({
-    branding: Reflect.get(client, "branding"),
-    authOptions: Reflect.get(client, "authOptions"),
-  });
-};
-
 const domainsFromMetadata = (metadata: OAuthClientMetadata) =>
   normalizeOAuthClientDomains(metadata.domains ?? []);
 
-const adminRow = (client: {
-  client_id: string;
-  client_name?: string;
-  logo_uri?: string;
-  redirect_uris?: ReadonlyArray<string>;
-  scope?: string;
-  disabled?: boolean;
-}) => {
-  const metadata = metadataFromClient(client);
+const RawOAuthClient = Schema.Struct({
+  client_id: Schema.optional(Schema.String),
+  clientId: Schema.optional(Schema.String),
+  client_secret: Schema.optional(Schema.String),
+  clientSecret: Schema.optional(Schema.String),
+  client_name: Schema.optional(Schema.String),
+  name: Schema.optional(Schema.String),
+  logo_uri: Schema.optional(Schema.String),
+  icon: Schema.optional(Schema.String),
+  redirect_uris: Schema.optional(Schema.Array(Schema.String)),
+  redirectUris: Schema.optional(Schema.Array(Schema.String)),
+  scope: Schema.optional(Schema.String),
+  scopes: Schema.optional(Schema.Array(Schema.String)),
+  disabled: Schema.optional(Schema.Boolean),
+  metadata: Schema.optional(Schema.NullOr(Schema.Unknown)),
+  domains: Schema.optional(Schema.Array(Schema.String)),
+  branding: Schema.optional(Schema.Unknown),
+  authOptions: Schema.optional(Schema.Unknown),
+});
+
+const decodeRawOAuthClient = Schema.decodeUnknownSync(RawOAuthClient);
+
+const metadataFromRawOAuthClient = (client: typeof RawOAuthClient.Type) =>
+  client.metadata !== undefined && client.metadata !== null
+    ? decodeMetadataOrEmpty(client.metadata)
+    : decodeMetadataOrEmpty({
+        domains: client.domains,
+        branding: client.branding,
+        authOptions: client.authOptions,
+      });
+
+const adminRow = (client: object) => {
+  const decoded = decodeRawOAuthClient(client);
+  const clientId = decoded.client_id ?? decoded.clientId;
+  if (!clientId) throw new Error("OAuth client response is missing client ID");
+
+  const metadata = metadataFromRawOAuthClient(decoded);
 
   return {
-    id: client.client_id,
-    clientId: client.client_id,
-    name: client.client_name ?? null,
-    icon: client.logo_uri ?? null,
-    redirectUris: Array.from(client.redirect_uris ?? []),
+    id: clientId,
+    clientId,
+    name: decoded.client_name ?? decoded.name ?? null,
+    icon: decoded.logo_uri ?? decoded.icon ?? null,
+    redirectUris: Array.from(
+      decoded.redirect_uris ?? decoded.redirectUris ?? [],
+    ),
     domains: domainsFromMetadata(metadata),
-    scope: client.scope ?? null,
-    disabled: client.disabled ?? null,
+    scope: decoded.scope ?? decoded.scopes?.join(" ") ?? null,
+    disabled: decoded.disabled ?? null,
     metadata,
   };
 };
 
-const createdRow = (
-  client: Parameters<typeof adminRow>[0],
-  clientSecret: string,
-) => ({
-  ...adminRow(client),
-  clientSecret,
-});
+const createdRow = (client: object) => {
+  const decoded = decodeRawOAuthClient(client);
+
+  return {
+    ...adminRow(client),
+    clientSecret: decoded.client_secret ?? decoded.clientSecret ?? "",
+  };
+};
 
 export class OAuthClients extends Context.Service<OAuthClients>()(
   "OAuthClients",
@@ -145,7 +164,7 @@ export class OAuthClients extends Context.Service<OAuthClients>()(
           }),
         );
 
-        return createdRow(client, client.client_secret ?? "");
+        return createdRow(client);
       });
 
       const getPublicConfig = Effect.fn("OAuthClients.getPublicConfig")(
@@ -158,7 +177,9 @@ export class OAuthClients extends Context.Service<OAuthClients>()(
 
           if (!client || client.disabled) return null;
 
-          const metadata = metadataFromClient(client);
+          const metadata = metadataFromRawOAuthClient(
+            decodeRawOAuthClient(client),
+          );
           const domains = domainsFromMetadata(metadata);
 
           return {
