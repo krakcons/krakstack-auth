@@ -7,6 +7,7 @@ import {
 import { HttpApiClient } from "effect/unstable/httpapi";
 
 import { BackendApi } from "./backend/api";
+import { BetterAuthApi } from "./better-auth/api";
 import { readClientConfig } from "./config";
 import { FrontendApi } from "./frontend/api";
 
@@ -37,9 +38,15 @@ export class AuthClient extends Context.Service<AuthClient>()(
         baseUrl: config.baseUrl,
         httpClient,
       });
+      const betterAuth = yield* HttpApiClient.group(BetterAuthApi, {
+        group: "betterAuth",
+        baseUrl: config.baseUrl,
+        httpClient: http,
+      });
 
       return {
         backend,
+        betterAuth,
         frontend: {
           presignOrganizationLogoUpload: frontend.presignOrganizationLogoUpload,
         },

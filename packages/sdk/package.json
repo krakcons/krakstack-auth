@@ -25,6 +25,10 @@
       "types": "./dist/backend/index.d.ts",
       "default": "./dist/backend/index.js"
     },
+    "./better-auth": {
+      "types": "./dist/better-auth/index.d.ts",
+      "default": "./dist/better-auth/index.js"
+    },
     "./frontend": {
       "types": "./dist/frontend/index.d.ts",
       "default": "./dist/frontend/index.js"

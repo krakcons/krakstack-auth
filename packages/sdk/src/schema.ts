@@ -29,6 +29,37 @@ export const User = Schema.Struct({
   ],
 });
 
+export const Session = Schema.Struct({
+  id: Schema.String,
+  expiresAt: Schema.Date,
+  token: Schema.String,
+  createdAt: Schema.Date,
+  updatedAt: Schema.Date,
+  ipAddress: Schema.optional(Schema.NullOr(Schema.String)),
+  userAgent: Schema.optional(Schema.NullOr(Schema.String)),
+  userId: Schema.String,
+  impersonatedBy: Schema.optional(Schema.NullOr(Schema.String)),
+  activeOrganizationId: Schema.optional(Schema.NullOr(Schema.String)),
+}).annotate({
+  identifier: "Session",
+  title: "Session",
+  description: "Current Better Auth browser session record.",
+  examples: [
+    {
+      id: "session_1",
+      expiresAt: new Date("2026-02-01T00:00:00.000Z"),
+      token: "session-token",
+      createdAt: new Date("2026-01-01T00:00:00.000Z"),
+      updatedAt: new Date("2026-01-01T00:00:00.000Z"),
+      ipAddress: "127.0.0.1",
+      userAgent: "Mozilla/5.0",
+      userId: "user_1",
+      impersonatedBy: null,
+      activeOrganizationId: "org_1",
+    },
+  ],
+});
+
 export const OrganizationLocale = Schema.Union([
   Schema.Literal("en"),
   Schema.Literal("fr"),
@@ -149,6 +180,7 @@ export const Member = Schema.Struct({
 });
 
 export type User = typeof User.Type;
+export type Session = typeof Session.Type;
 export type OrganizationLocale = typeof OrganizationLocale.Type;
 export type OrganizationTranslation = typeof OrganizationTranslation.Type;
 export type OrganizationMetadata = typeof OrganizationMetadata.Type;
