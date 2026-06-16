@@ -1,4 +1,5 @@
 import { eq, isNull, or } from "drizzle-orm";
+import { Schema } from "effect";
 
 import { oauthClient } from "@/db/auth-schema";
 import { db } from "@/services/database";
@@ -7,6 +8,7 @@ import {
   normalizeOAuthClientDomains,
   parseCsv,
 } from "@/lib/domain-utils";
+import { OAuthClientMetadata } from "@/services/oauth/schema";
 
 export { normalizeAuthHost, normalizeOAuthClientDomains, parseCsv };
 
@@ -21,6 +23,12 @@ const configuredPrimaryHosts = () => {
   const betterAuthHost = normalizeAuthHost(process.env.BETTER_AUTH_URL);
   if (betterAuthHost) hosts.add(betterAuthHost);
 
+  for (const origin of parseCsv(process.env.BETTER_AUTH_TRUSTED_ORIGINS) ??
+    []) {
+    const host = normalizeAuthHost(origin);
+    if (host) hosts.add(host);
+  }
+
   if (process.env.NODE_ENV === "development") {
     hosts.add("localhost:3001");
     hosts.add("localhost:3000");
@@ -32,13 +40,18 @@ const configuredPrimaryHosts = () => {
 export const isPrimaryAuthHost = (host: string | null | undefined) =>
   Boolean(host && configuredPrimaryHosts().has(host));
 
+const OAuthClientStoredMetadata = Schema.Union([
+  OAuthClientMetadata,
+  Schema.fromJsonString(OAuthClientMetadata),
+]);
+const decodeMetadata = Schema.decodeUnknownSync(OAuthClientStoredMetadata);
+
 const metadataDomains = (metadata: unknown) => {
-  if (typeof metadata !== "object" || metadata === null) return [];
-  const domains = Reflect.get(metadata, "domains");
-  if (!Array.isArray(domains)) return [];
-  return normalizeOAuthClientDomains(
-    domains.filter((domain): domain is string => typeof domain === "string"),
-  );
+  try {
+    return normalizeOAuthClientDomains(decodeMetadata(metadata).domains ?? []);
+  } catch {
+    return [];
+  }
 };
 
 export const isOAuthClientAuthHost = async (host: string) => {
