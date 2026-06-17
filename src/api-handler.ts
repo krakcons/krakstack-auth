@@ -176,8 +176,7 @@ const appServicesLayer = Layer.mergeAll(
 );
 
 const apiWebHandler = HttpEffect.toWebHandlerLayerWith(appServicesLayer, {
-  middleware: (httpApp) =>
-    HttpMiddleware.logger(HttpMiddleware.tracer(httpApp)),
+  middleware: HttpMiddleware.logger,
   toHandler: (context) =>
     HttpRouter.toHttpEffect(apiLayer).pipe(
       Effect.provide(context),
