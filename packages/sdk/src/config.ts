@@ -1,4 +1,4 @@
-import { Config, Effect, Redacted } from "effect";
+import { Config, Context, Effect, Layer, Redacted } from "effect";
 
 export const normalizeBaseUrl = (value: string) => value.replace(/\/$/, "");
 
@@ -9,17 +9,29 @@ export const defaultBaseUrl = () => {
   );
 };
 
-export const readClientConfig = Effect.gen(function* () {
-  const baseUrl = yield* Config.string("VITE_KRAKSTACK_AUTH_URL");
-  const apiKey = yield* Config.redacted("KRAKSTACK_AUTH_SERVICE_API_KEY");
-
-  return {
-    baseUrl: normalizeBaseUrl(baseUrl),
-    apiKey,
-  };
-});
-
 export type ClientConfig = {
   readonly baseUrl: string;
   readonly apiKey: Redacted.Redacted;
 };
+
+export class AuthClientConfig extends Context.Service<AuthClientConfig>()(
+  "@krak-stack/auth/AuthClientConfig",
+  {
+    make: (options: Partial<ClientConfig> = {}) =>
+      Effect.gen(function* () {
+        const baseUrl =
+          options.baseUrl ?? (yield* Config.string("VITE_KRAKSTACK_AUTH_URL"));
+        const apiKey =
+          options.apiKey ??
+          (yield* Config.redacted("KRAKSTACK_AUTH_SERVICE_API_KEY"));
+
+        return {
+          baseUrl: normalizeBaseUrl(baseUrl),
+          apiKey,
+        };
+      }),
+  },
+) {
+  static readonly layer = (options: Partial<ClientConfig> = {}) =>
+    Layer.effect(this, this.make(options));
+}

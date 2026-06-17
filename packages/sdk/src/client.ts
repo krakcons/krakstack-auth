@@ -1,4 +1,12 @@
-import { Context, Effect, Layer, Redacted } from "effect";
+import {
+  Cache,
+  Duration,
+  Context,
+  Effect,
+  Layer,
+  Redacted,
+  Exit,
+} from "effect";
 import {
   FetchHttpClient,
   HttpClient,
@@ -7,9 +15,14 @@ import {
 import { HttpApiClient } from "effect/unstable/httpapi";
 
 import { BetterAuthApi } from "./better-auth/api";
-import { readClientConfig } from "./config";
+import { AuthClientConfig, type ClientConfig } from "./config";
 import { ExtraApi } from "./extra/api";
 import { ServerApi } from "./server/api";
+import type { GetSessionResponse } from "./better-auth";
+
+export type AuthClientLayerOptions = Partial<ClientConfig> & {
+  readonly headers?: Record<string, string>;
+};
 
 const forwardedAuthHeaderNames = [
   "accept-language",
@@ -40,15 +53,16 @@ const authHttpClientLayer = (headers: Record<string, string>) =>
     }),
   ).pipe(Layer.provide(FetchHttpClient.layer));
 
-export class AuthClientConfig extends Context.Service<AuthClientConfig>()(
-  "@krak-stack/auth/AuthClientConfig",
-  { make: readClientConfig },
-) {
-  static readonly layer = Layer.effect(this, this.make);
-}
+const getSessionCacheKey = (headers: Record<string, string>) =>
+  JSON.stringify(forwardedAuthHeaders(headers));
 
-export class AuthClient extends Context.Service<AuthClient>()(
-  "@krak-stack/auth/AuthClient",
+const clientConfigOptions = ({ baseUrl, apiKey }: AuthClientLayerOptions) => ({
+  ...(baseUrl ? { baseUrl } : {}),
+  ...(apiKey ? { apiKey } : {}),
+});
+
+export class AuthApiClients extends Context.Service<AuthApiClients>()(
+  "@krak-stack/auth/AuthApiClients",
   {
     make: Effect.gen(function* () {
       const config = yield* AuthClientConfig;
@@ -89,9 +103,57 @@ export class AuthClient extends Context.Service<AuthClient>()(
     }),
   },
 ) {
-  static readonly layer = (headers: Record<string, string> = {}) =>
-    Layer.effect(this, this.make).pipe(
-      Layer.provide(AuthClientConfig.layer),
+  static readonly layer = (options: AuthClientLayerOptions = {}) => {
+    const headers = options.headers ?? {};
+
+    return Layer.effect(this, this.make).pipe(
+      Layer.provide(AuthClientConfig.layer(clientConfigOptions(options))),
       Layer.provide(authHttpClientLayer(headers)),
     );
+  };
+}
+
+const sessionCache = Effect.runSync(
+  Cache.makeWith<string, GetSessionResponse, unknown, AuthApiClients, "lookup">(
+    () =>
+      Effect.gen(function* () {
+        const auth = yield* AuthApiClients;
+
+        return yield* auth.getSession();
+      }),
+    {
+      capacity: 500,
+      timeToLive: (exit) =>
+        Exit.isSuccess(exit) ? Duration.seconds(2) : Duration.zero,
+      requireServicesAt: "lookup",
+    },
+  ),
+);
+
+export class AuthClient extends Context.Service<AuthClient>()(
+  "@krak-stack/auth/AuthClient",
+  {
+    make: (headers: Record<string, string> = {}) =>
+      Effect.gen(function* () {
+        const clients = yield* AuthApiClients;
+        const sessionCacheKey = getSessionCacheKey(headers);
+
+        return {
+          ...clients,
+          getSession: () =>
+            Cache.get(sessionCache, sessionCacheKey).pipe(
+              Effect.provideService(AuthApiClients, clients),
+            ),
+        };
+      }),
+  },
+) {
+  static readonly layer = (options: AuthClientLayerOptions = {}) => {
+    const headers = options.headers ?? {};
+
+    return Layer.effect(this, this.make(headers)).pipe(
+      Layer.provide(AuthClientConfig.layer(clientConfigOptions(options))),
+      Layer.provide(AuthApiClients.layer(options)),
+    );
+  };
 }

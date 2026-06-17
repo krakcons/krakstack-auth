@@ -1,4 +1,5 @@
-export { AuthClient, AuthClientConfig } from "../client";
+export { AuthClient } from "../client";
+export { AuthClientConfig } from "../config";
 export {
   ServerApi,
   ServerOrganizationsApiGroup,

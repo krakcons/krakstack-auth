@@ -13,7 +13,8 @@ export class ExtraApiClient extends AtomHttpApi.Service<ExtraApiClient>()(
   },
 ) {}
 
-export { AuthClient, AuthClientConfig } from "../client";
+export { AuthClient } from "../client";
+export { AuthClientConfig } from "../config";
 export { ExtraApi, ExtraApiGroup } from "./api";
 export * from "./schema";
 export type { Organization, OrganizationMetadata } from "../schema";

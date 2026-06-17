@@ -5,10 +5,7 @@ import {
   HttpApiGroup,
 } from "effect/unstable/httpapi";
 
-import {
-  GetSessionResponse,
-  TooManyRequests,
-} from "./schema";
+import { GetSessionResponse, TooManyRequests } from "./schema";
 
 export const BetterAuthApiGroup = HttpApiGroup.make("betterAuth")
   .add(
