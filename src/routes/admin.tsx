@@ -17,6 +17,7 @@ import {
 import { useEffect, useState } from "react";
 
 import { m } from "@/paraglide/messages";
+import { ThemeToggle } from "@/components/theme-toggle";
 import { Button } from "@/components/ui/button";
 import { LocaleSwitcher } from "@/components/ui/locale-switcher";
 import { useSidebar } from "@/components/ui/sidebar";
@@ -144,7 +145,13 @@ function Admin() {
   return (
     <SidebarLayout
       sidebarHeader={<AdminOrganizationSwitcher />}
-      headerActions={<UserButton authClient={authClient} />}
+      headerActions={
+        <>
+          <ThemeToggle />
+          <LocaleSwitcher />
+          <UserButton authClient={authClient} />
+        </>
+      }
       groups={adminNavGroups}
     >
       <Outlet />
@@ -167,7 +174,8 @@ function AdminOrganizationSwitcher() {
 function AdminAccessDenied({ isSignedIn }: { isSignedIn: boolean }) {
   return (
     <main className="relative grid min-h-screen place-items-center px-6 py-10">
-      <div className="absolute top-6 right-6 md:top-10 md:right-10">
+      <div className="absolute top-6 right-6 flex items-center gap-2 md:top-10 md:right-10">
+        <ThemeToggle />
         <LocaleSwitcher />
       </div>
       <Card className="w-full max-w-md">

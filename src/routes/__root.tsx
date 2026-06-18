@@ -7,6 +7,7 @@ import type { QueryClient } from "@tanstack/react-query";
 
 import { TableSearchSchemaStandard as TableSearchSchema } from "@/components/ui/data-table";
 import { Toaster } from "@/components/ui/sonner";
+import { ThemeProvider } from "@/components/ui/theme-switcher";
 import { m } from "../paraglide/messages.js";
 import { getLocale } from "../paraglide/runtime.js";
 import appCss from "../styles.css?url";
@@ -68,7 +69,7 @@ function RootDocument({ children }: { children: React.ReactNode }) {
         <HeadContent />
       </head>
       <body>
-        {children}
+        <ThemeProvider>{children}</ThemeProvider>
         <Toaster />
         <Scripts />
       </body>

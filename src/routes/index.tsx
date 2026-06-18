@@ -2,6 +2,7 @@ import { Link, createFileRoute } from "@tanstack/react-router";
 import { Users } from "lucide-react";
 
 import { m } from "@/paraglide/messages";
+import { ThemeToggle } from "@/components/theme-toggle";
 import { AppBrand } from "@/components/ui/app-brand";
 import { LocaleSwitcher } from "@/components/ui/locale-switcher";
 import { buttonVariants } from "@/components/ui/button";
@@ -36,7 +37,10 @@ function Home() {
             >
               {m.home_open_admin()}
             </Link>
-            <LocaleSwitcher />
+            <div className="flex items-center gap-2">
+              <ThemeToggle />
+              <LocaleSwitcher />
+            </div>
           </div>
         </nav>
       </header>
