@@ -7,6 +7,8 @@ import { AppBrand } from "@/components/ui/app-brand";
 import { LocaleSwitcher } from "@/components/ui/locale-switcher";
 import { buttonVariants } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { authClient } from "@/services/auth/client";
+import { OrganizationSwitcher, UserButton } from "@krak-stack/auth";
 
 export const Route = createFileRoute("/")({
   component: Home,
@@ -38,8 +40,13 @@ function Home() {
               {m.home_open_admin()}
             </Link>
             <div className="flex items-center gap-2">
+              <OrganizationSwitcher
+                authClient={authClient}
+                className="hidden min-w-48 sm:flex"
+              />
               <ThemeToggle />
               <LocaleSwitcher />
+              <UserButton authClient={authClient} />
             </div>
           </div>
         </nav>

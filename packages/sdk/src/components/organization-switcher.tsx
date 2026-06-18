@@ -4,12 +4,16 @@ import { type ColumnDef } from "@tanstack/react-table";
 import { Schema } from "effect";
 import {
   Building2,
+  Check,
   ChevronsUpDown,
   KeyRound,
+  Mail,
   PencilIcon,
+  Plus,
   Trash2,
   UserPlus,
   Users,
+  X,
 } from "lucide-react";
 import {
   type ComponentProps,
@@ -78,7 +82,14 @@ const messages = {
       "Update the active organization's canonical details and localized profile.",
     organization_invitation_cancel: "Cancel invitation",
     organization_invitation_cancel_error: "Could not cancel the invitation.",
+    organization_invitation_accept: "Accept invitation",
+    organization_invitation_accept_error: "Could not accept the invitation.",
+    organization_invitation_accepted: "Invitation accepted.",
     organization_invitation_expires: "Expires",
+    organization_invitation_organization: "Organization",
+    organization_invitation_reject: "Decline invitation",
+    organization_invitation_reject_error: "Could not decline the invitation.",
+    organization_invitation_rejected: "Invitation declined.",
     organization_invitation_status: "Status",
     organization_invitations_description:
       "Track invitations that have not been accepted yet.",
@@ -86,6 +97,10 @@ const messages = {
     organization_invitations_heading: "Pending invitations",
     organization_invitations_load_error:
       "Could not load organization invitations.",
+    organization_user_invitations_description:
+      "Review invitations sent to your email address and choose which organizations to join.",
+    organization_user_invitations_empty: "You have no pending invitations.",
+    organization_user_invitations_title: "Organization invitations",
     organization_invite_error: "Could not send the invitation.",
     organization_invite_member_description:
       "Send an invitation to join this organization with the selected role.",
@@ -153,7 +168,14 @@ const messages = {
       "Mettez à jour les détails canoniques et le profil localisé de l'organisation active.",
     organization_invitation_cancel: "Annuler l'invitation",
     organization_invitation_cancel_error: "Impossible d'annuler l'invitation.",
+    organization_invitation_accept: "Accepter l'invitation",
+    organization_invitation_accept_error: "Impossible d'accepter l'invitation.",
+    organization_invitation_accepted: "Invitation acceptée.",
     organization_invitation_expires: "Expire le",
+    organization_invitation_organization: "Organisation",
+    organization_invitation_reject: "Refuser l'invitation",
+    organization_invitation_reject_error: "Impossible de refuser l'invitation.",
+    organization_invitation_rejected: "Invitation refusée.",
     organization_invitation_status: "Statut",
     organization_invitations_description:
       "Suivez les invitations qui n'ont pas encore été acceptées.",
@@ -161,6 +183,11 @@ const messages = {
     organization_invitations_heading: "Invitations en attente",
     organization_invitations_load_error:
       "Impossible de charger les invitations de l'organisation.",
+    organization_user_invitations_description:
+      "Consultez les invitations envoyées à votre adresse courriel et choisissez les organisations à rejoindre.",
+    organization_user_invitations_empty:
+      "Vous n'avez aucune invitation en attente.",
+    organization_user_invitations_title: "Invitations d'organisation",
     organization_invite_error: "Impossible d'envoyer l'invitation.",
     organization_invite_member_description:
       "Envoyez une invitation à rejoindre cette organisation avec le rôle sélectionné.",
@@ -290,13 +317,21 @@ type OrganizationSummary = {
   metadata?: unknown;
 };
 
-type OrganizationDialog = "create" | "manage" | "members" | "apiKeys";
+type OrganizationDialog =
+  | "create"
+  | "manage"
+  | "members"
+  | "apiKeys"
+  | "invitations";
 type ApiKeySummary = Omit<ApiKey, "key">;
 type ActiveOrganization = NonNullable<
   ReturnType<AuthUiClient["useActiveOrganization"]>["data"]
 >;
 type OrganizationMemberSummary = ActiveOrganization["members"][number];
 type OrganizationInvitationSummary = ActiveOrganization["invitations"][number];
+type UserInvitationSummary = OrganizationInvitationSummary & {
+  organizationName?: string | null;
+};
 type OrganizationRole = "owner" | "admin" | "member";
 
 type OrganizationFormValues = {
@@ -541,6 +576,39 @@ export function OrganizationSwitcher({
   const organizations = authClient.useListOrganizations();
   const activeOrganization = authClient.useActiveOrganization();
   const [dialog, setDialog] = useState<OrganizationDialog | null>(null);
+  const sessionUserId = session.data?.user.id;
+  const [userInvitations, setUserInvitations] = useState<
+    UserInvitationSummary[]
+  >([]);
+  const [userInvitationsError, setUserInvitationsError] = useState<
+    string | null
+  >(null);
+  const [loadingUserInvitations, setLoadingUserInvitations] = useState(false);
+
+  const loadUserInvitations = useEffectEvent(async () => {
+    if (!session.data) return;
+
+    setLoadingUserInvitations(true);
+    setUserInvitationsError(null);
+
+    const result = await authClient.organization.listUserInvitations({});
+
+    if (result.error) {
+      setUserInvitationsError(
+        result.error.message ?? m.organization_invitations_load_error(),
+      );
+      setLoadingUserInvitations(false);
+      return;
+    }
+
+    setUserInvitations(result.data ?? []);
+    setLoadingUserInvitations(false);
+  });
+
+  useEffect(() => {
+    if (!sessionUserId) return;
+    void loadUserInvitations();
+  }, [sessionUserId]);
 
   if (!session.data) {
     return <>{renderUnauthenticated?.()}</>;
@@ -559,6 +627,20 @@ export function OrganizationSwitcher({
   const refresh = async () => {
     await organizations.refetch();
     await activeOrganization.refetch();
+    await session.refetch();
+  };
+
+  const refreshAfterInvitationAction = async (previousActiveId?: string) => {
+    await loadUserInvitations();
+    await refresh();
+
+    if (locked && previousActiveId) {
+      const result = await authClient.organization.setActive({
+        organizationId: previousActiveId,
+      });
+
+      if (!result.error) await refresh();
+    }
   };
 
   const activeDisplay = organizationDisplay(active ?? null, m);
@@ -657,15 +739,27 @@ export function OrganizationSwitcher({
                   : m.organization_switcher_empty()}
               </DropdownMenuItem>
             ) : null}
+            <DropdownMenuSeparator />
             {!locked ? (
-              <>
-                <DropdownMenuSeparator />
-                <DropdownMenuItem onClick={() => setDialog("create")}>
-                  <Building2 />
-                  {m.organization_create_title()}
-                </DropdownMenuItem>
-              </>
+              <DropdownMenuItem onClick={() => setDialog("create")}>
+                <Plus />
+                {m.organization_create_title()}
+              </DropdownMenuItem>
             ) : null}
+            <DropdownMenuItem
+              onClick={() => {
+                setDialog("invitations");
+                void loadUserInvitations();
+              }}
+            >
+              <Mail />
+              <span className="flex flex-1 items-center justify-between gap-3">
+                {m.organization_user_invitations_title()}
+                {userInvitations.length ? (
+                  <Badge variant="secondary">{userInvitations.length}</Badge>
+                ) : null}
+              </span>
+            </DropdownMenuItem>
             {activeOrganization.data ? (
               <>
                 <DropdownMenuSeparator />
@@ -793,9 +887,187 @@ export function OrganizationSwitcher({
           ) : null}
         </DialogContent>
       </Dialog>
+      <Dialog
+        open={dialog === "invitations"}
+        onOpenChange={(open) => {
+          setDialog((current) =>
+            open ? "invitations" : current === "invitations" ? null : current,
+          );
+        }}
+      >
+        <DialogContent className="max-h-[85vh] overflow-y-auto sm:max-w-4xl">
+          <DialogHeader>
+            <DialogTitle className="text-2xl">
+              {m.organization_user_invitations_title()}
+            </DialogTitle>
+            <DialogDescription>
+              {m.organization_user_invitations_description()}
+            </DialogDescription>
+          </DialogHeader>
+          <Separator />
+          <UserInvitationsManager
+            authClient={authClient}
+            invitations={userInvitations}
+            loading={loadingUserInvitations}
+            error={userInvitationsError}
+            activeOrganizationId={activeOrganization.data?.id}
+            onActionComplete={refreshAfterInvitationAction}
+          />
+        </DialogContent>
+      </Dialog>
     </OrganizationMessagesContext.Provider>
   );
 }
+
+function UserInvitationsManager({
+  authClient,
+  invitations,
+  loading,
+  error,
+  activeOrganizationId,
+  onActionComplete,
+}: {
+  authClient: AuthUiClient;
+  invitations: UserInvitationSummary[];
+  loading: boolean;
+  error: string | null;
+  activeOrganizationId?: string;
+  onActionComplete: (previousActiveId?: string) => Promise<void>;
+}) {
+  const m = useOrganizationMessages();
+  const [actingInvitationId, setActingInvitationId] = useState<string | null>(
+    null,
+  );
+  const [actionError, setActionError] = useState<string | null>(null);
+
+  const acceptInvitation = async (invitation: UserInvitationSummary) => {
+    setActingInvitationId(invitation.id);
+    setActionError(null);
+
+    const result = await authClient.organization.acceptInvitation({
+      invitationId: invitation.id,
+    });
+
+    setActingInvitationId(null);
+
+    if (result.error) {
+      setActionError(
+        result.error.message ?? m.organization_invitation_accept_error(),
+      );
+      return;
+    }
+
+    await onActionComplete(activeOrganizationId);
+  };
+
+  const rejectInvitation = async (invitation: UserInvitationSummary) => {
+    setActingInvitationId(invitation.id);
+    setActionError(null);
+
+    const result = await authClient.organization.rejectInvitation({
+      invitationId: invitation.id,
+    });
+
+    setActingInvitationId(null);
+
+    if (result.error) {
+      setActionError(
+        result.error.message ?? m.organization_invitation_reject_error(),
+      );
+      return;
+    }
+
+    await onActionComplete(activeOrganizationId);
+  };
+
+  return (
+    <section className="flex flex-col gap-4">
+      {error ? <p className="text-destructive text-sm">{error}</p> : null}
+      {actionError ? (
+        <p className="text-destructive text-sm">{actionError}</p>
+      ) : null}
+      <DataTable
+        columns={userInvitationColumns({
+          m,
+          actingInvitationId,
+          onAccept: acceptInvitation,
+          onReject: rejectInvitation,
+        })}
+        data={invitations}
+        emptyLabel={
+          loading ? m.user_loading() : m.organization_user_invitations_empty()
+        }
+        exportFileName="organization-invitations.csv"
+        features={{ gallery: false }}
+      />
+    </section>
+  );
+}
+
+const userInvitationColumns = ({
+  m,
+  actingInvitationId,
+  onAccept,
+  onReject,
+}: {
+  m: ReturnType<typeof organizationMessageFns>;
+  actingInvitationId: string | null;
+  onAccept: (invitation: UserInvitationSummary) => void;
+  onReject: (invitation: UserInvitationSummary) => void;
+}): ColumnDef<UserInvitationSummary>[] => [
+  {
+    accessorKey: "organizationName",
+    header: m.organization_invitation_organization(),
+    cell: ({ row }) => (
+      <div className="flex min-w-48 flex-col gap-1">
+        <span className="truncate font-medium">
+          {row.original.organizationName ?? row.original.organizationId}
+        </span>
+        <code className="text-muted-foreground truncate text-xs">
+          {row.original.organizationId}
+        </code>
+      </div>
+    ),
+  },
+  {
+    accessorKey: "role",
+    header: m.organization_member_role(),
+    cell: ({ row }) => (
+      <Badge variant="secondary">
+        {organizationRoleLabel(row.original.role, m)}
+      </Badge>
+    ),
+  },
+  {
+    accessorKey: "status",
+    header: m.organization_invitation_status(),
+    cell: ({ row }) => <Badge>{row.original.status}</Badge>,
+  },
+  {
+    accessorKey: "expiresAt",
+    header: m.organization_invitation_expires(),
+    cell: ({ row }) => (
+      <span className="text-muted-foreground text-sm">
+        {formatOrganizationDate(row.original.expiresAt)}
+      </span>
+    ),
+  },
+  createDataTableActionsColumn<UserInvitationSummary>([
+    {
+      name: m.organization_invitation_accept(),
+      icon: <Check />,
+      visible: (invitation) => actingInvitationId !== invitation.id,
+      onClick: onAccept,
+    },
+    {
+      name: m.organization_invitation_reject(),
+      icon: <X />,
+      variant: "destructive",
+      visible: (invitation) => actingInvitationId !== invitation.id,
+      onClick: onReject,
+    },
+  ]),
+];
 
 function EditOrganizationSection({
   authClient,
