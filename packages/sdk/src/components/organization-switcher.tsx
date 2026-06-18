@@ -14,6 +14,8 @@ import {
 import {
   type ComponentProps,
   type ReactNode,
+  createContext,
+  useContext,
   useEffect,
   useEffectEvent,
   useState,
@@ -53,8 +55,6 @@ import {
 } from "@/components/ui/select";
 import { Separator } from "@/components/ui/separator";
 import { cn } from "@/lib/utils";
-import { m } from "@/paraglide/messages";
-import { getLocale } from "@/paraglide/runtime";
 import {
   OrganizationMetadata,
   type OrganizationLocale,
@@ -63,12 +63,224 @@ import {
 
 import type { AuthUiClient } from "./auth-client";
 
+type Locale = "en" | "fr";
+
+const messages = {
+  en: {
+    api_key_rate_limit_notice:
+      "API keys are subject to the same rate limits as your account.",
+    organization_contact_email: "Contact email",
+    organization_create_description:
+      "Create a workspace for team-based access.",
+    organization_create_error: "Could not create the organization.",
+    organization_create_title: "Create organization",
+    organization_edit_description:
+      "Update the active organization's canonical details and localized profile.",
+    organization_invitation_cancel: "Cancel invitation",
+    organization_invitation_cancel_error: "Could not cancel the invitation.",
+    organization_invitation_expires: "Expires",
+    organization_invitation_status: "Status",
+    organization_invitations_description:
+      "Track invitations that have not been accepted yet.",
+    organization_invitations_empty: "No pending invitations.",
+    organization_invitations_heading: "Pending invitations",
+    organization_invitations_load_error:
+      "Could not load organization invitations.",
+    organization_invite_error: "Could not send the invitation.",
+    organization_invite_member_description:
+      "Send an invitation to join this organization with the selected role.",
+    organization_invite_member_title: "Invite a member",
+    organization_loading: "Loading...",
+    organization_location: "Location",
+    organization_logo: "Logo",
+    organization_logo_upload_error: "Could not upload the organization logo.",
+    organization_member_email: "Email",
+    organization_member_joined: "Joined",
+    organization_member_remove: "Remove member",
+    organization_member_remove_error: "Could not remove the member.",
+    organization_member_role: "Role",
+    organization_member_role_error: "Could not update the member role.",
+    organization_member_user: "User",
+    organization_members_description:
+      "Review active members, update roles, and remove access when needed.",
+    organization_members_empty: "No members found.",
+    organization_members_heading: "Organization members",
+    organization_members_load_error: "Could not load organization members.",
+    organization_members_title: "Members",
+    organization_name: "Organization name",
+    organization_role_admin: "Admin",
+    organization_role_member: "Member",
+    organization_role_owner: "Owner",
+    organization_slug: "Organization slug",
+    organization_slug_description: "Leave blank to generate one from the name.",
+    organization_switcher_empty: "You do not belong to any organizations yet.",
+    organization_switcher_label: "Organization",
+    organization_switcher_manage: "Manage organization",
+    organization_switcher_no_other_organizations: "No other organizations.",
+    organization_translation_description:
+      "Localized organization details stored in metadata.",
+    organization_translation_english: "English profile",
+    organization_translation_french: "French profile",
+    organization_translation_name: "Localized name",
+    organization_update_error: "Could not update the organization.",
+    table_empty: "No results.",
+    user_api_key_create_error: "Could not create the API key.",
+    user_api_key_created_description:
+      "Copy this key now. You will not be able to see it again.",
+    user_api_key_created_title: "API key created",
+    user_api_key_delete_error: "Could not delete the API key.",
+    user_api_key_disabled: "Disabled",
+    user_api_key_enabled: "Enabled",
+    user_api_key_hidden: "Secret hidden",
+    user_api_key_name: "Key name",
+    user_api_key_starts_with: "Starts with {start}",
+    user_api_key_status: "Status",
+    user_api_keys_load_error: "Could not load API keys.",
+    user_api_keys_title: "API keys",
+    user_button_api_keys: "API keys",
+    user_delete: "Delete",
+    user_loading: "Loading...",
+  },
+  fr: {
+    api_key_rate_limit_notice:
+      "Les clés API sont soumises aux mêmes limites de débit que votre compte.",
+    organization_contact_email: "E-mail de contact",
+    organization_create_description:
+      "Créez un espace de travail pour l'accès en équipe.",
+    organization_create_error: "Impossible de créer l'organisation.",
+    organization_create_title: "Créer une organisation",
+    organization_edit_description:
+      "Mettez à jour les détails canoniques et le profil localisé de l'organisation active.",
+    organization_invitation_cancel: "Annuler l'invitation",
+    organization_invitation_cancel_error: "Impossible d'annuler l'invitation.",
+    organization_invitation_expires: "Expire le",
+    organization_invitation_status: "Statut",
+    organization_invitations_description:
+      "Suivez les invitations qui n'ont pas encore été acceptées.",
+    organization_invitations_empty: "Aucune invitation en attente.",
+    organization_invitations_heading: "Invitations en attente",
+    organization_invitations_load_error:
+      "Impossible de charger les invitations de l'organisation.",
+    organization_invite_error: "Impossible d'envoyer l'invitation.",
+    organization_invite_member_description:
+      "Envoyez une invitation à rejoindre cette organisation avec le rôle sélectionné.",
+    organization_invite_member_title: "Inviter un membre",
+    organization_loading: "Chargement...",
+    organization_location: "Emplacement",
+    organization_logo: "Logo",
+    organization_logo_upload_error:
+      "Impossible de téléverser le logo de l'organisation.",
+    organization_member_email: "Courriel",
+    organization_member_joined: "Arrivée",
+    organization_member_remove: "Retirer le membre",
+    organization_member_remove_error: "Impossible de retirer le membre.",
+    organization_member_role: "Rôle",
+    organization_member_role_error: "Impossible de modifier le rôle du membre.",
+    organization_member_user: "Utilisateur",
+    organization_members_description:
+      "Consultez les membres actifs, modifiez les rôles et retirez les accès au besoin.",
+    organization_members_empty: "Aucun membre trouvé.",
+    organization_members_heading: "Membres de l'organisation",
+    organization_members_load_error:
+      "Impossible de charger les membres de l'organisation.",
+    organization_members_title: "Membres",
+    organization_name: "Nom de l'organisation",
+    organization_role_admin: "Admin",
+    organization_role_member: "Membre",
+    organization_role_owner: "Propriétaire",
+    organization_slug: "Slug de l'organisation",
+    organization_slug_description:
+      "Laissez vide pour en générer un à partir du nom.",
+    organization_switcher_empty:
+      "Vous n'appartenez encore à aucune organisation.",
+    organization_switcher_label: "Organisation",
+    organization_switcher_manage: "Gérer l'organisation",
+    organization_switcher_no_other_organizations: "Aucune autre organisation.",
+    organization_translation_description:
+      "Détails localisés de l'organisation stockés dans les métadonnées.",
+    organization_translation_english: "Profil anglais",
+    organization_translation_french: "Profil français",
+    organization_translation_name: "Nom localisé",
+    organization_update_error: "Impossible de mettre à jour l'organisation.",
+    table_empty: "Aucun résultat.",
+    user_api_key_create_error: "Impossible de créer la clé API.",
+    user_api_key_created_description:
+      "Copiez cette clé maintenant. Vous ne pourrez plus la voir.",
+    user_api_key_created_title: "Clé API créée",
+    user_api_key_delete_error: "Impossible de supprimer la clé API.",
+    user_api_key_disabled: "Désactivée",
+    user_api_key_enabled: "Activée",
+    user_api_key_hidden: "Secret masqué",
+    user_api_key_name: "Nom de la clé",
+    user_api_key_starts_with: "Commence par {start}",
+    user_api_key_status: "Statut",
+    user_api_keys_load_error: "Impossible de charger les clés API.",
+    user_api_keys_title: "Clés API",
+    user_button_api_keys: "Clés API",
+    user_delete: "Supprimer",
+    user_loading: "Chargement...",
+  },
+} as const satisfies Record<Locale, Record<string, string>>;
+
+type OrganizationSwitcherMessageKey = keyof (typeof messages)["en"];
+export type OrganizationSwitcherMessages = Partial<
+  Record<OrganizationSwitcherMessageKey, string>
+>;
+
+const getLocale = (): Locale =>
+  (
+    globalThis.document?.documentElement.lang ||
+    globalThis.navigator?.language ||
+    "en"
+  )
+    .toLowerCase()
+    .startsWith("fr")
+    ? "fr"
+    : "en";
+
+const organizationSwitcherMessages = (
+  overrides?: OrganizationSwitcherMessages,
+) => ({
+  ...(getLocale().startsWith("fr") ? messages.fr : messages.en),
+  ...overrides,
+});
+
+type OrganizationSwitcherLabels = ReturnType<
+  typeof organizationSwitcherMessages
+>;
+
+const interpolate = (value: string, params?: Record<string, string | number>) =>
+  params
+    ? value.replace(/\{([^}]+)\}/g, (_, key: string) =>
+        String(params[key] ?? `{${key}}`),
+      )
+    : value;
+
+const organizationMessageFns = (labels: OrganizationSwitcherLabels) =>
+  new Proxy(
+    {},
+    {
+      get:
+        (_target, key: string) => (params?: Record<string, string | number>) =>
+          interpolate(labels[key as OrganizationSwitcherMessageKey], params),
+    },
+  ) as Record<
+    OrganizationSwitcherMessageKey,
+    (params?: Record<string, string | number>) => string
+  >;
+
+const OrganizationMessagesContext = createContext(
+  organizationMessageFns(organizationSwitcherMessages()),
+);
+const useOrganizationMessages = () => useContext(OrganizationMessagesContext);
+
 type OrganizationSwitcherProps = {
   authClient: AuthUiClient;
   side?: ComponentProps<typeof DropdownMenuContent>["side"];
   className?: string;
   renderUnauthenticated?: () => ReactNode;
   locked?: boolean;
+  messages?: OrganizationSwitcherMessages;
 };
 
 type OrganizationSummary = {
@@ -115,7 +327,10 @@ const nullableString = (value: unknown) =>
 const centralAuthUrl = (path: string) =>
   new URL(path, import.meta.env.VITE_KRAKSTACK_AUTH_URL).toString();
 
-const parsePresignedUpload = (value: unknown) => {
+const parsePresignedUpload = (
+  value: unknown,
+  m: ReturnType<typeof organizationMessageFns>,
+) => {
   if (
     !isRecord(value) ||
     typeof value.uploadUrl !== "string" ||
@@ -130,7 +345,10 @@ const parsePresignedUpload = (value: unknown) => {
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null;
 
-const uploadOrganizationLogo = async (file: File) => {
+const uploadOrganizationLogo = async (
+  file: File,
+  m: ReturnType<typeof organizationMessageFns>,
+) => {
   const contentType = file.type || "image/png";
   const presignResponse = await fetch(
     centralAuthUrl("/api/organizations/logo/presign"),
@@ -146,7 +364,7 @@ const uploadOrganizationLogo = async (file: File) => {
     throw new Error(m.organization_logo_upload_error());
   }
 
-  const presigned = parsePresignedUpload(await presignResponse.json());
+  const presigned = parsePresignedUpload(await presignResponse.json(), m);
   const uploadResponse = await fetch(presigned.uploadUrl, {
     method: "PUT",
     headers: { "Content-Type": contentType },
@@ -186,7 +404,10 @@ const findOrganizationTranslation = (
   );
 };
 
-const organizationDisplay = (organization: OrganizationSummary | null) => {
+const organizationDisplay = (
+  organization: OrganizationSummary | null,
+  m: ReturnType<typeof organizationMessageFns>,
+) => {
   const translation = organization
     ? findOrganizationTranslation(organization)
     : undefined;
@@ -226,15 +447,21 @@ const organizationFormDefaults = (
   };
 };
 
-const organizationLogoFromForm = async (file: File | null, fallback: string) =>
-  file ? await uploadOrganizationLogo(file) : nullableString(fallback);
+const organizationLogoFromForm = async (
+  file: File | null,
+  fallback: string,
+  m: ReturnType<typeof organizationMessageFns>,
+) => (file ? await uploadOrganizationLogo(file, m) : nullableString(fallback));
 
 const organizationRoles: OrganizationRole[] = ["owner", "admin", "member"];
 
 const normalizeOrganizationRole = (role: string): OrganizationRole =>
   role === "owner" || role === "admin" || role === "member" ? role : "member";
 
-const organizationRoleLabel = (role: string) => {
+const organizationRoleLabel = (
+  role: string,
+  m: ReturnType<typeof organizationMessageFns>,
+) => {
   switch (normalizeOrganizationRole(role)) {
     case "owner":
       return m.organization_role_owner();
@@ -261,12 +488,21 @@ const initialsFromName = (name: string) =>
 
 const organizationMetadataFromForm = async (
   value: OrganizationFormValues,
+  m: ReturnType<typeof organizationMessageFns>,
 ): Promise<OrganizationMetadata> => {
   const translations: OrganizationTranslation[] = [];
   const enName = value.enName.trim() || value.name.trim();
   const frName = value.frName.trim();
-  const enLogo = await organizationLogoFromForm(value.enLogo, value.enLogoUrl);
-  const frLogo = await organizationLogoFromForm(value.frLogo, value.frLogoUrl);
+  const enLogo = await organizationLogoFromForm(
+    value.enLogo,
+    value.enLogoUrl,
+    m,
+  );
+  const frLogo = await organizationLogoFromForm(
+    value.frLogo,
+    value.frLogoUrl,
+    m,
+  );
 
   if (enName) {
     translations.push({
@@ -297,7 +533,10 @@ export function OrganizationSwitcher({
   className,
   renderUnauthenticated,
   locked = false,
+  messages,
 }: OrganizationSwitcherProps) {
+  const labels = organizationSwitcherMessages(messages);
+  const m = organizationMessageFns(labels);
   const session = authClient.useSession();
   const organizations = authClient.useListOrganizations();
   const activeOrganization = authClient.useActiveOrganization();
@@ -322,10 +561,10 @@ export function OrganizationSwitcher({
     await activeOrganization.refetch();
   };
 
-  const activeDisplay = organizationDisplay(active ?? null);
+  const activeDisplay = organizationDisplay(active ?? null, m);
 
   return (
-    <>
+    <OrganizationMessagesContext.Provider value={m}>
       <DropdownMenu>
         <DropdownMenuTrigger
           render={
@@ -388,7 +627,7 @@ export function OrganizationSwitcher({
             ) : null}
             {!locked && selectableOrganizations.length ? (
               selectableOrganizations.map((organization) => {
-                const display = organizationDisplay(organization);
+                const display = organizationDisplay(organization, m);
 
                 return (
                   <DropdownMenuItem
@@ -554,7 +793,7 @@ export function OrganizationSwitcher({
           ) : null}
         </DialogContent>
       </Dialog>
-    </>
+    </OrganizationMessagesContext.Provider>
   );
 }
 
@@ -567,6 +806,7 @@ function EditOrganizationSection({
   organization: OrganizationSummary;
   onUpdated: () => Promise<void>;
 }) {
+  const m = useOrganizationMessages();
   const [editingLocale, setEditingLocale] = useState<OrganizationLocale>(
     currentOrganizationLocale(),
   );
@@ -577,7 +817,7 @@ function EditOrganizationSection({
       formApi.setErrorMap({ onSubmit: undefined });
       const name = value.name.trim();
       const slug = value.slug.trim().toLowerCase();
-      const metadata = await organizationMetadataFromForm(value);
+      const metadata = await organizationMetadataFromForm(value, m);
 
       const result = await authClient.organization.update({
         organizationId: organization.id,
@@ -721,6 +961,7 @@ function CreateOrganizationSection({
   authClient: AuthUiClient;
   onCreated: () => Promise<void>;
 }) {
+  const m = useOrganizationMessages();
   const [editingLocale, setEditingLocale] = useState<OrganizationLocale>(
     currentOrganizationLocale(),
   );
@@ -731,11 +972,14 @@ function CreateOrganizationSection({
       formApi.setErrorMap({ onSubmit: undefined });
       const name = value.name.trim();
       const slug = (value.slug.trim() || slugify(name)).toLowerCase();
-      const metadata = await organizationMetadataFromForm({
-        ...value,
-        name,
-        slug,
-      });
+      const metadata = await organizationMetadataFromForm(
+        {
+          ...value,
+          name,
+          slug,
+        },
+        m,
+      );
 
       const result = await authClient.organization.create({
         name,
@@ -886,6 +1130,7 @@ function OrganizationTranslationHeader({
   editingLocale: OrganizationLocale;
   onEditingLocaleChange: (locale: OrganizationLocale) => void;
 }) {
+  const m = useOrganizationMessages();
   const title =
     locale === "en"
       ? m.organization_translation_english()
@@ -916,6 +1161,7 @@ function OrganizationMembersManager({
   organization: OrganizationSummary;
   currentUserId: string;
 }) {
+  const m = useOrganizationMessages();
   const [members, setMembers] = useState<OrganizationMemberSummary[]>([]);
   const [invitations, setInvitations] = useState<
     OrganizationInvitationSummary[]
@@ -1090,7 +1336,7 @@ function OrganizationMembersManager({
               <field.SelectField
                 label={m.organization_member_role()}
                 options={organizationRoles.map((role) => ({
-                  label: organizationRoleLabel(role),
+                  label: organizationRoleLabel(role, m),
                   value: role,
                 }))}
               />
@@ -1112,6 +1358,7 @@ function OrganizationMembersManager({
         </div>
         <DataTable
           columns={memberColumns({
+            m,
             currentUserId,
             updatingMemberId,
             onRemove: removeMember,
@@ -1136,6 +1383,7 @@ function OrganizationMembersManager({
         </div>
         <DataTable
           columns={invitationColumns({
+            m,
             cancellingInvitationId,
             onCancel: cancelInvitation,
           })}
@@ -1152,11 +1400,13 @@ function OrganizationMembersManager({
 }
 
 const memberColumns = ({
+  m,
   currentUserId,
   updatingMemberId,
   onRemove,
   onRoleChange,
 }: {
+  m: ReturnType<typeof organizationMessageFns>;
   currentUserId: string;
   updatingMemberId: string | null;
   onRemove: (member: OrganizationMemberSummary) => void;
@@ -1200,7 +1450,7 @@ const memberColumns = ({
       return (
         <Select
           items={organizationRoles.map((role) => ({
-            label: organizationRoleLabel(role),
+            label: organizationRoleLabel(role, m),
             value: role,
           }))}
           value={normalizeOrganizationRole(member.role)}
@@ -1220,7 +1470,7 @@ const memberColumns = ({
           <SelectContent>
             {organizationRoles.map((role) => (
               <SelectItem key={role} value={role}>
-                {organizationRoleLabel(role)}
+                {organizationRoleLabel(role, m)}
               </SelectItem>
             ))}
           </SelectContent>
@@ -1249,9 +1499,11 @@ const memberColumns = ({
 ];
 
 const invitationColumns = ({
+  m,
   cancellingInvitationId,
   onCancel,
 }: {
+  m: ReturnType<typeof organizationMessageFns>;
   cancellingInvitationId: string | null;
   onCancel: (invitation: OrganizationInvitationSummary) => void;
 }): ColumnDef<OrganizationInvitationSummary>[] => [
@@ -1267,7 +1519,7 @@ const invitationColumns = ({
     header: m.organization_member_role(),
     cell: ({ row }) => (
       <Badge variant="secondary">
-        {organizationRoleLabel(row.original.role)}
+        {organizationRoleLabel(row.original.role, m)}
       </Badge>
     ),
   },
@@ -1303,6 +1555,7 @@ function OrganizationApiKeyManager({
   authClient: AuthUiClient;
   organization: OrganizationSummary;
 }) {
+  const m = useOrganizationMessages();
   const [keys, setKeys] = useState<ApiKeySummary[]>([]);
   const [createdKey, setCreatedKey] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -1410,7 +1663,7 @@ function OrganizationApiKeyManager({
       {error ? <p className="text-destructive text-sm">{error}</p> : null}
       <Separator />
       <DataTable
-        columns={apiKeyColumns({ onDelete: deleteKey })}
+        columns={apiKeyColumns({ m, onDelete: deleteKey })}
         data={keys}
         emptyLabel={loading ? m.user_loading() : m.table_empty()}
         exportFileName={`${organization.slug}-api-keys.csv`}
@@ -1421,8 +1674,10 @@ function OrganizationApiKeyManager({
 }
 
 const apiKeyColumns = ({
+  m,
   onDelete,
 }: {
+  m: ReturnType<typeof organizationMessageFns>;
   onDelete: (key: ApiKeySummary) => void;
 }): ColumnDef<ApiKeySummary>[] => [
   {

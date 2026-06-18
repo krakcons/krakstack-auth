@@ -3,7 +3,7 @@ import { Users } from "lucide-react";
 
 import { m } from "@/paraglide/messages";
 import { AppBrand } from "@/components/ui/app-brand";
-import { LocaleToggle } from "@/components/ui/locale-toggle";
+import { LocaleSwitcher } from "@/components/ui/locale-switcher";
 import { buttonVariants } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 
@@ -36,7 +36,7 @@ function Home() {
             >
               {m.home_open_admin()}
             </Link>
-            <LocaleToggle />
+            <LocaleSwitcher />
           </div>
         </nav>
       </header>

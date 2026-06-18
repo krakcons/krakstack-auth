@@ -8,7 +8,7 @@ import { getRequest } from "@tanstack/react-start/server";
 import { Users } from "lucide-react";
 
 import { AppBrand } from "@/components/ui/app-brand";
-import { LocaleToggle } from "@/components/ui/locale-toggle";
+import { LocaleSwitcher } from "@/components/ui/locale-switcher";
 import { normalizeAuthHost } from "@/lib/domain-utils";
 import { m } from "@/paraglide/messages";
 import {
@@ -65,7 +65,7 @@ function AuthLayout() {
         />
       </div>
       <div className="absolute top-6 right-6 md:top-10 md:right-10">
-        <LocaleToggle />
+        <LocaleSwitcher />
       </div>
       <AuthBrandingProvider value={projectConfig}>
         <div className="flex w-full flex-col items-center">

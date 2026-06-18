@@ -158,7 +158,7 @@ function ApiKeysPage() {
         <DataTable
           columns={apiKeyColumns({ onDelete: deleteKey })}
           data={keys}
-          emptyLabel={loading ? m.admin_api_keys_loading() : m.table_empty()}
+          {...(loading ? { emptyLabel: m.admin_api_keys_loading() } : {})}
           exportFileName="service-api-keys.csv"
           features={{ gallery: false }}
         />

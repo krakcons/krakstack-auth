@@ -20,6 +20,8 @@ import { QRCode } from "react-qr-code";
 import {
   type ComponentProps,
   type ReactNode,
+  createContext,
+  useContext,
   useEffect,
   useEffectEvent,
   useState,
@@ -60,9 +62,264 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Separator } from "@/components/ui/separator";
-import { m } from "@/paraglide/messages";
 
 import type { AuthUiClient } from "./auth-client";
+
+const messages = {
+  en: {
+    api_key_rate_limit_notice:
+      "API keys are subject to the same rate limits as your account.",
+    table_empty: "No results.",
+    user_account_cancel: "Cancel",
+    user_account_confirm_revoke: "Revoke account",
+    user_account_connected: "Connected",
+    user_account_current_password: "Current password",
+    user_account_google_connect: "Connect Google",
+    user_account_google_description:
+      "Use your Google account as a sign-in option.",
+    user_account_google_link_error: "Could not connect Google.",
+    user_account_google_title: "Google",
+    user_account_new_password: "New password",
+    user_account_not_connected: "Not connected",
+    user_account_only_method: "Only sign-in method",
+    user_account_password_change_description:
+      "Update the password used to sign in with your email.",
+    user_account_password_change_error: "Could not change your password.",
+    user_account_password_change_submit: "Change password",
+    user_account_password_change_success: "Your password has been updated.",
+    user_account_password_change_title: "Change password",
+    user_account_password_connected_description:
+      "Password sign-in is enabled for this account.",
+    user_account_password_description:
+      "Use an email and password as a sign-in option.",
+    user_account_password_set: "Set password",
+    user_account_password_set_error: "Could not set your password.",
+    user_account_password_title: "Password",
+    user_account_password_verify_error: "Could not verify your password.",
+    user_account_revoke: "Revoke",
+    user_account_revoke_description:
+      "Revoke {provider} from this account. You will not be able to use it to sign in unless you connect it again.",
+    user_account_revoke_error: "Could not revoke this account.",
+    user_accounts_description:
+      "Connect external sign-in providers to this account.",
+    user_accounts_load_error: "Could not load connected accounts.",
+    user_accounts_title: "Accounts",
+    user_api_key_copied: "Copied",
+    user_api_key_copy: "Copy",
+    user_api_key_create_error: "Could not create the API key.",
+    user_api_key_created_description:
+      "Copy this key now. You will not be able to see it again.",
+    user_api_key_created_title: "API key created",
+    user_api_key_delete_error: "Could not delete the API key.",
+    user_api_key_disabled: "Disabled",
+    user_api_key_enabled: "Enabled",
+    user_api_key_hidden: "Secret hidden",
+    user_api_key_name: "Key name",
+    user_api_key_no_permissions: "No permissions",
+    user_api_key_permissions: "Permissions",
+    user_api_key_permissions_description:
+      "Choose the permissions this API key should receive.",
+    user_api_key_status: "Status",
+    user_api_keys_description:
+      "Create and manage API keys for your user account.",
+    user_api_keys_export_file_name: "api-keys.csv",
+    user_api_keys_load_error: "Could not load API keys.",
+    user_api_keys_title: "API keys",
+    user_button_account: "Account",
+    user_button_api_keys: "API keys",
+    user_button_aria_label: "Open user menu",
+    user_button_logout: "Log out",
+    user_button_security: "Security",
+    user_delete: "Delete",
+    user_field_password: "Password",
+    user_form_description:
+      "Update the profile details associated with your account.",
+    user_form_name_label: "Name",
+    user_form_title: "Account",
+    user_form_update_error: "Unable to update your account.",
+    user_loading: "Loading...",
+    user_profile_description: "Update your public profile details.",
+    user_profile_image_upload_error: "Could not upload your profile photo.",
+    user_profile_photo_upload_label: "Profile photo",
+    user_profile_title: "Profile",
+    user_security_description:
+      "Protect your account with authenticator app verification.",
+    user_security_title: "Security",
+    user_two_factor_backup_codes_warning:
+      "Save these backup codes now. They are shown only during setup.",
+    user_two_factor_code: "Authentication code",
+    user_two_factor_description:
+      "Use a time-based one-time password from your authenticator app.",
+    user_two_factor_disable_error:
+      "Could not disable two-factor authentication.",
+    user_two_factor_disabled: "Disabled",
+    user_two_factor_disabled_message: "Two-factor authentication is disabled.",
+    user_two_factor_enable_error: "Could not start two-factor setup.",
+    user_two_factor_enabled: "Enabled",
+    user_two_factor_enabled_message: "Two-factor authentication is enabled.",
+    user_two_factor_scan_description:
+      "Add this account to your authenticator app, then enter the generated code below.",
+    user_two_factor_scan_title: "Scan this QR code",
+    user_two_factor_title: "Two-factor authentication",
+    user_two_factor_verify_error: "Could not verify the code.",
+  },
+  fr: {
+    api_key_rate_limit_notice:
+      "Les clés API sont soumises aux mêmes limites de débit que votre compte.",
+    table_empty: "Aucun résultat.",
+    user_account_cancel: "Annuler",
+    user_account_confirm_revoke: "Révoquer le compte",
+    user_account_connected: "Connecté",
+    user_account_current_password: "Mot de passe actuel",
+    user_account_google_connect: "Connecter Google",
+    user_account_google_description:
+      "Utilisez votre compte Google comme option de connexion.",
+    user_account_google_link_error: "Impossible de connecter Google.",
+    user_account_google_title: "Google",
+    user_account_new_password: "Nouveau mot de passe",
+    user_account_not_connected: "Non connecté",
+    user_account_only_method: "Seule méthode de connexion",
+    user_account_password_change_description:
+      "Mettez à jour le mot de passe utilisé pour vous connecter avec votre courriel.",
+    user_account_password_change_error:
+      "Impossible de modifier votre mot de passe.",
+    user_account_password_change_submit: "Modifier le mot de passe",
+    user_account_password_change_success:
+      "Votre mot de passe a été mis à jour.",
+    user_account_password_change_title: "Modifier le mot de passe",
+    user_account_password_connected_description:
+      "La connexion par mot de passe est activée pour ce compte.",
+    user_account_password_description:
+      "Utilisez un courriel et un mot de passe comme option de connexion.",
+    user_account_password_set: "Définir le mot de passe",
+    user_account_password_set_error:
+      "Impossible de définir votre mot de passe.",
+    user_account_password_title: "Mot de passe",
+    user_account_password_verify_error:
+      "Impossible de vérifier votre mot de passe.",
+    user_account_revoke: "Révoquer",
+    user_account_revoke_description:
+      "Révoquez {provider} de ce compte. Vous ne pourrez plus l'utiliser pour vous connecter, sauf si vous le reconnectez.",
+    user_account_revoke_error: "Impossible de révoquer ce compte.",
+    user_accounts_description:
+      "Connectez des fournisseurs de connexion externes à ce compte.",
+    user_accounts_load_error: "Impossible de charger les comptes connectés.",
+    user_accounts_title: "Comptes",
+    user_api_key_copied: "Copié",
+    user_api_key_copy: "Copier",
+    user_api_key_create_error: "Impossible de créer la clé API.",
+    user_api_key_created_description:
+      "Copiez cette clé maintenant. Vous ne pourrez plus la voir.",
+    user_api_key_created_title: "Clé API créée",
+    user_api_key_delete_error: "Impossible de supprimer la clé API.",
+    user_api_key_disabled: "Désactivée",
+    user_api_key_enabled: "Activée",
+    user_api_key_hidden: "Secret masqué",
+    user_api_key_name: "Nom de la clé",
+    user_api_key_no_permissions: "Aucune autorisation",
+    user_api_key_permissions: "Autorisations",
+    user_api_key_permissions_description:
+      "Choisissez les autorisations que cette clé API doit recevoir.",
+    user_api_key_status: "Statut",
+    user_api_keys_description:
+      "Créez et gérez des clés API pour votre compte utilisateur.",
+    user_api_keys_export_file_name: "cles-api.csv",
+    user_api_keys_load_error: "Impossible de charger les clés API.",
+    user_api_keys_title: "Clés API",
+    user_button_account: "Compte",
+    user_button_api_keys: "Clés API",
+    user_button_aria_label: "Ouvrir le menu utilisateur",
+    user_button_logout: "Se déconnecter",
+    user_button_security: "Sécurité",
+    user_delete: "Supprimer",
+    user_field_password: "Mot de passe",
+    user_form_description:
+      "Mettez à jour les informations de profil associées à votre compte.",
+    user_form_name_label: "Nom",
+    user_form_title: "Compte",
+    user_form_update_error: "Impossible de mettre à jour votre compte.",
+    user_loading: "Chargement...",
+    user_profile_description:
+      "Mettez à jour les informations de votre profil public.",
+    user_profile_image_upload_error:
+      "Impossible de téléverser votre photo de profil.",
+    user_profile_photo_upload_label: "Photo de profil",
+    user_profile_title: "Profil",
+    user_security_description:
+      "Protégez votre compte avec une vérification par application d'authentification.",
+    user_security_title: "Sécurité",
+    user_two_factor_backup_codes_warning:
+      "Enregistrez ces codes de secours maintenant. Ils ne sont affichés que pendant la configuration.",
+    user_two_factor_code: "Code d'authentification",
+    user_two_factor_description:
+      "Utilisez un mot de passe à usage unique généré par votre application d'authentification.",
+    user_two_factor_disable_error:
+      "Impossible de désactiver l'authentification à deux facteurs.",
+    user_two_factor_disabled: "Désactivée",
+    user_two_factor_disabled_message:
+      "L'authentification à deux facteurs est désactivée.",
+    user_two_factor_enable_error:
+      "Impossible de démarrer la configuration à deux facteurs.",
+    user_two_factor_enabled: "Activée",
+    user_two_factor_enabled_message:
+      "L'authentification à deux facteurs est activée.",
+    user_two_factor_scan_description:
+      "Ajoutez ce compte à votre application d'authentification, puis saisissez le code généré ci-dessous.",
+    user_two_factor_scan_title: "Scannez ce code QR",
+    user_two_factor_title: "Authentification à deux facteurs",
+    user_two_factor_verify_error: "Impossible de vérifier le code.",
+  },
+} as const;
+
+type Locale = "en" | "fr";
+type UserButtonMessageKey = keyof (typeof messages)["en"];
+export type UserButtonMessages = Partial<Record<UserButtonMessageKey, string>>;
+
+const getLocale = (): Locale =>
+  (
+    globalThis.document?.documentElement.lang ||
+    globalThis.navigator?.language ||
+    "en"
+  )
+    .toLowerCase()
+    .startsWith("fr")
+    ? "fr"
+    : "en";
+
+const interpolate = (value: string, params?: Record<string, string | number>) =>
+  params
+    ? value.replace(/\{([^}]+)\}/g, (_, key: string) =>
+        String(params[key] ?? `{${key}}`),
+      )
+    : value;
+
+const userButtonMessages = (overrides?: UserButtonMessages) => ({
+  ...(getLocale().startsWith("fr") ? messages.fr : messages.en),
+  ...overrides,
+});
+
+type UserButtonLabels = ReturnType<typeof userButtonMessages>;
+
+const userButtonMessageFns = (labels: UserButtonLabels) => {
+  const localized = labels;
+
+  return new Proxy(
+    {},
+    {
+      get:
+        (_target, key: string) => (params?: Record<string, string | number>) =>
+          interpolate(localized[key as UserButtonMessageKey], params),
+    },
+  ) as Record<
+    UserButtonMessageKey,
+    (params?: Record<string, string | number>) => string
+  >;
+};
+
+const UserButtonMessagesContext = createContext(
+  userButtonMessageFns(userButtonMessages()),
+);
+const useUserButtonMessages = () => useContext(UserButtonMessagesContext);
 
 type UserFormType = {
   name: string;
@@ -86,6 +343,7 @@ const authUrl = (path: string) =>
 
 const presignUserImageUpload = async (
   file: File,
+  m: ReturnType<typeof userButtonMessages>,
 ): Promise<PresignedImageUpload> => {
   const response = await fetch(authUrl("/api/auth/image/presign"), {
     method: "POST",
@@ -132,6 +390,7 @@ type UserDropdownProps = {
   side?: ComponentProps<typeof DropdownMenuContent>["side"];
   renderUnauthenticated?: () => ReactNode;
   apiKeyPermissions?: Record<string, string[]>;
+  messages?: UserButtonMessages;
 };
 
 type SettingsDialog = "account" | "security" | "apiKeys";
@@ -142,7 +401,10 @@ export const UserButton = ({
   side = "bottom",
   renderUnauthenticated,
   apiKeyPermissions,
+  messages,
 }: UserDropdownProps) => {
+  const labels = userButtonMessages(messages);
+  const m = userButtonMessageFns(labels);
   const navigate = useNavigate();
   const currentSiteHref = useRouterState({
     select: (state) => `${import.meta.env.VITE_SITE_URL}${state.location.href}`,
@@ -177,7 +439,7 @@ export const UserButton = ({
     const imageFile = isFile(values.image) ? values.image : null;
     const image = imageFile
       ? await (async () => {
-          const presigned = await presignUserImageUpload(imageFile);
+          const presigned = await presignUserImageUpload(imageFile, m);
           const uploadResponse = await fetch(presigned.uploadUrl, {
             method: "PUT",
             headers: { "Content-Type": imageFile.type },
@@ -208,7 +470,7 @@ export const UserButton = ({
   };
 
   return (
-    <>
+    <UserButtonMessagesContext.Provider value={m}>
       <DropdownMenu>
         <DropdownMenuTrigger
           render={
@@ -354,7 +616,7 @@ export const UserButton = ({
           />
         </DialogContent>
       </Dialog>
-    </>
+    </UserButtonMessagesContext.Provider>
   );
 };
 
@@ -367,6 +629,7 @@ function ConnectedAccounts({
   currentSiteHref: string;
   navigate: UseNavigateResult<string>;
 }) {
+  const m = useUserButtonMessages();
   const [accounts, setAccounts] = useState<LinkedAccount[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -512,6 +775,7 @@ function AccountProviderRow({
   onConnect: () => void;
   onRevoke: (account: LinkedAccount) => void;
 }) {
+  const m = useUserButtonMessages();
   return (
     <div className="flex flex-col gap-3 rounded-lg border p-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
@@ -558,6 +822,7 @@ function AccountProviderRow({
 }
 
 function PasswordSettings({ authClient }: { authClient: AuthUiClient }) {
+  const m = useUserButtonMessages();
   const [accounts, setAccounts] = useState<LinkedAccount[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -663,6 +928,7 @@ function PasswordSettings({ authClient }: { authClient: AuthUiClient }) {
 }
 
 function ChangePasswordForm({ authClient }: { authClient: AuthUiClient }) {
+  const m = useUserButtonMessages();
   const [saved, setSaved] = useState(false);
   const form = useAppForm({
     defaultValues: { currentPassword: "", newPassword: "" },
@@ -749,6 +1015,7 @@ function SetPasswordForm({
   authClient: AuthUiClient;
   onSaved: () => Promise<void>;
 }) {
+  const m = useUserButtonMessages();
   const form = useAppForm({
     defaultValues: { password: "" },
     onSubmit: async ({ value, formApi }) => {
@@ -815,6 +1082,7 @@ function RevokeAccountForm({
   onCancel: () => void;
   onRevoke: (account: LinkedAccount) => Promise<void>;
 }) {
+  const m = useUserButtonMessages();
   const form = useAppForm({
     defaultValues: { password: "" },
     onSubmit: async ({ value, formApi }) => {
@@ -855,7 +1123,7 @@ function RevokeAccountForm({
           <h3 className="text-sm font-medium">{m.user_account_revoke()}</h3>
           <p className="text-muted-foreground text-sm">
             {m.user_account_revoke_description({
-              provider: providerName(account.providerId),
+              provider: providerName(account.providerId, m),
             })}
           </p>
         </div>
@@ -883,7 +1151,10 @@ function RevokeAccountForm({
   );
 }
 
-const providerName = (providerId: string) => {
+const providerName = (
+  providerId: string,
+  m: ReturnType<typeof userButtonMessages>,
+) => {
   if (providerId === "google") return m.user_account_google_title();
   if (providerId === "credential") return m.user_account_password_title();
   return providerId;
@@ -898,6 +1169,7 @@ const UserForm = ({
   error?: string | null;
   onSubmit: (values: UserFormType) => Promise<void>;
 }) => {
+  const m = useUserButtonMessages();
   const form = useAppForm({
     defaultValues,
     onSubmit: ({ value }) => onSubmit(value),
@@ -957,6 +1229,7 @@ const UserForm = ({
 };
 
 function AccountSecuritySettings({ authClient }: { authClient: AuthUiClient }) {
+  const m = useUserButtonMessages();
   const session = authClient.useSession();
   const [setup, setSetup] = useState<TotpSetup | null>(null);
   const [message, setMessage] = useState<string | null>(null);
@@ -1014,6 +1287,7 @@ function EnableTotpForm({
   authClient: AuthUiClient;
   onEnabled: (setup: TotpSetup) => void;
 }) {
+  const m = useUserButtonMessages();
   const form = useAppForm({
     defaultValues: { password: "" },
     onSubmit: async ({ value, formApi }) => {
@@ -1075,6 +1349,7 @@ function VerifyTotpSetup({
   setup: TotpSetup;
   onVerified: () => Promise<void>;
 }) {
+  const m = useUserButtonMessages();
   const form = useAppForm({
     defaultValues: { code: "" },
     onSubmit: async ({ value, formApi }) => {
@@ -1155,6 +1430,7 @@ function DisableTotpForm({
   authClient: AuthUiClient;
   onDisabled: () => Promise<void>;
 }) {
+  const m = useUserButtonMessages();
   const form = useAppForm({
     defaultValues: { password: "" },
     onSubmit: async ({ value, formApi }) => {
@@ -1211,6 +1487,7 @@ function ApiKeyManager({
   authClient: AuthUiClient;
   permissions?: Record<string, string[]>;
 }) {
+  const m = useUserButtonMessages();
   const [keys, setKeys] = useState<ApiKeySummary[]>([]);
   const [createdKey, setCreatedKey] = useState<string | null>(null);
   const [copiedKey, setCopiedKey] = useState(false);
@@ -1383,7 +1660,7 @@ function ApiKeyManager({
       {error ? <p className="text-destructive text-sm">{error}</p> : null}
       <Separator />
       <DataTable
-        columns={apiKeyColumns({ onDelete: deleteKey })}
+        columns={apiKeyColumns({ m, onDelete: deleteKey })}
         data={keys}
         emptyLabel={loading ? m.user_loading() : m.table_empty()}
         exportFileName={m.user_api_keys_export_file_name()}
@@ -1394,8 +1671,10 @@ function ApiKeyManager({
 }
 
 const apiKeyColumns = ({
+  m,
   onDelete,
 }: {
+  m: ReturnType<typeof userButtonMessages>;
   onDelete: (key: ApiKeySummary) => void;
 }): ColumnDef<ApiKeySummary>[] => [
   {

@@ -183,7 +183,6 @@ export function OAuthClientForm({
               {(field) => (
                 <field.SelectField
                   label={m.project()}
-                  required={false}
                   options={[
                     { label: m.project_none(), value: "" },
                     ...projects.map((project) => ({

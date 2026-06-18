@@ -2,7 +2,7 @@ import { Link, Outlet, useRouterState } from "@tanstack/react-router";
 import type { LucideIcon } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
-import { LocaleToggle } from "@/components/ui/locale-toggle";
+import { LocaleSwitcher } from "@/components/ui/locale-switcher";
 import {
   Sidebar,
   SidebarContent,
@@ -139,7 +139,7 @@ export function SidebarLayout({
           <SidebarTrigger />
           <div className="ml-auto flex items-center gap-2">
             {headerActions}
-            <LocaleToggle />
+            <LocaleSwitcher />
           </div>
         </header>
         <div className="flex flex-col gap-6 px-5 py-6 md:px-8">

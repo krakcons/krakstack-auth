@@ -18,7 +18,7 @@ import { useEffect, useState } from "react";
 
 import { m } from "@/paraglide/messages";
 import { Button } from "@/components/ui/button";
-import { LocaleToggle } from "@/components/ui/locale-toggle";
+import { LocaleSwitcher } from "@/components/ui/locale-switcher";
 import { useSidebar } from "@/components/ui/sidebar";
 import { SidebarLayout, type NavGroup } from "@/components/ui/sidebar-layout";
 import {
@@ -168,7 +168,7 @@ function AdminAccessDenied({ isSignedIn }: { isSignedIn: boolean }) {
   return (
     <main className="relative grid min-h-screen place-items-center px-6 py-10">
       <div className="absolute top-6 right-6 md:top-10 md:right-10">
-        <LocaleToggle />
+        <LocaleSwitcher />
       </div>
       <Card className="w-full max-w-md">
         <CardHeader>
