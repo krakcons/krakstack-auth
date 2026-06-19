@@ -328,41 +328,31 @@ type UserFormType = {
 
 const isFile = (value: unknown): value is File => value instanceof File;
 
+const isRecord = (value: unknown): value is Record<string, unknown> =>
+  typeof value === "object" && value !== null;
+
 type PresignedImageUpload = {
   uploadUrl: string;
   url: string;
 };
 
-const authUrl = (path: string) =>
-  new URL(
-    path,
-    import.meta.env.VITE_KRAKSTACK_AUTH_URL ??
-      globalThis.location?.origin ??
-      "http://localhost:3000",
-  ).toString();
-
 const presignUserImageUpload = async (
+  authClient: AuthUiClient,
   file: File,
   m: ReturnType<typeof userButtonMessages>,
 ): Promise<PresignedImageUpload> => {
-  const response = await fetch(authUrl("/api/auth/image/presign"), {
+  const contentType = file.type || "image/png";
+  const result = await authClient.$fetch("/image/presign", {
     method: "POST",
-    credentials: "include",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ fileName: file.name, contentType: file.type }),
+    body: { fileName: file.name, contentType },
   });
 
-  if (!response.ok) {
+  if (result.error || !isRecord(result.data)) {
     throw new Error(m.user_profile_image_upload_error());
   }
 
-  const body = await response.json();
-  if (typeof body !== "object" || body === null) {
-    throw new Error(m.user_profile_image_upload_error());
-  }
-
-  const uploadUrl = Reflect.get(body, "uploadUrl");
-  const url = Reflect.get(body, "url");
+  const uploadUrl = Reflect.get(result.data, "uploadUrl");
+  const url = Reflect.get(result.data, "url");
 
   if (typeof uploadUrl !== "string" || typeof url !== "string") {
     throw new Error(m.user_profile_image_upload_error());
@@ -421,9 +411,7 @@ export const UserButton = ({
 
   const displayName = session.user.name.trim();
   const displayEmail = session.user.email.trim();
-  const displayImage = session.user.image?.trim()
-    ? authUrl(session.user.image.trim())
-    : "";
+  const displayImage = session.user.image?.trim() ?? "";
 
   const signOut = async () => {
     const redirectUrl = signOutRedirect.startsWith("http")
@@ -439,10 +427,14 @@ export const UserButton = ({
     const imageFile = isFile(values.image) ? values.image : null;
     const image = imageFile
       ? await (async () => {
-          const presigned = await presignUserImageUpload(imageFile, m);
+          const presigned = await presignUserImageUpload(
+            authClient,
+            imageFile,
+            m,
+          );
           const uploadResponse = await fetch(presigned.uploadUrl, {
             method: "PUT",
-            headers: { "Content-Type": imageFile.type },
+            headers: { "Content-Type": imageFile.type || "image/png" },
             body: imageFile,
           });
 

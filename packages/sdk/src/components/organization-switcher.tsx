@@ -385,14 +385,6 @@ const isOrganizationSlugConflict = (error: unknown) => {
 const nullableString = (value: unknown) =>
   typeof value === "string" && value.trim() ? value.trim() : null;
 
-const centralAuthUrl = (path: string) =>
-  new URL(
-    path,
-    import.meta.env.VITE_KRAKSTACK_AUTH_URL?.trim() ||
-      globalThis.location?.origin ||
-      "http://localhost:3000",
-  ).toString();
-
 const parsePresignedUpload = (
   value: unknown,
   m: ReturnType<typeof organizationMessageFns>,
@@ -412,25 +404,24 @@ const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null;
 
 const uploadOrganizationLogo = async (
+  authClient: AuthUiClient,
   file: File,
   m: ReturnType<typeof organizationMessageFns>,
 ) => {
   const contentType = file.type || "image/png";
-  const presignResponse = await fetch(
-    centralAuthUrl("/api/organizations/logo/presign"),
+  const presignResult = await authClient.$fetch(
+    "../organizations/logo/presign",
     {
       method: "POST",
-      credentials: "include",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ fileName: file.name, contentType }),
+      body: { fileName: file.name, contentType },
     },
   );
 
-  if (!presignResponse.ok) {
+  if (presignResult.error) {
     throw new Error(m.organization_logo_upload_error());
   }
 
-  const presigned = parsePresignedUpload(await presignResponse.json(), m);
+  const presigned = parsePresignedUpload(presignResult.data, m);
   const uploadResponse = await fetch(presigned.uploadUrl, {
     method: "PUT",
     headers: { "Content-Type": contentType },
@@ -518,10 +509,14 @@ const organizationFormDefaults = (
 };
 
 const organizationLogoFromForm = async (
+  authClient: AuthUiClient,
   file: File | null,
   fallback: string,
   m: ReturnType<typeof organizationMessageFns>,
-) => (file ? await uploadOrganizationLogo(file, m) : nullableString(fallback));
+) =>
+  file
+    ? await uploadOrganizationLogo(authClient, file, m)
+    : nullableString(fallback);
 
 const organizationRoles: OrganizationRole[] = ["owner", "admin", "member"];
 
@@ -557,6 +552,7 @@ const initialsFromName = (name: string) =>
     .toUpperCase() || "?";
 
 const organizationMetadataFromForm = async (
+  authClient: AuthUiClient,
   value: OrganizationFormValues,
   m: ReturnType<typeof organizationMessageFns>,
 ): Promise<OrganizationMetadata> => {
@@ -564,21 +560,25 @@ const organizationMetadataFromForm = async (
   const enName = value.enName.trim() || value.name.trim();
   const frName = value.frName.trim();
   const enLogo = await organizationLogoFromForm(
+    authClient,
     value.enLogo,
     value.enLogoUrl,
     m,
   );
   const enIcon = await organizationLogoFromForm(
+    authClient,
     value.enIcon,
     value.enIconUrl,
     m,
   );
   const frLogo = await organizationLogoFromForm(
+    authClient,
     value.frLogo,
     value.frLogoUrl,
     m,
   );
   const frIcon = await organizationLogoFromForm(
+    authClient,
     value.frIcon,
     value.frIconUrl,
     m,
@@ -1154,7 +1154,11 @@ function EditOrganizationSection({
       try {
         const name = value.name.trim();
         const slug = value.slug.trim().toLowerCase();
-        const metadata = await organizationMetadataFromForm(value, m);
+        const metadata = await organizationMetadataFromForm(
+          authClient,
+          value,
+          m,
+        );
 
         const result = await authClient.organization.update({
           organizationId: organization.id,
@@ -1370,6 +1374,7 @@ function CreateOrganizationSection({
         const name = value.name.trim();
         const slug = (value.slug.trim() || slugify(name)).toLowerCase();
         const metadata = await organizationMetadataFromForm(
+          authClient,
           {
             ...value,
             name,
