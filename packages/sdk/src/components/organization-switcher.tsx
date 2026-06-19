@@ -386,7 +386,12 @@ const nullableString = (value: unknown) =>
   typeof value === "string" && value.trim() ? value.trim() : null;
 
 const centralAuthUrl = (path: string) =>
-  new URL(path, import.meta.env.VITE_KRAKSTACK_AUTH_URL).toString();
+  new URL(
+    path,
+    import.meta.env.VITE_KRAKSTACK_AUTH_URL?.trim() ||
+      globalThis.location?.origin ||
+      "http://localhost:3000",
+  ).toString();
 
 const parsePresignedUpload = (
   value: unknown,
@@ -436,7 +441,7 @@ const uploadOrganizationLogo = async (
     throw new Error(m.organization_logo_upload_error());
   }
 
-  return centralAuthUrl(presigned.url);
+  return presigned.url;
 };
 
 const currentOrganizationLocale = (): OrganizationLocale =>
@@ -1146,26 +1151,38 @@ function EditOrganizationSection({
     defaultValues,
     onSubmit: async ({ value, formApi }) => {
       formApi.setErrorMap({ onSubmit: undefined });
-      const name = value.name.trim();
-      const slug = value.slug.trim().toLowerCase();
-      const metadata = await organizationMetadataFromForm(value, m);
+      try {
+        const name = value.name.trim();
+        const slug = value.slug.trim().toLowerCase();
+        const metadata = await organizationMetadataFromForm(value, m);
 
-      const result = await authClient.organization.update({
-        organizationId: organization.id,
-        data: { name, slug, metadata },
-      });
+        const result = await authClient.organization.update({
+          organizationId: organization.id,
+          data: { name, slug, metadata },
+        });
 
-      if (result.error) {
+        if (result.error) {
+          formApi.setErrorMap({
+            onSubmit: {
+              form: result.error.message ?? m.organization_update_error(),
+              fields: {},
+            },
+          });
+          return;
+        }
+
+        await onUpdated();
+      } catch (cause) {
         formApi.setErrorMap({
           onSubmit: {
-            form: result.error.message ?? m.organization_update_error(),
+            form:
+              cause instanceof Error
+                ? cause.message
+                : m.organization_update_error(),
             fields: {},
           },
         });
-        return;
       }
-
-      await onUpdated();
     },
   });
 
@@ -1349,46 +1366,58 @@ function CreateOrganizationSection({
     defaultValues,
     onSubmit: async ({ value, formApi }) => {
       formApi.setErrorMap({ onSubmit: undefined });
-      const name = value.name.trim();
-      const slug = (value.slug.trim() || slugify(name)).toLowerCase();
-      const metadata = await organizationMetadataFromForm(
-        {
-          ...value,
+      try {
+        const name = value.name.trim();
+        const slug = (value.slug.trim() || slugify(name)).toLowerCase();
+        const metadata = await organizationMetadataFromForm(
+          {
+            ...value,
+            name,
+            slug,
+          },
+          m,
+        );
+
+        const result = await authClient.organization.create({
           name,
           slug,
-        },
-        m,
-      );
+          metadata,
+        });
 
-      const result = await authClient.organization.create({
-        name,
-        slug,
-        metadata,
-      });
+        if (result.error) {
+          if (isOrganizationSlugConflict(result.error)) {
+            formApi.setErrorMap({
+              onSubmit: {
+                fields: {
+                  slug: { message: m.organization_create_slug_conflict() },
+                },
+              },
+            });
+            return;
+          }
 
-      if (result.error) {
-        if (isOrganizationSlugConflict(result.error)) {
           formApi.setErrorMap({
             onSubmit: {
-              fields: {
-                slug: { message: m.organization_create_slug_conflict() },
-              },
+              form: result.error.message ?? m.organization_create_error(),
+              fields: {},
             },
           });
           return;
         }
 
+        form.reset();
+        await onCreated(result.data);
+      } catch (cause) {
         formApi.setErrorMap({
           onSubmit: {
-            form: result.error.message ?? m.organization_create_error(),
+            form:
+              cause instanceof Error
+                ? cause.message
+                : m.organization_create_error(),
             fields: {},
           },
         });
-        return;
       }
-
-      form.reset();
-      await onCreated(result.data);
     },
   });
 
