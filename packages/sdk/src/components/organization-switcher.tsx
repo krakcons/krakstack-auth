@@ -670,10 +670,8 @@ export function OrganizationSwitcher({
 
   const refresh = async () => {
     await organizations.refetch();
-    const activeResult = await activeOrganization.refetch();
+    await activeOrganization.refetch();
     await session.refetch();
-
-    return activeResult.data ?? null;
   };
 
   const refreshAfterInvitationAction = async (previousActiveId?: string) => {
@@ -686,8 +684,12 @@ export function OrganizationSwitcher({
       });
 
       if (!result.error) {
-        const active = await refresh();
-        onChange?.(active ?? null);
+        await refresh();
+        onChange?.(
+          organizations.data?.find(
+            (organization) => organization.id === previousActiveId,
+          ) ?? null,
+        );
       }
     }
   };
@@ -768,8 +770,8 @@ export function OrganizationSwitcher({
                         organizationId: organization.id,
                       });
                       if (!result.error) {
-                        const active = await refresh();
-                        onChange?.(active ?? organization);
+                        await refresh();
+                        onChange?.(organization);
                       }
                     }}
                   >
@@ -854,9 +856,12 @@ export function OrganizationSwitcher({
             authClient={authClient}
             onCreated={async (organization) => {
               onCreate?.(organization);
-              const active = await refresh();
-              onChange?.(active ?? organization);
               setDialog(null);
+              const activeResult = await authClient.organization.setActive({
+                organizationId: organization.id,
+              });
+              await refresh();
+              if (!activeResult.error) onChange?.(organization);
             }}
           />
         </DialogContent>
