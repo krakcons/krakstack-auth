@@ -1,5 +1,3 @@
-import { getDomain } from "tldts";
-
 import { normalizeAuthHost } from "@/lib/domain-utils";
 
 export const getAuthRedirectParam = (searchString: string) => {
@@ -13,18 +11,17 @@ export const getAuthRedirectParam = (searchString: string) => {
 };
 
 export const getDefaultAuthRedirectTarget = (
-  projectDomains: ReadonlyArray<string> | undefined,
+  projectAuthDomain: string | null | undefined,
+  projectRootDomain: string | null | undefined,
 ) => {
   if (typeof window === "undefined") return "/admin";
 
   const currentHost = normalizeAuthHost(window.location.host);
-  const isProjectDomain = projectDomains?.some(
-    (domain) => normalizeAuthHost(domain) === currentHost,
-  );
+  const isProjectDomain = normalizeAuthHost(projectAuthDomain) === currentHost;
 
   if (!isProjectDomain) return "/admin";
 
-  const rootDomain = getDomain(window.location.hostname);
+  const rootDomain = normalizeAuthHost(projectRootDomain);
   if (!rootDomain) return "/admin";
 
   return `${window.location.protocol}//${rootDomain}`;

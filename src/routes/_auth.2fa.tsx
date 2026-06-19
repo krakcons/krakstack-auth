@@ -44,7 +44,8 @@ function TwoFactorVerify() {
   const projectConfig = useAuthBrandingConfig();
   const redirectTarget = getRedirectTarget(
     searchString,
-    projectConfig?.domains,
+    projectConfig?.authDomain,
+    projectConfig?.rootDomain,
   );
   const oauthQuery = getOAuthQuery(searchString);
   const form = useAppForm({
@@ -220,14 +221,15 @@ function TwoFactorVerify() {
 
 const getRedirectTarget = (
   searchString: string,
-  projectDomains: ReadonlyArray<string> | undefined,
+  projectAuthDomain: string | null | undefined,
+  projectRootDomain: string | null | undefined,
 ) => {
   const oauthTarget = getOAuthAuthorizeTarget(searchString);
   if (oauthTarget) return oauthTarget;
 
   return (
     getAuthRedirectParam(searchString) ??
-    getDefaultAuthRedirectTarget(projectDomains)
+    getDefaultAuthRedirectTarget(projectAuthDomain, projectRootDomain)
   );
 };
 

@@ -42,6 +42,7 @@ export const OAuthClientAdmin = Schema.Struct({
       scope: "openid profile email",
       disabled: false,
       projectData: {
+        authDomain: "auth.example.com",
         branding: { themeCss: ":root { --primary: oklch(0.5 0.1 240); }" },
         authOptions: {
           emailPassword: true,
@@ -88,7 +89,7 @@ export const OAuthClientCreated = Schema.Struct({
       scope: "openid profile email",
       disabled: false,
       projectData: {
-        domains: ["auth.example.com"],
+        authDomain: "auth.example.com",
         branding: { themeCss: ":root { --primary: oklch(0.5 0.1 240); }" },
         authOptions: {
           emailPassword: true,

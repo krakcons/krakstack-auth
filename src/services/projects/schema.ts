@@ -1,7 +1,8 @@
 import { Schema } from "effect";
 
 export const ProjectData = Schema.Struct({
-  domains: Schema.optional(Schema.Array(Schema.NonEmptyString)),
+  authDomain: Schema.optional(Schema.NonEmptyString),
+  rootDomain: Schema.optional(Schema.NonEmptyString),
   branding: Schema.optional(
     Schema.Struct({
       themeCss: Schema.optional(Schema.String),
@@ -18,10 +19,12 @@ export const ProjectData = Schema.Struct({
 }).annotate({
   identifier: "ProjectData",
   title: "Project data",
-  description: "White-label theme, auth domains, and authentication settings.",
+  description:
+    "White-label theme, auth domain, root redirect domain, and authentication settings.",
   examples: [
     {
-      domains: ["auth.example.com"],
+      authDomain: "auth.example.com",
+      rootDomain: "example.com",
       branding: { themeCss: ":root { --primary: oklch(0.5 0.1 240); }" },
       authOptions: {
         emailPassword: true,
@@ -91,7 +94,8 @@ export const ProjectPublicConfig = Schema.Struct({
   projectKey: Schema.String,
   name: Schema.NullOr(Schema.String),
   logoUrl: Schema.NullOr(Schema.String),
-  domains: Schema.Array(Schema.String),
+  authDomain: Schema.NullOr(Schema.String),
+  rootDomain: Schema.NullOr(Schema.String),
   themeCss: Schema.NullOr(Schema.String),
   authOptions: ProjectAuthOptions,
 }).annotate({
@@ -104,7 +108,8 @@ export const ProjectPublicConfig = Schema.Struct({
       projectKey: "auth.example.com",
       name: "Example project",
       logoUrl: "https://example.com/logo.svg",
-      domains: ["auth.example.com"],
+      authDomain: "auth.example.com",
+      rootDomain: "example.com",
       themeCss:
         '[data-project-theme="auth.example.com"] { --primary: oklch(0.5 0.1 240); }',
       authOptions: {

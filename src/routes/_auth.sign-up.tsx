@@ -33,7 +33,8 @@ function SignUp() {
   const projectConfig = useAuthBrandingConfig();
   const redirectTarget = getRedirectTarget(
     searchString,
-    projectConfig?.domains,
+    projectConfig?.authDomain,
+    projectConfig?.rootDomain,
   );
   const authOptions = projectConfig?.authOptions ?? {
     emailPassword: true,
@@ -237,10 +238,11 @@ const nameFromEmail = (email: string) => {
 
 const getRedirectTarget = (
   searchString: string,
-  projectDomains: ReadonlyArray<string> | undefined,
+  projectAuthDomain: string | null | undefined,
+  projectRootDomain: string | null | undefined,
 ) => {
   return (
     getAuthRedirectParam(searchString) ??
-    getDefaultAuthRedirectTarget(projectDomains)
+    getDefaultAuthRedirectTarget(projectAuthDomain, projectRootDomain)
   );
 };

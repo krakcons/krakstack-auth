@@ -138,26 +138,28 @@ const projectColumns = ({
     ),
   },
   {
-    accessorKey: "domains",
-    header: m.oauth_client_domains(),
-    cell: ({ row }) => (
-      <div className="flex max-w-64 flex-col gap-1">
-        {row.original.data.domains?.length ? (
-          row.original.data.domains.map((domain) => (
-            <code
-              key={domain}
-              className="text-muted-foreground truncate text-xs"
-            >
-              {domain}
-            </code>
-          ))
-        ) : (
-          <span className="text-muted-foreground text-sm">
-            {m.admin_none()}
-          </span>
-        )}
-      </div>
-    ),
+    accessorKey: "authDomain",
+    header: m.project_auth_domain(),
+    cell: ({ row }) =>
+      row.original.data.authDomain ? (
+        <code className="text-muted-foreground text-xs">
+          {row.original.data.authDomain}
+        </code>
+      ) : (
+        <span className="text-muted-foreground text-sm">{m.admin_none()}</span>
+      ),
+  },
+  {
+    accessorKey: "rootDomain",
+    header: m.project_root_domain(),
+    cell: ({ row }) =>
+      row.original.data.rootDomain ? (
+        <code className="text-muted-foreground text-xs">
+          {row.original.data.rootDomain}
+        </code>
+      ) : (
+        <span className="text-muted-foreground text-sm">{m.admin_none()}</span>
+      ),
   },
   {
     id: "authOptions",

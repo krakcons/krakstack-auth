@@ -8,7 +8,10 @@ import {
   normalizeOAuthClientDomains,
   parseCsv,
 } from "@/lib/domain-utils";
-import { decodeProjectDataOrEmpty } from "@/services/projects";
+import {
+  authDomainFromData,
+  decodeProjectDataOrEmpty,
+} from "@/services/projects";
 
 export { normalizeAuthHost, normalizeOAuthClientDomains, parseCsv };
 
@@ -52,7 +55,11 @@ export const isPrimaryAuthHost = (host: string | null | undefined) =>
   Boolean(host && configuredPrimaryHosts().has(host));
 
 const dataDomains = (data: unknown) =>
-  normalizeOAuthClientDomains(decodeProjectDataOrEmpty(data).domains ?? []);
+  normalizeOAuthClientDomains(
+    [authDomainFromData(decodeProjectDataOrEmpty(data))].filter(
+      (domain): domain is string => Boolean(domain),
+    ),
+  );
 
 export const isOAuthClientAuthHost = async (host: string) => {
   const clients = await db

@@ -28,10 +28,29 @@ const authOptions = (data: ProjectData) => ({
   signUpName: data.authOptions?.signUpName ?? true,
 });
 
+const StoredProjectData = Schema.Struct({
+  authDomain: Schema.optional(Schema.String),
+  domains: Schema.optional(Schema.Array(Schema.String)),
+  rootDomain: Schema.optional(Schema.String),
+  branding: ProjectData.fields.branding,
+  authOptions: ProjectData.fields.authOptions,
+});
+
 export const decodeProjectData = (value: unknown) => {
-  const data = Schema.decodeUnknownSync(ProjectData)(value ?? emptyData);
-  const domains = normalizeOAuthClientDomains(data.domains ?? []);
-  return { ...data, ...(domains.length ? { domains } : {}) };
+  const stored = Schema.decodeUnknownSync(StoredProjectData)(
+    value ?? emptyData,
+  );
+  const authDomain =
+    normalizeAuthHost(stored.authDomain) ??
+    normalizeOAuthClientDomains(stored.domains ?? [])[0];
+  const rootDomain = normalizeAuthHost(stored.rootDomain);
+
+  return Schema.decodeUnknownSync(ProjectData)({
+    ...(authDomain ? { authDomain } : {}),
+    ...(rootDomain ? { rootDomain } : {}),
+    ...(stored.branding ? { branding: stored.branding } : {}),
+    ...(stored.authOptions ? { authOptions: stored.authOptions } : {}),
+  });
 };
 
 export const decodeProjectDataOrEmpty = (value: unknown) => {
@@ -48,14 +67,18 @@ const row = (value: typeof project.$inferSelect) => ({
   data: decodeProjectDataOrEmpty(value.data),
 });
 
-const domainsFromData = (data: ProjectData) =>
-  normalizeOAuthClientDomains(data.domains ?? []);
+export const authDomainFromData = (data: ProjectData) =>
+  normalizeAuthHost(data.authDomain) ?? null;
+
+const rootDomainFromData = (data: ProjectData) =>
+  normalizeAuthHost(data.rootDomain) ?? null;
 
 const fallbackPublicConfig = (projectKey: string) => ({
   projectKey,
   name: null,
   logoUrl: null,
-  domains: [],
+  authDomain: null,
+  rootDomain: null,
   themeCss: null,
   authOptions: authOptions({}),
 });
@@ -88,9 +111,8 @@ export class Projects extends Context.Service<Projects>()("Projects", {
       return (
         projects
           .map(row)
-          .find((value) =>
-            domainsFromData(value.data).includes(normalizedHost),
-          ) ?? null
+          .find((value) => authDomainFromData(value.data) === normalizedHost) ??
+        null
       );
     });
 
@@ -109,7 +131,8 @@ export class Projects extends Context.Service<Projects>()("Projects", {
         projectKey,
         name: value?.name ?? client?.name ?? null,
         logoUrl: value?.logo ?? client?.icon ?? null,
-        domains: domainsFromData(data),
+        authDomain: authDomainFromData(data),
+        rootDomain: rootDomainFromData(data),
         themeCss: sanitizeThemeCss(data.branding?.themeCss, projectKey),
         authOptions: authOptions(data),
       };

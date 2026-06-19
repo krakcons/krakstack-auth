@@ -3,10 +3,13 @@ import type { Headers } from "effect/unstable/http/Headers";
 import { eq } from "drizzle-orm";
 
 import { oauthClient, project } from "@/db/auth-schema";
-import { normalizeOAuthClientDomains } from "@/lib/domain-utils";
+import { normalizeAuthHost } from "@/lib/domain-utils";
 import { DB } from "@/services/database";
 import { auth } from "@/services/auth/config";
-import { decodeProjectDataOrEmpty } from "@/services/projects";
+import {
+  authDomainFromData,
+  decodeProjectDataOrEmpty,
+} from "@/services/projects";
 import type { ProjectData } from "@/services/projects/schema";
 
 import type {
@@ -38,7 +41,12 @@ const scopesFromString = (value: string | undefined) =>
     : ["openid", "profile", "email"];
 
 const domainsFromData = (data: ProjectData) =>
-  normalizeOAuthClientDomains(data.domains ?? []);
+  [authDomainFromData(data)].filter((domain): domain is string =>
+    Boolean(domain),
+  );
+
+const rootDomainFromData = (data: ProjectData) =>
+  normalizeAuthHost(data.rootDomain) ?? null;
 
 const RawOAuthClient = Schema.Struct({
   client_id: Schema.optional(Schema.String),
@@ -147,7 +155,8 @@ export class OAuthClients extends Context.Service<OAuthClients>()(
           projectKey,
           name: summary?.name ?? client?.name ?? null,
           logoUrl: summary?.logo ?? client?.icon ?? null,
-          domains: domainsFromData(data),
+          authDomain: authDomainFromData(data),
+          rootDomain: rootDomainFromData(data),
           themeCss: sanitizeThemeCss(data.branding?.themeCss, projectKey),
           authOptions: authOptions(data),
         };
