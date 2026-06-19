@@ -73,10 +73,10 @@ export const OrganizationLocale = Schema.Union([
 export const OrganizationTranslation = Schema.Struct({
   locale: OrganizationLocale,
   name: Schema.String,
-  logo: Schema.NullOr(Schema.String),
-  icon: Schema.NullOr(Schema.String),
-  contactEmail: Schema.NullOr(Schema.String),
-  location: Schema.NullOr(Schema.String),
+  logo: Schema.optional(Schema.NullOr(Schema.String)),
+  icon: Schema.optional(Schema.NullOr(Schema.String)),
+  contactEmail: Schema.optional(Schema.NullOr(Schema.String)),
+  location: Schema.optional(Schema.NullOr(Schema.String)),
 }).annotate({
   identifier: "OrganizationTranslation",
   title: "Organization translation",
