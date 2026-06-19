@@ -1,4 +1,4 @@
-import { Link, createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, useRouterState } from "@tanstack/react-router";
 
 import { useAppForm } from "@/components/ui/form";
 import {
@@ -16,6 +16,9 @@ export const Route = createFileRoute("/_auth/forgot-password")({
 });
 
 function ForgotPassword() {
+  const searchString = useRouterState({
+    select: (state) => state.location.searchStr,
+  });
   const form = useAppForm({
     defaultValues: {
       email: "",
@@ -78,12 +81,12 @@ function ForgotPassword() {
           </form>
         </form.AppForm>
         <p className="text-muted-foreground mt-6 text-center text-sm">
-          <Link
+          <a
             className="text-foreground font-medium underline-offset-4 hover:underline"
-            to="/sign-in"
+            href={`/sign-in${searchString}`}
           >
             {m.forgot_password_back_to_sign_in()}
-          </Link>
+          </a>
         </p>
       </CardContent>
     </Card>

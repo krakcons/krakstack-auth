@@ -24,6 +24,11 @@ import {
 } from "@/components/ui/input-otp";
 import { m } from "@/paraglide/messages";
 import { authClient } from "@/services/auth/client";
+import {
+  getAuthRedirectParam,
+  getDefaultAuthRedirectTarget,
+} from "@/lib/auth-redirect";
+import { useAuthBrandingConfig } from "@/services/auth/client/branding";
 
 export const Route = createFileRoute("/_auth/2fa")({
   component: TwoFactorVerify,
@@ -36,7 +41,11 @@ function TwoFactorVerify() {
   });
   const [mode, setMode] = useState<"totp" | "email" | "backup">("totp");
   const [emailCodeSent, setEmailCodeSent] = useState(false);
-  const redirectTarget = getRedirectTarget(searchString);
+  const projectConfig = useAuthBrandingConfig();
+  const redirectTarget = getRedirectTarget(
+    searchString,
+    projectConfig?.domains,
+  );
   const oauthQuery = getOAuthQuery(searchString);
   const form = useAppForm({
     defaultValues: {
@@ -209,17 +218,16 @@ function TwoFactorVerify() {
   );
 }
 
-const getRedirectTarget = (searchString: string) => {
+const getRedirectTarget = (
+  searchString: string,
+  projectDomains: ReadonlyArray<string> | undefined,
+) => {
   const oauthTarget = getOAuthAuthorizeTarget(searchString);
   if (oauthTarget) return oauthTarget;
 
-  const search = new URLSearchParams(searchString);
   return (
-    search.get("callbackURL") ??
-    search.get("redirect") ??
-    search.get("redirectTo") ??
-    search.get("returnTo") ??
-    "/admin"
+    getAuthRedirectParam(searchString) ??
+    getDefaultAuthRedirectTarget(projectDomains)
   );
 };
 

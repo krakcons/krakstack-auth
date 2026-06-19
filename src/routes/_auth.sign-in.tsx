@@ -1,5 +1,4 @@
 import {
-  Link,
   createFileRoute,
   useNavigate,
   useRouterState,
@@ -17,6 +16,10 @@ import {
 } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { useAuthBrandingConfig } from "@/services/auth/client/branding";
+import {
+  getAuthRedirectParam,
+  getDefaultAuthRedirectTarget,
+} from "@/lib/auth-redirect";
 
 export const Route = createFileRoute("/_auth/sign-in")({
   component: SignIn,
@@ -37,10 +40,16 @@ function SignIn() {
   const searchString = useRouterState({
     select: (state) => state.location.searchStr,
   });
-  const redirectTarget = getRedirectTarget(searchString);
-  const socialRedirectTarget = getSocialRedirectTarget(searchString);
-  const oauthQuery = getOAuthQuery(searchString);
   const projectConfig = useAuthBrandingConfig();
+  const redirectTarget = getRedirectTarget(
+    searchString,
+    projectConfig?.domains,
+  );
+  const socialRedirectTarget = getSocialRedirectTarget(
+    searchString,
+    projectConfig?.domains,
+  );
+  const oauthQuery = getOAuthQuery(searchString);
   const authOptions = projectConfig?.authOptions ?? {
     emailPassword: true,
     google: true,
@@ -173,12 +182,12 @@ function SignIn() {
               <form.FormError />
               <div className="flex flex-wrap items-center justify-between gap-3">
                 <form.SubmitButton />
-                <Link
+                <a
                   className="text-foreground text-sm font-medium underline-offset-4 hover:underline"
-                  to="/forgot-password"
+                  href={`/forgot-password${searchString}`}
                 >
                   {m.sign_in_forgot_password()}
-                </Link>
+                </a>
               </div>
             </form>
           </form.AppForm>
@@ -225,25 +234,27 @@ function SignIn() {
   );
 }
 
-const getRedirectTarget = (searchString: string) => {
+const getRedirectTarget = (
+  searchString: string,
+  projectDomains: ReadonlyArray<string> | undefined,
+) => {
   const oauthTarget = getOAuthAuthorizeTarget(searchString);
   if (oauthTarget) return oauthTarget;
 
-  const search = new URLSearchParams(searchString);
   return (
-    search.get("callbackURL") ??
-    search.get("redirect") ??
-    search.get("redirectTo") ??
-    search.get("returnTo") ??
-    "/admin"
+    getAuthRedirectParam(searchString) ??
+    getDefaultAuthRedirectTarget(projectDomains)
   );
 };
 
-const getSocialRedirectTarget = (searchString: string) => {
+const getSocialRedirectTarget = (
+  searchString: string,
+  projectDomains: ReadonlyArray<string> | undefined,
+) => {
   const oauthTarget = getOAuthAuthorizeTargetWithoutPromptLogin(searchString);
   if (oauthTarget) return oauthTarget;
 
-  return getRedirectTarget(searchString);
+  return getRedirectTarget(searchString, projectDomains);
 };
 
 const getOAuthAuthorizeTarget = (searchString: string) => {

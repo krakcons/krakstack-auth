@@ -16,6 +16,10 @@ import {
 } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { useAuthBrandingConfig } from "@/services/auth/client/branding";
+import {
+  getAuthRedirectParam,
+  getDefaultAuthRedirectTarget,
+} from "@/lib/auth-redirect";
 
 export const Route = createFileRoute("/_auth/sign-up")({
   component: SignUp,
@@ -26,8 +30,11 @@ function SignUp() {
   const searchString = useRouterState({
     select: (state) => state.location.searchStr,
   });
-  const redirectTarget = getRedirectTarget(searchString);
   const projectConfig = useAuthBrandingConfig();
+  const redirectTarget = getRedirectTarget(
+    searchString,
+    projectConfig?.domains,
+  );
   const authOptions = projectConfig?.authOptions ?? {
     emailPassword: true,
     google: true,
@@ -228,13 +235,12 @@ const nameFromEmail = (email: string) => {
   return localPart || trimmed;
 };
 
-const getRedirectTarget = (searchString: string) => {
-  const search = new URLSearchParams(searchString);
+const getRedirectTarget = (
+  searchString: string,
+  projectDomains: ReadonlyArray<string> | undefined,
+) => {
   return (
-    search.get("callbackURL") ??
-    search.get("redirect") ??
-    search.get("redirectTo") ??
-    search.get("returnTo") ??
-    "/admin"
+    getAuthRedirectParam(searchString) ??
+    getDefaultAuthRedirectTarget(projectDomains)
   );
 };
