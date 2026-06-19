@@ -9,9 +9,24 @@ import tailwindcss from "@tailwindcss/vite";
 
 const config = defineConfig({
   resolve: {
-    alias: {
-      "@": fileURLToPath(new URL("./src", import.meta.url)),
-    },
+    alias: [
+      {
+        find: /^@krak-stack\/auth$/,
+        replacement: fileURLToPath(
+          new URL("./packages/sdk/src/components/index.ts", import.meta.url),
+        ),
+      },
+      {
+        find: /^@krak-stack\/auth\/schema$/,
+        replacement: fileURLToPath(
+          new URL("./packages/sdk/src/schema.ts", import.meta.url),
+        ),
+      },
+      {
+        find: "@",
+        replacement: fileURLToPath(new URL("./src", import.meta.url)),
+      },
+    ],
     tsconfigPaths: true,
   },
   server: {

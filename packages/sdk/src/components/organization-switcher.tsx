@@ -347,17 +347,13 @@ type OrganizationFormValues = {
   name: string;
   slug: string;
   enName: string;
-  enLogo: File | null;
-  enLogoUrl: string;
-  enIcon: File | null;
-  enIconUrl: string;
+  enLogo: File | string | null;
+  enIcon: File | string | null;
   enContactEmail: string;
   enLocation: string;
   frName: string;
-  frLogo: File | null;
-  frLogoUrl: string;
-  frIcon: File | null;
-  frIconUrl: string;
+  frLogo: File | string | null;
+  frIcon: File | string | null;
   frContactEmail: string;
   frLocation: string;
 };
@@ -384,6 +380,17 @@ const isOrganizationSlugConflict = (error: unknown) => {
 
 const nullableString = (value: unknown) =>
   typeof value === "string" && value.trim() ? value.trim() : null;
+
+const assetPath = (value: string | null | undefined) => {
+  if (!value?.trim()) return null;
+
+  try {
+    const url = new URL(value);
+    return url.pathname.startsWith("/api/assets/") ? url.pathname : value;
+  } catch {
+    return value;
+  }
+};
 
 const parsePresignedUpload = (
   value: unknown,
@@ -432,7 +439,7 @@ const uploadOrganizationLogo = async (
     throw new Error(m.organization_logo_upload_error());
   }
 
-  return presigned.url;
+  return assetPath(presigned.url);
 };
 
 const currentOrganizationLocale = (): OrganizationLocale =>
@@ -440,7 +447,10 @@ const currentOrganizationLocale = (): OrganizationLocale =>
 
 const parseOrganizationMetadata = (metadata: unknown): OrganizationMetadata => {
   try {
-    return Schema.decodeUnknownSync(OrganizationMetadata)(metadata);
+    const value =
+      typeof metadata === "string" ? JSON.parse(metadata) : metadata;
+
+    return Schema.decodeUnknownSync(OrganizationMetadata)(value);
   } catch {
     return { translations: [] };
   }
@@ -475,7 +485,7 @@ const organizationDisplay = (
       organization?.name ||
       m.organization_switcher_label(),
     subtitle: organization?.slug ?? m.organization_switcher_label(),
-    logo: translation?.logo || undefined,
+    image: translation?.icon || translation?.logo || undefined,
   };
 };
 
@@ -492,17 +502,13 @@ const organizationFormDefaults = (
     name: organization?.name ?? "",
     slug: organization?.slug ?? "",
     enName: en?.name || organization?.name || "",
-    enLogo: null,
-    enLogoUrl: en?.logo ?? "",
-    enIcon: null,
-    enIconUrl: en?.icon ?? "",
+    enLogo: en?.logo ?? null,
+    enIcon: en?.icon ?? null,
     enContactEmail: en?.contactEmail ?? "",
     enLocation: en?.location ?? "",
     frName: fr?.name ?? "",
-    frLogo: null,
-    frLogoUrl: fr?.logo ?? "",
-    frIcon: null,
-    frIconUrl: fr?.icon ?? "",
+    frLogo: fr?.logo ?? null,
+    frIcon: fr?.icon ?? null,
     frContactEmail: fr?.contactEmail ?? "",
     frLocation: fr?.location ?? "",
   };
@@ -510,13 +516,14 @@ const organizationFormDefaults = (
 
 const organizationLogoFromForm = async (
   authClient: AuthUiClient,
-  file: File | null,
-  fallback: string,
+  value: File | string | null,
   m: ReturnType<typeof organizationMessageFns>,
-) =>
-  file
-    ? await uploadOrganizationLogo(authClient, file, m)
-    : nullableString(fallback);
+) => {
+  if (value instanceof File)
+    return await uploadOrganizationLogo(authClient, value, m);
+  if (typeof value === "string") return assetPath(value);
+  return null;
+};
 
 const organizationRoles: OrganizationRole[] = ["owner", "admin", "member"];
 
@@ -559,30 +566,10 @@ const organizationMetadataFromForm = async (
   const translations: OrganizationTranslation[] = [];
   const enName = value.enName.trim() || value.name.trim();
   const frName = value.frName.trim();
-  const enLogo = await organizationLogoFromForm(
-    authClient,
-    value.enLogo,
-    value.enLogoUrl,
-    m,
-  );
-  const enIcon = await organizationLogoFromForm(
-    authClient,
-    value.enIcon,
-    value.enIconUrl,
-    m,
-  );
-  const frLogo = await organizationLogoFromForm(
-    authClient,
-    value.frLogo,
-    value.frLogoUrl,
-    m,
-  );
-  const frIcon = await organizationLogoFromForm(
-    authClient,
-    value.frIcon,
-    value.frIconUrl,
-    m,
-  );
+  const enLogo = await organizationLogoFromForm(authClient, value.enLogo, m);
+  const enIcon = await organizationLogoFromForm(authClient, value.enIcon, m);
+  const frLogo = await organizationLogoFromForm(authClient, value.frLogo, m);
+  const frIcon = await organizationLogoFromForm(authClient, value.frIcon, m);
 
   if (enName) {
     translations.push({
@@ -724,8 +711,8 @@ export function OrganizationSwitcher({
                 icon={Building2}
                 variant="sidebar"
                 className="min-w-0 flex-1 !p-0 text-left group-data-[collapsible=icon]:flex-none group-data-[collapsible=icon]:justify-start"
-                {...(activeDisplay.logo
-                  ? { imageSrc: activeDisplay.logo }
+                {...(activeDisplay.image
+                  ? { imageSrc: activeDisplay.image }
                   : {})}
               />
               <ChevronsUpDown className="text-muted-foreground size-4 shrink-0 group-data-[collapsible=icon]:hidden" />
@@ -747,8 +734,8 @@ export function OrganizationSwitcher({
                 icon={Building2}
                 variant="sidebar"
                 className="px-1 py-1.5 text-left text-sm"
-                {...(activeDisplay.logo
-                  ? { imageSrc: activeDisplay.logo }
+                {...(activeDisplay.image
+                  ? { imageSrc: activeDisplay.image }
                   : {})}
               />
             </DropdownMenuLabel>
@@ -786,7 +773,7 @@ export function OrganizationSwitcher({
                       subtitle={display.subtitle}
                       icon={Building2}
                       className="w-full text-left [&>div:first-child]:size-7"
-                      {...(display.logo ? { imageSrc: display.logo } : {})}
+                      {...(display.image ? { imageSrc: display.image } : {})}
                     />
                   </DropdownMenuItem>
                 );
@@ -1231,7 +1218,6 @@ function EditOrganizationSection({
                 {(field) => (
                   <field.ImageField
                     label={m.organization_logo()}
-                    defaultImageUrl={defaultValues.enLogoUrl}
                     size={{
                       width: 175,
                       height: 50,
@@ -1245,7 +1231,6 @@ function EditOrganizationSection({
                 {(field) => (
                   <field.ImageField
                     label={m.organization_icon()}
-                    defaultImageUrl={defaultValues.enIconUrl}
                     size={{
                       width: 96,
                       height: 96,
@@ -1286,7 +1271,6 @@ function EditOrganizationSection({
                 {(field) => (
                   <field.ImageField
                     label={m.organization_logo()}
-                    defaultImageUrl={defaultValues.frLogoUrl}
                     size={{
                       width: 175,
                       height: 50,
@@ -1300,7 +1284,6 @@ function EditOrganizationSection({
                 {(field) => (
                   <field.ImageField
                     label={m.organization_icon()}
-                    defaultImageUrl={defaultValues.frIconUrl}
                     size={{
                       width: 96,
                       height: 96,
@@ -1471,7 +1454,6 @@ function CreateOrganizationSection({
                 {(field) => (
                   <field.ImageField
                     label={m.organization_logo()}
-                    defaultImageUrl={defaultValues.enLogoUrl}
                     size={{
                       width: 175,
                       height: 50,
@@ -1485,7 +1467,6 @@ function CreateOrganizationSection({
                 {(field) => (
                   <field.ImageField
                     label={m.organization_icon()}
-                    defaultImageUrl={defaultValues.enIconUrl}
                     size={{
                       width: 96,
                       height: 96,
@@ -1526,7 +1507,6 @@ function CreateOrganizationSection({
                 {(field) => (
                   <field.ImageField
                     label={m.organization_logo()}
-                    defaultImageUrl={defaultValues.frLogoUrl}
                     size={{
                       width: 175,
                       height: 50,
@@ -1540,7 +1520,6 @@ function CreateOrganizationSection({
                 {(field) => (
                   <field.ImageField
                     label={m.organization_icon()}
-                    defaultImageUrl={defaultValues.frIconUrl}
                     size={{
                       width: 96,
                       height: 96,

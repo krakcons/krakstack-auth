@@ -8,6 +8,7 @@
   "home_heading": "Une seule connexion pour chaque application Krakstack.",
   "home_description": "Ce service gère les sessions des utilisateurs, les identifiants, les clients OAuth et les métadonnées OIDC. Les autres applications devraient rediriger ici au lieu d'implémenter leur propre pile d'authentification.",
   "home_open_admin": "Ouvrir l'administration",
+  "home_menu": "Ouvrir le menu",
   "home_github": "GitHub",
   "home_open_sign_in": "Ouvrir l'administration",
   "home_check_api_health": "Vérifier l'état de l'API",

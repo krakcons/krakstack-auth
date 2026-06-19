@@ -1,12 +1,19 @@
 import { Link, createFileRoute } from "@tanstack/react-router";
-import { Users } from "lucide-react";
+import { Menu, Users } from "lucide-react";
 
 import { m } from "@/paraglide/messages";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { AppBrand } from "@/components/ui/app-brand";
 import { LocaleSwitcher } from "@/components/ui/locale-switcher";
-import { buttonVariants } from "@/components/ui/button";
+import { Button, buttonVariants } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { authClient } from "@/services/auth/client";
 import { OrganizationSwitcher, UserButton } from "@krak-stack/auth";
 
@@ -18,15 +25,16 @@ function Home() {
   return (
     <div className="flex min-h-screen flex-col">
       <header className="bg-background/95 supports-[backdrop-filter]:bg-background/60 sticky top-0 z-20 border-b backdrop-blur">
-        <nav className="mx-auto flex h-14 max-w-5xl items-center justify-between px-4">
+        <nav className="mx-auto flex h-14 max-w-5xl items-center gap-3 px-3 sm:px-4">
           <AppBrand
             label={m.sidebar_brand()}
             subtitle={m.sidebar_brand_subtitle()}
             icon={Users}
+            className="min-w-0 [&>div:last-child>span:last-child]:hidden sm:[&>div:last-child>span:last-child]:block"
           />
-          <div className="flex items-center gap-5 text-sm">
+          <div className="ml-auto flex shrink-0 items-center gap-2 text-sm sm:gap-4">
             <a
-              className="text-muted-foreground hover:text-foreground underline-offset-4 transition-colors hover:underline"
+              className="text-muted-foreground hover:text-foreground hidden underline-offset-4 transition-colors hover:underline md:inline-flex"
               href="https://github.com/krakcons/krakstack-auth"
               target="_blank"
               rel="noreferrer"
@@ -34,15 +42,16 @@ function Home() {
               {m.home_github()}
             </a>
             <Link
-              className="text-muted-foreground hover:text-foreground underline-offset-4 transition-colors hover:underline"
+              className="text-muted-foreground hover:text-foreground hidden underline-offset-4 transition-colors hover:underline md:inline-flex"
               to="/admin"
             >
               {m.home_open_admin()}
             </Link>
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-1 sm:gap-2">
+              <MobileHeaderMenu />
               <OrganizationSwitcher
                 authClient={authClient}
-                className="hidden min-w-48 sm:flex"
+                className="hidden w-40 min-w-0 lg:flex"
               />
               <ThemeToggle />
               <LocaleSwitcher />
@@ -106,6 +115,51 @@ function Home() {
         </footer>
       </main>
     </div>
+  );
+}
+
+function MobileHeaderMenu() {
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger
+        render={
+          <Button variant="outline" size="icon" className="lg:hidden">
+            <Menu className="size-4" />
+            <span className="sr-only">{m.home_menu()}</span>
+          </Button>
+        }
+      />
+      <DropdownMenuContent
+        className="w-72 max-w-[calc(100vw-1rem)]"
+        align="end"
+        sideOffset={8}
+      >
+        <div className="p-1 md:hidden">
+          <DropdownMenuItem
+            render={
+              <a
+                href="https://github.com/krakcons/krakstack-auth"
+                target="_blank"
+                rel="noreferrer"
+              >
+                {m.home_github()}
+              </a>
+            }
+          />
+          <DropdownMenuItem
+            render={<Link to="/admin">{m.home_open_admin()}</Link>}
+          />
+        </div>
+        <DropdownMenuSeparator className="md:hidden" />
+        <div className="p-1 lg:hidden">
+          <OrganizationSwitcher
+            authClient={authClient}
+            side="bottom"
+            className="w-full min-w-0"
+          />
+        </div>
+      </DropdownMenuContent>
+    </DropdownMenu>
   );
 }
 
