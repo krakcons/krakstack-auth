@@ -315,6 +315,8 @@ type OrganizationSwitcherProps = {
   renderUnauthenticated?: () => ReactNode;
   locked?: boolean;
   messages?: OrganizationSwitcherMessages;
+  onChange?: (organization: OrganizationSummary | null) => void;
+  onCreate?: (organization: OrganizationSummary) => void;
 };
 
 type OrganizationSummary = {
@@ -609,6 +611,8 @@ export function OrganizationSwitcher({
   renderUnauthenticated,
   locked = false,
   messages,
+  onChange,
+  onCreate,
 }: OrganizationSwitcherProps) {
   const labels = organizationSwitcherMessages(messages);
   const m = organizationMessageFns(labels);
@@ -666,8 +670,10 @@ export function OrganizationSwitcher({
 
   const refresh = async () => {
     await organizations.refetch();
-    await activeOrganization.refetch();
+    const activeResult = await activeOrganization.refetch();
     await session.refetch();
+
+    return activeResult.data ?? null;
   };
 
   const refreshAfterInvitationAction = async (previousActiveId?: string) => {
@@ -679,7 +685,10 @@ export function OrganizationSwitcher({
         organizationId: previousActiveId,
       });
 
-      if (!result.error) await refresh();
+      if (!result.error) {
+        const active = await refresh();
+        onChange?.(active ?? null);
+      }
     }
   };
 
@@ -758,7 +767,10 @@ export function OrganizationSwitcher({
                       const result = await authClient.organization.setActive({
                         organizationId: organization.id,
                       });
-                      if (!result.error) await refresh();
+                      if (!result.error) {
+                        const active = await refresh();
+                        onChange?.(active ?? organization);
+                      }
                     }}
                   >
                     <AppBrand
@@ -840,8 +852,10 @@ export function OrganizationSwitcher({
           <Separator />
           <CreateOrganizationSection
             authClient={authClient}
-            onCreated={async () => {
-              await refresh();
+            onCreated={async (organization) => {
+              onCreate?.(organization);
+              const active = await refresh();
+              onChange?.(active ?? organization);
               setDialog(null);
             }}
           />
@@ -1319,7 +1333,7 @@ function CreateOrganizationSection({
   onCreated,
 }: {
   authClient: AuthUiClient;
-  onCreated: () => Promise<void>;
+  onCreated: (organization: OrganizationSummary) => Promise<void>;
 }) {
   const m = useOrganizationMessages();
   const [editingLocale, setEditingLocale] = useState<OrganizationLocale>(
@@ -1369,7 +1383,7 @@ function CreateOrganizationSection({
       }
 
       form.reset();
-      await onCreated();
+      await onCreated(result.data);
     },
   });
 
