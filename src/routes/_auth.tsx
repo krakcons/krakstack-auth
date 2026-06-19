@@ -46,6 +46,9 @@ function AuthLayout() {
     clientId,
     serverHost ?? getBrowserAuthHost(),
   );
+  const brandHref = projectConfig?.rootDomain
+    ? `//${projectConfig.rootDomain}`
+    : undefined;
 
   return (
     <main
@@ -60,6 +63,7 @@ function AuthLayout() {
           label={projectConfig?.name ?? m.sidebar_brand()}
           subtitle={m.sidebar_brand_subtitle()}
           icon={Users}
+          {...(brandHref ? { href: brandHref } : {})}
           {...(projectConfig?.logoUrl
             ? { imageSrc: projectConfig.logoUrl }
             : {})}
