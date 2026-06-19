@@ -107,6 +107,7 @@ const messages = {
     organization_invite_member_title: "Invite a member",
     organization_loading: "Loading...",
     organization_location: "Location",
+    organization_icon: "Icon",
     organization_logo: "Logo",
     organization_logo_upload_error: "Could not upload the organization logo.",
     organization_member_email: "Email",
@@ -194,6 +195,7 @@ const messages = {
     organization_invite_member_title: "Inviter un membre",
     organization_loading: "Chargement...",
     organization_location: "Emplacement",
+    organization_icon: "Icône",
     organization_logo: "Logo",
     organization_logo_upload_error:
       "Impossible de téléverser le logo de l'organisation.",
@@ -340,11 +342,15 @@ type OrganizationFormValues = {
   enName: string;
   enLogo: File | null;
   enLogoUrl: string;
+  enIcon: File | null;
+  enIconUrl: string;
   enContactEmail: string;
   enLocation: string;
   frName: string;
   frLogo: File | null;
   frLogoUrl: string;
+  frIcon: File | null;
+  frIconUrl: string;
   frContactEmail: string;
   frLocation: string;
 };
@@ -472,11 +478,15 @@ const organizationFormDefaults = (
     enName: en?.name || organization?.name || "",
     enLogo: null,
     enLogoUrl: en?.logo ?? "",
+    enIcon: null,
+    enIconUrl: en?.icon ?? "",
     enContactEmail: en?.contactEmail ?? "",
     enLocation: en?.location ?? "",
     frName: fr?.name ?? "",
     frLogo: null,
     frLogoUrl: fr?.logo ?? "",
+    frIcon: null,
+    frIconUrl: fr?.icon ?? "",
     frContactEmail: fr?.contactEmail ?? "",
     frLocation: fr?.location ?? "",
   };
@@ -533,9 +543,19 @@ const organizationMetadataFromForm = async (
     value.enLogoUrl,
     m,
   );
+  const enIcon = await organizationLogoFromForm(
+    value.enIcon,
+    value.enIconUrl,
+    m,
+  );
   const frLogo = await organizationLogoFromForm(
     value.frLogo,
     value.frLogoUrl,
+    m,
+  );
+  const frIcon = await organizationLogoFromForm(
+    value.frIcon,
+    value.frIconUrl,
     m,
   );
 
@@ -544,6 +564,7 @@ const organizationMetadataFromForm = async (
       locale: "en",
       name: enName,
       logo: enLogo,
+      icon: enIcon,
       contactEmail: nullableString(value.enContactEmail),
       location: nullableString(value.enLocation),
     });
@@ -554,6 +575,7 @@ const organizationMetadataFromForm = async (
       locale: "fr",
       name: frName,
       logo: frLogo,
+      icon: frIcon,
       contactEmail: nullableString(value.frContactEmail),
       location: nullableString(value.frLocation),
     });
@@ -1153,6 +1175,20 @@ function EditOrganizationSection({
                     label={m.organization_logo()}
                     defaultImageUrl={defaultValues.enLogoUrl}
                     size={{
+                      width: 175,
+                      height: 50,
+                      suggestedWidth: 350,
+                      suggestedHeight: 100,
+                    }}
+                  />
+                )}
+              </form.AppField>
+              <form.AppField name="enIcon">
+                {(field) => (
+                  <field.ImageField
+                    label={m.organization_icon()}
+                    defaultImageUrl={defaultValues.enIconUrl}
+                    size={{
                       width: 96,
                       height: 96,
                       suggestedWidth: 512,
@@ -1193,6 +1229,20 @@ function EditOrganizationSection({
                   <field.ImageField
                     label={m.organization_logo()}
                     defaultImageUrl={defaultValues.frLogoUrl}
+                    size={{
+                      width: 175,
+                      height: 50,
+                      suggestedWidth: 350,
+                      suggestedHeight: 100,
+                    }}
+                  />
+                )}
+              </form.AppField>
+              <form.AppField name="frIcon">
+                {(field) => (
+                  <field.ImageField
+                    label={m.organization_icon()}
+                    defaultImageUrl={defaultValues.frIconUrl}
                     size={{
                       width: 96,
                       height: 96,
@@ -1320,6 +1370,20 @@ function CreateOrganizationSection({
                     label={m.organization_logo()}
                     defaultImageUrl={defaultValues.enLogoUrl}
                     size={{
+                      width: 175,
+                      height: 50,
+                      suggestedWidth: 350,
+                      suggestedHeight: 100,
+                    }}
+                  />
+                )}
+              </form.AppField>
+              <form.AppField name="enIcon">
+                {(field) => (
+                  <field.ImageField
+                    label={m.organization_icon()}
+                    defaultImageUrl={defaultValues.enIconUrl}
+                    size={{
                       width: 96,
                       height: 96,
                       suggestedWidth: 512,
@@ -1360,6 +1424,20 @@ function CreateOrganizationSection({
                   <field.ImageField
                     label={m.organization_logo()}
                     defaultImageUrl={defaultValues.frLogoUrl}
+                    size={{
+                      width: 175,
+                      height: 50,
+                      suggestedWidth: 350,
+                      suggestedHeight: 100,
+                    }}
+                  />
+                )}
+              </form.AppField>
+              <form.AppField name="frIcon">
+                {(field) => (
+                  <field.ImageField
+                    label={m.organization_icon()}
+                    defaultImageUrl={defaultValues.frIconUrl}
                     size={{
                       width: 96,
                       height: 96,

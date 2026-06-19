@@ -74,6 +74,7 @@ export const OrganizationTranslation = Schema.Struct({
   locale: OrganizationLocale,
   name: Schema.String,
   logo: Schema.NullOr(Schema.String),
+  icon: Schema.NullOr(Schema.String),
   contactEmail: Schema.NullOr(Schema.String),
   location: Schema.NullOr(Schema.String),
 }).annotate({
@@ -85,6 +86,7 @@ export const OrganizationTranslation = Schema.Struct({
       locale: "en",
       name: "KrakStack",
       logo: "https://example.com/logo.svg",
+      icon: "https://example.com/icon.png",
       contactEmail: "team@example.com",
       location: "Montreal, QC",
     },
@@ -97,7 +99,7 @@ export const OrganizationMetadata = Schema.Struct({
   identifier: "OrganizationMetadata",
   title: "Organization metadata",
   description:
-    "Localized names, logos, contact emails, and locations stored on an organization record.",
+    "Localized names, logos, icons, contact emails, and locations stored on an organization record.",
   examples: [
     {
       translations: [
@@ -105,6 +107,7 @@ export const OrganizationMetadata = Schema.Struct({
           locale: "en",
           name: "KrakStack",
           logo: "https://example.com/logo.svg",
+          icon: "https://example.com/icon.png",
           contactEmail: "team@example.com",
           location: "Montreal, QC",
         },
@@ -136,6 +139,7 @@ export const Organization = Schema.Struct({
             locale: "en",
             name: "KrakStack",
             logo: null,
+            icon: null,
             contactEmail: "team@example.com",
             location: "Montreal, QC",
           },
