@@ -1,5 +1,6 @@
 // @ts-nocheck
 import type { ApiKey } from "@better-auth/api-key/client";
+import { useStore } from "@tanstack/react-form";
 import { type ColumnDef } from "@tanstack/react-table";
 import { Schema } from "effect";
 import {
@@ -77,6 +78,8 @@ const messages = {
     organization_create_description:
       "Create a workspace for team-based access.",
     organization_create_error: "Could not create the organization.",
+    organization_create_slug_conflict:
+      "That organization slug is already in use. Choose a different slug.",
     organization_create_title: "Create organization",
     organization_edit_description:
       "Update the active organization's canonical details and localized profile.",
@@ -164,6 +167,8 @@ const messages = {
     organization_create_description:
       "Créez un espace de travail pour l'accès en équipe.",
     organization_create_error: "Impossible de créer l'organisation.",
+    organization_create_slug_conflict:
+      "Ce slug d'organisation est déjà utilisé. Choisissez un autre slug.",
     organization_create_title: "Créer une organisation",
     organization_edit_description:
       "Mettez à jour les détails canoniques et le profil localisé de l'organisation active.",
@@ -361,6 +366,19 @@ const slugify = (value: string) =>
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, "-")
     .replace(/^-+|-+$/g, "");
+
+const isOrganizationSlugConflict = (error: unknown) => {
+  if (!isRecord(error)) return false;
+
+  const code = typeof error.code === "string" ? error.code : "";
+  const message = typeof error.message === "string" ? error.message : "";
+
+  return [code, message].some((value) => {
+    const normalized = value.toLowerCase().replaceAll("_", " ");
+
+    return normalized.includes("organization already exists");
+  });
+};
 
 const nullableString = (value: unknown) =>
   typeof value === "string" && value.trim() ? value.trim() : null;
@@ -1276,6 +1294,26 @@ function EditOrganizationSection({
   );
 }
 
+function CreateOrganizationSlugAutoFill({
+  form,
+}: {
+  form: ReturnType<typeof useAppForm>;
+}) {
+  const name = useStore(form.store, (state) => state.values.name);
+  const slugIsDirty = useStore(
+    form.store,
+    (state) => state.fieldMeta.slug?.isDirty ?? false,
+  );
+
+  useEffect(() => {
+    if (!slugIsDirty) {
+      form.setFieldValue("slug", slugify(name), { dontUpdateMeta: true });
+    }
+  }, [form, name, slugIsDirty]);
+
+  return null;
+}
+
 function CreateOrganizationSection({
   authClient,
   onCreated,
@@ -1310,6 +1348,17 @@ function CreateOrganizationSection({
       });
 
       if (result.error) {
+        if (isOrganizationSlugConflict(result.error)) {
+          formApi.setErrorMap({
+            onSubmit: {
+              fields: {
+                slug: { message: m.organization_create_slug_conflict() },
+              },
+            },
+          });
+          return;
+        }
+
         formApi.setErrorMap({
           onSubmit: {
             form: result.error.message ?? m.organization_create_error(),
@@ -1348,6 +1397,7 @@ function CreateOrganizationSection({
               />
             )}
           </form.AppField>
+          <CreateOrganizationSlugAutoFill form={form} />
           <Separator className="my-2" />
           {editingLocale === "en" ? (
             <>
