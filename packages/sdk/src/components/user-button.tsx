@@ -64,6 +64,7 @@ import {
 import { Separator } from "@/components/ui/separator";
 
 import type { AuthUiClient } from "./auth-client";
+import { assetPath, isRecord } from "./utils";
 
 const messages = {
   en: {
@@ -328,9 +329,6 @@ type UserFormType = {
 
 const isFile = (value: unknown): value is File => value instanceof File;
 
-const isRecord = (value: unknown): value is Record<string, unknown> =>
-  typeof value === "object" && value !== null;
-
 type PresignedImageUpload = {
   uploadUrl: string;
   url: string;
@@ -442,10 +440,10 @@ export const UserButton = ({
             throw new Error(m.user_profile_image_upload_error());
           }
 
-          return presigned.url;
+          return assetPath(presigned.url);
         })()
       : typeof values.image === "string"
-        ? values.image
+        ? assetPath(values.image)
         : null;
     const result = await authClient.updateUser({
       name: values.name.trim(),

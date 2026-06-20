@@ -67,6 +67,7 @@ import {
 } from "@krak-stack/auth/schema";
 
 import type { AuthUiClient } from "./auth-client";
+import { assetPath, isRecord } from "./utils";
 
 type Locale = "en" | "fr";
 
@@ -381,17 +382,6 @@ const isOrganizationSlugConflict = (error: unknown) => {
 const nullableString = (value: unknown) =>
   typeof value === "string" && value.trim() ? value.trim() : null;
 
-const assetPath = (value: string | null | undefined) => {
-  if (!value?.trim()) return null;
-
-  try {
-    const url = new URL(value);
-    return url.pathname.startsWith("/api/assets/") ? url.pathname : value;
-  } catch {
-    return value;
-  }
-};
-
 const parsePresignedUpload = (
   value: unknown,
   m: ReturnType<typeof organizationMessageFns>,
@@ -406,9 +396,6 @@ const parsePresignedUpload = (
 
   return { uploadUrl: value.uploadUrl, url: value.url };
 };
-
-const isRecord = (value: unknown): value is Record<string, unknown> =>
-  typeof value === "object" && value !== null;
 
 const uploadOrganizationLogo = async (
   authClient: AuthUiClient,
