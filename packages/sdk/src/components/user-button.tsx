@@ -64,7 +64,7 @@ import {
 import { Separator } from "@/components/ui/separator";
 
 import type { AuthUiClient } from "./auth-client";
-import { assetPath, isRecord } from "./utils";
+import { assetPath, assetUrl, isRecord } from "./utils";
 
 const messages = {
   en: {
@@ -374,6 +374,7 @@ type LinkedAccount = {
 
 type UserDropdownProps = {
   authClient: AuthUiClient;
+  baseUrl?: string | undefined;
   signOutRedirect?: string;
   side?: ComponentProps<typeof DropdownMenuContent>["side"];
   renderUnauthenticated?: () => ReactNode;
@@ -385,6 +386,7 @@ type SettingsDialog = "account" | "security" | "apiKeys";
 
 export const UserButton = ({
   authClient,
+  baseUrl,
   signOutRedirect = "/",
   side = "bottom",
   renderUnauthenticated,
@@ -409,7 +411,7 @@ export const UserButton = ({
 
   const displayName = session.user.name.trim();
   const displayEmail = session.user.email.trim();
-  const displayImage = session.user.image?.trim() ?? "";
+  const displayImage = assetUrl(session.user.image, baseUrl);
 
   const signOut = async () => {
     const redirectUrl = signOutRedirect.startsWith("http")

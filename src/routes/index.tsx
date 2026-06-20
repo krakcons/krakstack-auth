@@ -17,6 +17,8 @@ import {
 import { authClient } from "@/services/auth/client";
 import { OrganizationSwitcher, UserButton } from "@krak-stack/auth";
 
+const authBaseUrl = import.meta.env.VITE_KRAKSTACK_AUTH_URL;
+
 export const Route = createFileRoute("/")({
   component: Home,
 });
@@ -51,11 +53,12 @@ function Home() {
               <MobileHeaderMenu />
               <OrganizationSwitcher
                 authClient={authClient}
+                baseUrl={authBaseUrl}
                 className="hidden w-40 min-w-0 lg:flex"
               />
               <ThemeToggle />
               <LocaleSwitcher />
-              <UserButton authClient={authClient} />
+              <UserButton authClient={authClient} baseUrl={authBaseUrl} />
             </div>
           </div>
         </nav>
@@ -154,6 +157,7 @@ function MobileHeaderMenu() {
         <div className="p-1 lg:hidden">
           <OrganizationSwitcher
             authClient={authClient}
+            baseUrl={authBaseUrl}
             side="bottom"
             className="w-full min-w-0"
           />

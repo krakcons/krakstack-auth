@@ -39,6 +39,8 @@ import type { AuthSession } from "@/services/auth/config";
 
 type SessionData = AuthSession | null;
 
+const authBaseUrl = import.meta.env.VITE_KRAKSTACK_AUTH_URL;
+
 const isAdminUser = (user: AuthSession["user"] | undefined) => {
   const role = (user as Record<string, unknown> | undefined)?.role;
 
@@ -149,7 +151,7 @@ function Admin() {
         <>
           <ThemeToggle />
           <LocaleSwitcher />
-          <UserButton authClient={authClient} />
+          <UserButton authClient={authClient} baseUrl={authBaseUrl} />
         </>
       }
       groups={adminNavGroups}
@@ -165,6 +167,7 @@ function AdminOrganizationSwitcher() {
   return (
     <OrganizationSwitcher
       authClient={authClient}
+      baseUrl={authBaseUrl}
       locked
       side={isMobile ? "bottom" : "right"}
     />

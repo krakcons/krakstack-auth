@@ -67,7 +67,7 @@ import {
 } from "@krak-stack/auth/schema";
 
 import type { AuthUiClient } from "./auth-client";
-import { assetPath, isRecord } from "./utils";
+import { assetPath, assetUrl, isRecord } from "./utils";
 
 type Locale = "en" | "fr";
 
@@ -311,6 +311,7 @@ const useOrganizationMessages = () => useContext(OrganizationMessagesContext);
 
 type OrganizationSwitcherProps = {
   authClient: AuthUiClient;
+  baseUrl?: string | undefined;
   side?: ComponentProps<typeof DropdownMenuContent>["side"];
   className?: string;
   renderUnauthenticated?: () => ReactNode;
@@ -461,6 +462,7 @@ const findOrganizationTranslation = (
 const organizationDisplay = (
   organization: OrganizationSummary | null,
   m: ReturnType<typeof organizationMessageFns>,
+  baseUrl?: string,
 ) => {
   const translation = organization
     ? findOrganizationTranslation(organization)
@@ -472,12 +474,13 @@ const organizationDisplay = (
       organization?.name ||
       m.organization_switcher_label(),
     subtitle: organization?.slug ?? m.organization_switcher_label(),
-    image: translation?.icon || translation?.logo || undefined,
+    image: assetUrl(translation?.icon || translation?.logo, baseUrl),
   };
 };
 
 const organizationFormDefaults = (
   organization?: OrganizationSummary,
+  baseUrl?: string,
 ): OrganizationFormValues => {
   const translations = parseOrganizationMetadata(
     organization?.metadata,
@@ -489,13 +492,13 @@ const organizationFormDefaults = (
     name: organization?.name ?? "",
     slug: organization?.slug ?? "",
     enName: en?.name || organization?.name || "",
-    enLogo: en?.logo ?? null,
-    enIcon: en?.icon ?? null,
+    enLogo: assetUrl(en?.logo, baseUrl) || null,
+    enIcon: assetUrl(en?.icon, baseUrl) || null,
     enContactEmail: en?.contactEmail ?? "",
     enLocation: en?.location ?? "",
     frName: fr?.name ?? "",
-    frLogo: fr?.logo ?? null,
-    frIcon: fr?.icon ?? null,
+    frLogo: assetUrl(fr?.logo, baseUrl) || null,
+    frIcon: assetUrl(fr?.icon, baseUrl) || null,
     frContactEmail: fr?.contactEmail ?? "",
     frLocation: fr?.location ?? "",
   };
@@ -585,6 +588,7 @@ const organizationMetadataFromForm = async (
 
 export function OrganizationSwitcher({
   authClient,
+  baseUrl,
   side = "bottom",
   className,
   renderUnauthenticated,
@@ -673,7 +677,7 @@ export function OrganizationSwitcher({
     }
   };
 
-  const activeDisplay = organizationDisplay(active ?? null, m);
+  const activeDisplay = organizationDisplay(active ?? null, m, baseUrl);
 
   return (
     <OrganizationMessagesContext.Provider value={m}>
@@ -739,7 +743,7 @@ export function OrganizationSwitcher({
             ) : null}
             {!locked && selectableOrganizations.length ? (
               selectableOrganizations.map((organization) => {
-                const display = organizationDisplay(organization, m);
+                const display = organizationDisplay(organization, m, baseUrl);
 
                 return (
                   <DropdownMenuItem
@@ -833,6 +837,7 @@ export function OrganizationSwitcher({
           <Separator />
           <CreateOrganizationSection
             authClient={authClient}
+            baseUrl={baseUrl}
             onCreated={async (organization) => {
               onCreate?.(organization);
               setDialog(null);
@@ -866,6 +871,7 @@ export function OrganizationSwitcher({
           {activeOrganization.data ? (
             <EditOrganizationSection
               authClient={authClient}
+              baseUrl={baseUrl}
               organization={activeOrganization.data}
               onUpdated={refresh}
             />
@@ -1109,10 +1115,12 @@ const userInvitationColumns = ({
 
 function EditOrganizationSection({
   authClient,
+  baseUrl,
   organization,
   onUpdated,
 }: {
   authClient: AuthUiClient;
+  baseUrl?: string | undefined;
   organization: OrganizationSummary;
   onUpdated: () => Promise<void>;
 }) {
@@ -1120,7 +1128,7 @@ function EditOrganizationSection({
   const [editingLocale, setEditingLocale] = useState<OrganizationLocale>(
     currentOrganizationLocale(),
   );
-  const defaultValues = organizationFormDefaults(organization);
+  const defaultValues = organizationFormDefaults(organization, baseUrl);
   const form = useAppForm({
     defaultValues,
     onSubmit: async ({ value, formApi }) => {
@@ -1326,16 +1334,18 @@ function CreateOrganizationSlugAutoFill({
 
 function CreateOrganizationSection({
   authClient,
+  baseUrl,
   onCreated,
 }: {
   authClient: AuthUiClient;
+  baseUrl?: string | undefined;
   onCreated: (organization: OrganizationSummary) => Promise<void>;
 }) {
   const m = useOrganizationMessages();
   const [editingLocale, setEditingLocale] = useState<OrganizationLocale>(
     currentOrganizationLocale(),
   );
-  const defaultValues = organizationFormDefaults();
+  const defaultValues = organizationFormDefaults(undefined, baseUrl);
   const form = useAppForm({
     defaultValues,
     onSubmit: async ({ value, formApi }) => {
