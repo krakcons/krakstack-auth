@@ -317,8 +317,10 @@ type OrganizationSwitcherProps = {
   renderUnauthenticated?: () => ReactNode;
   locked?: boolean;
   messages?: OrganizationSwitcherMessages;
+  dialog?: OrganizationSwitcherDialog | null;
   onChange?: (organization: OrganizationSummary | null) => void;
   onCreate?: (organization: OrganizationSummary) => void;
+  onDialogChange?: (dialog: OrganizationSwitcherDialog | null) => void;
 };
 
 type OrganizationSummary = {
@@ -328,7 +330,7 @@ type OrganizationSummary = {
   metadata?: unknown;
 };
 
-type OrganizationDialog =
+export type OrganizationSwitcherDialog =
   | "create"
   | "manage"
   | "members"
@@ -594,15 +596,20 @@ export function OrganizationSwitcher({
   renderUnauthenticated,
   locked = false,
   messages,
+  dialog: controlledDialog,
   onChange,
   onCreate,
+  onDialogChange,
 }: OrganizationSwitcherProps) {
   const labels = organizationSwitcherMessages(messages);
   const m = organizationMessageFns(labels);
   const session = authClient.useSession();
   const organizations = authClient.useListOrganizations();
   const activeOrganization = authClient.useActiveOrganization();
-  const [dialog, setDialog] = useState<OrganizationDialog | null>(null);
+  const [uncontrolledDialog, setUncontrolledDialog] =
+    useState<OrganizationSwitcherDialog | null>(null);
+  const dialog =
+    controlledDialog !== undefined ? controlledDialog : uncontrolledDialog;
   const sessionUserId = session.data?.user.id;
   const [userInvitations, setUserInvitations] = useState<
     UserInvitationSummary[]
@@ -631,6 +638,21 @@ export function OrganizationSwitcher({
     setUserInvitations(result.data ?? []);
     setLoadingUserInvitations(false);
   });
+
+  const setDialog = (
+    next:
+      | OrganizationSwitcherDialog
+      | null
+      | ((
+          current: OrganizationSwitcherDialog | null,
+        ) => OrganizationSwitcherDialog | null),
+  ) => {
+    const nextDialog = typeof next === "function" ? next(dialog) : next;
+
+    if (nextDialog === dialog) return;
+    if (controlledDialog === undefined) setUncontrolledDialog(nextDialog);
+    onDialogChange?.(nextDialog);
+  };
 
   useEffect(() => {
     if (!sessionUserId) return;

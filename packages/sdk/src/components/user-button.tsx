@@ -380,9 +380,11 @@ type UserDropdownProps = {
   renderUnauthenticated?: () => ReactNode;
   apiKeyPermissions?: Record<string, string[]>;
   messages?: UserButtonMessages;
+  dialog?: UserButtonDialog | null;
+  onDialogChange?: (dialog: UserButtonDialog | null) => void;
 };
 
-type SettingsDialog = "account" | "security" | "apiKeys";
+export type UserButtonDialog = "account" | "security" | "apiKeys";
 
 export const UserButton = ({
   authClient,
@@ -392,6 +394,8 @@ export const UserButton = ({
   renderUnauthenticated,
   apiKeyPermissions,
   messages,
+  dialog: controlledDialog,
+  onDialogChange,
 }: UserDropdownProps) => {
   const labels = userButtonMessages(messages);
   const m = userButtonMessageFns(labels);
@@ -400,10 +404,24 @@ export const UserButton = ({
     select: (state) => `${import.meta.env.VITE_SITE_URL}${state.location.href}`,
   });
   const { data: session, isPending, refetch } = authClient.useSession();
-  const [settingsDialog, setSettingsDialog] = useState<SettingsDialog | null>(
-    null,
-  );
+  const [uncontrolledDialog, setUncontrolledDialog] =
+    useState<UserButtonDialog | null>(null);
+  const settingsDialog =
+    controlledDialog !== undefined ? controlledDialog : uncontrolledDialog;
   const [formError, setFormError] = useState<string | null>(null);
+
+  const setSettingsDialog = (
+    next:
+      | UserButtonDialog
+      | null
+      | ((current: UserButtonDialog | null) => UserButtonDialog | null),
+  ) => {
+    const nextDialog = typeof next === "function" ? next(settingsDialog) : next;
+
+    if (nextDialog === settingsDialog) return;
+    if (controlledDialog === undefined) setUncontrolledDialog(nextDialog);
+    onDialogChange?.(nextDialog);
+  };
 
   if (!session) {
     return <>{renderUnauthenticated?.()}</>;
