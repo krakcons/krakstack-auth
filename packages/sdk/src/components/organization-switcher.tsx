@@ -314,6 +314,8 @@ type OrganizationSwitcherProps = {
   baseUrl?: string | undefined;
   side?: ComponentProps<typeof DropdownMenuContent>["side"];
   className?: string;
+  defaultDialog?: OrganizationSwitcherDialog | null;
+  hideTrigger?: boolean;
   renderUnauthenticated?: () => ReactNode;
   locked?: boolean;
   messages?: OrganizationSwitcherMessages;
@@ -593,6 +595,8 @@ export function OrganizationSwitcher({
   baseUrl,
   side = "bottom",
   className,
+  defaultDialog = null,
+  hideTrigger = false,
   renderUnauthenticated,
   locked = false,
   messages,
@@ -607,7 +611,7 @@ export function OrganizationSwitcher({
   const organizations = authClient.useListOrganizations();
   const activeOrganization = authClient.useActiveOrganization();
   const [uncontrolledDialog, setUncontrolledDialog] =
-    useState<OrganizationSwitcherDialog | null>(null);
+    useState<OrganizationSwitcherDialog | null>(defaultDialog);
   const dialog =
     controlledDialog !== undefined ? controlledDialog : uncontrolledDialog;
   const sessionUserId = session.data?.user.id;
@@ -653,6 +657,7 @@ export function OrganizationSwitcher({
     if (controlledDialog === undefined) setUncontrolledDialog(nextDialog);
     onDialogChange?.(nextDialog);
   };
+  const openCreate = () => setDialog("create");
 
   useEffect(() => {
     if (!sessionUserId) return;
@@ -703,142 +708,144 @@ export function OrganizationSwitcher({
 
   return (
     <OrganizationMessagesContext.Provider value={m}>
-      <DropdownMenu>
-        <DropdownMenuTrigger
-          render={
-            <Button
-              variant="ghost"
-              className={cn(
-                "h-11 w-full justify-between gap-2 !px-1 !py-0 group-data-[collapsible=icon]:size-8 group-data-[collapsible=icon]:justify-start group-data-[collapsible=icon]:!p-0",
-                className,
-              )}
-            >
-              <AppBrand
-                to={null}
-                label={
-                  activeName
-                    ? activeDisplay.name
-                    : m.organization_switcher_label()
-                }
-                subtitle={activeDisplay.subtitle}
-                icon={Building2}
-                variant="sidebar"
-                className="min-w-0 flex-1 !p-0 text-left group-data-[collapsible=icon]:flex-none group-data-[collapsible=icon]:justify-start"
-                {...(activeDisplay.image
-                  ? { imageSrc: activeDisplay.image }
-                  : {})}
-              />
-              <ChevronsUpDown className="text-muted-foreground size-4 shrink-0 group-data-[collapsible=icon]:hidden" />
-            </Button>
-          }
-        />
-        <DropdownMenuContent
-          className="min-w-64 rounded-lg"
-          side={side}
-          align="end"
-          sideOffset={4}
-        >
-          <DropdownMenuGroup>
-            <DropdownMenuLabel className="p-0 font-normal">
-              <AppBrand
-                to={null}
-                label={activeDisplay.name}
-                subtitle={activeDisplay.subtitle}
-                icon={Building2}
-                variant="sidebar"
-                className="px-1 py-1.5 text-left text-sm"
-                {...(activeDisplay.image
-                  ? { imageSrc: activeDisplay.image }
-                  : {})}
-              />
-            </DropdownMenuLabel>
-            {hasOrganizationListItems ? <DropdownMenuSeparator /> : null}
-            {organizations.isPending ? (
-              <DropdownMenuItem disabled>
-                {m.organization_loading()}
-              </DropdownMenuItem>
-            ) : null}
-            {organizations.error ? (
-              <DropdownMenuItem disabled>
-                {organizations.error.message}
-              </DropdownMenuItem>
-            ) : null}
-            {!locked && selectableOrganizations.length ? (
-              selectableOrganizations.map((organization) => {
-                const display = organizationDisplay(organization, m, baseUrl);
+      {hideTrigger ? null : (
+        <DropdownMenu>
+          <DropdownMenuTrigger
+            render={
+              <Button
+                variant="ghost"
+                className={cn(
+                  "h-11 w-full justify-between gap-2 !px-1 !py-0 group-data-[collapsible=icon]:size-8 group-data-[collapsible=icon]:justify-start group-data-[collapsible=icon]:!p-0",
+                  className,
+                )}
+              >
+                <AppBrand
+                  to={null}
+                  label={
+                    activeName
+                      ? activeDisplay.name
+                      : m.organization_switcher_label()
+                  }
+                  subtitle={activeDisplay.subtitle}
+                  icon={Building2}
+                  variant="sidebar"
+                  className="min-w-0 flex-1 !p-0 text-left group-data-[collapsible=icon]:flex-none group-data-[collapsible=icon]:justify-start"
+                  {...(activeDisplay.image
+                    ? { imageSrc: activeDisplay.image }
+                    : {})}
+                />
+                <ChevronsUpDown className="text-muted-foreground size-4 shrink-0 group-data-[collapsible=icon]:hidden" />
+              </Button>
+            }
+          />
+          <DropdownMenuContent
+            className="min-w-64 rounded-lg"
+            side={side}
+            align="end"
+            sideOffset={4}
+          >
+            <DropdownMenuGroup>
+              <DropdownMenuLabel className="p-0 font-normal">
+                <AppBrand
+                  to={null}
+                  label={activeDisplay.name}
+                  subtitle={activeDisplay.subtitle}
+                  icon={Building2}
+                  variant="sidebar"
+                  className="px-1 py-1.5 text-left text-sm"
+                  {...(activeDisplay.image
+                    ? { imageSrc: activeDisplay.image }
+                    : {})}
+                />
+              </DropdownMenuLabel>
+              {hasOrganizationListItems ? <DropdownMenuSeparator /> : null}
+              {organizations.isPending ? (
+                <DropdownMenuItem disabled>
+                  {m.organization_loading()}
+                </DropdownMenuItem>
+              ) : null}
+              {organizations.error ? (
+                <DropdownMenuItem disabled>
+                  {organizations.error.message}
+                </DropdownMenuItem>
+              ) : null}
+              {!locked && selectableOrganizations.length ? (
+                selectableOrganizations.map((organization) => {
+                  const display = organizationDisplay(organization, m, baseUrl);
 
-                return (
-                  <DropdownMenuItem
-                    key={organization.id}
-                    onClick={async () => {
-                      const result = await authClient.organization.setActive({
-                        organizationId: organization.id,
-                      });
-                      if (!result.error) {
-                        await refresh();
-                        onChange?.(organization);
-                      }
-                    }}
-                  >
-                    <AppBrand
-                      to={null}
-                      label={display.name}
-                      subtitle={display.subtitle}
-                      icon={Building2}
-                      className="w-full text-left [&>div:first-child]:size-7"
-                      {...(display.image ? { imageSrc: display.image } : {})}
-                    />
+                  return (
+                    <DropdownMenuItem
+                      key={organization.id}
+                      onClick={async () => {
+                        const result = await authClient.organization.setActive({
+                          organizationId: organization.id,
+                        });
+                        if (!result.error) {
+                          await refresh();
+                          onChange?.(organization);
+                        }
+                      }}
+                    >
+                      <AppBrand
+                        to={null}
+                        label={display.name}
+                        subtitle={display.subtitle}
+                        icon={Building2}
+                        className="w-full text-left [&>div:first-child]:size-7"
+                        {...(display.image ? { imageSrc: display.image } : {})}
+                      />
+                    </DropdownMenuItem>
+                  );
+                })
+              ) : !locked && !organizations.isPending ? (
+                <DropdownMenuItem disabled>
+                  {active
+                    ? m.organization_switcher_no_other_organizations()
+                    : m.organization_switcher_empty()}
+                </DropdownMenuItem>
+              ) : null}
+              <DropdownMenuSeparator />
+              {!locked ? (
+                <DropdownMenuItem onClick={openCreate}>
+                  <Plus />
+                  {m.organization_create_title()}
+                </DropdownMenuItem>
+              ) : null}
+              <DropdownMenuItem
+                onClick={() => {
+                  setDialog("invitations");
+                  void loadUserInvitations();
+                }}
+              >
+                <Mail />
+                <span className="flex flex-1 items-center justify-between gap-3">
+                  {m.organization_user_invitations_title()}
+                  {userInvitations.length ? (
+                    <Badge variant="secondary">{userInvitations.length}</Badge>
+                  ) : null}
+                </span>
+              </DropdownMenuItem>
+              {activeOrganization.data ? (
+                <>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem onClick={() => setDialog("manage")}>
+                    <PencilIcon />
+                    {m.organization_switcher_manage()}
                   </DropdownMenuItem>
-                );
-              })
-            ) : !locked && !organizations.isPending ? (
-              <DropdownMenuItem disabled>
-                {active
-                  ? m.organization_switcher_no_other_organizations()
-                  : m.organization_switcher_empty()}
-              </DropdownMenuItem>
-            ) : null}
-            <DropdownMenuSeparator />
-            {!locked ? (
-              <DropdownMenuItem onClick={() => setDialog("create")}>
-                <Plus />
-                {m.organization_create_title()}
-              </DropdownMenuItem>
-            ) : null}
-            <DropdownMenuItem
-              onClick={() => {
-                setDialog("invitations");
-                void loadUserInvitations();
-              }}
-            >
-              <Mail />
-              <span className="flex flex-1 items-center justify-between gap-3">
-                {m.organization_user_invitations_title()}
-                {userInvitations.length ? (
-                  <Badge variant="secondary">{userInvitations.length}</Badge>
-                ) : null}
-              </span>
-            </DropdownMenuItem>
-            {activeOrganization.data ? (
-              <>
-                <DropdownMenuSeparator />
-                <DropdownMenuItem onClick={() => setDialog("manage")}>
-                  <PencilIcon />
-                  {m.organization_switcher_manage()}
-                </DropdownMenuItem>
-                <DropdownMenuItem onClick={() => setDialog("members")}>
-                  <Users />
-                  {m.organization_members_title()}
-                </DropdownMenuItem>
-                <DropdownMenuItem onClick={() => setDialog("apiKeys")}>
-                  <KeyRound />
-                  {m.user_button_api_keys()}
-                </DropdownMenuItem>
-              </>
-            ) : null}
-          </DropdownMenuGroup>
-        </DropdownMenuContent>
-      </DropdownMenu>
+                  <DropdownMenuItem onClick={() => setDialog("members")}>
+                    <Users />
+                    {m.organization_members_title()}
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => setDialog("apiKeys")}>
+                    <KeyRound />
+                    {m.user_button_api_keys()}
+                  </DropdownMenuItem>
+                </>
+              ) : null}
+            </DropdownMenuGroup>
+          </DropdownMenuContent>
+        </DropdownMenu>
+      )}
       <Dialog
         open={dialog === "create"}
         onOpenChange={(open) => {
@@ -861,13 +868,15 @@ export function OrganizationSwitcher({
             authClient={authClient}
             baseUrl={baseUrl}
             onCreated={async (organization) => {
-              onCreate?.(organization);
               setDialog(null);
               const activeResult = await authClient.organization.setActive({
                 organizationId: organization.id,
               });
               await refresh();
-              if (!activeResult.error) onChange?.(organization);
+              if (!activeResult.error) {
+                onCreate?.(organization);
+                onChange?.(organization);
+              }
             }}
           />
         </DialogContent>

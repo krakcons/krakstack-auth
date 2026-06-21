@@ -270,7 +270,7 @@ const messages = {
     user_two_factor_title: "Authentification à deux facteurs",
     user_two_factor_verify_error: "Impossible de vérifier le code.",
   },
-} as const;
+} as const satisfies Record<Locale, Record<string, string>>;
 
 type Locale = "en" | "fr";
 type UserButtonMessageKey = keyof (typeof messages)["en"];
@@ -287,13 +287,6 @@ const getLocale = (): Locale =>
     ? "fr"
     : "en";
 
-const interpolate = (value: string, params?: Record<string, string | number>) =>
-  params
-    ? value.replace(/\{([^}]+)\}/g, (_, key: string) =>
-        String(params[key] ?? `{${key}}`),
-      )
-    : value;
-
 const userButtonMessages = (overrides?: UserButtonMessages) => ({
   ...(getLocale().startsWith("fr") ? messages.fr : messages.en),
   ...overrides,
@@ -301,21 +294,25 @@ const userButtonMessages = (overrides?: UserButtonMessages) => ({
 
 type UserButtonLabels = ReturnType<typeof userButtonMessages>;
 
-const userButtonMessageFns = (labels: UserButtonLabels) => {
-  const localized = labels;
+const interpolate = (value: string, params?: Record<string, string | number>) =>
+  params
+    ? value.replace(/\{([^}]+)\}/g, (_, key: string) =>
+        String(params[key] ?? `{${key}}`),
+      )
+    : value;
 
-  return new Proxy(
+const userButtonMessageFns = (labels: UserButtonLabels) =>
+  new Proxy(
     {},
     {
       get:
         (_target, key: string) => (params?: Record<string, string | number>) =>
-          interpolate(localized[key as UserButtonMessageKey], params),
+          interpolate(labels[key as UserButtonMessageKey], params),
     },
   ) as Record<
     UserButtonMessageKey,
     (params?: Record<string, string | number>) => string
   >;
-};
 
 const UserButtonMessagesContext = createContext(
   userButtonMessageFns(userButtonMessages()),
@@ -377,6 +374,8 @@ type UserDropdownProps = {
   baseUrl?: string | undefined;
   signOutRedirect?: string;
   side?: ComponentProps<typeof DropdownMenuContent>["side"];
+  defaultDialog?: UserButtonDialog | null;
+  hideTrigger?: boolean;
   renderUnauthenticated?: () => ReactNode;
   apiKeyPermissions?: Record<string, string[]>;
   messages?: UserButtonMessages;
@@ -391,6 +390,8 @@ export const UserButton = ({
   baseUrl,
   signOutRedirect = "/",
   side = "bottom",
+  defaultDialog = null,
+  hideTrigger = false,
   renderUnauthenticated,
   apiKeyPermissions,
   messages,
@@ -405,7 +406,7 @@ export const UserButton = ({
   });
   const { data: session, isPending, refetch } = authClient.useSession();
   const [uncontrolledDialog, setUncontrolledDialog] =
-    useState<UserButtonDialog | null>(null);
+    useState<UserButtonDialog | null>(defaultDialog);
   const settingsDialog =
     controlledDialog !== undefined ? controlledDialog : uncontrolledDialog;
   const [formError, setFormError] = useState<string | null>(null);
@@ -481,56 +482,60 @@ export const UserButton = ({
 
   return (
     <UserButtonMessagesContext.Provider value={m}>
-      <DropdownMenu>
-        <DropdownMenuTrigger
-          render={
-            <Button variant="outline" size="icon">
-              <UserIcon className="size-4.5" />
-              <span className="sr-only">{m.user_button_aria_label()}</span>
-            </Button>
-          }
-        />
-        <DropdownMenuContent
-          className="w-56 rounded-lg"
-          side={side}
-          align="end"
-          sideOffset={4}
-        >
-          <DropdownMenuGroup>
-            <DropdownMenuLabel className="p-0 font-normal">
-              <AppBrand
-                to={null}
-                label={displayName || displayEmail}
-                subtitle={displayName ? displayEmail : m.user_button_account()}
-                icon={UserIcon}
-                className="px-1 py-1.5 text-left text-sm"
-                {...(displayImage ? { imageSrc: displayImage } : {})}
-              />
-            </DropdownMenuLabel>
-            <DropdownMenuSeparator />
-            <DropdownMenuItem
-              disabled={isPending}
-              onClick={() => setSettingsDialog("account")}
-            >
-              <UserCircleIcon />
-              {m.user_button_account()}
-            </DropdownMenuItem>
-            <DropdownMenuItem onClick={() => setSettingsDialog("security")}>
-              <ShieldCheck />
-              {m.user_button_security()}
-            </DropdownMenuItem>
-            <DropdownMenuItem onClick={() => setSettingsDialog("apiKeys")}>
-              <KeyRound />
-              {m.user_button_api_keys()}
-            </DropdownMenuItem>
-            <DropdownMenuSeparator />
-            <DropdownMenuItem onClick={signOut}>
-              <LogOutIcon />
-              {m.user_button_logout()}
-            </DropdownMenuItem>
-          </DropdownMenuGroup>
-        </DropdownMenuContent>
-      </DropdownMenu>
+      {hideTrigger ? null : (
+        <DropdownMenu>
+          <DropdownMenuTrigger
+            render={
+              <Button variant="outline" size="icon">
+                <UserIcon className="size-4.5" />
+                <span className="sr-only">{m.user_button_aria_label()}</span>
+              </Button>
+            }
+          />
+          <DropdownMenuContent
+            className="w-56 rounded-lg"
+            side={side}
+            align="end"
+            sideOffset={4}
+          >
+            <DropdownMenuGroup>
+              <DropdownMenuLabel className="p-0 font-normal">
+                <AppBrand
+                  to={null}
+                  label={displayName || displayEmail}
+                  subtitle={
+                    displayName ? displayEmail : m.user_button_account()
+                  }
+                  icon={UserIcon}
+                  className="px-1 py-1.5 text-left text-sm"
+                  {...(displayImage ? { imageSrc: displayImage } : {})}
+                />
+              </DropdownMenuLabel>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem
+                disabled={isPending}
+                onClick={() => setSettingsDialog("account")}
+              >
+                <UserCircleIcon />
+                {m.user_button_account()}
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => setSettingsDialog("security")}>
+                <ShieldCheck />
+                {m.user_button_security()}
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => setSettingsDialog("apiKeys")}>
+                <KeyRound />
+                {m.user_button_api_keys()}
+              </DropdownMenuItem>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem onClick={signOut}>
+                <LogOutIcon />
+                {m.user_button_logout()}
+              </DropdownMenuItem>
+            </DropdownMenuGroup>
+          </DropdownMenuContent>
+        </DropdownMenu>
+      )}
       <Dialog
         open={settingsDialog === "account"}
         onOpenChange={(open) => {
