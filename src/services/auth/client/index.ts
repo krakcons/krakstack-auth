@@ -10,8 +10,10 @@ import { oauthProviderClient } from "@better-auth/oauth-provider/client";
 import { apiKeyClient } from "@better-auth/api-key/client";
 
 export const KRAK_ORGANIZATION_SLUG = "krak";
+export const authBaseUrl = import.meta.env.VITE_KRAKSTACK_AUTH_URL;
 
 export const authClient = createAuthClient({
+  baseURL: authBaseUrl,
   plugins: [
     adminClient(),
     emailOTPClient(),

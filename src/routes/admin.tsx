@@ -31,6 +31,7 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import {
+  authBaseUrl,
   authClient,
   ensureKrakOrganizationSelected,
 } from "@/services/auth/client";
@@ -38,8 +39,6 @@ import { OrganizationSwitcher, UserButton } from "@krak-stack/auth";
 import type { AuthSession } from "@/services/auth/config";
 
 type SessionData = AuthSession | null;
-
-const authBaseUrl = import.meta.env.VITE_KRAKSTACK_AUTH_URL;
 
 const isAdminUser = (user: AuthSession["user"] | undefined) => {
   const role = (user as Record<string, unknown> | undefined)?.role;

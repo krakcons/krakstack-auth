@@ -14,10 +14,8 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { authClient } from "@/services/auth/client";
+import { authBaseUrl, authClient } from "@/services/auth/client";
 import { OrganizationSwitcher, UserButton } from "@krak-stack/auth";
-
-const authBaseUrl = import.meta.env.VITE_KRAKSTACK_AUTH_URL;
 
 export const Route = createFileRoute("/")({
   component: Home,
