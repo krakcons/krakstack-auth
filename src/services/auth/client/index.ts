@@ -13,7 +13,6 @@ export const KRAK_ORGANIZATION_SLUG = "krak";
 export const authBaseUrl = import.meta.env.VITE_KRAKSTACK_AUTH_URL;
 
 export const authClient = createAuthClient({
-  baseURL: authBaseUrl,
   plugins: [
     adminClient(),
     emailOTPClient(),
