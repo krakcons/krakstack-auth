@@ -26,10 +26,7 @@ import {
   useState,
 } from "react";
 
-import {
-  createDataTableActionsColumn,
-  DataTable,
-} from "@/components/ui/data-table";
+import { DataTable } from "@/components/ui/data-table";
 import { EditingLocaleSwitcher } from "@/components/ui/editing-locale-switcher";
 import { AppBrand } from "@/components/ui/app-brand";
 import { useAppForm } from "@/components/ui/form";
@@ -1064,9 +1061,6 @@ function UserInvitationsManager({
       <DataTable
         columns={userInvitationColumns({
           m,
-          actingInvitationId,
-          onAccept: acceptInvitation,
-          onReject: rejectInvitation,
         })}
         data={invitations}
         emptyLabel={
@@ -1074,6 +1068,12 @@ function UserInvitationsManager({
         }
         exportFileName="organization-invitations.csv"
         features={{ gallery: false }}
+        rowActions={userInvitationRowActions({
+          m,
+          actingInvitationId,
+          onAccept: acceptInvitation,
+          onReject: rejectInvitation,
+        })}
       />
     </section>
   );
@@ -1081,14 +1081,8 @@ function UserInvitationsManager({
 
 const userInvitationColumns = ({
   m,
-  actingInvitationId,
-  onAccept,
-  onReject,
 }: {
   m: ReturnType<typeof organizationMessageFns>;
-  actingInvitationId: string | null;
-  onAccept: (invitation: UserInvitationSummary) => void;
-  onReject: (invitation: UserInvitationSummary) => void;
 }): ColumnDef<UserInvitationSummary>[] => [
   {
     accessorKey: "organizationName",
@@ -1127,21 +1121,34 @@ const userInvitationColumns = ({
       </span>
     ),
   },
-  createDataTableActionsColumn<UserInvitationSummary>([
-    {
-      name: m.organization_invitation_accept(),
-      icon: <Check />,
-      visible: (invitation) => actingInvitationId !== invitation.id,
-      onClick: onAccept,
-    },
-    {
-      name: m.organization_invitation_reject(),
-      icon: <X />,
-      variant: "destructive",
-      visible: (invitation) => actingInvitationId !== invitation.id,
-      onClick: onReject,
-    },
-  ]),
+];
+
+const userInvitationRowActions = ({
+  m,
+  actingInvitationId,
+  onAccept,
+  onReject,
+}: {
+  m: ReturnType<typeof organizationMessageFns>;
+  actingInvitationId: string | null;
+  onAccept: (invitation: UserInvitationSummary) => void;
+  onReject: (invitation: UserInvitationSummary) => void;
+}) => [
+  {
+    name: m.organization_invitation_accept(),
+    icon: <Check />,
+    visible: (invitation: UserInvitationSummary) =>
+      actingInvitationId !== invitation.id,
+    onClick: onAccept,
+  },
+  {
+    name: m.organization_invitation_reject(),
+    icon: <X />,
+    variant: "destructive" as const,
+    visible: (invitation: UserInvitationSummary) =>
+      actingInvitationId !== invitation.id,
+    onClick: onReject,
+  },
 ];
 
 function EditOrganizationSection({
@@ -1819,9 +1826,7 @@ function OrganizationMembersManager({
         <DataTable
           columns={memberColumns({
             m,
-            currentUserId,
             updatingMemberId,
-            onRemove: removeMember,
             onRoleChange: updateRole,
           })}
           data={members}
@@ -1830,6 +1835,11 @@ function OrganizationMembersManager({
           }
           exportFileName={`${organization.slug}-members.csv`}
           features={{ gallery: false }}
+          rowActions={memberRowActions({
+            m,
+            currentUserId,
+            onRemove: removeMember,
+          })}
         />
       </section>
       <section className="flex flex-col gap-3">
@@ -1844,8 +1854,6 @@ function OrganizationMembersManager({
         <DataTable
           columns={invitationColumns({
             m,
-            cancellingInvitationId,
-            onCancel: cancelInvitation,
           })}
           data={invitations}
           emptyLabel={
@@ -1853,6 +1861,11 @@ function OrganizationMembersManager({
           }
           exportFileName={`${organization.slug}-invitations.csv`}
           features={{ gallery: false }}
+          rowActions={invitationRowActions({
+            m,
+            cancellingInvitationId,
+            onCancel: cancelInvitation,
+          })}
         />
       </section>
     </div>
@@ -1861,15 +1874,11 @@ function OrganizationMembersManager({
 
 const memberColumns = ({
   m,
-  currentUserId,
   updatingMemberId,
-  onRemove,
   onRoleChange,
 }: {
   m: ReturnType<typeof organizationMessageFns>;
-  currentUserId: string;
   updatingMemberId: string | null;
-  onRemove: (member: OrganizationMemberSummary) => void;
   onRoleChange: (
     member: OrganizationMemberSummary,
     role: OrganizationRole,
@@ -1947,25 +1956,31 @@ const memberColumns = ({
       </span>
     ),
   },
-  createDataTableActionsColumn<OrganizationMemberSummary>([
-    {
-      name: m.organization_member_remove(),
-      icon: <Trash2 />,
-      variant: "destructive",
-      visible: (member) => member.userId !== currentUserId,
-      onClick: onRemove,
-    },
-  ]),
+];
+
+const memberRowActions = ({
+  m,
+  currentUserId,
+  onRemove,
+}: {
+  m: ReturnType<typeof organizationMessageFns>;
+  currentUserId: string;
+  onRemove: (member: OrganizationMemberSummary) => void;
+}) => [
+  {
+    name: m.organization_member_remove(),
+    icon: <Trash2 />,
+    variant: "destructive" as const,
+    visible: (member: OrganizationMemberSummary) =>
+      member.userId !== currentUserId,
+    onClick: onRemove,
+  },
 ];
 
 const invitationColumns = ({
   m,
-  cancellingInvitationId,
-  onCancel,
 }: {
   m: ReturnType<typeof organizationMessageFns>;
-  cancellingInvitationId: string | null;
-  onCancel: (invitation: OrganizationInvitationSummary) => void;
 }): ColumnDef<OrganizationInvitationSummary>[] => [
   {
     accessorKey: "email",
@@ -1997,15 +2012,25 @@ const invitationColumns = ({
       </span>
     ),
   },
-  createDataTableActionsColumn<OrganizationInvitationSummary>([
-    {
-      name: m.organization_invitation_cancel(),
-      icon: <Trash2 />,
-      variant: "destructive",
-      visible: (invitation) => cancellingInvitationId !== invitation.id,
-      onClick: onCancel,
-    },
-  ]),
+];
+
+const invitationRowActions = ({
+  m,
+  cancellingInvitationId,
+  onCancel,
+}: {
+  m: ReturnType<typeof organizationMessageFns>;
+  cancellingInvitationId: string | null;
+  onCancel: (invitation: OrganizationInvitationSummary) => void;
+}) => [
+  {
+    name: m.organization_invitation_cancel(),
+    icon: <Trash2 />,
+    variant: "destructive" as const,
+    visible: (invitation: OrganizationInvitationSummary) =>
+      cancellingInvitationId !== invitation.id,
+    onClick: onCancel,
+  },
 ];
 
 function OrganizationApiKeyManager({
@@ -2123,11 +2148,12 @@ function OrganizationApiKeyManager({
       {error ? <p className="text-destructive text-sm">{error}</p> : null}
       <Separator />
       <DataTable
-        columns={apiKeyColumns({ m, onDelete: deleteKey })}
+        columns={apiKeyColumns({ m })}
         data={keys}
         emptyLabel={loading ? m.user_loading() : m.table_empty()}
         exportFileName={`${organization.slug}-api-keys.csv`}
         features={{ gallery: false }}
+        rowActions={apiKeyRowActions({ m, onDelete: deleteKey })}
       />
     </div>
   );
@@ -2135,10 +2161,8 @@ function OrganizationApiKeyManager({
 
 const apiKeyColumns = ({
   m,
-  onDelete,
 }: {
   m: ReturnType<typeof organizationMessageFns>;
-  onDelete: (key: ApiKeySummary) => void;
 }): ColumnDef<ApiKeySummary>[] => [
   {
     accessorKey: "name",
@@ -2165,12 +2189,19 @@ const apiKeyColumns = ({
       </Badge>
     ),
   },
-  createDataTableActionsColumn<ApiKeySummary>([
-    {
-      name: m.user_delete(),
-      icon: <Trash2 />,
-      variant: "destructive",
-      onClick: onDelete,
-    },
-  ]),
+];
+
+const apiKeyRowActions = ({
+  m,
+  onDelete,
+}: {
+  m: ReturnType<typeof organizationMessageFns>;
+  onDelete: (key: ApiKeySummary) => void;
+}) => [
+  {
+    name: m.user_delete(),
+    icon: <Trash2 />,
+    variant: "destructive" as const,
+    onClick: onDelete,
+  },
 ];

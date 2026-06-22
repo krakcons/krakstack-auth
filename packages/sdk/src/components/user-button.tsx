@@ -27,10 +27,7 @@ import {
   useState,
 } from "react";
 
-import {
-  createDataTableActionsColumn,
-  DataTable,
-} from "@/components/ui/data-table";
+import { DataTable } from "@/components/ui/data-table";
 import { AppBrand } from "@/components/ui/app-brand";
 import { useAppForm } from "@/components/ui/form";
 import { Badge } from "@/components/ui/badge";
@@ -1675,11 +1672,12 @@ function ApiKeyManager({
       {error ? <p className="text-destructive text-sm">{error}</p> : null}
       <Separator />
       <DataTable
-        columns={apiKeyColumns({ m, onDelete: deleteKey })}
+        columns={apiKeyColumns({ m })}
         data={keys}
         emptyLabel={loading ? m.user_loading() : m.table_empty()}
         exportFileName={m.user_api_keys_export_file_name()}
         features={{ gallery: false }}
+        rowActions={apiKeyRowActions({ m, onDelete: deleteKey })}
       />
     </div>
   );
@@ -1687,10 +1685,8 @@ function ApiKeyManager({
 
 const apiKeyColumns = ({
   m,
-  onDelete,
 }: {
   m: ReturnType<typeof userButtonMessages>;
-  onDelete: (key: ApiKeySummary) => void;
 }): ColumnDef<ApiKeySummary>[] => [
   {
     accessorKey: "name",
@@ -1739,14 +1735,21 @@ const apiKeyColumns = ({
       );
     },
   },
-  createDataTableActionsColumn<ApiKeySummary>([
-    {
-      name: m.user_delete(),
-      icon: <Trash2 />,
-      variant: "destructive",
-      onClick: onDelete,
-    },
-  ]),
+];
+
+const apiKeyRowActions = ({
+  m,
+  onDelete,
+}: {
+  m: ReturnType<typeof userButtonMessages>;
+  onDelete: (key: ApiKeySummary) => void;
+}) => [
+  {
+    name: m.user_delete(),
+    icon: <Trash2 />,
+    variant: "destructive" as const,
+    onClick: onDelete,
+  },
 ];
 
 const getPermissionId = (resource: string, action: string) =>
