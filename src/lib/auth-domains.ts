@@ -1,17 +1,11 @@
-import { eq, isNull, or } from "drizzle-orm";
 import { getDomain } from "tldts";
 
-import { oauthClient, project } from "@/db/auth-schema";
 import { db } from "@/services/database";
 import {
   normalizeAuthHost,
   normalizeOAuthClientDomains,
   parseCsv,
 } from "@/lib/domain-utils";
-import {
-  authDomainFromData,
-  decodeProjectDataOrEmpty,
-} from "@/services/projects";
 
 export { normalizeAuthHost, normalizeOAuthClientDomains, parseCsv };
 
@@ -54,22 +48,28 @@ const configuredPrimaryHosts = () => {
 export const isPrimaryAuthHost = (host: string | null | undefined) =>
   Boolean(host && configuredPrimaryHosts().has(host));
 
-const dataDomains = (data: unknown) =>
-  normalizeOAuthClientDomains(
-    [authDomainFromData(decodeProjectDataOrEmpty(data))].filter(
-      (domain): domain is string => Boolean(domain),
-    ),
-  );
+export const registeredAuthDomainForRequest = async (request: Request) => {
+  const host = hostFromRequest(request);
+  if (!host) return null;
 
-export const isOAuthClientAuthHost = async (host: string) => {
-  const clients = await db
-    .select({ data: project.data })
-    .from(oauthClient)
-    .leftJoin(project, eq(oauthClient.projectId, project.id))
-    .where(or(eq(oauthClient.disabled, false), isNull(oauthClient.disabled)));
-
-  return clients.some((client) => dataDomains(client.data).includes(host));
+  return await db.query.domains.findFirst({
+    where: { hostname: host, active: true },
+  });
 };
+
+export const isRegisteredAuthHost = async (request: Request) =>
+  Boolean(await registeredAuthDomainForRequest(request));
+
+const originForHost = (host: string, protocol: string) => {
+  const normalized = normalizeAuthHost(host);
+  if (!normalized) return null;
+
+  return `${protocol}//${normalized}`;
+};
+
+const requestProtocol = (request: Request) =>
+  request.headers.get("x-forwarded-proto")?.split(",")[0]?.trim() ||
+  new URL(request.url).protocol.replace(":", "");
 
 export const trustedOriginsForRequest = async (request?: Request) => {
   const origins = new Set(
@@ -80,8 +80,17 @@ export const trustedOriginsForRequest = async (request?: Request) => {
 
   const host = hostFromRequest(request);
   if (!host) return Array.from(origins);
-  if (isPrimaryAuthHost(host) || (await isOAuthClientAuthHost(host))) {
+  if (isPrimaryAuthHost(host)) {
     origins.add(new URL(request.url).origin);
+  }
+
+  const domain = await registeredAuthDomainForRequest(request);
+  if (domain) {
+    const protocol = requestProtocol(request);
+    const authOrigin = originForHost(domain.hostname, protocol);
+    const rootOrigin = originForHost(domain.rootHostname, protocol);
+    if (authOrigin) origins.add(authOrigin);
+    if (rootOrigin) origins.add(rootOrigin);
   }
 
   return Array.from(origins);

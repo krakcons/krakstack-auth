@@ -13,7 +13,6 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { normalizeOAuthClientDomain } from "@/lib/domain-utils";
 import { m } from "@/paraglide/messages";
 import { AdminApiClient } from "@/lib/admin-api-client";
 import { ProjectData, type Project } from "@/services/projects/schema";
@@ -28,8 +27,6 @@ const presignLogoUploadAtom = AdminApiClient.mutation(
 type ProjectFormValues = {
   name: string;
   logo: File | string | null;
-  authDomain: string;
-  rootDomain: string;
   themeCss: string;
   emailPassword: boolean;
   google: boolean;
@@ -39,44 +36,8 @@ type ProjectFormValues = {
 
 const isFile = (value: unknown): value is File => value instanceof File;
 
-const authDomainFromValue = (value: string) => {
-  const trimmed = value.trim();
-  if (!trimmed) return undefined;
-
-  const domain = normalizeOAuthClientDomain(trimmed);
-  if (!domain) {
-    throw new Error(m.project_auth_domain_invalid({ domain: trimmed }));
-  }
-
-  return domain;
-};
-
-const rootDomainFromValue = (value: string) => {
-  const trimmed = value.trim();
-  if (!trimmed) return undefined;
-
-  const domain = normalizeOAuthClientDomain(trimmed);
-  if (!domain) {
-    throw new Error(m.project_root_domain_invalid({ domain: trimmed }));
-  }
-
-  return domain;
-};
-
-const slugFromName = (value: string) =>
-  value
-    .trim()
-    .toLowerCase()
-    .replace(/[^a-z0-9._-]+/g, "-")
-    .replace(/^-+|-+$/g, "");
-
-const valuesToData = (value: ProjectFormValues) => {
-  const authDomain = authDomainFromValue(value.authDomain);
-  const rootDomain = rootDomainFromValue(value.rootDomain);
-
-  return Schema.decodeUnknownSync(ProjectData)({
-    ...(authDomain ? { authDomain } : {}),
-    ...(rootDomain ? { rootDomain } : {}),
+const valuesToData = (value: ProjectFormValues) =>
+  Schema.decodeUnknownSync(ProjectData)({
     branding: { themeCss: value.themeCss.trim() || undefined },
     authOptions: {
       emailPassword: value.emailPassword,
@@ -85,7 +46,6 @@ const valuesToData = (value: ProjectFormValues) => {
       signUpName: value.signUpName,
     },
   });
-};
 
 export function ProjectForm({
   project,
@@ -106,8 +66,6 @@ export function ProjectForm({
     defaultValues: {
       name: project?.name ?? "",
       logo: project?.logo ?? null,
-      authDomain: project?.data.authDomain ?? "",
-      rootDomain: project?.data.rootDomain ?? "",
       themeCss: project?.data.branding?.themeCss ?? "",
       emailPassword: project?.data.authOptions?.emailPassword ?? true,
       google: project?.data.authOptions?.google ?? true,
@@ -150,7 +108,6 @@ export function ProjectForm({
           : await createProject({
               payload: {
                 name: value.name.trim(),
-                slug: slugFromName(value.name),
                 logo,
                 data,
               },
@@ -202,22 +159,6 @@ export function ProjectForm({
                     suggestedWidth: 512,
                     suggestedHeight: 512,
                   }}
-                />
-              )}
-            </form.AppField>
-            <form.AppField name="authDomain">
-              {(field) => (
-                <field.TextField
-                  label={m.project_auth_domain()}
-                  description={m.project_auth_domain_description()}
-                />
-              )}
-            </form.AppField>
-            <form.AppField name="rootDomain">
-              {(field) => (
-                <field.TextField
-                  label={m.project_root_domain()}
-                  description={m.project_root_domain_description()}
                 />
               )}
             </form.AppField>

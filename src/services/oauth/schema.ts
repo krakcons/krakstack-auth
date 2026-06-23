@@ -38,11 +38,10 @@ export const OAuthClientAdmin = Schema.Struct({
       projectName: "Example project",
       projectLogo: null,
       redirectUris: ["https://example.com/callback"],
-      domains: ["auth.example.com"],
+      domains: [],
       scope: "openid profile email",
       disabled: false,
       projectData: {
-        authDomain: "auth.example.com",
         branding: { themeCss: ":root { --primary: oklch(0.5 0.1 240); }" },
         authOptions: {
           emailPassword: true,
@@ -85,11 +84,10 @@ export const OAuthClientCreated = Schema.Struct({
       projectName: "Example project",
       projectLogo: null,
       redirectUris: ["https://example.com/callback"],
-      domains: ["auth.example.com"],
+      domains: [],
       scope: "openid profile email",
       disabled: false,
       projectData: {
-        authDomain: "auth.example.com",
         branding: { themeCss: ":root { --primary: oklch(0.5 0.1 240); }" },
         authOptions: {
           emailPassword: true,

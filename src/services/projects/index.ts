@@ -2,10 +2,7 @@ import { Context, Effect, Layer, Schema } from "effect";
 import { eq } from "drizzle-orm";
 
 import { oauthClient, project } from "@/db/auth-schema";
-import {
-  normalizeAuthHost,
-  normalizeOAuthClientDomains,
-} from "@/lib/domain-utils";
+import { normalizeAuthHost } from "@/lib/domain-utils";
 import { DB } from "@/services/database";
 import { sanitizeThemeCss } from "@/services/oauth/theme";
 
@@ -29,9 +26,6 @@ const authOptions = (data: ProjectData) => ({
 });
 
 const StoredProjectData = Schema.Struct({
-  authDomain: Schema.optional(Schema.String),
-  domains: Schema.optional(Schema.Array(Schema.String)),
-  rootDomain: Schema.optional(Schema.String),
   branding: ProjectData.fields.branding,
   authOptions: ProjectData.fields.authOptions,
 });
@@ -40,14 +34,8 @@ export const decodeProjectData = (value: unknown) => {
   const stored = Schema.decodeUnknownSync(StoredProjectData)(
     value ?? emptyData,
   );
-  const authDomain =
-    normalizeAuthHost(stored.authDomain) ??
-    normalizeOAuthClientDomains(stored.domains ?? [])[0];
-  const rootDomain = normalizeAuthHost(stored.rootDomain);
 
   return Schema.decodeUnknownSync(ProjectData)({
-    ...(authDomain ? { authDomain } : {}),
-    ...(rootDomain ? { rootDomain } : {}),
     ...(stored.branding ? { branding: stored.branding } : {}),
     ...(stored.authOptions ? { authOptions: stored.authOptions } : {}),
   });
@@ -66,12 +54,6 @@ const row = (value: typeof project.$inferSelect) => ({
   logo: value.logo ?? null,
   data: decodeProjectDataOrEmpty(value.data),
 });
-
-export const authDomainFromData = (data: ProjectData) =>
-  normalizeAuthHost(data.authDomain) ?? null;
-
-const rootDomainFromData = (data: ProjectData) =>
-  normalizeAuthHost(data.rootDomain) ?? null;
 
 const fallbackPublicConfig = (projectKey: string) => ({
   projectKey,
@@ -99,31 +81,18 @@ export class Projects extends Context.Service<Projects>()("Projects", {
       return value ? row(value) : null;
     });
 
-    const projectByHost = Effect.fn("Projects.projectByHost")(function* ({
-      host,
-    }: {
-      host: string | null | undefined;
-    }) {
-      const normalizedHost = normalizeAuthHost(host);
-      if (!normalizedHost) return null;
-
-      const projects = yield* db.query.project.findMany();
-      return (
-        projects
-          .map(row)
-          .find((value) => authDomainFromData(value.data) === normalizedHost) ??
-        null
-      );
-    });
-
     const publicConfigFrom = ({
       projectKey,
       value,
       client,
+      authDomain,
+      rootDomain,
     }: {
       projectKey: string;
       value: ReturnType<typeof row> | null;
       client?: typeof oauthClient.$inferSelect;
+      authDomain?: string | null;
+      rootDomain?: string | null;
     }) => {
       const data = value?.data ?? {};
 
@@ -131,8 +100,8 @@ export class Projects extends Context.Service<Projects>()("Projects", {
         projectKey,
         name: value?.name ?? client?.name ?? null,
         logoUrl: value?.logo ?? client?.icon ?? null,
-        authDomain: authDomainFromData(data),
-        rootDomain: rootDomainFromData(data),
+        authDomain: authDomain ?? null,
+        rootDomain: rootDomain ?? null,
         themeCss: sanitizeThemeCss(data.branding?.themeCss, projectKey),
         authOptions: authOptions(data),
       };
@@ -159,12 +128,38 @@ export class Projects extends Context.Service<Projects>()("Projects", {
         }
       }
 
-      const hostProject = yield* projectByHost({ host });
-      if (hostProject) {
-        return publicConfigFrom({
-          projectKey: normalizeAuthHost(host) ?? hostProject.id,
-          value: hostProject,
+      const normalizedHost = normalizeAuthHost(host);
+      if (normalizedHost) {
+        const domain = yield* db.query.domains.findFirst({
+          where: { hostname: normalizedHost, active: true },
         });
+        if (domain) {
+          const value = domain.projectId
+            ? yield* db.query.project.findFirst({
+                where: { id: domain.projectId },
+              })
+            : null;
+          const organization = domain.organizationId
+            ? yield* db.query.organization.findFirst({
+                where: { id: domain.organizationId },
+              })
+            : null;
+          const data = value ? row(value).data : {};
+          const projectKey =
+            [domain.projectId, domain.organizationId]
+              .filter(Boolean)
+              .join(":") || domain.hostname;
+
+          return {
+            projectKey,
+            name: organization?.name ?? value?.name ?? null,
+            logoUrl: organization?.logo ?? value?.logo ?? null,
+            authDomain: domain.hostname,
+            rootDomain: domain.rootHostname,
+            themeCss: sanitizeThemeCss(data.branding?.themeCss, projectKey),
+            authOptions: authOptions(data),
+          };
+        }
       }
 
       if (clientId) {
@@ -202,7 +197,6 @@ export class Projects extends Context.Service<Projects>()("Projects", {
         .values({
           id: crypto.randomUUID(),
           name: payload.name.trim(),
-          slug: payload.slug.trim(),
           logo: payload.logo ?? null,
           data: decodeProjectData(payload.data),
         })
@@ -222,7 +216,6 @@ export class Projects extends Context.Service<Projects>()("Projects", {
         .update(project)
         .set({
           ...(payload.name !== undefined ? { name: payload.name.trim() } : {}),
-          ...(payload.slug !== undefined ? { slug: payload.slug.trim() } : {}),
           ...(payload.logo !== undefined ? { logo: payload.logo } : {}),
           data: decodeProjectData(payload.data),
           updatedAt: new Date(),

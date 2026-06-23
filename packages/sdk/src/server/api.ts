@@ -8,6 +8,11 @@ import {
 import { Member, Organization, User } from "../schema";
 import {
   ServerActiveOrganization,
+  ServerCreateDomainPayload,
+  ServerDomain,
+  ServerDomainHostParams,
+  ServerDomainIdParams,
+  ServerDomainRecordsResponse,
   ServerIdParams,
   ServerIdsQuery,
   ServerMemberParams,
@@ -164,7 +169,78 @@ export const ServerOrganizationsApiGroup = HttpApiGroup.make(
     }),
   );
 
+export const ServerDomainsApiGroup = HttpApiGroup.make("serverDomains")
+  .add(
+    HttpApiEndpoint.post("createDomain", "/domains", {
+      payload: ServerCreateDomainPayload,
+      success: ServerDomain,
+      error: [
+        HttpApiError.BadRequest,
+        HttpApiError.Unauthorized,
+        HttpApiError.InternalServerError,
+      ],
+    }).annotateMerge(
+      OpenApi.annotations({
+        title: "Create server domain",
+        summary: "Create an auth-owned custom hostname",
+        description:
+          "Registers an auth custom hostname for a trusted service. Requires a service API key.",
+      }),
+    ),
+  )
+  .add(
+    HttpApiEndpoint.get("getDomain", "/domains/:id", {
+      params: ServerDomainIdParams,
+      success: ServerDomain,
+      error: [
+        HttpApiError.Unauthorized,
+        HttpApiError.NotFound,
+        HttpApiError.InternalServerError,
+      ],
+    }),
+  )
+  .add(
+    HttpApiEndpoint.get("getDomainByHost", "/domains/by-host/:hostname", {
+      params: ServerDomainHostParams,
+      success: ServerDomain,
+      error: [
+        HttpApiError.Unauthorized,
+        HttpApiError.NotFound,
+        HttpApiError.InternalServerError,
+      ],
+    }),
+  )
+  .add(
+    HttpApiEndpoint.get("getDomainRecords", "/domains/:id/records", {
+      params: ServerDomainIdParams,
+      success: ServerDomainRecordsResponse,
+      error: [
+        HttpApiError.Unauthorized,
+        HttpApiError.NotFound,
+        HttpApiError.InternalServerError,
+      ],
+    }),
+  )
+  .add(
+    HttpApiEndpoint.delete("deleteDomain", "/domains/:id", {
+      params: ServerDomainIdParams,
+      success: ServerDomain,
+      error: [
+        HttpApiError.Unauthorized,
+        HttpApiError.NotFound,
+        HttpApiError.InternalServerError,
+      ],
+    }),
+  )
+  .annotateMerge(
+    OpenApi.annotations({
+      title: "Domains (Server)",
+      description: "Server-to-server auth custom hostname endpoints.",
+    }),
+  );
+
 export const ServerApi = HttpApi.make("ServerApi")
   .add(ServerUsersApiGroup)
   .add(ServerOrganizationsApiGroup)
+  .add(ServerDomainsApiGroup)
   .prefix("/api");

@@ -7,6 +7,13 @@ import {
 } from "effect/unstable/httpapi";
 
 import { AuthMember, AuthOrganization, AuthUser } from "@/lib/auth-schema";
+import {
+  ServerCreateDomainPayload,
+  ServerDomain,
+  ServerDomainHostParams,
+  ServerDomainIdParams,
+  ServerDomainRecordsResponse,
+} from "../../../packages/sdk/src/server/schema";
 
 import {
   BackendAuthActiveOrganization,
@@ -166,6 +173,76 @@ export const BackendAuthOrganizationsApiGroup = HttpApiGroup.make(
     }),
   );
 
+export const BackendAuthDomainsApiGroup = HttpApiGroup.make("backendDomains")
+  .add(
+    HttpApiEndpoint.post("createDomain", "/domains", {
+      payload: ServerCreateDomainPayload,
+      success: ServerDomain,
+      error: [
+        HttpApiError.BadRequest,
+        HttpApiError.Unauthorized,
+        HttpApiError.InternalServerError,
+      ],
+    }).annotateMerge(
+      OpenApi.annotations({
+        title: "Create domain",
+        summary: "Create an auth-owned custom hostname",
+        description:
+          "Registers an auth custom hostname for a trusted service. Requires a service API key.",
+      }),
+    ),
+  )
+  .add(
+    HttpApiEndpoint.get("getDomain", "/domains/:id", {
+      params: ServerDomainIdParams,
+      success: ServerDomain,
+      error: [
+        HttpApiError.Unauthorized,
+        HttpApiError.NotFound,
+        HttpApiError.InternalServerError,
+      ],
+    }),
+  )
+  .add(
+    HttpApiEndpoint.get("getDomainByHost", "/domains/by-host/:hostname", {
+      params: ServerDomainHostParams,
+      success: ServerDomain,
+      error: [
+        HttpApiError.Unauthorized,
+        HttpApiError.NotFound,
+        HttpApiError.InternalServerError,
+      ],
+    }),
+  )
+  .add(
+    HttpApiEndpoint.get("getDomainRecords", "/domains/:id/records", {
+      params: ServerDomainIdParams,
+      success: ServerDomainRecordsResponse,
+      error: [
+        HttpApiError.Unauthorized,
+        HttpApiError.NotFound,
+        HttpApiError.InternalServerError,
+      ],
+    }),
+  )
+  .add(
+    HttpApiEndpoint.delete("deleteDomain", "/domains/:id", {
+      params: ServerDomainIdParams,
+      success: ServerDomain,
+      error: [
+        HttpApiError.Unauthorized,
+        HttpApiError.NotFound,
+        HttpApiError.InternalServerError,
+      ],
+    }),
+  )
+  .annotateMerge(
+    OpenApi.annotations({
+      title: "Domains (Server)",
+      description: "Server-to-server auth custom hostname endpoints.",
+    }),
+  );
+
 export const BackendAuthApi = HttpApi.make("BackendAuthApi")
   .annotateMerge(
     OpenApi.annotations({
@@ -177,4 +254,5 @@ export const BackendAuthApi = HttpApi.make("BackendAuthApi")
   )
   .add(BackendAuthUsersApiGroup)
   .add(BackendAuthOrganizationsApiGroup)
+  .add(BackendAuthDomainsApiGroup)
   .prefix("/api");

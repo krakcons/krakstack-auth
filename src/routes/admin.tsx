@@ -11,6 +11,7 @@ import {
   Loader2,
   Building2,
   FolderKanban,
+  Globe2,
   ShieldAlert,
   Users,
 } from "lucide-react";
@@ -74,6 +75,11 @@ const adminNavGroups: NavGroup[] = [
         label: m.sidebar_nav_projects,
         href: "/admin/projects",
         icon: FolderKanban,
+      },
+      {
+        label: m.sidebar_nav_domains,
+        href: "/admin/domains",
+        icon: Globe2,
       },
       {
         label: m.sidebar_nav_api_keys,

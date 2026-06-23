@@ -131,35 +131,11 @@ const projectColumns = ({
         <div className="flex min-w-0 flex-col gap-1">
           <span className="truncate font-medium">{row.original.name}</span>
           <code className="text-muted-foreground truncate text-xs">
-            {row.original.slug}
+            {row.original.id}
           </code>
         </div>
       </div>
     ),
-  },
-  {
-    accessorKey: "authDomain",
-    header: m.project_auth_domain(),
-    cell: ({ row }) =>
-      row.original.data.authDomain ? (
-        <code className="text-muted-foreground text-xs">
-          {row.original.data.authDomain}
-        </code>
-      ) : (
-        <span className="text-muted-foreground text-sm">{m.admin_none()}</span>
-      ),
-  },
-  {
-    accessorKey: "rootDomain",
-    header: m.project_root_domain(),
-    cell: ({ row }) =>
-      row.original.data.rootDomain ? (
-        <code className="text-muted-foreground text-xs">
-          {row.original.data.rootDomain}
-        </code>
-      ) : (
-        <span className="text-muted-foreground text-sm">{m.admin_none()}</span>
-      ),
   },
   {
     id: "authOptions",

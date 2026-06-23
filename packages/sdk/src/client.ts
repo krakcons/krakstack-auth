@@ -81,6 +81,11 @@ export class AuthApiClients extends Context.Service<AuthApiClients>()(
         baseUrl: config.baseUrl,
         httpClient,
       });
+      const serverDomains = yield* HttpApiClient.group(ServerApi, {
+        group: "serverDomains",
+        baseUrl: config.baseUrl,
+        httpClient,
+      });
       const extra = yield* HttpApiClient.group(ExtraApi, {
         group: "extra",
         baseUrl: config.baseUrl,
@@ -97,6 +102,13 @@ export class AuthApiClients extends Context.Service<AuthApiClients>()(
         server: {
           ...serverUsers,
           ...serverOrganizations,
+          domains: {
+            create: serverDomains.createDomain,
+            get: serverDomains.getDomain,
+            getByHost: serverDomains.getDomainByHost,
+            records: serverDomains.getDomainRecords,
+            delete: serverDomains.deleteDomain,
+          },
         },
         extra,
       };

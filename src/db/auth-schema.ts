@@ -244,21 +244,41 @@ export const oauthClient = pgTable(
   ],
 );
 
-export const project = pgTable(
-  "project",
+export const project = pgTable("project", {
+  id: text("id").primaryKey(),
+  name: text("name").notNull(),
+  logo: text("logo"),
+  data: jsonb("data").notNull().default({}),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at")
+    .defaultNow()
+    .$onUpdate(() => /* @__PURE__ */ new Date())
+    .notNull(),
+});
+
+export const domains = pgTable(
+  "domains",
   {
     id: text("id").primaryKey(),
-    name: text("name").notNull(),
-    slug: text("slug").notNull().unique(),
-    logo: text("logo"),
-    data: jsonb("data").notNull().default({}),
+    hostname: text("hostname").notNull().unique(),
+    rootHostname: text("root_hostname").notNull(),
+    projectId: text("project_id").references(() => project.id, {
+      onDelete: "set null",
+    }),
+    organizationId: text("organization_id"),
+    hostnameId: text("hostname_id").notNull(),
+    active: boolean("active").default(false).notNull(),
     createdAt: timestamp("created_at").defaultNow().notNull(),
     updatedAt: timestamp("updated_at")
       .defaultNow()
       .$onUpdate(() => /* @__PURE__ */ new Date())
       .notNull(),
   },
-  (table) => [uniqueIndex("project_slug_uidx").on(table.slug)],
+  (table) => [
+    uniqueIndex("domains_hostname_uidx").on(table.hostname),
+    index("domains_projectId_idx").on(table.projectId),
+    index("domains_organizationId_idx").on(table.organizationId),
+  ],
 );
 
 export const oauthRefreshToken = pgTable(
@@ -350,6 +370,7 @@ export const relations = defineRelations(
     apikey,
     oauthClient,
     project,
+    domains,
     oauthRefreshToken,
     oauthAccessToken,
     oauthConsent,
@@ -521,6 +542,12 @@ export const relations = defineRelations(
       user: r.one.user({
         from: r.oauthConsent.userId,
         to: r.user.id,
+      }),
+    },
+    domains: {
+      project: r.one.project({
+        from: r.domains.projectId,
+        to: r.project.id,
       }),
     },
   }),

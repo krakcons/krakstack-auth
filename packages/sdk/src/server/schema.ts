@@ -94,8 +94,100 @@ export const ServerMembersResponse = Schema.Array(Member).annotate({
   description: "Organization members with user contact details.",
 });
 
+export const ServerDomain = Schema.Struct({
+  id: Schema.String,
+  hostname: Schema.String,
+  rootHostname: Schema.String,
+  projectId: Schema.NullOr(Schema.String),
+  organizationId: Schema.NullOr(Schema.String),
+  hostnameId: Schema.String,
+  active: Schema.Boolean,
+  createdAt: Schema.Date,
+  updatedAt: Schema.Date,
+}).annotate({
+  identifier: "ServerDomain",
+  title: "Server domain",
+  description:
+    "An auth-owned custom hostname mapped to a project and optionally an organization.",
+  examples: [
+    {
+      id: "domain_1",
+      hostname: "auth.institute.example.com",
+      rootHostname: "institute.example.com",
+      projectId: "kokobi",
+      organizationId: "org_1",
+      hostnameId: "cloudflare-hostname-id",
+      active: false,
+      createdAt: new Date("2026-01-01T00:00:00.000Z"),
+      updatedAt: new Date("2026-01-01T00:00:00.000Z"),
+    },
+  ],
+});
+
+export const ServerCreateDomainPayload = Schema.Struct({
+  hostname: Schema.NonEmptyString,
+  rootHostname: Schema.NonEmptyString,
+  projectId: Schema.optional(Schema.NullOr(Schema.String)),
+  organizationId: Schema.optional(Schema.NullOr(Schema.String)),
+}).annotate({
+  identifier: "ServerCreateDomainPayload",
+  title: "Create server domain payload",
+  description:
+    "Payload used by trusted services to register an auth-owned custom hostname.",
+  examples: [
+    {
+      hostname: "auth.institute.example.com",
+      rootHostname: "institute.example.com",
+      projectId: "kokobi",
+      organizationId: "org_1",
+    },
+  ],
+});
+
+export const ServerDomainIdParams = Schema.Struct({
+  id: Schema.NonEmptyString,
+}).annotate({
+  identifier: "ServerDomainIdParams",
+  title: "Server domain ID params",
+  description: "Domain ID used to return or delete a server domain.",
+  examples: [{ id: "domain_1" }],
+});
+
+export const ServerDomainHostParams = Schema.Struct({
+  hostname: Schema.NonEmptyString,
+}).annotate({
+  identifier: "ServerDomainHostParams",
+  title: "Server domain host params",
+  description: "Hostname used to return a server domain.",
+  examples: [{ hostname: "auth.institute.example.com" }],
+});
+
+export const ServerDomainRecord = Schema.Struct({
+  required: Schema.Boolean,
+  status: Schema.String,
+  type: Schema.String,
+  name: Schema.String,
+  value: Schema.String,
+}).annotate({
+  identifier: "ServerDomainRecord",
+  title: "Server domain DNS record",
+  description: "A DNS record required for an auth-owned custom hostname.",
+});
+
+export const ServerDomainRecordsResponse = Schema.Array(
+  ServerDomainRecord,
+).annotate({
+  identifier: "ServerDomainRecordsResponse",
+  title: "Server domain records response",
+  description: "DNS records required for an auth-owned custom hostname.",
+});
+
 export type ServerUsersResponse = typeof ServerUsersResponse.Type;
 export type ServerOrganizationsResponse =
   typeof ServerOrganizationsResponse.Type;
 export type ServerMembersResponse = typeof ServerMembersResponse.Type;
 export type ServerActiveOrganization = typeof ServerActiveOrganization.Type;
+export type ServerDomain = typeof ServerDomain.Type;
+export type ServerCreateDomainPayload = typeof ServerCreateDomainPayload.Type;
+export type ServerDomainRecordsResponse =
+  typeof ServerDomainRecordsResponse.Type;

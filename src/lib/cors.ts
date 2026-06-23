@@ -34,7 +34,20 @@ const allowedOrigin = (
   if (allowedOrigins === "*") return "*";
 
   const origin = request.headers.get("origin");
-  return origin && allowedOrigins.includes(origin) ? origin : undefined;
+  if (!origin) return undefined;
+  if (allowedOrigins.includes(origin)) return origin;
+
+  try {
+    const originUrl = new URL(origin);
+    const requestUrl = new URL(request.url);
+    const authHostname = `auth.${originUrl.hostname}`;
+
+    if (requestUrl.hostname === authHostname) return origin;
+  } catch {
+    return undefined;
+  }
+
+  return undefined;
 };
 
 const corsHeaders = (request: Request, options?: CorsOptions) => {

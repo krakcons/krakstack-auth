@@ -13,6 +13,12 @@ import {
   OrganizationIdParams,
   UpdateOrganizationPayload,
 } from "@/services/organizations/schema";
+import {
+  ServerCreateDomainPayload,
+  ServerDomain,
+  ServerDomainIdParams,
+  ServerDomainRecordsResponse,
+} from "../../../packages/sdk/src/server/schema";
 
 export const AdminApiGroup = HttpApiGroup.make("admin")
   .add(
@@ -99,6 +105,76 @@ export const AdminApiGroup = HttpApiGroup.make("admin")
         title: "Delete organization",
         summary: "Delete an organization",
         description: "Deletes an app-managed organization record.",
+      }),
+    ),
+  )
+  .add(
+    HttpApiEndpoint.get("listDomains", "/admin/domains", {
+      success: Schema.Array(ServerDomain),
+      error: [
+        HttpApiError.Unauthorized,
+        HttpApiError.Forbidden,
+        HttpApiError.InternalServerError,
+      ],
+    }).annotateMerge(
+      OpenApi.annotations({
+        title: "List domains",
+        summary: "List auth domains",
+        description: "Returns auth-owned custom hostnames for administrators.",
+      }),
+    ),
+  )
+  .add(
+    HttpApiEndpoint.post("createDomain", "/admin/domains", {
+      payload: ServerCreateDomainPayload,
+      success: ServerDomain,
+      error: [
+        HttpApiError.Unauthorized,
+        HttpApiError.Forbidden,
+        HttpApiError.InternalServerError,
+      ],
+    }).annotateMerge(
+      OpenApi.annotations({
+        title: "Create domain",
+        summary: "Create an auth domain",
+        description: "Registers an auth-owned custom hostname.",
+      }),
+    ),
+  )
+  .add(
+    HttpApiEndpoint.get("getDomainRecords", "/admin/domains/:id/records", {
+      params: ServerDomainIdParams,
+      success: ServerDomainRecordsResponse,
+      error: [
+        HttpApiError.Unauthorized,
+        HttpApiError.Forbidden,
+        HttpApiError.NotFound,
+        HttpApiError.InternalServerError,
+      ],
+    }).annotateMerge(
+      OpenApi.annotations({
+        title: "Get domain records",
+        summary: "Get auth domain DNS records",
+        description:
+          "Returns DNS records and refreshed status for an auth-owned custom hostname.",
+      }),
+    ),
+  )
+  .add(
+    HttpApiEndpoint.delete("deleteDomain", "/admin/domains/:id", {
+      params: ServerDomainIdParams,
+      success: ServerDomain,
+      error: [
+        HttpApiError.Unauthorized,
+        HttpApiError.Forbidden,
+        HttpApiError.NotFound,
+        HttpApiError.InternalServerError,
+      ],
+    }).annotateMerge(
+      OpenApi.annotations({
+        title: "Delete domain",
+        summary: "Delete an auth domain",
+        description: "Deletes an auth-owned custom hostname.",
       }),
     ),
   )

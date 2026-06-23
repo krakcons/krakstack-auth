@@ -1,4 +1,6 @@
-import { Effect, FileSystem, Layer, Path } from "effect";
+import { Context, Effect, FileSystem, Layer, Path } from "effect";
+import { CredentialsFromEnv } from "@distilled.cloud/cloudflare";
+import * as FetchHttpClient from "effect/unstable/http/FetchHttpClient";
 import {
   Etag,
   HttpEffect,
@@ -17,6 +19,7 @@ import { authForRequest } from "@/services/auth/config";
 import { BackendAuth } from "@/services/backend-auth";
 import { backendAuthApiHandler } from "@/services/backend-auth/api.builder";
 import { BackendAuthApi } from "@/services/backend-auth/api.group";
+import { Domains } from "@/services/domains";
 import { OAuthClients } from "@/services/oauth";
 import { adminOAuthClientsApiHandler } from "@/services/oauth/api.builder";
 import { OpenTelemetry } from "@/services/opentelemetry";
@@ -36,6 +39,11 @@ const platformLayer = Layer.mergeAll(
   fileSystemLayer,
   Etag.layerWeak,
   httpPlatformLayer,
+);
+
+const CloudflareLive = Layer.mergeAll(
+  FetchHttpClient.layer,
+  CredentialsFromEnv,
 );
 
 export const authWebHandler = async (request: Request) =>
@@ -170,9 +178,11 @@ const appServicesLayer = Layer.mergeAll(
   OpenTelemetry.layer,
   OAuthClients.layer,
   BackendAuth.layer,
+  Domains.layer,
   Organizations.layer,
   Projects.layer,
   S3Service.layer,
+  CloudflareLive,
 );
 
 const apiWebHandler = HttpEffect.toWebHandlerLayerWith(appServicesLayer, {
@@ -185,6 +195,6 @@ const apiWebHandler = HttpEffect.toWebHandlerLayerWith(appServicesLayer, {
 });
 
 export const apiHandler = corsMiddleware((request) =>
-  apiWebHandler.handler(request),
+  apiWebHandler.handler(request, Context.empty()),
 );
 export const disposeApiHandler = apiWebHandler.dispose;

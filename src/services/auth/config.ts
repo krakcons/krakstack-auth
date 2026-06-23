@@ -16,8 +16,8 @@ import { schema } from "../../db/schema";
 import {
   cookieDomainFromRequest,
   hostFromRequest,
-  isOAuthClientAuthHost,
   isPrimaryAuthHost,
+  isRegisteredAuthHost,
   normalizeAuthHost,
   parseCsv,
   trustedOriginsForRequest,
@@ -47,7 +47,9 @@ const allowedHosts = Array.from(
         normalizeAuthHost,
       ),
       normalizeAuthHost(betterAuthUrl),
-      ...(isDev ? ["localhost:3001", "localhost:3000"] : []),
+      ...(isDev
+        ? ["localhost:3001", "localhost:3000", "auth.local.kokobi.test:3001"]
+        : []),
     ].filter((host): host is string => Boolean(host)),
   ),
 );
@@ -198,7 +200,7 @@ const authByCookieDomain = new Map<string, ReturnType<typeof createAuth>>();
 export const authForRequest = async (request: Request) => {
   const host = hostFromRequest(request);
   if (!host) return auth;
-  if (!isPrimaryAuthHost(host) && !(await isOAuthClientAuthHost(host))) {
+  if (!(await isRegisteredAuthHost(request)) && !isPrimaryAuthHost(host)) {
     return auth;
   }
 

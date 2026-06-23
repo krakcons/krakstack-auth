@@ -3,13 +3,9 @@ import type { Headers } from "effect/unstable/http/Headers";
 import { eq } from "drizzle-orm";
 
 import { oauthClient, project } from "@/db/auth-schema";
-import { normalizeAuthHost } from "@/lib/domain-utils";
 import { DB } from "@/services/database";
 import { auth } from "@/services/auth/config";
-import {
-  authDomainFromData,
-  decodeProjectDataOrEmpty,
-} from "@/services/projects";
+import { decodeProjectDataOrEmpty } from "@/services/projects";
 import type { ProjectData } from "@/services/projects/schema";
 
 import type {
@@ -39,14 +35,6 @@ const scopesFromString = (value: string | undefined) =>
         .map((item) => item.trim())
         .filter(Boolean)
     : ["openid", "profile", "email"];
-
-const domainsFromData = (data: ProjectData) =>
-  [authDomainFromData(data)].filter((domain): domain is string =>
-    Boolean(domain),
-  );
-
-const rootDomainFromData = (data: ProjectData) =>
-  normalizeAuthHost(data.rootDomain) ?? null;
 
 const RawOAuthClient = Schema.Struct({
   client_id: Schema.optional(Schema.String),
@@ -81,8 +69,6 @@ const adminRow = (client: object, projectSummary?: ProjectSummary) => {
   const clientId = decoded.client_id ?? decoded.clientId;
   if (!clientId) throw new Error("OAuth client response is missing client ID");
 
-  const data = projectSummary?.data ?? {};
-
   return {
     id: clientId,
     clientId,
@@ -95,10 +81,10 @@ const adminRow = (client: object, projectSummary?: ProjectSummary) => {
     redirectUris: Array.from(
       decoded.redirect_uris ?? decoded.redirectUris ?? [],
     ),
-    domains: domainsFromData(data),
+    domains: [],
     scope: decoded.scope ?? decoded.scopes?.join(" ") ?? null,
     disabled: decoded.disabled ?? null,
-    projectData: data,
+    projectData: projectSummary?.data ?? {},
   };
 };
 
@@ -155,8 +141,8 @@ export class OAuthClients extends Context.Service<OAuthClients>()(
           projectKey,
           name: summary?.name ?? client?.name ?? null,
           logoUrl: summary?.logo ?? client?.icon ?? null,
-          authDomain: authDomainFromData(data),
-          rootDomain: rootDomainFromData(data),
+          authDomain: null,
+          rootDomain: null,
           themeCss: sanitizeThemeCss(data.branding?.themeCss, projectKey),
           authOptions: authOptions(data),
         };

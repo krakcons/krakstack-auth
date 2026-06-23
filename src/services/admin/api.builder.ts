@@ -6,6 +6,7 @@ import { HttpApiBuilder, HttpApiError } from "effect/unstable/httpapi";
 import { AdminApi } from "@/api";
 import { oauthClient, oauthConsent, project, user } from "@/db/auth-schema";
 import { auth } from "@/services/auth/config";
+import { Domains } from "@/services/domains";
 import { db } from "@/services/database";
 import { Organizations } from "@/services/organizations";
 
@@ -147,6 +148,55 @@ export const adminApiHandler = HttpApiBuilder.group(
 
           if (!organization) return yield* new HttpApiError.NotFound({});
           return organization;
+        }),
+      )
+      .handle("listDomains", ({ request }) =>
+        Effect.gen(function* () {
+          yield* requireAdmin(request.headers);
+
+          const service = yield* Domains;
+          return yield* service
+            .list()
+            .pipe(Effect.mapError(internalServerError));
+        }),
+      )
+      .handle("createDomain", ({ payload, request }) =>
+        Effect.gen(function* () {
+          yield* requireAdmin(request.headers);
+
+          const service = yield* Domains;
+          const domain = yield* service
+            .create({ payload })
+            .pipe(Effect.mapError(internalServerError));
+
+          if (!domain) return yield* new HttpApiError.InternalServerError({});
+          return domain;
+        }),
+      )
+      .handle("getDomainRecords", ({ params, request }) =>
+        Effect.gen(function* () {
+          yield* requireAdmin(request.headers);
+
+          const service = yield* Domains;
+          const records = yield* service
+            .records({ id: params.id })
+            .pipe(Effect.mapError(internalServerError));
+
+          if (!records) return yield* new HttpApiError.NotFound({});
+          return records;
+        }),
+      )
+      .handle("deleteDomain", ({ params, request }) =>
+        Effect.gen(function* () {
+          yield* requireAdmin(request.headers);
+
+          const service = yield* Domains;
+          const domain = yield* service
+            .delete({ id: params.id })
+            .pipe(Effect.mapError(internalServerError));
+
+          if (!domain) return yield* new HttpApiError.NotFound({});
+          return domain;
         }),
       ),
 );

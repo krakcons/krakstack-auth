@@ -1,8 +1,6 @@
 import { Schema } from "effect";
 
 export const ProjectData = Schema.Struct({
-  authDomain: Schema.optional(Schema.NonEmptyString),
-  rootDomain: Schema.optional(Schema.NonEmptyString),
   branding: Schema.optional(
     Schema.Struct({
       themeCss: Schema.optional(Schema.String),
@@ -20,11 +18,9 @@ export const ProjectData = Schema.Struct({
   identifier: "ProjectData",
   title: "Project data",
   description:
-    "White-label theme, auth domain, root redirect domain, and authentication settings.",
+    "White-label theme and authentication settings owned by a project.",
   examples: [
     {
-      authDomain: "auth.example.com",
-      rootDomain: "example.com",
       branding: { themeCss: ":root { --primary: oklch(0.5 0.1 240); }" },
       authOptions: {
         emailPassword: true,
@@ -39,7 +35,6 @@ export const ProjectData = Schema.Struct({
 export const Project = Schema.Struct({
   id: Schema.String,
   name: Schema.String,
-  slug: Schema.String,
   logo: Schema.NullOr(Schema.String),
   data: ProjectData,
   createdAt: Schema.Date,
@@ -124,7 +119,6 @@ export const ProjectPublicConfig = Schema.Struct({
 
 export const CreateProjectPayload = Schema.Struct({
   name: Schema.NonEmptyString,
-  slug: Schema.NonEmptyString,
   logo: Schema.optional(Schema.NullOr(Schema.String)),
   data: ProjectData,
 }).annotate({
@@ -135,7 +129,6 @@ export const CreateProjectPayload = Schema.Struct({
 
 export const UpdateProjectPayload = Schema.Struct({
   name: Schema.optional(Schema.NonEmptyString),
-  slug: Schema.optional(Schema.NonEmptyString),
   logo: Schema.optional(Schema.NullOr(Schema.String)),
   data: ProjectData,
 }).annotate({

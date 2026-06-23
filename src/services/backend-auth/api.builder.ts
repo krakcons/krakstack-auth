@@ -3,6 +3,7 @@ import { Headers } from "effect/unstable/http";
 import { HttpApiBuilder, HttpApiError } from "effect/unstable/httpapi";
 
 import { auth } from "@/services/auth/config";
+import { Domains } from "@/services/domains";
 
 import { BackendAuth } from ".";
 import { BackendAuthApi } from "./api.group";
@@ -175,6 +176,84 @@ const backendAuthOrganizationsApiHandler = HttpApiBuilder.group(
       ),
 );
 
+const backendAuthDomainsApiHandler = HttpApiBuilder.group(
+  BackendAuthApi,
+  "backendDomains",
+  (handlers) =>
+    handlers
+      .handle("createDomain", ({ payload, request }) =>
+        Effect.gen(function* () {
+          yield* requireServiceApiKey(request.headers);
+
+          const domains = yield* Domains;
+          const domain = yield* domains
+            .create({ payload })
+            .pipe(Effect.mapError(internalServerError));
+
+          if (!domain) return yield* new HttpApiError.BadRequest({});
+
+          return domain;
+        }),
+      )
+      .handle("getDomain", ({ params, request }) =>
+        Effect.gen(function* () {
+          yield* requireServiceApiKey(request.headers);
+
+          const domains = yield* Domains;
+          const domain = yield* domains
+            .get({ id: params.id })
+            .pipe(Effect.mapError(internalServerError));
+
+          if (!domain) return yield* new HttpApiError.NotFound({});
+
+          return domain;
+        }),
+      )
+      .handle("getDomainByHost", ({ params, request }) =>
+        Effect.gen(function* () {
+          yield* requireServiceApiKey(request.headers);
+
+          const domains = yield* Domains;
+          const domain = yield* domains
+            .getByHost({ hostname: params.hostname })
+            .pipe(Effect.mapError(internalServerError));
+
+          if (!domain) return yield* new HttpApiError.NotFound({});
+
+          return domain;
+        }),
+      )
+      .handle("getDomainRecords", ({ params, request }) =>
+        Effect.gen(function* () {
+          yield* requireServiceApiKey(request.headers);
+
+          const domains = yield* Domains;
+          const records = yield* domains
+            .records({ id: params.id })
+            .pipe(Effect.mapError(internalServerError));
+
+          if (!records) return yield* new HttpApiError.NotFound({});
+
+          return records;
+        }),
+      )
+      .handle("deleteDomain", ({ params, request }) =>
+        Effect.gen(function* () {
+          yield* requireServiceApiKey(request.headers);
+
+          const domains = yield* Domains;
+          const domain = yield* domains
+            .delete({ id: params.id })
+            .pipe(Effect.mapError(internalServerError));
+
+          if (!domain) return yield* new HttpApiError.NotFound({});
+
+          return domain;
+        }),
+      ),
+);
+
 export const backendAuthApiHandler = backendAuthUsersApiHandler.pipe(
   Layer.merge(backendAuthOrganizationsApiHandler),
+  Layer.merge(backendAuthDomainsApiHandler),
 );
