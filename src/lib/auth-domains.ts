@@ -1,4 +1,5 @@
 import { getDomain } from "tldts";
+import { Cache, Duration, Effect, Exit } from "effect";
 
 import { db } from "@/services/database";
 import {
@@ -63,9 +64,52 @@ export const isRegisteredAuthHost = async (request: Request) =>
 const originForHost = (host: string, protocol: string) => {
   const normalized = normalizeAuthHost(host);
   if (!normalized) return null;
+  const normalizedProtocol = protocol.replace(/:$/, "");
 
-  return `${protocol}//${normalized}`;
+  return `${normalizedProtocol}://${normalized}`;
 };
+
+const activeDomainTrustedOriginsCacheKey = "active-domain-trusted-origins";
+
+const activeDomainTrustedOriginsCache = Effect.runSync(
+  Cache.makeWith<string, ReadonlyArray<string>, unknown, never, "lookup">(
+    () =>
+      Effect.promise(async () => {
+        const rows = await db.query.domains.findMany({
+          where: { active: true },
+          columns: {
+            hostname: true,
+            rootHostname: true,
+          },
+        });
+
+        const origins = new Set<string>();
+
+        for (const domain of rows) {
+          const authOrigin = originForHost(domain.hostname, "https:");
+          const rootOrigin = originForHost(domain.rootHostname, "https:");
+          if (authOrigin) origins.add(authOrigin);
+          if (rootOrigin) origins.add(rootOrigin);
+        }
+
+        return Array.from(origins);
+      }),
+    {
+      capacity: 1,
+      timeToLive: (exit) =>
+        Exit.isSuccess(exit) ? Duration.seconds(60) : Duration.zero,
+      requireServicesAt: "lookup",
+    },
+  ),
+);
+
+const activeDomainTrustedOrigins = () =>
+  Effect.runPromise(
+    Cache.get(
+      activeDomainTrustedOriginsCache,
+      activeDomainTrustedOriginsCacheKey,
+    ),
+  );
 
 const requestProtocol = (request: Request) =>
   request.headers.get("x-forwarded-proto")?.split(",")[0]?.trim() ||
@@ -75,6 +119,10 @@ export const trustedOriginsForRequest = async (request?: Request) => {
   const origins = new Set(
     parseCsv(process.env.BETTER_AUTH_TRUSTED_ORIGINS) ?? [],
   );
+
+  for (const origin of await activeDomainTrustedOrigins()) {
+    origins.add(origin);
+  }
 
   if (!request) return Array.from(origins);
 
