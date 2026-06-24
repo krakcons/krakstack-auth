@@ -1,7 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute } from "@tanstack/react-router";
 import { type ColumnDef } from "@tanstack/react-table";
-import { Ban, Loader2, RefreshCw, ShieldOff, UserIcon } from "lucide-react";
+import { Ban, Loader2, ShieldOff, UserIcon } from "lucide-react";
 import { useState } from "react";
 
 import {
@@ -11,7 +11,6 @@ import {
 import { ErrorMessage } from "@/components/ui/form";
 import { SidebarPageHeader } from "@/components/ui/sidebar-layout";
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -102,20 +101,6 @@ function UsersPage() {
         title={m.admin_users_title()}
         description={`${m.admin_users_description()} ${total === 1 ? m.admin_users_count_single() : m.admin_users_count({ count: total.toString() })}`}
         badge={{ label: m.admin_badge_admin() }}
-        actions={
-          <Button
-            disabled={isLoading}
-            onClick={() => void refetch()}
-            variant="outline"
-          >
-            {isLoading ? (
-              <Loader2 className="animate-spin" data-icon="inline-start" />
-            ) : (
-              <RefreshCw data-icon="inline-start" />
-            )}
-            {m.admin_refresh()}
-          </Button>
-        }
       />
 
       {error ? <ErrorMessage text={error.message} /> : null}
@@ -125,6 +110,8 @@ function UsersPage() {
         exportFileName="users.csv"
         features={{ gallery: false }}
         from="/admin/users"
+        isLoading={isLoading}
+        onRefresh={() => void refetch()}
         rowActions={[
           {
             name: m.admin_action_ban(),

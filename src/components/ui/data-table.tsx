@@ -37,6 +37,7 @@ import { cn } from "@/lib/utils";
 import {
   DndContext,
   DragOverlay,
+  type Modifier,
   PointerSensor,
   useDraggable,
   useDroppable,
@@ -79,13 +80,13 @@ import {
   LayoutGrid,
   LinkIcon,
   MoreHorizontal,
+  RefreshCw,
   Rows3,
   Search,
   Settings2,
   X,
 } from "lucide-react";
 import {
-  Fragment,
   useEffect,
   useMemo,
   useState,
@@ -133,6 +134,7 @@ export type DataTableMessages = {
   export: string;
   exportCsv: string;
   exportJson: string;
+  refresh: string;
   selectedOf: (selected: number, total: number) => string;
   view: string;
   tableView: string;
@@ -161,6 +163,7 @@ const messages = {
     export: "Export",
     exportCsv: "CSV",
     exportJson: "JSON",
+    refresh: "Refresh",
     selectedOf: (selected: number, total: number) => `${selected} of ${total}`,
     view: "View",
     tableView: "Table",
@@ -187,6 +190,7 @@ const messages = {
     export: "Exporter",
     exportCsv: "CSV",
     exportJson: "JSON",
+    refresh: "Rafraîchir",
     selectedOf: (selected: number, total: number) => `${selected} sur ${total}`,
     view: "Affichage",
     tableView: "Tableau",
@@ -257,6 +261,7 @@ interface DataTableProps<TData, TValue> {
   messages?: DataTableMessageOverrides;
   exportFileName?: string;
   isLoading?: boolean;
+  onRefresh?: () => void;
   onRowClick?: (row: TData) => void;
   from?: ValidateFromPath;
   grouping?: DataTableGrouping<TData>;
@@ -271,6 +276,7 @@ interface DataTableProps<TData, TValue> {
     export?: boolean;
     columnVisibility?: boolean;
     gallery?: boolean;
+    sorting?: boolean;
   };
 }
 
@@ -289,10 +295,35 @@ const DEFAULT_TABLE_FEATURES = {
   export: true,
   columnVisibility: true,
   gallery: true,
+  sorting: true,
 } as const;
 
 const GROUP_INDENT_PX = 20;
 const GROUP_ROW_INDENT_OFFSET_PX = 44;
+
+const snapDragOverlayVerticalCenterToCursor: Modifier = ({
+  activatorEvent,
+  activeNodeRect,
+  overlayNodeRect,
+  transform,
+}) => {
+  if (
+    !(activatorEvent instanceof MouseEvent) ||
+    !activeNodeRect ||
+    !overlayNodeRect
+  ) {
+    return transform;
+  }
+
+  return {
+    ...transform,
+    y:
+      transform.y +
+      activatorEvent.clientY -
+      activeNodeRect.top -
+      overlayNodeRect.height / 2,
+  };
+};
 
 const getDefaultGrouping = <TData,>(grouping?: DataTableGrouping<TData>) => {
   if (!grouping) {
@@ -313,12 +344,14 @@ const getDefaultGrouping = <TData,>(grouping?: DataTableGrouping<TData>) => {
 const getGroupTargetDropId = (key: string) => `group-target:${key}`;
 const getRowDragId = (rowId: string) => `row:${rowId}`;
 
-const DataTableRowActions = <TData,>({
+export const DataTableRowActions = <TData,>({
   actions,
+  contentClassName,
   row,
   title = "Actions",
 }: {
   actions: DataTableRowAction<TData>[];
+  contentClassName?: string | undefined;
   row: TData;
   title?: string | undefined;
 }) => {
@@ -335,13 +368,17 @@ const DataTableRowActions = <TData,>({
       <DropdownMenuTrigger
         onClick={(event) => event.stopPropagation()}
         render={
-          <Button variant="ghost" size="icon">
+          <Button
+            className="size-7 shadow-md [&_svg:not([class*='size-'])]:size-3.5"
+            variant="ghost"
+            size="icon"
+          >
             <span className="sr-only">{title}</span>
             <MoreHorizontal />
           </Button>
         }
       />
-      <DropdownMenuContent align="end">
+      <DropdownMenuContent align="end" className={contentClassName}>
         <DropdownMenuGroup>
           <DropdownMenuLabel>{title}</DropdownMenuLabel>
           <DropdownMenuSeparator />
@@ -418,16 +455,6 @@ const GroupHeaderRow = <TData,>({
   onToggle: () => void;
   section: GroupSection<TData>;
 }) => {
-  const { isOver, setNodeRef } = useDroppable({
-    id: getGroupTargetDropId(section.key),
-    disabled: !section.field.onMoveToGroup,
-    data: {
-      type: "group-target",
-      fieldId: section.field.id,
-      groupId: section.groupId,
-    },
-  });
-
   const label =
     section.field.getGroupLabel?.(
       section.groupId,
@@ -436,16 +463,7 @@ const GroupHeaderRow = <TData,>({
 
   return (
     <TableRow>
-      <TableCell
-        className={cn(
-          "relative p-0",
-          isOver &&
-            "after:border-primary after:pointer-events-none after:absolute after:inset-0 after:border",
-        )}
-        colSpan={colSpan}
-        ref={setNodeRef}
-        onClick={onToggle}
-      >
+      <TableCell className="relative p-0" colSpan={colSpan} onClick={onToggle}>
         <div
           className="flex cursor-pointer items-center gap-3 px-2 py-2 font-medium transition-colors"
           style={{
@@ -464,6 +482,36 @@ const GroupHeaderRow = <TData,>({
         </div>
       </TableCell>
     </TableRow>
+  );
+};
+
+const GroupTableSection = <TData,>({
+  children,
+  section,
+}: {
+  children: ReactNode;
+  section: GroupSection<TData>;
+}) => {
+  const { isOver, setNodeRef } = useDroppable({
+    id: getGroupTargetDropId(section.key),
+    disabled: !section.field.onMoveToGroup,
+    data: {
+      type: "group-target",
+      fieldId: section.field.id,
+      groupId: section.groupId,
+    },
+  });
+
+  return (
+    <TableBody
+      className={cn(
+        "relative px-2",
+        isOver && "ring-primary ring-1 ring-inset",
+      )}
+      ref={setNodeRef}
+    >
+      {children}
+    </TableBody>
   );
 };
 
@@ -580,8 +628,10 @@ const DataTableRow = <TData,>({
           <TableCell
             key={cell.id}
             className={cn(
-              "align-center min-w-32 whitespace-normal",
-              rowActions && isLastCell && "relative",
+              "align-center min-w-32 whitespace-normal [&:has([data-slot=relationship-cell])]:p-0 [&:has([data-slot=relationship-cell])>div]:line-clamp-none",
+              rowActions &&
+                isLastCell &&
+                "min-w-40 pr-12 [&:has([data-slot=relationship-cell])]:pr-0 [&:has([data-slot=relationship-cell])_[data-slot=relationship-cell]]:pr-14",
             )}
             style={
               index === 0 && firstCellIndent
@@ -592,14 +642,16 @@ const DataTableRow = <TData,>({
             <div className="line-clamp-3 break-words">
               {flexRender(cell.column.columnDef.cell, cell.getContext())}
             </div>
-            {rowActions && isLastCell ? (
-              <div className="bg-background/95 sticky right-2 z-10 float-right -mt-8 w-fit rounded-md shadow-sm backdrop-blur">
-                <DataTableRowActions actions={rowActions} row={row.original} />
-              </div>
-            ) : null}
           </TableCell>
         );
       })}
+      {rowActions ? (
+        <TableCell className="sticky right-0 z-20 w-0 min-w-0 overflow-visible p-0">
+          <div className="bg-background/95 absolute top-1/2 right-2 -translate-y-1/2 rounded-md shadow-sm backdrop-blur">
+            <DataTableRowActions actions={rowActions} row={row.original} />
+          </div>
+        </TableCell>
+      ) : null}
     </TableRow>
   );
 };
@@ -793,6 +845,21 @@ const getColumnDisplayName = <TData,>(
   return header ? getHeaderName(header) : columnId;
 };
 
+const renderHeader = <TData, TValue>(header: Header<TData, TValue>) => {
+  if (header.isPlaceholder) return null;
+
+  const content = flexRender(
+    header.column.columnDef.header,
+    header.getContext(),
+  );
+
+  return typeof content === "string" || typeof content === "number" ? (
+    <div className="flex h-12 items-center px-2 text-sm">{content}</div>
+  ) : (
+    content
+  );
+};
+
 export type CsvValue = string | number | boolean | null | undefined;
 
 const withFileExtension = (fileName: string, extension: string) => {
@@ -894,6 +961,7 @@ export function DataTable<TData, TValue>({
   messages,
   exportFileName = "table.csv",
   isLoading = false,
+  onRefresh,
   onRowClick,
   from,
   grouping,
@@ -929,6 +997,7 @@ export function DataTable<TData, TValue>({
     export: showExport,
     columnVisibility: showColumnVisibility,
     gallery: showGallery,
+    sorting: showSorting,
   } = {
     ...DEFAULT_TABLE_FEATURES,
     ...features,
@@ -936,6 +1005,15 @@ export function DataTable<TData, TValue>({
   const currentView: DataTableView = showGallery ? view : "table";
   const isGalleryView = currentView === "gallery";
   const emptyStateLabel = isLoading ? labels.loading : resolvedEmptyLabel;
+  const hasToolbar = Boolean(
+    showSearch ||
+    grouping?.fields.length ||
+    showSorting ||
+    showGallery ||
+    showColumnVisibility ||
+    onRefresh ||
+    showExport,
+  );
 
   const [columnVisibility, setColumnVisibility] = useState<VisibilityState>({});
   const [rowSelection, setRowSelection] = useState({});
@@ -943,6 +1021,7 @@ export function DataTable<TData, TValue>({
     Record<string, boolean>
   >({});
   const [activeDragLabel, setActiveDragLabel] = useState<string | null>(null);
+  const [refreshSpinCount, setRefreshSpinCount] = useState(0);
   const [searchInput, setSearchInput] = useState(globalFilter);
   const availableGroupFieldIds =
     grouping?.fields.map((field) => field.id) ?? [];
@@ -1073,7 +1152,8 @@ export function DataTable<TData, TValue>({
     () => buildGroupedSections(bodyRows, activeGroupingFields),
     [activeGroupingFields, bodyRows],
   );
-  const colSpan = Math.max(table.getVisibleLeafColumns().length, 1);
+  const colSpan =
+    Math.max(table.getVisibleLeafColumns().length, 1) + (rowActions ? 1 : 0);
   const canDragRows = activeGroupingFields.some(
     (field) => !!field.onMoveToGroup,
   );
@@ -1155,12 +1235,11 @@ export function DataTable<TData, TValue>({
   const renderGroupedTableSections = (
     sections: GroupSection<TData>[],
   ): ReactNode =>
-    sections.map((section) => {
+    sections.flatMap((section) => {
       const isCollapsed = collapsedGroups[section.key] ?? false;
       const hasChildren = section.children.length > 0;
-
-      return (
-        <Fragment key={section.key}>
+      const sectionBody = (
+        <GroupTableSection key={section.key} section={section}>
           <GroupHeaderRow
             collapsed={isCollapsed}
             colSpan={colSpan}
@@ -1168,9 +1247,8 @@ export function DataTable<TData, TValue>({
             section={section}
           />
           {!isCollapsed &&
-            (hasChildren ? (
-              renderGroupedTableSections(section.children)
-            ) : section.rows.length > 0 ? (
+            !hasChildren &&
+            (section.rows.length > 0 ? (
               section.rows.map((row) => (
                 <DataTableRow
                   canDrag={canDragRows}
@@ -1196,8 +1274,12 @@ export function DataTable<TData, TValue>({
                 </TableCell>
               </TableRow>
             ))}
-        </Fragment>
+        </GroupTableSection>
       );
+
+      return !isCollapsed && hasChildren
+        ? [sectionBody, renderGroupedTableSections(section.children)]
+        : [sectionBody];
     });
 
   const renderGroupedGallerySections = (
@@ -1228,129 +1310,159 @@ export function DataTable<TData, TValue>({
     });
 
   return (
-    <div className="w-[calc(100vw-32px)] rounded-md sm:w-full">
-      <div className="flex flex-col gap-3 pb-4">
-        <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
-          {showSearch ? (
-            <div className="relative w-full min-w-0 flex-1 sm:min-w-sm">
-              <Search className="text-muted-foreground pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2" />
-              <Input
-                className="px-9"
-                onChange={(event) => {
-                  setSearchInput(event.target.value);
-                  table.setGlobalFilter(event.target.value);
-                }}
-                placeholder={labels.filter}
-                value={searchInput}
-              />
-              {searchInput ? (
-                <Button
-                  aria-label={labels.filter}
-                  className="text-muted-foreground hover:text-foreground absolute top-1/2 right-1 size-7 -translate-y-1/2 active:!-translate-y-1/2"
-                  onClick={() => {
-                    setSearchInput("");
-                    table.setGlobalFilter("");
+    <div className="w-full max-w-full min-w-0 rounded-md">
+      {hasToolbar ? (
+        <div className="flex flex-col gap-3 pb-4">
+          <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
+            {showSearch ? (
+              <div className="relative w-full min-w-0 flex-1 sm:min-w-sm">
+                <Search className="text-muted-foreground pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2" />
+                <Input
+                  className="px-9"
+                  onChange={(event) => {
+                    setSearchInput(event.target.value);
+                    table.setGlobalFilter(event.target.value);
                   }}
-                  size="icon"
+                  placeholder={labels.filter}
+                  value={searchInput}
+                />
+                {searchInput ? (
+                  <Button
+                    aria-label={labels.filter}
+                    className="text-muted-foreground hover:text-foreground absolute top-1/2 right-1 size-7 -translate-y-1/2 active:!-translate-y-1/2"
+                    onClick={() => {
+                      setSearchInput("");
+                      table.setGlobalFilter("");
+                    }}
+                    size="icon"
+                    type="button"
+                    variant="ghost"
+                  >
+                    <X className="size-4" />
+                  </Button>
+                ) : null}
+              </div>
+            ) : (
+              <div />
+            )}
+            <div className="-m-1 flex items-center gap-2 overflow-x-auto p-1">
+              {grouping?.fields.length ? (
+                <DropdownMenu>
+                  <DropdownMenuTrigger
+                    render={
+                      <Button
+                        aria-label={labels.groupBy}
+                        className="h-9"
+                        size="sm"
+                        variant="outline"
+                      >
+                        <Rows3 />
+                        <span className="hidden sm:inline">
+                          {labels.groupBy}
+                        </span>
+                      </Button>
+                    }
+                  />
+                  <DropdownMenuContent align="end" className="w-[200px]">
+                    <DropdownMenuGroup>
+                      <DropdownMenuLabel>{labels.groupBy}</DropdownMenuLabel>
+                      <DropdownMenuSeparator />
+                      {grouping.fields.map((field) => (
+                        <DropdownMenuCheckboxItem
+                          checked={activeGrouping.includes(field.id)}
+                          key={field.id}
+                          onCheckedChange={(value) =>
+                            toggleGroupingField(field.id, !!value)
+                          }
+                        >
+                          {field.label}
+                        </DropdownMenuCheckboxItem>
+                      ))}
+                    </DropdownMenuGroup>
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              ) : null}
+              {showSorting ? (
+                <DataTableSortDropdown messages={labels} table={table} />
+              ) : null}
+              {showGallery ? (
+                <DataTableDisplayModeSwitch
+                  messages={labels}
+                  onChange={setView}
+                  value={currentView}
+                />
+              ) : null}
+              {showColumnVisibility ? (
+                <DataTableViewOptions messages={labels} table={table} />
+              ) : null}
+              {onRefresh ? (
+                <Button
+                  aria-label={labels.refresh}
+                  className="h-9"
+                  onClick={() => {
+                    setRefreshSpinCount((count) => count + 1);
+                    onRefresh();
+                  }}
+                  size="sm"
                   type="button"
-                  variant="ghost"
+                  variant="outline"
                 >
-                  <X className="size-4" />
+                  <RefreshCw
+                    className={cn(
+                      refreshSpinCount > 0 &&
+                        "animate-[spin_500ms_ease-in-out_1]",
+                    )}
+                    key={refreshSpinCount}
+                  />
+                  <span className="hidden sm:inline">{labels.refresh}</span>
                 </Button>
               ) : null}
-            </div>
-          ) : (
-            <div />
-          )}
-          <div className="-m-1 flex items-center gap-2 overflow-x-auto p-1">
-            {grouping?.fields.length ? (
-              <DropdownMenu>
-                <DropdownMenuTrigger
-                  render={
-                    <Button
-                      aria-label={labels.groupBy}
-                      className="h-9"
-                      size="sm"
-                      variant="outline"
-                    >
-                      <Rows3 />
-                      <span className="hidden sm:inline">{labels.groupBy}</span>
-                    </Button>
-                  }
-                />
-                <DropdownMenuContent align="end" className="w-[200px]">
-                  <DropdownMenuGroup>
-                    <DropdownMenuLabel>{labels.groupBy}</DropdownMenuLabel>
-                    <DropdownMenuSeparator />
-                    {grouping.fields.map((field) => (
-                      <DropdownMenuCheckboxItem
-                        checked={activeGrouping.includes(field.id)}
-                        key={field.id}
-                        onCheckedChange={(value) =>
-                          toggleGroupingField(field.id, !!value)
+              {showExport ? (
+                <DropdownMenu>
+                  <DropdownMenuTrigger
+                    render={
+                      <Button
+                        aria-label={labels.export}
+                        className="h-9"
+                        disabled={!hasExportableRows}
+                        size="sm"
+                        variant="outline"
+                      >
+                        <Download />
+                        <span className="hidden sm:inline">
+                          {labels.export}
+                        </span>
+                      </Button>
+                    }
+                  />
+                  <DropdownMenuContent align="end" className="w-[180px]">
+                    <DropdownMenuGroup>
+                      <DropdownMenuLabel>{labels.export}</DropdownMenuLabel>
+                      <DropdownMenuSeparator />
+                      <DropdownMenuItem
+                        onClick={() =>
+                          exportTableToCsv(table, exportRows, exportFileName)
                         }
                       >
-                        {field.label}
-                      </DropdownMenuCheckboxItem>
-                    ))}
-                  </DropdownMenuGroup>
-                </DropdownMenuContent>
-              </DropdownMenu>
-            ) : null}
-            <DataTableSortDropdown messages={labels} table={table} />
-            {showGallery ? (
-              <DataTableDisplayModeSwitch
-                messages={labels}
-                onChange={setView}
-                value={currentView}
-              />
-            ) : null}
-            {showColumnVisibility ? (
-              <DataTableViewOptions messages={labels} table={table} />
-            ) : null}
-            {showExport ? (
-              <DropdownMenu>
-                <DropdownMenuTrigger
-                  render={
-                    <Button
-                      aria-label={labels.export}
-                      className="h-9"
-                      disabled={!hasExportableRows}
-                      size="sm"
-                      variant="outline"
-                    >
-                      <Download />
-                      <span className="hidden sm:inline">{labels.export}</span>
-                    </Button>
-                  }
-                />
-                <DropdownMenuContent align="end" className="w-[180px]">
-                  <DropdownMenuGroup>
-                    <DropdownMenuLabel>{labels.export}</DropdownMenuLabel>
-                    <DropdownMenuSeparator />
-                    <DropdownMenuItem
-                      onClick={() =>
-                        exportTableToCsv(table, exportRows, exportFileName)
-                      }
-                    >
-                      <FileText />
-                      {labels.exportCsv}
-                    </DropdownMenuItem>
-                    <DropdownMenuItem
-                      onClick={() =>
-                        exportTableToJson(table, exportRows, exportFileName)
-                      }
-                    >
-                      <FileJson />
-                      {labels.exportJson}
-                    </DropdownMenuItem>
-                  </DropdownMenuGroup>
-                </DropdownMenuContent>
-              </DropdownMenu>
-            ) : null}
+                        <FileText />
+                        {labels.exportCsv}
+                      </DropdownMenuItem>
+                      <DropdownMenuItem
+                        onClick={() =>
+                          exportTableToJson(table, exportRows, exportFileName)
+                        }
+                      >
+                        <FileJson />
+                        {labels.exportJson}
+                      </DropdownMenuItem>
+                    </DropdownMenuGroup>
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              ) : null}
+            </div>
           </div>
         </div>
-      </div>
+      ) : null}
       <DndContext
         onDragCancel={() => setActiveDragLabel(null)}
         onDragEnd={({ active, over }) => {
@@ -1408,8 +1520,8 @@ export function DataTable<TData, TValue>({
               renderGalleryEmptyState()
             )
           ) : (
-            <ScrollArea className="-m-1">
-              <div className="p-1">
+            <ScrollArea className="-m-1 max-w-full min-w-0">
+              <div className="max-w-full min-w-0 p-1">
                 <Table className="min-w-full">
                   <TableHeader>
                     {table.getHeaderGroups().map((headerGroup) => (
@@ -1420,24 +1532,27 @@ export function DataTable<TData, TValue>({
                               key={header.id}
                               className="h-12 min-w-32 p-0"
                             >
-                              {header.isPlaceholder
-                                ? null
-                                : flexRender(
-                                    header.column.columnDef.header,
-                                    header.getContext(),
-                                  )}
+                              {renderHeader(header)}
                             </TableHead>
                           );
                         })}
+                        {rowActions ? (
+                          <TableHead className="sticky right-0 z-20 w-0 min-w-0 p-0" />
+                        ) : null}
                       </TableRow>
                     ))}
                   </TableHeader>
-                  <TableBody className="px-2">
-                    {hasActiveGrouping
-                      ? groupedSections.length > 0
-                        ? renderGroupedTableSections(groupedSections)
-                        : renderTableEmptyState()
-                      : bodyRows.length > 0
+                  {hasActiveGrouping ? (
+                    groupedSections.length > 0 ? (
+                      renderGroupedTableSections(groupedSections)
+                    ) : (
+                      <TableBody className="px-2">
+                        {renderTableEmptyState()}
+                      </TableBody>
+                    )
+                  ) : (
+                    <TableBody className="px-2">
+                      {bodyRows.length > 0
                         ? bodyRows.map((row) => (
                             <DataTableRow
                               canDrag={false}
@@ -1448,13 +1563,14 @@ export function DataTable<TData, TValue>({
                             />
                           ))
                         : renderTableEmptyState()}
-                  </TableBody>
+                    </TableBody>
+                  )}
                 </Table>
               </div>
               <ScrollBar orientation="horizontal" />
             </ScrollArea>
           )}
-          <DragOverlay>
+          <DragOverlay modifiers={[snapDragOverlayVerticalCenterToCursor]}>
             {activeDragLabel ? (
               <div className="bg-background rounded-md border px-3 py-2 text-sm shadow-sm">
                 {activeDragLabel}
@@ -1490,12 +1606,12 @@ function DataTableDisplayModeSwitch({
             className="h-9"
             size="sm"
             variant="outline"
-          />
+          >
+            {value === "gallery" ? <LayoutGrid /> : <Rows3 />}
+            <span className="hidden sm:inline">{messages.view}</span>
+          </Button>
         }
-      >
-        <Rows3 />
-        {messages.view}
-      </DropdownMenuTrigger>
+      />
       <DropdownMenuContent align="end" className="w-[160px]">
         <DropdownMenuRadioGroup
           value={value}
@@ -1792,67 +1908,79 @@ export function DataTableRelationshipCell({
   });
 
   return (
-    <div
-      className="flex flex-col gap-2"
-      onClick={(event) => event.stopPropagation()}
-    >
-      <div className="flex flex-wrap items-center gap-2">
-        {value.length > 0 ? (
-          value.map((option) => (
-            <Badge
-              key={option.value}
-              variant="outline"
-              onClick={() => option.href && navigate({ to: option.href })}
-              className="max-w-48"
-            >
-              {option.href && <LinkIcon className="size-3.5 min-w-3.5" />}
-              <span className="justify-start truncate">{option.label}</span>
-            </Badge>
-          ))
-        ) : (
-          <span className="text-muted-foreground text-sm">{emptyLabel}</span>
-        )}
-      </div>
-      <DropdownMenu>
-        <DropdownMenuTrigger
-          render={
-            <Button className="h-8 w-min" size="sm" variant="outline">
-              {manageLabel}
-            </Button>
-          }
-        />
-        <DropdownMenuContent
-          align="end"
-          className="w-[220px]"
-          onClick={(event) => event.stopPropagation()}
-        >
-          <DropdownMenuGroup>
-            <DropdownMenuLabel>{manageLabel}</DropdownMenuLabel>
-            <DropdownMenuSeparator />
-            {options.map((option) => {
-              const checked = selectedValues.has(option.value);
+    <DropdownMenu>
+      <DropdownMenuTrigger
+        onClick={(event) => event.stopPropagation()}
+        render={
+          <Button
+            aria-label={manageLabel}
+            data-slot="relationship-cell"
+            className="min-h-16 w-full justify-between gap-3 rounded-none px-2 py-2 text-left font-normal"
+            type="button"
+            variant="ghost"
+          >
+            <div className="flex min-w-0 flex-wrap items-center gap-2">
+              {value.length > 0 ? (
+                value.map((option) => (
+                  <Badge
+                    key={option.value}
+                    variant="outline"
+                    onClick={(event) => {
+                      if (!option.href) return;
 
-              return (
-                <DropdownMenuCheckboxItem
-                  checked={checked}
-                  key={option.value}
-                  onCheckedChange={(nextChecked) => {
-                    if (nextChecked) {
-                      onAdd?.(option.value);
-                      return;
-                    }
+                      event.preventDefault();
+                      event.stopPropagation();
+                      navigate({ to: option.href });
+                    }}
+                    className="max-w-48 cursor-pointer"
+                  >
+                    {option.href && <LinkIcon className="size-3.5 min-w-3.5" />}
+                    <span className="justify-start truncate">
+                      {option.label}
+                    </span>
+                  </Badge>
+                ))
+              ) : (
+                <span className="text-muted-foreground text-sm">
+                  {emptyLabel}
+                </span>
+              )}
+            </div>
+            <ChevronDown className="text-muted-foreground size-4 shrink-0" />
+          </Button>
+        }
+      />
+      <DropdownMenuContent
+        align="end"
+        className="w-[220px]"
+        onClick={(event) => event.stopPropagation()}
+      >
+        <DropdownMenuGroup>
+          <DropdownMenuLabel>{manageLabel}</DropdownMenuLabel>
+          <DropdownMenuSeparator />
+          {options.map((option) => {
+            const checked = selectedValues.has(option.value);
 
-                    onRemove?.(option.value);
-                  }}
-                >
-                  {option.label}
-                </DropdownMenuCheckboxItem>
-              );
-            })}
-          </DropdownMenuGroup>
-        </DropdownMenuContent>
-      </DropdownMenu>
-    </div>
+            return (
+              <DropdownMenuCheckboxItem
+                checked={checked}
+                key={option.value}
+                onCheckedChange={(nextChecked) => {
+                  if (nextChecked) {
+                    onAdd?.(option.value);
+                    return;
+                  }
+
+                  onRemove?.(option.value);
+                }}
+              >
+                {option.label}
+              </DropdownMenuCheckboxItem>
+            );
+          })}
+        </DropdownMenuGroup>
+      </DropdownMenuContent>
+    </DropdownMenu>
   );
 }
 
@@ -1874,7 +2002,7 @@ export function DataTableColumnHeader<TData, TValue>({
   const labels = dataTableMessages(messages);
   if (!column.getCanSort()) {
     return (
-      <div className={cn("flex h-12 items-center px-2", className)}>
+      <div className={cn("flex h-12 items-center px-2 text-sm", className)}>
         {title}
       </div>
     );
