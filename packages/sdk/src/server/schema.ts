@@ -129,17 +129,19 @@ export const ServerCreateDomainPayload = Schema.Struct({
   rootHostname: Schema.NonEmptyString,
   projectId: Schema.optional(Schema.NullOr(Schema.String)),
   organizationId: Schema.optional(Schema.NullOr(Schema.String)),
+  managed: Schema.optional(Schema.Boolean),
 }).annotate({
   identifier: "ServerCreateDomainPayload",
   title: "Create server domain payload",
   description:
-    "Payload used by trusted services to register an auth-owned custom hostname.",
+    "Payload used by trusted services to register an auth hostname. Set managed to false when the custom hostname is provisioned externally.",
   examples: [
     {
       hostname: "auth.institute.example.com",
       rootHostname: "institute.example.com",
       projectId: "kokobi",
       organizationId: "org_1",
+      managed: true,
     },
   ],
 });

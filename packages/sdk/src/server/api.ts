@@ -182,9 +182,9 @@ export const ServerDomainsApiGroup = HttpApiGroup.make("serverDomains")
     }).annotateMerge(
       OpenApi.annotations({
         title: "Create server domain",
-        summary: "Create an auth-owned custom hostname",
+        summary: "Register an auth hostname",
         description:
-          "Registers an auth custom hostname for a trusted service. Requires a service API key.",
+          "Registers an auth hostname for a trusted service. Managed domains are provisioned in Cloudflare by auth; unmanaged domains are only registered for auth request resolution. Requires a service API key.",
       }),
     ),
   )
@@ -235,7 +235,7 @@ export const ServerDomainsApiGroup = HttpApiGroup.make("serverDomains")
   .annotateMerge(
     OpenApi.annotations({
       title: "Domains (Server)",
-      description: "Server-to-server auth custom hostname endpoints.",
+      description: "Server-to-server auth hostname endpoints.",
     }),
   );
 

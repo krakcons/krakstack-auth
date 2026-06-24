@@ -73,7 +73,7 @@
     },
     "packages/sdk": {
       "name": "@krak-stack/auth",
-      "version": "0.1.24",
+      "version": "0.1.25",
       "peerDependencies": {
         "@better-auth/api-key": "^1.6.14",
         "@tanstack/react-router": "^1.170.15",

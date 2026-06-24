@@ -10,9 +10,16 @@ import { DB } from "@/services/database";
 import type { ServerCreateDomainPayload } from "../../../packages/sdk/src/server/schema";
 
 const localHostnameIdPrefix = "local:";
+const externalHostnameIdPrefix = "external:";
 
 const isLocalHostnameId = (hostnameId: string) =>
   hostnameId.startsWith(localHostnameIdPrefix);
+
+const isExternalHostnameId = (hostnameId: string) =>
+  hostnameId.startsWith(externalHostnameIdPrefix);
+
+const isManagedHostnameId = (hostnameId: string) =>
+  !isLocalHostnameId(hostnameId) && !isExternalHostnameId(hostnameId);
 
 const hostnameWithoutPort = (host: string) => host.split(":")[0] ?? host;
 
@@ -129,9 +136,12 @@ export class Domains extends Context.Service<Domains>()("Domains", {
         return domain ?? existing;
       }
 
+      const managed = payload.managed !== false;
       const isLocal = isDevelopmentLocalHostname(normalized.hostname);
       let hostnameId = `${localHostnameIdPrefix}${crypto.randomUUID()}`;
-      if (!isLocal) {
+      if (!managed) {
+        hostnameId = `${externalHostnameIdPrefix}${crypto.randomUUID()}`;
+      } else if (!isLocal) {
         const zoneId = yield* requireCloudflareZoneId;
         hostnameId = (yield* CustomHostnames.createCustomHostname({
           zoneId,
@@ -153,7 +163,7 @@ export class Domains extends Context.Service<Domains>()("Domains", {
           projectId: linkedProject?.id ?? null,
           organizationId: normalized.organizationId,
           hostnameId,
-          active: isLocal,
+          active: isLocal || !managed,
         })
         .returning();
 
@@ -167,7 +177,7 @@ export class Domains extends Context.Service<Domains>()("Domains", {
     }) {
       const domain = yield* get({ id });
       if (!domain) return null;
-      if (isLocalHostnameId(domain.hostnameId)) return [];
+      if (!isManagedHostnameId(domain.hostnameId)) return [];
 
       const zoneId = yield* requireCloudflareZoneId;
       const cloudflare = yield* CustomHostnames.getCustomHostname({
@@ -203,7 +213,7 @@ export class Domains extends Context.Service<Domains>()("Domains", {
       const domain = yield* get({ id });
       if (!domain) return null;
 
-      if (!isLocalHostnameId(domain.hostnameId)) {
+      if (isManagedHostnameId(domain.hostnameId)) {
         const zoneId = yield* requireCloudflareZoneId;
         yield* CustomHostnames.deleteCustomHostname({
           zoneId,
@@ -233,4 +243,4 @@ export class Domains extends Context.Service<Domains>()("Domains", {
   );
 }
 
-export { isLocalHostnameId };
+export { isLocalHostnameId, isExternalHostnameId, isManagedHostnameId };
