@@ -6,7 +6,6 @@ import { useEffect, useState } from "react";
 import { toast } from "sonner";
 
 import {
-  createDataTableActionsColumn,
   DataTable,
   TableSearchSchemaStandard as TableSearchSchema,
 } from "@/components/ui/data-table";
@@ -156,11 +155,19 @@ function ApiKeysPage() {
       <div className="min-w-0 space-y-4">
         {error ? <p className="text-destructive text-sm">{error}</p> : null}
         <DataTable
-          columns={apiKeyColumns({ onDelete: deleteKey })}
+          columns={apiKeyColumns()}
           data={keys}
           {...(loading ? { emptyLabel: m.admin_api_keys_loading() } : {})}
           exportFileName="service-api-keys.csv"
           features={{ gallery: false }}
+          rowActions={[
+            {
+              name: m.admin_api_key_delete(),
+              icon: <Trash2 />,
+              variant: "destructive",
+              onClick: deleteKey,
+            },
+          ]}
         />
       </div>
       <Dialog
@@ -237,11 +244,7 @@ function ApiKeysPage() {
   );
 }
 
-const apiKeyColumns = ({
-  onDelete,
-}: {
-  onDelete: (key: ApiKeySummary) => void;
-}): ColumnDef<ApiKeySummary>[] => [
+const apiKeyColumns = (): ColumnDef<ApiKeySummary>[] => [
   {
     accessorKey: "name",
     header: m.admin_api_key_name(),
@@ -278,12 +281,4 @@ const apiKeyColumns = ({
       </span>
     ),
   },
-  createDataTableActionsColumn<ApiKeySummary>([
-    {
-      name: m.admin_api_key_delete(),
-      icon: <Trash2 />,
-      variant: "destructive",
-      onClick: onDelete,
-    },
-  ]),
 ];

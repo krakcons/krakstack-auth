@@ -5,7 +5,6 @@ import { Ban, Loader2, RefreshCw, ShieldOff, UserIcon } from "lucide-react";
 import { useState } from "react";
 
 import {
-  createDataTableActionsColumn,
   DataTable,
   TableSearchSchemaStandard as TableSearchSchema,
 } from "@/components/ui/data-table";
@@ -121,14 +120,26 @@ function UsersPage() {
 
       {error ? <ErrorMessage text={error.message} /> : null}
       <DataTable
-        columns={userColumns({
-          onBan: setBanningUser,
-          onUnban: setUnbanningUser,
-        })}
+        columns={userColumns()}
         data={users}
         exportFileName="users.csv"
         features={{ gallery: false }}
         from="/admin/users"
+        rowActions={[
+          {
+            name: m.admin_action_ban(),
+            icon: <Ban className="size-4" />,
+            variant: "destructive",
+            onClick: setBanningUser,
+            visible: (user) => !user.banned,
+          },
+          {
+            name: m.admin_action_unban(),
+            icon: <ShieldOff className="size-4" />,
+            onClick: setUnbanningUser,
+            visible: (user) => !!user.banned,
+          },
+        ]}
       />
       {banningUser ? (
         <BanUserDialog
@@ -146,13 +157,7 @@ function UsersPage() {
   );
 }
 
-const userColumns = ({
-  onBan,
-  onUnban,
-}: {
-  onBan: (user: User) => void;
-  onUnban: (user: User) => void;
-}): ColumnDef<User>[] => [
+const userColumns = (): ColumnDef<User>[] => [
   {
     accessorKey: "name",
     header: m.admin_column_user(),
@@ -232,21 +237,6 @@ const userColumns = ({
       </span>
     ),
   },
-  createDataTableActionsColumn<User>([
-    {
-      name: m.admin_action_ban(),
-      icon: <Ban className="size-4" />,
-      variant: "destructive",
-      onClick: onBan,
-      visible: (user) => !user.banned,
-    },
-    {
-      name: m.admin_action_unban(),
-      icon: <ShieldOff className="size-4" />,
-      onClick: onUnban,
-      visible: (user) => !!user.banned,
-    },
-  ]),
 ];
 
 function BanUserDialog({ user, onClose }: { user: User; onClose: () => void }) {

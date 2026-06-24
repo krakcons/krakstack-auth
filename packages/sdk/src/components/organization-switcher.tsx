@@ -914,7 +914,7 @@ export function OrganizationSwitcher({
           );
         }}
       >
-        <DialogContent className="max-h-[85vh] overflow-y-auto sm:max-w-4xl">
+        <DialogContent className="max-h-[85vh] overflow-x-hidden overflow-y-auto sm:max-w-4xl">
           <DialogHeader>
             <DialogTitle className="text-2xl">
               {m.organization_members_title()}
@@ -927,6 +927,7 @@ export function OrganizationSwitcher({
           {activeOrganization.data ? (
             <OrganizationMembersManager
               authClient={authClient}
+              baseUrl={baseUrl}
               organization={activeOrganization.data}
               currentUserId={session.data.user.id}
             />
@@ -1621,10 +1622,12 @@ function OrganizationTranslationHeader({
 
 function OrganizationMembersManager({
   authClient,
+  baseUrl,
   organization,
   currentUserId,
 }: {
   authClient: AuthUiClient;
+  baseUrl?: string | undefined;
   organization: OrganizationSummary;
   currentUserId: string;
 }) {
@@ -1769,7 +1772,7 @@ function OrganizationMembersManager({
   };
 
   return (
-    <div className="flex flex-col gap-5">
+    <div className="flex min-w-0 flex-col gap-5">
       <inviteForm.AppForm>
         <form
           className="grid gap-4 rounded-lg border p-4 sm:grid-cols-[minmax(0,1fr)_12rem_auto] sm:items-end"
@@ -1816,33 +1819,36 @@ function OrganizationMembersManager({
         </form>
       </inviteForm.AppForm>
       {error ? <p className="text-destructive text-sm">{error}</p> : null}
-      <section className="flex flex-col gap-3">
+      <section className="flex min-w-0 flex-col gap-3">
         <div>
           <h3 className="font-medium">{m.organization_members_heading()}</h3>
           <p className="text-muted-foreground text-sm">
             {m.organization_members_description()}
           </p>
         </div>
-        <DataTable
-          columns={memberColumns({
-            m,
-            updatingMemberId,
-            onRoleChange: updateRole,
-          })}
-          data={members}
-          emptyLabel={
-            loading ? m.user_loading() : m.organization_members_empty()
-          }
-          exportFileName={`${organization.slug}-members.csv`}
-          features={{ gallery: false }}
-          rowActions={memberRowActions({
-            m,
-            currentUserId,
-            onRemove: removeMember,
-          })}
-        />
+        <div className="min-w-0 overflow-x-auto">
+          <DataTable
+            columns={memberColumns({
+              m,
+              baseUrl,
+              updatingMemberId,
+              onRoleChange: updateRole,
+            })}
+            data={members}
+            emptyLabel={
+              loading ? m.user_loading() : m.organization_members_empty()
+            }
+            exportFileName={`${organization.slug}-members.csv`}
+            features={{ gallery: false }}
+            rowActions={memberRowActions({
+              m,
+              currentUserId,
+              onRemove: removeMember,
+            })}
+          />
+        </div>
       </section>
-      <section className="flex flex-col gap-3">
+      <section className="flex min-w-0 flex-col gap-3">
         <div>
           <h3 className="font-medium">
             {m.organization_invitations_heading()}
@@ -1851,22 +1857,24 @@ function OrganizationMembersManager({
             {m.organization_invitations_description()}
           </p>
         </div>
-        <DataTable
-          columns={invitationColumns({
-            m,
-          })}
-          data={invitations}
-          emptyLabel={
-            loading ? m.user_loading() : m.organization_invitations_empty()
-          }
-          exportFileName={`${organization.slug}-invitations.csv`}
-          features={{ gallery: false }}
-          rowActions={invitationRowActions({
-            m,
-            cancellingInvitationId,
-            onCancel: cancelInvitation,
-          })}
-        />
+        <div className="min-w-0 overflow-x-auto">
+          <DataTable
+            columns={invitationColumns({
+              m,
+            })}
+            data={invitations}
+            emptyLabel={
+              loading ? m.user_loading() : m.organization_invitations_empty()
+            }
+            exportFileName={`${organization.slug}-invitations.csv`}
+            features={{ gallery: false }}
+            rowActions={invitationRowActions({
+              m,
+              cancellingInvitationId,
+              onCancel: cancelInvitation,
+            })}
+          />
+        </div>
       </section>
     </div>
   );
@@ -1874,10 +1882,12 @@ function OrganizationMembersManager({
 
 const memberColumns = ({
   m,
+  baseUrl,
   updatingMemberId,
   onRoleChange,
 }: {
   m: ReturnType<typeof organizationMessageFns>;
+  baseUrl?: string | undefined;
   updatingMemberId: string | null;
   onRoleChange: (
     member: OrganizationMemberSummary,
@@ -1887,27 +1897,31 @@ const memberColumns = ({
   {
     id: "user",
     header: m.organization_member_user(),
-    cell: ({ row }) => (
-      <div className="flex min-w-0 items-center gap-3">
-        {row.original.user.image ? (
-          <img
-            src={row.original.user.image}
-            alt={row.original.user.name}
-            className="size-9 shrink-0 rounded-full border object-cover"
-          />
-        ) : (
-          <span className="bg-muted flex size-9 shrink-0 items-center justify-center rounded-full border text-sm font-semibold">
-            {initialsFromName(row.original.user.name)}
-          </span>
-        )}
-        <div className="min-w-0">
-          <p className="truncate font-medium">{row.original.user.name}</p>
-          <p className="text-muted-foreground truncate text-sm">
-            {row.original.user.email}
-          </p>
+    cell: ({ row }) => {
+      const image = assetUrl(row.original.user.image, baseUrl);
+
+      return (
+        <div className="flex min-w-0 items-center gap-3">
+          {image ? (
+            <img
+              src={image}
+              alt={row.original.user.name}
+              className="size-9 shrink-0 rounded-full border object-cover"
+            />
+          ) : (
+            <span className="bg-muted flex size-9 shrink-0 items-center justify-center rounded-full border text-sm font-semibold">
+              {initialsFromName(row.original.user.name)}
+            </span>
+          )}
+          <div className="min-w-0">
+            <p className="truncate font-medium">{row.original.user.name}</p>
+            <p className="text-muted-foreground truncate text-sm">
+              {row.original.user.email}
+            </p>
+          </div>
         </div>
-      </div>
-    ),
+      );
+    },
   },
   {
     accessorKey: "role",

@@ -6,10 +6,7 @@ import { useState } from "react";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
-import {
-  createDataTableActionsColumn,
-  DataTable,
-} from "@/components/ui/data-table";
+import { DataTable } from "@/components/ui/data-table";
 import { ErrorMessage, useAppForm } from "@/components/ui/form";
 import {
   AlertDialog,
@@ -84,14 +81,24 @@ export function DomainsTable({
     <div className="flex flex-col gap-4">
       {error ? <ErrorMessage text={error} /> : null}
       <DataTable
-        columns={domainColumns({
-          onDelete: setDeletingDomain,
-          onEdit: setEditingDomain,
-        })}
+        columns={domainColumns()}
         data={rows}
         exportFileName="domains.csv"
         features={{ gallery: false }}
         from="/admin/domains"
+        rowActions={[
+          {
+            name: m.admin_action_edit(),
+            icon: <Pencil className="size-4" />,
+            onClick: setEditingDomain,
+          },
+          {
+            name: m.actions_delete(),
+            icon: <Trash2 className="size-4" />,
+            variant: "destructive",
+            onClick: setDeletingDomain,
+          },
+        ]}
       />
       {deletingDomain ? (
         <DeleteDomainDialog
@@ -294,13 +301,7 @@ function DomainDialog({
   );
 }
 
-const domainColumns = ({
-  onEdit,
-  onDelete,
-}: {
-  onEdit: (domain: ServerDomain) => void;
-  onDelete: (domain: ServerDomain) => void;
-}): ColumnDef<ServerDomain>[] => [
+const domainColumns = (): ColumnDef<ServerDomain>[] => [
   {
     accessorKey: "hostname",
     header: m.domain_hostname(),
@@ -361,19 +362,6 @@ const domainColumns = ({
       </span>
     ),
   },
-  createDataTableActionsColumn<ServerDomain>([
-    {
-      name: m.admin_action_edit(),
-      icon: <Pencil className="size-4" />,
-      onClick: onEdit,
-    },
-    {
-      name: m.actions_delete(),
-      icon: <Trash2 className="size-4" />,
-      variant: "destructive",
-      onClick: onDelete,
-    },
-  ]),
 ];
 
 function DeleteDomainDialog({

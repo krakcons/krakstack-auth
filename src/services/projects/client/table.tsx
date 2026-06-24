@@ -5,10 +5,7 @@ import { Eye, Pencil, Trash2 } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
 
-import {
-  createDataTableActionsColumn,
-  DataTable,
-} from "@/components/ui/data-table";
+import { DataTable } from "@/components/ui/data-table";
 import { ErrorMessage } from "@/components/ui/form";
 import {
   AlertDialog,
@@ -60,21 +57,35 @@ export function ProjectsTable({ reloadKey = 0 }: { reloadKey?: number }) {
     <div className="flex flex-col gap-4">
       {error ? <ErrorMessage text={error} /> : null}
       <DataTable
-        columns={projectColumns({
-          onEdit: setEditingProject,
-          onDelete: setDeletingProject,
-          onPreview: (project) => {
-            window.open(
-              `/sign-in?projectId=${encodeURIComponent(project.id)}`,
-              "_blank",
-              "noopener,noreferrer",
-            );
-          },
-        })}
+        columns={projectColumns()}
         data={rows}
         exportFileName="projects.csv"
         features={{ gallery: false }}
         from="/admin/projects"
+        rowActions={[
+          {
+            name: m.admin_action_preview(),
+            icon: <Eye className="size-4" />,
+            onClick: (project) => {
+              window.open(
+                `/sign-in?projectId=${encodeURIComponent(project.id)}`,
+                "_blank",
+                "noopener,noreferrer",
+              );
+            },
+          },
+          {
+            name: m.admin_action_edit(),
+            icon: <Pencil className="size-4" />,
+            onClick: setEditingProject,
+          },
+          {
+            name: m.actions_delete(),
+            icon: <Trash2 className="size-4" />,
+            variant: "destructive",
+            onClick: setDeletingProject,
+          },
+        ]}
       />
       {editingProject ? (
         <ProjectForm
@@ -105,15 +116,7 @@ export function ProjectsTable({ reloadKey = 0 }: { reloadKey?: number }) {
   );
 }
 
-const projectColumns = ({
-  onEdit,
-  onDelete,
-  onPreview,
-}: {
-  onEdit: (project: Project) => void;
-  onDelete: (project: Project) => void;
-  onPreview: (project: Project) => void;
-}): ColumnDef<Project>[] => [
+const projectColumns = (): ColumnDef<Project>[] => [
   {
     accessorKey: "name",
     header: m.project(),
@@ -178,24 +181,6 @@ const projectColumns = ({
       </div>
     ),
   },
-  createDataTableActionsColumn<Project>([
-    {
-      name: m.admin_action_preview(),
-      icon: <Eye className="size-4" />,
-      onClick: onPreview,
-    },
-    {
-      name: m.admin_action_edit(),
-      icon: <Pencil className="size-4" />,
-      onClick: onEdit,
-    },
-    {
-      name: m.actions_delete(),
-      icon: <Trash2 className="size-4" />,
-      variant: "destructive",
-      onClick: onDelete,
-    },
-  ]),
 ];
 
 function DeleteProjectDialog({
@@ -235,8 +220,8 @@ function DeleteProjectDialog({
                   params: { id: project.id },
                   reactivityKeys: ["projects"],
                 });
-                toast.success(m.project_deleted_toast());
                 onDeleted(deleted);
+                toast.success(m.project_deleted_toast());
                 onClose();
               } catch (cause) {
                 setError(

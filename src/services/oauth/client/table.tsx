@@ -5,10 +5,7 @@ import { Pencil, Trash2 } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
 
-import {
-  createDataTableActionsColumn,
-  DataTable,
-} from "@/components/ui/data-table";
+import { DataTable } from "@/components/ui/data-table";
 import { ErrorMessage } from "@/components/ui/form";
 import {
   AlertDialog,
@@ -68,14 +65,24 @@ export function OAuthClientsTable({ reloadKey = 0 }: { reloadKey?: number }) {
     <div className="flex flex-col gap-4">
       {error ? <ErrorMessage text={error} /> : null}
       <DataTable
-        columns={clientColumns({
-          onEdit: setEditingClient,
-          onDelete: setDeletingClient,
-        })}
+        columns={clientColumns()}
         data={rows}
         exportFileName="oauth-clients.csv"
         features={{ gallery: false }}
         from="/admin/oauth/clients"
+        rowActions={[
+          {
+            name: m.admin_action_edit(),
+            icon: <Pencil className="size-4" />,
+            onClick: setEditingClient,
+          },
+          {
+            name: m.actions_delete(),
+            icon: <Trash2 className="size-4" />,
+            variant: "destructive",
+            onClick: setDeletingClient,
+          },
+        ]}
       />
       {editingClient ? (
         <OAuthClientForm
@@ -108,13 +115,7 @@ export function OAuthClientsTable({ reloadKey = 0 }: { reloadKey?: number }) {
   );
 }
 
-const clientColumns = ({
-  onEdit,
-  onDelete,
-}: {
-  onEdit: (client: OAuthClientAdmin) => void;
-  onDelete: (client: OAuthClientAdmin) => void;
-}): ColumnDef<OAuthClientAdmin>[] => [
+const clientColumns = (): ColumnDef<OAuthClientAdmin>[] => [
   {
     accessorKey: "name",
     header: m.admin_column_client(),
@@ -188,19 +189,6 @@ const clientColumns = ({
       </code>
     ),
   },
-  createDataTableActionsColumn<OAuthClientAdmin>([
-    {
-      name: m.admin_action_edit(),
-      icon: <Pencil className="size-4" />,
-      onClick: onEdit,
-    },
-    {
-      name: m.actions_delete(),
-      icon: <Trash2 className="size-4" />,
-      variant: "destructive",
-      onClick: onDelete,
-    },
-  ]),
 ];
 
 function DeleteOAuthClientDialog({
