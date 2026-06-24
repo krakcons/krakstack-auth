@@ -251,6 +251,8 @@
   "domain_root_hostname_description": "Nom d'hôte de l'application autorisé pour les rappels, comme institute.example.com.",
   "domain_project_id_description": "ID de projet facultatif utilisé pour la marque et les options d'authentification.",
   "domain_organization_id_description": "ID d'organisation facultatif utilisé pour la marque de l'organisation.",
+  "domain_managed": "Gérer le nom d'hôte Cloudflare",
+  "domain_managed_description": "Créez et supprimez le nom d'hôte personnalisé Cloudflare depuis KrakStack Auth. Désactivez cette option lorsqu'une autre application provisionne le nom d'hôte et que ce service doit seulement l'autoriser.",
   "domain_create_error": "Impossible de créer le domaine.",
   "domain_created_toast": "Domaine créé",
   "domain_delete_title": "Supprimer le domaine ?",

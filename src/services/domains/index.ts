@@ -82,10 +82,34 @@ export class Domains extends Context.Service<Domains>()("Domains", {
       return yield* db.query.domains.findFirst({ where: { id } });
     });
 
+    const refreshStatus = Effect.fn("Domains.refreshStatus")(function* (
+      domain: typeof domains.$inferSelect,
+    ) {
+      if (!isManagedHostnameId(domain.hostnameId)) return domain;
+
+      const zoneId = yield* requireCloudflareZoneId;
+      const cloudflare = yield* CustomHostnames.getCustomHostname({
+        zoneId,
+        customHostnameId: domain.hostnameId,
+      });
+      const active = cloudflare.status === "active";
+      if (domain.active === active) return domain;
+
+      const [updated] = yield* db
+        .update(domains)
+        .set({ active, updatedAt: new Date() })
+        .where(eq(domains.id, domain.id))
+        .returning();
+
+      return updated ?? { ...domain, active };
+    });
+
     const list = Effect.fn("Domains.list")(function* () {
-      return yield* db.query.domains.findMany({
+      const rows = yield* db.query.domains.findMany({
         orderBy: { createdAt: "desc" },
       });
+
+      return yield* Effect.all(rows.map(refreshStatus), { concurrency: 4 });
     });
 
     const getByHost = Effect.fn("Domains.getByHost")(function* ({
@@ -179,25 +203,12 @@ export class Domains extends Context.Service<Domains>()("Domains", {
       if (!domain) return null;
       if (!isManagedHostnameId(domain.hostnameId)) return [];
 
-      const zoneId = yield* requireCloudflareZoneId;
-      const cloudflare = yield* CustomHostnames.getCustomHostname({
-        zoneId,
-        customHostnameId: domain.hostnameId,
-      });
-      const active = cloudflare.status === "active";
-      if (domain.active !== active) {
-        yield* db
-          .update(domains)
-          .set({ active, updatedAt: new Date() })
-          .where(eq(domains.id, domain.id));
-      }
+      const refreshed = yield* refreshStatus(domain);
 
       return [
         {
           required: true,
-          status: active
-            ? "SUCCESS"
-            : (cloudflare.status ?? "UNKNOWN").toUpperCase(),
+          status: refreshed.active ? "SUCCESS" : "PENDING",
           type: "CNAME",
           name: domain.hostname,
           value: cnameTarget(),

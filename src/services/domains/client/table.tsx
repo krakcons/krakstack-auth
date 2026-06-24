@@ -119,6 +119,7 @@ type DomainFormValues = {
   rootHostname: string;
   projectId: string;
   organizationId: string;
+  managed: boolean;
 };
 
 const domainPayloadFromValue = (
@@ -128,6 +129,7 @@ const domainPayloadFromValue = (
   rootHostname: value.rootHostname.trim(),
   projectId: value.projectId.trim() || null,
   organizationId: value.organizationId.trim() || null,
+  managed: value.managed,
 });
 
 function CreateDomainDialog({
@@ -149,6 +151,7 @@ function CreateDomainDialog({
       rootHostname: "",
       projectId: "",
       organizationId: "",
+      managed: true,
     } satisfies DomainFormValues,
     onSubmit: async ({ value }) => {
       setError("");
@@ -213,6 +216,14 @@ function CreateDomainDialog({
                 <field.TextField
                   label={m.admin_column_organization()}
                   description={m.domain_organization_id_description()}
+                />
+              )}
+            </form.AppField>
+            <form.AppField name="managed">
+              {(field) => (
+                <field.CheckboxField
+                  label={m.domain_managed()}
+                  description={m.domain_managed_description()}
                 />
               )}
             </form.AppField>

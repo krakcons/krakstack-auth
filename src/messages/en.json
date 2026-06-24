@@ -251,6 +251,8 @@
   "domain_root_hostname_description": "Application hostname trusted for callbacks, such as institute.example.com.",
   "domain_project_id_description": "Optional project ID used for branding and auth options.",
   "domain_organization_id_description": "Optional organization ID used for organization branding.",
+  "domain_managed": "Manage Cloudflare hostname",
+  "domain_managed_description": "Create and delete the Cloudflare custom hostname from KrakStack Auth. Disable when another app provisions the hostname and this service should only trust it.",
   "domain_create_error": "Could not create domain.",
   "domain_created_toast": "Domain created",
   "domain_delete_title": "Delete domain?",
