@@ -101,6 +101,7 @@ export const ServerDomain = Schema.Struct({
   projectId: Schema.NullOr(Schema.String),
   organizationId: Schema.NullOr(Schema.String),
   hostnameId: Schema.String,
+  managed: Schema.Boolean,
   active: Schema.Boolean,
   createdAt: Schema.Date,
   updatedAt: Schema.Date,
@@ -117,6 +118,7 @@ export const ServerDomain = Schema.Struct({
       projectId: "kokobi",
       organizationId: "org_1",
       hostnameId: "cloudflare-hostname-id",
+      managed: true,
       active: false,
       createdAt: new Date("2026-01-01T00:00:00.000Z"),
       updatedAt: new Date("2026-01-01T00:00:00.000Z"),
@@ -129,7 +131,7 @@ export const ServerCreateDomainPayload = Schema.Struct({
   rootHostname: Schema.NonEmptyString,
   projectId: Schema.optional(Schema.NullOr(Schema.String)),
   organizationId: Schema.optional(Schema.NullOr(Schema.String)),
-  managed: Schema.optional(Schema.Boolean),
+  managed: Schema.Boolean,
 }).annotate({
   identifier: "ServerCreateDomainPayload",
   title: "Create server domain payload",
@@ -142,6 +144,26 @@ export const ServerCreateDomainPayload = Schema.Struct({
       projectId: "kokobi",
       organizationId: "org_1",
       managed: true,
+    },
+  ],
+});
+
+export const ServerUpdateDomainPayload = Schema.Struct({
+  rootHostname: Schema.NonEmptyString,
+  projectId: Schema.optional(Schema.NullOr(Schema.String)),
+  organizationId: Schema.optional(Schema.NullOr(Schema.String)),
+  managed: Schema.Boolean,
+}).annotate({
+  identifier: "ServerUpdateDomainPayload",
+  title: "Update server domain payload",
+  description:
+    "Payload used by administrators to update an auth hostname's trust target, ownership links, and Cloudflare management mode.",
+  examples: [
+    {
+      rootHostname: "institute.example.com",
+      projectId: "kokobi",
+      organizationId: "org_1",
+      managed: false,
     },
   ],
 });
@@ -191,5 +213,6 @@ export type ServerMembersResponse = typeof ServerMembersResponse.Type;
 export type ServerActiveOrganization = typeof ServerActiveOrganization.Type;
 export type ServerDomain = typeof ServerDomain.Type;
 export type ServerCreateDomainPayload = typeof ServerCreateDomainPayload.Type;
+export type ServerUpdateDomainPayload = typeof ServerUpdateDomainPayload.Type;
 export type ServerDomainRecordsResponse =
   typeof ServerDomainRecordsResponse.Type;

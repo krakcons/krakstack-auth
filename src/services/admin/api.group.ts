@@ -18,6 +18,7 @@ import {
   ServerDomain,
   ServerDomainIdParams,
   ServerDomainRecordsResponse,
+  ServerUpdateDomainPayload,
 } from "../../../packages/sdk/src/server/schema";
 
 export const AdminApiGroup = HttpApiGroup.make("admin")
@@ -138,6 +139,26 @@ export const AdminApiGroup = HttpApiGroup.make("admin")
         title: "Create domain",
         summary: "Create an auth domain",
         description: "Registers an auth-owned custom hostname.",
+      }),
+    ),
+  )
+  .add(
+    HttpApiEndpoint.patch("updateDomain", "/admin/domains/:id", {
+      params: ServerDomainIdParams,
+      payload: ServerUpdateDomainPayload,
+      success: ServerDomain,
+      error: [
+        HttpApiError.Unauthorized,
+        HttpApiError.Forbidden,
+        HttpApiError.NotFound,
+        HttpApiError.InternalServerError,
+      ],
+    }).annotateMerge(
+      OpenApi.annotations({
+        title: "Update domain",
+        summary: "Update an auth domain",
+        description:
+          "Updates trust target, ownership links, and Cloudflare management mode for an auth hostname.",
       }),
     ),
   )

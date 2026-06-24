@@ -8,30 +8,7 @@ import { domains } from "@/db/auth-schema";
 import { normalizeAuthHost } from "@/lib/domain-utils";
 import { DB } from "@/services/database";
 import type { ServerCreateDomainPayload } from "../../../packages/sdk/src/server/schema";
-
-const localHostnameIdPrefix = "local:";
-const externalHostnameIdPrefix = "external:";
-
-const isLocalHostnameId = (hostnameId: string) =>
-  hostnameId.startsWith(localHostnameIdPrefix);
-
-const isExternalHostnameId = (hostnameId: string) =>
-  hostnameId.startsWith(externalHostnameIdPrefix);
-
-const isManagedHostnameId = (hostnameId: string) =>
-  !isLocalHostnameId(hostnameId) && !isExternalHostnameId(hostnameId);
-
-const hostnameWithoutPort = (host: string) => host.split(":")[0] ?? host;
-
-const isDevelopmentLocalHostname = (host: string) => {
-  const hostname = hostnameWithoutPort(host);
-  return (
-    process.env.NODE_ENV === "development" &&
-    (hostname === "localhost" ||
-      hostname.endsWith(".localhost") ||
-      hostname.endsWith(".test"))
-  );
-};
+import type { ServerUpdateDomainPayload } from "../../../packages/sdk/src/server/schema";
 
 const cloudflareZoneId = () =>
   process.env.AUTH_CLOUDFLARE_ZONE_ID ?? process.env.CLOUDFLARE_ZONE_ID;
@@ -62,6 +39,8 @@ const requireCloudflareZoneId = Effect.sync(() => {
   return zoneId;
 });
 
+type DomainRow = typeof domains.$inferSelect;
+
 const normalizePayload = (payload: ServerCreateDomainPayload) => {
   const hostname = normalizeAuthHost(payload.hostname);
   const rootHostname = normalizeAuthHost(payload.rootHostname);
@@ -71,7 +50,24 @@ const normalizePayload = (payload: ServerCreateDomainPayload) => {
   const organizationId = payload.organizationId?.trim() || null;
   if (!projectId && !organizationId) return null;
 
-  return { hostname, rootHostname, projectId, organizationId };
+  return {
+    hostname,
+    rootHostname,
+    projectId,
+    organizationId,
+    managed: payload.managed,
+  };
+};
+
+const normalizeUpdatePayload = (payload: ServerUpdateDomainPayload) => {
+  const rootHostname = normalizeAuthHost(payload.rootHostname);
+  if (!rootHostname) return null;
+
+  const projectId = payload.projectId?.trim() || null;
+  const organizationId = payload.organizationId?.trim() || null;
+  if (!projectId && !organizationId) return null;
+
+  return { rootHostname, projectId, organizationId, managed: payload.managed };
 };
 
 export class Domains extends Context.Service<Domains>()("Domains", {
@@ -79,13 +75,14 @@ export class Domains extends Context.Service<Domains>()("Domains", {
     const db = yield* DB;
 
     const get = Effect.fn("Domains.get")(function* ({ id }: { id: string }) {
-      return yield* db.query.domains.findFirst({ where: { id } });
+      const domain = yield* db.query.domains.findFirst({ where: { id } });
+      return domain ?? null;
     });
 
     const refreshStatus = Effect.fn("Domains.refreshStatus")(function* (
-      domain: typeof domains.$inferSelect,
+      domain: DomainRow,
     ) {
-      if (!isManagedHostnameId(domain.hostnameId)) return domain;
+      if (!domain.managed) return domain;
 
       const zoneId = yield* requireCloudflareZoneId;
       const cloudflare = yield* CustomHostnames.getCustomHostname({
@@ -119,9 +116,10 @@ export class Domains extends Context.Service<Domains>()("Domains", {
     }) {
       const normalized = normalizeAuthHost(hostname);
       if (!normalized) return null;
-      return yield* db.query.domains.findFirst({
+      const domain = yield* db.query.domains.findFirst({
         where: { hostname: normalized },
       });
+      return domain ?? null;
     });
 
     const create = Effect.fn("Domains.create")(function* ({
@@ -152,20 +150,17 @@ export class Domains extends Context.Service<Domains>()("Domains", {
             rootHostname: normalized.rootHostname,
             projectId: linkedProject?.id ?? null,
             organizationId: normalized.organizationId,
+            managed: normalized.managed,
             updatedAt: new Date(),
           })
           .where(eq(domains.id, existing.id))
           .returning();
 
-        return domain ?? existing;
+        return domain ?? { ...existing, managed: normalized.managed };
       }
 
-      const managed = payload.managed !== false;
-      const isLocal = isDevelopmentLocalHostname(normalized.hostname);
-      let hostnameId = `${localHostnameIdPrefix}${crypto.randomUUID()}`;
-      if (!managed) {
-        hostnameId = `${externalHostnameIdPrefix}${crypto.randomUUID()}`;
-      } else if (!isLocal) {
+      let hostnameId: string = crypto.randomUUID();
+      if (normalized.managed) {
         const zoneId = yield* requireCloudflareZoneId;
         hostnameId = (yield* CustomHostnames.createCustomHostname({
           zoneId,
@@ -187,8 +182,80 @@ export class Domains extends Context.Service<Domains>()("Domains", {
           projectId: linkedProject?.id ?? null,
           organizationId: normalized.organizationId,
           hostnameId,
-          active: isLocal || !managed,
+          managed: normalized.managed,
+          active: !normalized.managed,
         })
+        .returning();
+
+      return domain ?? null;
+    });
+
+    const update = Effect.fn("Domains.update")(function* ({
+      id,
+      payload,
+    }: {
+      id: string;
+      payload: ServerUpdateDomainPayload;
+    }) {
+      const normalized = normalizeUpdatePayload(payload);
+      if (!normalized) return null;
+
+      const existing = yield* db.query.domains.findFirst({ where: { id } });
+      if (!existing) return null;
+
+      const linkedProject = normalized.projectId
+        ? yield* db.query.project.findFirst({
+            where: { id: normalized.projectId },
+            columns: { id: true },
+          })
+        : null;
+      if (normalized.projectId && !linkedProject) {
+        throw new Error(`Project not found: ${normalized.projectId}`);
+      }
+
+      let hostnameId: string = existing.hostnameId;
+      let active = existing.active;
+
+      if (existing.managed !== normalized.managed) {
+        if (normalized.managed) {
+          const zoneId = yield* requireCloudflareZoneId;
+          hostnameId = (yield* CustomHostnames.createCustomHostname({
+            zoneId,
+            hostname: existing.hostname,
+            ssl: {
+              method: "http",
+              type: "dv",
+              settings: {
+                http2: "on",
+                tls_1_3: "on",
+                minTlsVersion: "1.2",
+              },
+            },
+          })).id;
+          active = false;
+        } else {
+          const zoneId = yield* requireCloudflareZoneId;
+          yield* CustomHostnames.deleteCustomHostname({
+            zoneId,
+            customHostnameId: existing.hostnameId,
+          });
+          hostnameId = crypto.randomUUID();
+          active = true;
+        }
+      }
+
+      const [domain] = yield* db
+        .update(domains)
+        .set({
+          rootHostname: normalized.rootHostname,
+          projectId: linkedProject?.id ?? null,
+          organizationId: normalized.organizationId,
+          hostnameId,
+          managed: normalized.managed,
+          active,
+          updatedAt: new Date(),
+        })
+        .where(eq(domains.id, id))
         .returning();
 
       return domain ?? null;
@@ -199,9 +266,9 @@ export class Domains extends Context.Service<Domains>()("Domains", {
     }: {
       id: string;
     }) {
-      const domain = yield* get({ id });
+      const domain = yield* db.query.domains.findFirst({ where: { id } });
       if (!domain) return null;
-      if (!isManagedHostnameId(domain.hostnameId)) return [];
+      if (!domain.managed) return [];
 
       const refreshed = yield* refreshStatus(domain);
 
@@ -224,7 +291,7 @@ export class Domains extends Context.Service<Domains>()("Domains", {
       const domain = yield* get({ id });
       if (!domain) return null;
 
-      if (isManagedHostnameId(domain.hostnameId)) {
+      if (domain.managed) {
         const zoneId = yield* requireCloudflareZoneId;
         yield* CustomHostnames.deleteCustomHostname({
           zoneId,
@@ -241,7 +308,7 @@ export class Domains extends Context.Service<Domains>()("Domains", {
       return domain;
     });
 
-    return { list, create, get, getByHost, records, delete: _delete };
+    return { list, create, update, get, getByHost, records, delete: _delete };
   }),
 }) {
   static readonly layer = Layer.effect(this, this.make).pipe(
@@ -253,5 +320,3 @@ export class Domains extends Context.Service<Domains>()("Domains", {
     Layer.provideMerge(DB.testLayer),
   );
 }
-
-export { isLocalHostnameId, isExternalHostnameId, isManagedHostnameId };

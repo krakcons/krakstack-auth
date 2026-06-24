@@ -173,6 +173,19 @@ export const adminApiHandler = HttpApiBuilder.group(
           return domain;
         }),
       )
+      .handle("updateDomain", ({ params, payload, request }) =>
+        Effect.gen(function* () {
+          yield* requireAdmin(request.headers);
+
+          const service = yield* Domains;
+          const domain = yield* service
+            .update({ id: params.id, payload })
+            .pipe(Effect.mapError(internalServerError));
+
+          if (!domain) return yield* new HttpApiError.NotFound({});
+          return domain;
+        }),
+      )
       .handle("getDomainRecords", ({ params, request }) =>
         Effect.gen(function* () {
           yield* requireAdmin(request.headers);

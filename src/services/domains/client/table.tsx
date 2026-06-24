@@ -1,7 +1,7 @@
 import { useAtomSet, useAtomValue } from "@effect/atom-react";
 import { type ColumnDef } from "@tanstack/react-table";
 import { Atom, AsyncResult } from "effect/unstable/reactivity";
-import { Trash2 } from "lucide-react";
+import { Pencil, Trash2 } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
 
@@ -34,6 +34,7 @@ import { m } from "@/paraglide/messages";
 import type {
   ServerCreateDomainPayload,
   ServerDomain,
+  ServerUpdateDomainPayload,
 } from "../../../../packages/sdk/src/server/schema";
 
 const domainsAtom = Atom.family((reloadKey: number) =>
@@ -46,6 +47,7 @@ const domainsAtom = Atom.family((reloadKey: number) =>
 
 const deleteDomainAtom = AdminApiClient.mutation("admin", "deleteDomain");
 const createDomainAtom = AdminApiClient.mutation("admin", "createDomain");
+const updateDomainAtom = AdminApiClient.mutation("admin", "updateDomain");
 
 export function DomainsTable({
   reloadKey = 0,
@@ -59,7 +61,9 @@ export function DomainsTable({
   const result = useAtomValue(domainsAtom(reloadKey));
   const deleteDomain = useAtomSet(deleteDomainAtom, { mode: "promise" });
   const createDomain = useAtomSet(createDomainAtom, { mode: "promise" });
+  const updateDomain = useAtomSet(updateDomainAtom, { mode: "promise" });
   const [domains, setDomains] = useState<ServerDomain[] | null>(null);
+  const [editingDomain, setEditingDomain] = useState<ServerDomain | null>(null);
   const [deletingDomain, setDeletingDomain] = useState<ServerDomain | null>(
     null,
   );
@@ -80,7 +84,10 @@ export function DomainsTable({
     <div className="flex flex-col gap-4">
       {error ? <ErrorMessage text={error} /> : null}
       <DataTable
-        columns={domainColumns({ onDelete: setDeletingDomain })}
+        columns={domainColumns({
+          onDelete: setDeletingDomain,
+          onEdit: setEditingDomain,
+        })}
         data={rows}
         exportFileName="domains.csv"
         features={{ gallery: false }}
@@ -98,16 +105,41 @@ export function DomainsTable({
           deleteDomain={deleteDomain}
         />
       ) : null}
+      {editingDomain ? (
+        <DomainDialog
+          domain={editingDomain}
+          onClose={() => setEditingDomain(null)}
+          onSaved={(updated) => {
+            setDomains((current) =>
+              (current ?? rows).map((domain) =>
+                domain.id === updated.id ? updated : domain,
+              ),
+            );
+          }}
+          saveDomain={(value) =>
+            updateDomain({
+              params: { id: editingDomain.id },
+              payload: updateDomainPayloadFromValue(value),
+              reactivityKeys: ["domains"],
+            })
+          }
+        />
+      ) : null}
       {creatingDomain ? (
-        <CreateDomainDialog
+        <DomainDialog
           onClose={() => onCreatingDomainChange?.(false)}
-          onCreated={(created) => {
+          onSaved={(created) => {
             setDomains((current) => [
               created,
               ...(current ?? rows).filter((domain) => domain.id !== created.id),
             ]);
           }}
-          createDomain={createDomain}
+          saveDomain={(value) =>
+            createDomain({
+              payload: createDomainPayloadFromValue(value),
+              reactivityKeys: ["domains"],
+            })
+          }
         />
       ) : null}
     </div>
@@ -122,7 +154,7 @@ type DomainFormValues = {
   managed: boolean;
 };
 
-const domainPayloadFromValue = (
+const createDomainPayloadFromValue = (
   value: DomainFormValues,
 ): ServerCreateDomainPayload => ({
   hostname: value.hostname.trim(),
@@ -132,40 +164,52 @@ const domainPayloadFromValue = (
   managed: value.managed,
 });
 
-function CreateDomainDialog({
+const updateDomainPayloadFromValue = (
+  value: DomainFormValues,
+): ServerUpdateDomainPayload => ({
+  rootHostname: value.rootHostname.trim(),
+  projectId: value.projectId.trim() || null,
+  organizationId: value.organizationId.trim() || null,
+  managed: value.managed,
+});
+
+function DomainDialog({
+  domain,
   onClose,
-  onCreated,
-  createDomain,
+  onSaved,
+  saveDomain,
 }: {
+  domain?: ServerDomain;
   onClose: () => void;
-  onCreated: (domain: ServerDomain) => void;
-  createDomain: (input: {
-    payload: ServerCreateDomainPayload;
-    reactivityKeys?: ReadonlyArray<string>;
-  }) => Promise<ServerDomain>;
+  onSaved: (domain: ServerDomain) => void;
+  saveDomain: (value: DomainFormValues) => Promise<ServerDomain>;
 }) {
+  const isEditing = Boolean(domain);
   const [error, setError] = useState("");
   const form = useAppForm({
     defaultValues: {
-      hostname: "",
-      rootHostname: "",
-      projectId: "",
-      organizationId: "",
-      managed: true,
+      hostname: domain?.hostname ?? "",
+      rootHostname: domain?.rootHostname ?? "",
+      projectId: domain?.projectId ?? "",
+      organizationId: domain?.organizationId ?? "",
+      managed: domain?.managed ?? true,
     } satisfies DomainFormValues,
     onSubmit: async ({ value }) => {
       setError("");
       try {
-        const created = await createDomain({
-          payload: domainPayloadFromValue(value),
-          reactivityKeys: ["domains"],
-        });
-        onCreated(created);
-        toast.success(m.domain_created_toast());
+        const saved = await saveDomain(value);
+        onSaved(saved);
+        toast.success(
+          isEditing ? m.domain_updated_toast() : m.domain_created_toast(),
+        );
         onClose();
       } catch (cause) {
         setError(
-          cause instanceof Error ? cause.message : m.domain_create_error(),
+          cause instanceof Error
+            ? cause.message
+            : isEditing
+              ? m.domain_update_error()
+              : m.domain_create_error(),
         );
       }
     },
@@ -175,8 +219,14 @@ function CreateDomainDialog({
     <Dialog open onOpenChange={(open) => !open && onClose()}>
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>{m.domain_create_title()}</DialogTitle>
-          <DialogDescription>{m.domain_create_description()}</DialogDescription>
+          <DialogTitle>
+            {isEditing ? m.domain_edit_title() : m.domain_create_title()}
+          </DialogTitle>
+          <DialogDescription>
+            {isEditing
+              ? m.domain_edit_description()
+              : m.domain_create_description()}
+          </DialogDescription>
         </DialogHeader>
         <form
           className="flex flex-col gap-4"
@@ -191,6 +241,7 @@ function CreateDomainDialog({
                 <field.TextField
                   label={m.domain_hostname()}
                   description={m.domain_hostname_description()}
+                  disabled={isEditing}
                   autoFocus
                 />
               )}
@@ -232,7 +283,9 @@ function CreateDomainDialog({
               <Button type="button" variant="outline" onClick={onClose}>
                 {m.actions_cancel()}
               </Button>
-              <form.SubmitButton>{m.domain_create()}</form.SubmitButton>
+              <form.SubmitButton>
+                {isEditing ? m.form_submit() : m.domain_create()}
+              </form.SubmitButton>
             </div>
           </form.AppForm>
         </form>
@@ -242,8 +295,10 @@ function CreateDomainDialog({
 }
 
 const domainColumns = ({
+  onEdit,
   onDelete,
 }: {
+  onEdit: (domain: ServerDomain) => void;
   onDelete: (domain: ServerDomain) => void;
 }): ColumnDef<ServerDomain>[] => [
   {
@@ -307,6 +362,11 @@ const domainColumns = ({
     ),
   },
   createDataTableActionsColumn<ServerDomain>([
+    {
+      name: m.admin_action_edit(),
+      icon: <Pencil className="size-4" />,
+      onClick: onEdit,
+    },
     {
       name: m.actions_delete(),
       icon: <Trash2 className="size-4" />,

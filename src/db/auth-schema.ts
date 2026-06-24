@@ -267,6 +267,7 @@ export const domains = pgTable(
     }),
     organizationId: text("organization_id"),
     hostnameId: text("hostname_id").notNull(),
+    managed: boolean("managed").default(true).notNull(),
     active: boolean("active").default(false).notNull(),
     createdAt: timestamp("created_at").defaultNow().notNull(),
     updatedAt: timestamp("updated_at")
