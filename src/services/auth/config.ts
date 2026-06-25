@@ -14,13 +14,12 @@ import { apiKey } from "@better-auth/api-key";
 import { db } from "../../services/database";
 import { schema } from "../../db/schema";
 import {
+  allowedHostsForRequest,
   cookieDomainFromRequest,
   hostFromRequest,
   isPrimaryAuthHost,
-  isRegisteredAuthHost,
   normalizeAuthHost,
   parseCsv,
-  trustedOriginsForRequest,
 } from "@/lib/auth-domains";
 import {
   sendResetPasswordEmail,
@@ -40,12 +39,9 @@ const apiKeyRateLimit = {
 const googleClientId = process.env.GOOGLE_CLIENT_ID;
 const googleClientSecret = process.env.GOOGLE_CLIENT_SECRET;
 const betterAuthUrl = process.env.BETTER_AUTH_URL ?? "http://localhost:3000";
-const allowedHosts = Array.from(
+const defaultAllowedHosts = Array.from(
   new Set(
     [
-      ...(parseCsv(process.env.BETTER_AUTH_TRUSTED_ORIGINS) ?? []).map(
-        normalizeAuthHost,
-      ),
       normalizeAuthHost(betterAuthUrl),
       ...(isDev
         ? ["localhost:3001", "localhost:3000", "auth.local.kokobi.test:3001"]
@@ -54,13 +50,18 @@ const allowedHosts = Array.from(
   ),
 );
 
-const createAuth = (cookieDomain?: string) =>
+const createAuth = ({
+  allowedHosts,
+  cookieDomain,
+}: {
+  allowedHosts: readonly string[];
+  cookieDomain?: string | undefined;
+}) =>
   betterAuth({
     appName: "Krakstack Auth",
     baseURL: {
-      allowedHosts,
+      allowedHosts: Array.from(allowedHosts),
       protocol: isDev ? "http" : "https",
-      fallback: betterAuthUrl,
     },
     database: drizzleAdapter(db, {
       provider: "pg",
@@ -78,7 +79,6 @@ const createAuth = (cookieDomain?: string) =>
         httpOnly: true,
       },
     },
-    trustedOrigins: trustedOriginsForRequest,
     emailAndPassword: {
       enabled: true,
       requireEmailVerification: true,
@@ -193,25 +193,28 @@ const createAuth = (cookieDomain?: string) =>
     ],
   });
 
-export const auth = createAuth();
+export const auth = createAuth({ allowedHosts: defaultAllowedHosts });
 
-const authByCookieDomain = new Map<string, ReturnType<typeof createAuth>>();
+const authByRequestScope = new Map<string, ReturnType<typeof createAuth>>();
 
 export const authForRequest = async (request: Request) => {
   const host = hostFromRequest(request);
   if (!host) return auth;
-  if (!(await isRegisteredAuthHost(request)) && !isPrimaryAuthHost(host)) {
+  const allowedHosts = await allowedHostsForRequest(request);
+  const isAllowedHost = allowedHosts.includes(host);
+
+  if (!isAllowedHost && !isPrimaryAuthHost(host)) {
     return auth;
   }
 
   const cookieDomain = cookieDomainFromRequest(request);
-  if (!cookieDomain) return auth;
+  const cacheKey = `${host}|${cookieDomain ?? ""}|${allowedHosts.join(",")}`;
 
-  const cached = authByCookieDomain.get(cookieDomain);
+  const cached = authByRequestScope.get(cacheKey);
   if (cached) return cached;
 
-  const next = createAuth(cookieDomain);
-  authByCookieDomain.set(cookieDomain, next);
+  const next = createAuth({ allowedHosts, cookieDomain });
+  authByRequestScope.set(cacheKey, next);
   return next;
 };
 

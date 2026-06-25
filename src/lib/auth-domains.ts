@@ -32,12 +32,6 @@ const configuredPrimaryHosts = () => {
   const betterAuthHost = normalizeAuthHost(process.env.BETTER_AUTH_URL);
   if (betterAuthHost) hosts.add(betterAuthHost);
 
-  for (const origin of parseCsv(process.env.BETTER_AUTH_TRUSTED_ORIGINS) ??
-    []) {
-    const host = normalizeAuthHost(origin);
-    if (host) hosts.add(host);
-  }
-
   if (process.env.NODE_ENV === "development") {
     hosts.add("localhost:3001");
     hosts.add("localhost:3000");
@@ -110,6 +104,40 @@ const activeDomainTrustedOrigins = () =>
       activeDomainTrustedOriginsCacheKey,
     ),
   );
+
+const defaultAllowedHosts = () => Array.from(configuredPrimaryHosts());
+
+const activeDomainAllowedHosts = async () => {
+  const hosts = new Set<string>();
+
+  for (const origin of await activeDomainTrustedOrigins()) {
+    const host = normalizeAuthHost(origin);
+    if (host) hosts.add(host);
+  }
+
+  return Array.from(hosts);
+};
+
+export const allowedHostsForRequest = async (request?: Request) => {
+  const hosts = new Set(defaultAllowedHosts());
+
+  for (const host of await activeDomainAllowedHosts()) {
+    hosts.add(host);
+  }
+
+  if (!request) return Array.from(hosts);
+
+  const host = hostFromRequest(request);
+  if (host && isPrimaryAuthHost(host)) hosts.add(host);
+
+  const domain = await registeredAuthDomainForRequest(request);
+  if (domain) {
+    hosts.add(domain.hostname);
+    hosts.add(domain.rootHostname);
+  }
+
+  return Array.from(hosts);
+};
 
 const requestProtocol = (request: Request) =>
   request.headers.get("x-forwarded-proto")?.split(",")[0]?.trim() ||
