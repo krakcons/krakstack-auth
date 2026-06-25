@@ -175,7 +175,7 @@ export const adminApiHandler = HttpApiBuilder.group(
             .create({ payload })
             .pipe(Effect.mapError(internalServerError));
 
-          if (!domain) return yield* new HttpApiError.InternalServerError({});
+          if (!domain) return yield* new HttpApiError.BadRequest({});
           return domain;
         }),
       )

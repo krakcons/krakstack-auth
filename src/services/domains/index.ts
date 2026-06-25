@@ -48,7 +48,6 @@ const normalizePayload = (payload: ServerCreateDomainPayload) => {
 
   const projectId = payload.projectId?.trim() || null;
   const organizationId = payload.organizationId?.trim() || null;
-  if (!projectId && !organizationId) return null;
 
   return {
     hostname,
@@ -65,7 +64,6 @@ const normalizeUpdatePayload = (payload: ServerUpdateDomainPayload) => {
 
   const projectId = payload.projectId?.trim() || null;
   const organizationId = payload.organizationId?.trim() || null;
-  if (!projectId && !organizationId) return null;
 
   return { rootHostname, projectId, organizationId, managed: payload.managed };
 };

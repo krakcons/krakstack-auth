@@ -132,6 +132,7 @@ export const AdminApiGroup = HttpApiGroup.make("admin")
       error: [
         HttpApiError.Unauthorized,
         HttpApiError.Forbidden,
+        HttpApiError.BadRequest,
         HttpApiError.InternalServerError,
       ],
     }).annotateMerge(
