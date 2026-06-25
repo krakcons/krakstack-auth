@@ -1,8 +1,8 @@
 import { Cause, Effect, Layer, Option } from "effect";
-import { Headers } from "effect/unstable/http";
+import { Headers, HttpServerRequest } from "effect/unstable/http";
 import { HttpApiBuilder, HttpApiError } from "effect/unstable/httpapi";
 
-import { auth } from "@/services/auth/config";
+import { authForRequest } from "@/services/auth/config";
 import { Domains } from "@/services/domains";
 
 import { BackendAuth } from ".";
@@ -33,13 +33,20 @@ const serviceApiKey = (headers: Headers.Headers) =>
   bearerToken(Option.getOrUndefined(Headers.get(headers, "authorization"))) ??
   Option.getOrUndefined(Headers.get(headers, "x-api-key"));
 
-const requireServiceApiKey = (headers: Headers.Headers) =>
+const requireServiceApiKey = (request: HttpServerRequest.HttpServerRequest) =>
   Effect.gen(function* () {
-    const key = serviceApiKey(headers);
+    const key = serviceApiKey(request.headers);
     if (!key) return yield* new HttpApiError.Unauthorized({});
 
+    const webRequest = yield* HttpServerRequest.toWeb(request).pipe(
+      Effect.mapError(internalServerError),
+    );
     const result = yield* Effect.tryPromise({
-      try: () => auth.api.verifyApiKey({ body: { key, configId: "service" } }),
+      try: async () =>
+        (await authForRequest(webRequest)).api.verifyApiKey({
+          body: { key, configId: "service" },
+          headers: webRequest.headers,
+        }),
       catch: internalServerError,
     });
 
@@ -73,7 +80,7 @@ const backendAuthUsersApiHandler = HttpApiBuilder.group(
     handlers
       .handle("listUsersByIds", ({ query, request }) =>
         Effect.gen(function* () {
-          yield* requireServiceApiKey(request.headers);
+          yield* requireServiceApiKey(request);
 
           const backendAuth = yield* BackendAuth;
           return yield* backendAuth
@@ -83,7 +90,7 @@ const backendAuthUsersApiHandler = HttpApiBuilder.group(
       )
       .handle("getUser", ({ params, request }) =>
         Effect.gen(function* () {
-          yield* requireServiceApiKey(request.headers);
+          yield* requireServiceApiKey(request);
 
           const backendAuth = yield* BackendAuth;
           const user = yield* backendAuth
@@ -97,7 +104,7 @@ const backendAuthUsersApiHandler = HttpApiBuilder.group(
       )
       .handle("getUserActiveOrganization", ({ params, request }) =>
         Effect.gen(function* () {
-          yield* requireServiceApiKey(request.headers);
+          yield* requireServiceApiKey(request);
 
           const backendAuth = yield* BackendAuth;
           return yield* backendAuth
@@ -114,7 +121,7 @@ const backendAuthOrganizationsApiHandler = HttpApiBuilder.group(
     handlers
       .handle("listOrganizations", ({ query, request }) =>
         Effect.gen(function* () {
-          yield* requireServiceApiKey(request.headers);
+          yield* requireServiceApiKey(request);
 
           const parsedQuery = organizationQuery(query);
           if (!parsedQuery) return yield* new HttpApiError.BadRequest({});
@@ -133,7 +140,7 @@ const backendAuthOrganizationsApiHandler = HttpApiBuilder.group(
       )
       .handle("getOrganization", ({ params, request }) =>
         Effect.gen(function* () {
-          yield* requireServiceApiKey(request.headers);
+          yield* requireServiceApiKey(request);
 
           const backendAuth = yield* BackendAuth;
           const organization = yield* backendAuth
@@ -147,7 +154,7 @@ const backendAuthOrganizationsApiHandler = HttpApiBuilder.group(
       )
       .handle("getActiveMember", ({ params, request }) =>
         Effect.gen(function* () {
-          yield* requireServiceApiKey(request.headers);
+          yield* requireServiceApiKey(request);
 
           const backendAuth = yield* BackendAuth;
           const member = yield* backendAuth
@@ -164,7 +171,7 @@ const backendAuthOrganizationsApiHandler = HttpApiBuilder.group(
       )
       .handle("listOrganizationMembers", ({ params, request }) =>
         Effect.gen(function* () {
-          yield* requireServiceApiKey(request.headers);
+          yield* requireServiceApiKey(request);
 
           const backendAuth = yield* BackendAuth;
           return yield* backendAuth
@@ -183,7 +190,7 @@ const backendAuthDomainsApiHandler = HttpApiBuilder.group(
     handlers
       .handle("createDomain", ({ payload, request }) =>
         Effect.gen(function* () {
-          yield* requireServiceApiKey(request.headers);
+          yield* requireServiceApiKey(request);
 
           const domains = yield* Domains;
           const domain = yield* domains
@@ -197,7 +204,7 @@ const backendAuthDomainsApiHandler = HttpApiBuilder.group(
       )
       .handle("getDomain", ({ params, request }) =>
         Effect.gen(function* () {
-          yield* requireServiceApiKey(request.headers);
+          yield* requireServiceApiKey(request);
 
           const domains = yield* Domains;
           const domain = yield* domains
@@ -211,7 +218,7 @@ const backendAuthDomainsApiHandler = HttpApiBuilder.group(
       )
       .handle("getDomainByHost", ({ params, request }) =>
         Effect.gen(function* () {
-          yield* requireServiceApiKey(request.headers);
+          yield* requireServiceApiKey(request);
 
           const domains = yield* Domains;
           const domain = yield* domains
@@ -225,7 +232,7 @@ const backendAuthDomainsApiHandler = HttpApiBuilder.group(
       )
       .handle("getDomainRecords", ({ params, request }) =>
         Effect.gen(function* () {
-          yield* requireServiceApiKey(request.headers);
+          yield* requireServiceApiKey(request);
 
           const domains = yield* Domains;
           const records = yield* domains
@@ -239,7 +246,7 @@ const backendAuthDomainsApiHandler = HttpApiBuilder.group(
       )
       .handle("deleteDomain", ({ params, request }) =>
         Effect.gen(function* () {
-          yield* requireServiceApiKey(request.headers);
+          yield* requireServiceApiKey(request);
 
           const domains = yield* Domains;
           const domain = yield* domains
