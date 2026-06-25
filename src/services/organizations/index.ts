@@ -1,7 +1,7 @@
 import { Context, Effect, Layer } from "effect";
-import type { Headers } from "effect/unstable/http/Headers";
+import { HttpServerRequest } from "effect/unstable/http";
 
-import { auth } from "@/services/auth/config";
+import { authForRequest } from "@/services/auth/config";
 
 import type {
   CreateOrganizationPayload,
@@ -12,56 +12,68 @@ export class Organizations extends Context.Service<Organizations>()(
   "Organizations",
   {
     make: Effect.sync(() => {
+      const toWebRequest = (request: HttpServerRequest.HttpServerRequest) =>
+        HttpServerRequest.toWeb(request);
+
       const list = Effect.fn("Organizations.list")(function* ({
-        headers,
+        request,
       }: {
-        headers: Headers;
+        request: HttpServerRequest.HttpServerRequest;
       }) {
-        return yield* Effect.promise(() =>
-          auth.api.listOrganizations({ headers }),
+        const webRequest = yield* toWebRequest(request);
+        return yield* Effect.promise(async () =>
+          (await authForRequest(webRequest)).api.listOrganizations({
+            headers: webRequest.headers,
+          }),
         );
       });
 
       const create = Effect.fn("Organizations.create")(function* ({
-        headers,
+        request,
         payload,
       }: {
-        headers: Headers;
+        request: HttpServerRequest.HttpServerRequest;
         payload: CreateOrganizationPayload;
       }) {
-        return yield* Effect.promise(() =>
-          auth.api.createOrganization({ body: payload, headers }),
+        const webRequest = yield* toWebRequest(request);
+        return yield* Effect.promise(async () =>
+          (await authForRequest(webRequest)).api.createOrganization({
+            body: payload,
+            headers: webRequest.headers,
+          }),
         );
       });
 
       const update = Effect.fn("Organizations.update")(function* ({
-        headers,
+        request,
         id,
         payload,
       }: {
-        headers: Headers;
+        request: HttpServerRequest.HttpServerRequest;
         id: string;
         payload: UpdateOrganizationPayload;
       }) {
-        return yield* Effect.promise(() =>
-          auth.api.updateOrganization({
+        const webRequest = yield* toWebRequest(request);
+        return yield* Effect.promise(async () =>
+          (await authForRequest(webRequest)).api.updateOrganization({
             body: { organizationId: id, data: payload },
-            headers,
+            headers: webRequest.headers,
           }),
         );
       });
 
       const _delete = Effect.fn("Organizations.delete")(function* ({
-        headers,
+        request,
         id,
       }: {
-        headers: Headers;
+        request: HttpServerRequest.HttpServerRequest;
         id: string;
       }) {
-        return yield* Effect.promise(() =>
-          auth.api.deleteOrganization({
+        const webRequest = yield* toWebRequest(request);
+        return yield* Effect.promise(async () =>
+          (await authForRequest(webRequest)).api.deleteOrganization({
             body: { organizationId: id },
-            headers,
+            headers: webRequest.headers,
           }),
         );
       });
