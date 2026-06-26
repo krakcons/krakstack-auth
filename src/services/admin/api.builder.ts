@@ -22,12 +22,15 @@ const daysAgo = (days: number) => {
   return date;
 };
 
+const chartRangeDays = (days: "7" | "14" | "30" | "90" | undefined) =>
+  days ? Number(days) : 14;
+
 export const adminApiHandler = HttpApiBuilder.group(
   AdminApi,
   "admin",
   (handlers) =>
     handlers
-      .handle("dashboardStats", () =>
+      .handle("dashboardStats", ({ query }) =>
         Effect.gen(function* () {
           const userTotals = yield* Effect.tryPromise({
             try: () => db.select({ count: count() }).from(user),
@@ -40,7 +43,8 @@ export const adminApiHandler = HttpApiBuilder.group(
           });
 
           const since = new Date(Date.now() - 24 * 60 * 60 * 1000);
-          const chartStart = daysAgo(13);
+          const chartDays = chartRangeDays(query.days);
+          const chartStart = daysAgo(chartDays - 1);
           const activeUserTotals = yield* Effect.tryPromise({
             try: () =>
               db
@@ -94,9 +98,9 @@ export const adminApiHandler = HttpApiBuilder.group(
           }
 
           const dailyActiveUsersByDay = Array.from(
-            { length: 14 },
+            { length: chartDays },
             (_, index) => {
-              const date = daysAgo(13 - index);
+              const date = daysAgo(chartDays - 1 - index);
               const key = dayKey(date);
               return {
                 date: key,
@@ -112,8 +116,8 @@ export const adminApiHandler = HttpApiBuilder.group(
             signupsByDate.set(key, (signupsByDate.get(key) ?? 0) + 1);
           }
 
-          const signupsByDay = Array.from({ length: 14 }, (_, index) => {
-            const date = daysAgo(13 - index);
+          const signupsByDay = Array.from({ length: chartDays }, (_, index) => {
+            const date = daysAgo(chartDays - 1 - index);
             const key = dayKey(date);
             return {
               date: key,

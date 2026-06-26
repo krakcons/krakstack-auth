@@ -2,6 +2,7 @@ import { Link, createFileRoute } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { Area, AreaChart, CartesianGrid, XAxis, YAxis } from "recharts";
 import { Building2, Users } from "lucide-react";
+import { useState } from "react";
 
 import { m } from "@/paraglide/messages";
 import { SidebarPageHeader } from "@/components/ui/sidebar-layout";
@@ -19,6 +20,13 @@ import {
   ChartTooltipContent,
   type ChartConfig,
 } from "@/components/ui/chart";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 
 export const Route = createFileRoute("/admin/")({
   component: DashboardPage,
@@ -32,11 +40,25 @@ type DashboardStats = {
   signupsByDay: { date: string; count: number }[];
 };
 
-function useDashboardStats() {
+const chartRanges = ["7", "14", "30", "90"] as const;
+type ChartRange = (typeof chartRanges)[number];
+
+const chartRangeOptions: { value: ChartRange; label: string }[] = [
+  { value: "7", label: m.admin_chart_range_7_days() },
+  { value: "14", label: m.admin_chart_range_14_days() },
+  { value: "30", label: m.admin_chart_range_30_days() },
+  { value: "90", label: m.admin_chart_range_90_days() },
+];
+
+const isChartRange = (value: string): value is ChartRange =>
+  chartRanges.includes(value as ChartRange);
+
+function useDashboardStats(range: ChartRange) {
   return useQuery({
-    queryKey: ["admin", "dashboard"],
+    queryKey: ["admin", "dashboard", range],
     queryFn: async () => {
-      const res = await fetch("/api/admin/dashboard-stats", {
+      const params = new URLSearchParams({ days: range });
+      const res = await fetch(`/api/admin/dashboard-stats?${params}`, {
         credentials: "include",
       });
       if (!res.ok) throw new Error("Failed to fetch dashboard stats.");
@@ -67,7 +89,8 @@ const formatDay = (value: string) =>
   });
 
 function DashboardPage() {
-  const { data: stats, isLoading, error } = useDashboardStats();
+  const [chartRange, setChartRange] = useState<ChartRange>("14");
+  const { data: stats, isLoading, error } = useDashboardStats(chartRange);
 
   const formatStat = (value: number | undefined) =>
     isLoading ? "..." : (value ?? 0).toLocaleString();
@@ -108,6 +131,30 @@ function DashboardPage() {
                 icon={<Building2 className="text-muted-foreground" />}
               />
             </Link>
+          </div>
+          <div className="flex items-center justify-between gap-3">
+            <h2 className="text-lg font-semibold">{m.admin_trends()}</h2>
+            <Select
+              items={chartRangeOptions}
+              value={chartRange}
+              onValueChange={(value) => {
+                if (value && isChartRange(value)) setChartRange(value);
+              }}
+            >
+              <SelectTrigger
+                className="w-full sm:w-40"
+                aria-label={m.admin_chart_range()}
+              >
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {chartRangeOptions.map(({ value, label }) => (
+                  <SelectItem key={value} value={value}>
+                    {label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </div>
           <Card>
             <CardHeader>

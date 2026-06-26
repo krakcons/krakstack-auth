@@ -1,5 +1,21 @@
 import { Schema } from "effect";
 
+export const DashboardStatsQuery = Schema.Struct({
+  days: Schema.optional(
+    Schema.Union([
+      Schema.Literal("7"),
+      Schema.Literal("14"),
+      Schema.Literal("30"),
+      Schema.Literal("90"),
+    ]),
+  ),
+}).annotate({
+  identifier: "DashboardStatsQuery",
+  title: "Dashboard stats query",
+  description: "Time range used for dashboard chart series.",
+  examples: [{ days: "14" }],
+});
+
 export const DailyActiveUsersByDay = Schema.Struct({
   date: Schema.String,
   count: Schema.Number,

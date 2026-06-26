@@ -6,7 +6,7 @@ import {
 } from "effect/unstable/httpapi";
 import { Schema } from "effect";
 
-import { DashboardStatsResponse } from "./schema";
+import { DashboardStatsQuery, DashboardStatsResponse } from "./schema";
 import { AdminAuthMiddleware } from "@/services/auth/middleware";
 import {
   CreateOrganizationPayload,
@@ -25,6 +25,7 @@ import {
 export const AdminApiGroup = HttpApiGroup.make("admin")
   .add(
     HttpApiEndpoint.get("dashboardStats", "/admin/dashboard-stats", {
+      query: DashboardStatsQuery,
       success: DashboardStatsResponse,
       error: [
         HttpApiError.Unauthorized,
