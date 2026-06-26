@@ -3,7 +3,15 @@ import { and, count, countDistinct, gt, gte } from "drizzle-orm";
 import { HttpApiBuilder, HttpApiError } from "effect/unstable/httpapi";
 
 import { AdminApi } from "@/api";
-import { organization, session, user } from "@/db/auth-schema";
+import {
+  apikey,
+  domains,
+  oauthClient,
+  organization,
+  project,
+  session,
+  user,
+} from "@/db/auth-schema";
 import { Domains } from "@/services/domains";
 import { db } from "@/services/database";
 import { Organizations } from "@/services/organizations";
@@ -39,6 +47,26 @@ export const adminApiHandler = HttpApiBuilder.group(
 
           const organizationTotals = yield* Effect.tryPromise({
             try: () => db.select({ count: count() }).from(organization),
+            catch: internalServerError,
+          });
+
+          const projectTotals = yield* Effect.tryPromise({
+            try: () => db.select({ count: count() }).from(project),
+            catch: internalServerError,
+          });
+
+          const domainTotals = yield* Effect.tryPromise({
+            try: () => db.select({ count: count() }).from(domains),
+            catch: internalServerError,
+          });
+
+          const apiKeyTotals = yield* Effect.tryPromise({
+            try: () => db.select({ count: count() }).from(apikey),
+            catch: internalServerError,
+          });
+
+          const oauthClientTotals = yield* Effect.tryPromise({
+            try: () => db.select({ count: count() }).from(oauthClient),
             catch: internalServerError,
           });
 
@@ -87,6 +115,10 @@ export const adminApiHandler = HttpApiBuilder.group(
 
           const totalUsers = Number(userTotals[0]?.count ?? 0);
           const totalOrganizations = Number(organizationTotals[0]?.count ?? 0);
+          const totalProjects = Number(projectTotals[0]?.count ?? 0);
+          const totalDomains = Number(domainTotals[0]?.count ?? 0);
+          const totalApiKeys = Number(apiKeyTotals[0]?.count ?? 0);
+          const totalOauthClients = Number(oauthClientTotals[0]?.count ?? 0);
           const dailyActiveUsers = Number(activeUserTotals[0]?.count ?? 0);
           const activeUsersByDay = new Map<string, Set<string>>();
 
@@ -128,6 +160,10 @@ export const adminApiHandler = HttpApiBuilder.group(
           return {
             totalUsers,
             totalOrganizations,
+            totalProjects,
+            totalDomains,
+            totalApiKeys,
+            totalOauthClients,
             dailyActiveUsers,
             dailyActiveUsersByDay,
             signupsByDay,

@@ -39,6 +39,10 @@ export const SignupsByDay = Schema.Struct({
 export const DashboardStatsResponse = Schema.Struct({
   totalUsers: Schema.Number,
   totalOrganizations: Schema.Number,
+  totalProjects: Schema.Number,
+  totalDomains: Schema.Number,
+  totalApiKeys: Schema.Number,
+  totalOauthClients: Schema.Number,
   dailyActiveUsers: Schema.Number,
   dailyActiveUsersByDay: Schema.Array(DailyActiveUsersByDay),
   signupsByDay: Schema.Array(SignupsByDay),
@@ -50,6 +54,10 @@ export const DashboardStatsResponse = Schema.Struct({
     {
       totalUsers: 42,
       totalOrganizations: 3,
+      totalProjects: 2,
+      totalDomains: 5,
+      totalApiKeys: 7,
+      totalOauthClients: 1,
       dailyActiveUsers: 18,
       dailyActiveUsersByDay: [{ date: "2026-06-26", count: 18 }],
       signupsByDay: [{ date: "2026-06-26", count: 4 }],

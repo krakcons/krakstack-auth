@@ -76,6 +76,8 @@
   "admin_registered_users": "Utilisateurs inscrits",
   "admin_total_projects": "Total des projets",
   "admin_registered_projects": "Projets inscrits",
+  "admin_registered_domains": "Domaines inscrits",
+  "admin_registered_api_keys": "Clés API inscrites",
   "admin_daily_active_users": "Utilisateurs actifs quotidiens",
   "admin_daily_active_users_description": "Utilisateurs distincts avec une activité de session authentifiée au cours des dernières 24 heures.",
   "admin_dau_chart_title": "Utilisateurs actifs quotidiens par jour",

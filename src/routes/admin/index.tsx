@@ -1,7 +1,14 @@
 import { Link, createFileRoute } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { Area, AreaChart, CartesianGrid, XAxis, YAxis } from "recharts";
-import { Building2, Users } from "lucide-react";
+import {
+  Building2,
+  FolderKanban,
+  Globe2,
+  KeyRound,
+  KeySquare,
+  Users,
+} from "lucide-react";
 import { useState } from "react";
 
 import { m } from "@/paraglide/messages";
@@ -35,6 +42,10 @@ export const Route = createFileRoute("/admin/")({
 type DashboardStats = {
   totalUsers: number;
   totalOrganizations: number;
+  totalProjects: number;
+  totalDomains: number;
+  totalApiKeys: number;
+  totalOauthClients: number;
   dailyActiveUsers: number;
   dailyActiveUsersByDay: { date: string; count: number }[];
   signupsByDay: { date: string; count: number }[];
@@ -129,6 +140,56 @@ function DashboardPage() {
                 value={formatStat(stats?.totalOrganizations)}
                 description={m.admin_registered_organizations()}
                 icon={<Building2 className="text-muted-foreground" />}
+              />
+            </Link>
+          </div>
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+            <Link
+              to="/admin/projects"
+              preload="intent"
+              className="group/card-link focus-visible:ring-ring/50 min-w-0 rounded-xl outline-none focus-visible:ring-[3px]"
+            >
+              <StatsCard
+                title={m.sidebar_nav_projects()}
+                value={formatStat(stats?.totalProjects)}
+                description={m.admin_registered_projects()}
+                icon={<FolderKanban className="text-muted-foreground" />}
+              />
+            </Link>
+            <Link
+              to="/admin/domains"
+              preload="intent"
+              className="group/card-link focus-visible:ring-ring/50 min-w-0 rounded-xl outline-none focus-visible:ring-[3px]"
+            >
+              <StatsCard
+                title={m.sidebar_nav_domains()}
+                value={formatStat(stats?.totalDomains)}
+                description={m.admin_registered_domains()}
+                icon={<Globe2 className="text-muted-foreground" />}
+              />
+            </Link>
+            <Link
+              to="/admin/api-keys"
+              preload="intent"
+              className="group/card-link focus-visible:ring-ring/50 min-w-0 rounded-xl outline-none focus-visible:ring-[3px]"
+            >
+              <StatsCard
+                title={m.sidebar_nav_api_keys()}
+                value={formatStat(stats?.totalApiKeys)}
+                description={m.admin_registered_api_keys()}
+                icon={<KeySquare className="text-muted-foreground" />}
+              />
+            </Link>
+            <Link
+              to="/admin/oauth/clients"
+              preload="intent"
+              className="group/card-link focus-visible:ring-ring/50 min-w-0 rounded-xl outline-none focus-visible:ring-[3px]"
+            >
+              <StatsCard
+                title={m.admin_oauth_clients()}
+                value={formatStat(stats?.totalOauthClients)}
+                description={m.admin_registered_clients()}
+                icon={<KeyRound className="text-muted-foreground" />}
               />
             </Link>
           </div>

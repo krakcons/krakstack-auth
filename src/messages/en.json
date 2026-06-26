@@ -76,6 +76,8 @@
   "admin_registered_users": "Registered users",
   "admin_total_projects": "Total Projects",
   "admin_registered_projects": "Registered projects",
+  "admin_registered_domains": "Registered domains",
+  "admin_registered_api_keys": "Registered API keys",
   "admin_daily_active_users": "Daily Active Users",
   "admin_daily_active_users_description": "Distinct users with authenticated session activity in the last 24 hours.",
   "admin_dau_chart_title": "Daily Active Users by Day",
