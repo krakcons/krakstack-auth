@@ -1,4 +1,8 @@
 import { trustedOrigins } from "@/lib/trusted-origins";
+import {
+  normalizeAuthHost,
+  registeredAuthDomainForRequest,
+} from "@/lib/auth-domains";
 
 export type CorsOptions = {
   allowedOrigins?: "*" | readonly string[];
@@ -27,7 +31,26 @@ const resolveOptions = (options?: CorsOptions): Required<CorsOptions> => ({
   ...options,
 });
 
-const allowedOrigin = (
+const registeredDomainOrigin = async (request: Request, origin: string) => {
+  const originHost = normalizeAuthHost(origin);
+  if (!originHost) return undefined;
+
+  const domain = await registeredAuthDomainForRequest(request);
+  if (
+    !domain ||
+    (originHost !== domain.rootHostname && originHost !== domain.hostname)
+  ) {
+    return undefined;
+  }
+
+  try {
+    return new URL(origin).origin;
+  } catch {
+    return undefined;
+  }
+};
+
+const allowedOrigin = async (
   request: Request,
   allowedOrigins: Required<CorsOptions>["allowedOrigins"],
 ) => {
@@ -36,6 +59,9 @@ const allowedOrigin = (
   const origin = request.headers.get("origin");
   if (!origin) return undefined;
   if (allowedOrigins.includes(origin)) return origin;
+
+  const domainOrigin = await registeredDomainOrigin(request, origin);
+  if (domainOrigin) return domainOrigin;
 
   try {
     const originUrl = new URL(origin);
@@ -50,10 +76,10 @@ const allowedOrigin = (
   return undefined;
 };
 
-const corsHeaders = (request: Request, options?: CorsOptions) => {
+const corsHeaders = async (request: Request, options?: CorsOptions) => {
   const { allowedOrigins, allowedMethods, credentials } =
     resolveOptions(options);
-  const origin = allowedOrigin(request, allowedOrigins);
+  const origin = await allowedOrigin(request, allowedOrigins);
   const headers = new Headers({
     "Access-Control-Allow-Methods": allowedMethods.join(", "),
     "Access-Control-Allow-Headers":
@@ -101,13 +127,13 @@ const copyCorsHeaders = (target: Headers, source: Headers) => {
   });
 };
 
-export const applyCorsHeaders = (
+export const applyCorsHeaders = async (
   request: Request,
   response: Response,
   options?: CorsOptions,
 ) => {
   const headers = new Headers(response.headers);
-  copyCorsHeaders(headers, corsHeaders(request, options));
+  copyCorsHeaders(headers, await corsHeaders(request, options));
 
   return new Response(response.body, {
     status: response.status,
@@ -125,10 +151,10 @@ export const corsMiddleware =
     if (request.method === "OPTIONS") {
       return new Response(null, {
         status: 204,
-        headers: corsHeaders(request, options),
+        headers: await corsHeaders(request, options),
       });
     }
 
     const response = await handler(request);
-    return applyCorsHeaders(request, response, options);
+    return await applyCorsHeaders(request, response, options);
   };
