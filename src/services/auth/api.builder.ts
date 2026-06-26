@@ -1,8 +1,9 @@
 import { Effect } from "effect";
+import { HttpServerRequest } from "effect/unstable/http";
 import { HttpApiBuilder, HttpApiError } from "effect/unstable/httpapi";
 
 import { FrontendApi } from "@/api";
-import { auth } from "@/services/auth/config";
+import { BetterAuthRequest } from "@/services/auth/better-auth-request";
 import { S3Service } from "@/services/s3";
 import { s3AssetUrl } from "@/services/s3/asset-url";
 
@@ -14,6 +15,28 @@ const authError = (fallback: string) => (error: unknown) =>
   });
 
 const internalServerError = () => new HttpApiError.InternalServerError({});
+
+const requestAuth = (
+  request: HttpServerRequest.HttpServerRequest,
+  fallback: string,
+) =>
+  BetterAuthRequest.pipe(
+    Effect.provide(BetterAuthRequest.make(request)),
+    Effect.mapError(authError(fallback)),
+  );
+
+const requestAuthSession = (request: HttpServerRequest.HttpServerRequest) =>
+  Effect.gen(function* () {
+    const client = yield* BetterAuthRequest.pipe(
+      Effect.provide(BetterAuthRequest.make(request)),
+      Effect.mapError(internalServerError),
+    );
+
+    return yield* Effect.tryPromise({
+      try: () => client.api.getSession({ headers: client.headers }),
+      catch: internalServerError,
+    });
+  });
 
 const safeFileName = (name: string) =>
   name
@@ -28,80 +51,104 @@ export const authApiHandler = HttpApiBuilder.group(
   (handlers) =>
     handlers
       .handle("setPassword", ({ payload, request }) =>
-        Effect.tryPromise({
-          try: () =>
-            auth.api.setPassword({
-              body: { newPassword: payload.newPassword },
-              headers: request.headers,
-            }),
-          catch: authError("Could not set password"),
-        }).pipe(Effect.map(() => ({ ok: true }))),
+        Effect.gen(function* () {
+          const client = yield* requestAuth(request, "Could not set password");
+          yield* Effect.tryPromise({
+            try: () =>
+              client.api.setPassword({
+                body: { newPassword: payload.newPassword },
+                headers: client.headers,
+              }),
+            catch: authError("Could not set password"),
+          });
+
+          return { ok: true };
+        }),
       )
       .handle("verifyPassword", ({ payload, request }) =>
-        Effect.tryPromise({
-          try: () =>
-            auth.api.verifyPassword({
-              body: { password: payload.password },
-              headers: request.headers,
-            }),
-          catch: authError("Could not verify password"),
-        }).pipe(Effect.map(() => ({ ok: true }))),
+        Effect.gen(function* () {
+          const client = yield* requestAuth(
+            request,
+            "Could not verify password",
+          );
+          yield* Effect.tryPromise({
+            try: () =>
+              client.api.verifyPassword({
+                body: { password: payload.password },
+                headers: client.headers,
+              }),
+            catch: authError("Could not verify password"),
+          });
+
+          return { ok: true };
+        }),
       )
       .handle("createApiKey", ({ payload, request }) =>
-        Effect.tryPromise({
-          try: async () => {
-            const session = await auth.api.getSession({
-              headers: request.headers,
-            });
+        Effect.gen(function* () {
+          const client = yield* requestAuth(
+            request,
+            "Could not create API key",
+          );
+          const session = yield* Effect.tryPromise({
+            try: () => client.api.getSession({ headers: client.headers }),
+            catch: authError("Could not create API key"),
+          });
 
-            if (!session) {
-              throw new Error("Unauthorized");
-            }
+          if (!session) {
+            return yield* new AuthBadRequest({ message: "Unauthorized" });
+          }
 
-            const permissions = payload.permissions
-              ? Object.fromEntries(
-                  Object.entries(payload.permissions).map(
-                    ([resource, actions]) => [resource, Array.from(actions)],
-                  ),
-                )
-              : undefined;
-            const result = await auth.api.createApiKey({
-              headers: request.headers,
-              body: {
-                configId: payload.configId,
-                userId: session.user.id,
-                ...(payload.name ? { name: payload.name } : {}),
-                ...(payload.organizationId
-                  ? { organizationId: payload.organizationId }
-                  : {}),
-                ...(permissions ? { permissions } : {}),
-              },
-            });
+          const permissions = payload.permissions
+            ? Object.fromEntries(
+                Object.entries(payload.permissions).map(
+                  ([resource, actions]) => [resource, Array.from(actions)],
+                ),
+              )
+            : undefined;
+          const result = yield* Effect.tryPromise({
+            try: () =>
+              client.api.createApiKey({
+                headers: client.headers,
+                body: {
+                  configId: payload.configId,
+                  userId: session.user.id,
+                  ...(payload.name ? { name: payload.name } : {}),
+                  ...(payload.organizationId
+                    ? { organizationId: payload.organizationId }
+                    : {}),
+                  ...(permissions ? { permissions } : {}),
+                },
+              }),
+            catch: authError("Could not create API key"),
+          });
 
-            return { id: result.id, key: result.key };
-          },
-          catch: authError("Could not create API key"),
+          return { id: result.id, key: result.key };
         }),
       )
       .handle("verifyApiKey", ({ payload, request }) =>
-        Effect.tryPromise({
-          try: () => {
-            const permissions = payload.permissions
-              ? Object.fromEntries(
-                  Object.entries(payload.permissions).map(
-                    ([resource, actions]) => [resource, Array.from(actions)],
-                  ),
-                )
-              : undefined;
-            const body = {
-              key: payload.key,
-              ...(payload.configId ? { configId: payload.configId } : {}),
-              ...(permissions ? { permissions } : {}),
-            };
+        Effect.gen(function* () {
+          const client = yield* requestAuth(
+            request,
+            "Could not verify API key",
+          );
+          const permissions = payload.permissions
+            ? Object.fromEntries(
+                Object.entries(payload.permissions).map(
+                  ([resource, actions]) => [resource, Array.from(actions)],
+                ),
+              )
+            : undefined;
+          const body = {
+            key: payload.key,
+            ...(payload.configId ? { configId: payload.configId } : {}),
+            ...(permissions ? { permissions } : {}),
+          };
 
-            return auth.api.verifyApiKey({ body, headers: request.headers });
-          },
-          catch: authError("Could not verify API key"),
+          return yield* Effect.tryPromise({
+            try: () =>
+              client.api.verifyApiKey({ body, headers: client.headers }),
+            catch: authError("Could not verify API key"),
+          });
         }).pipe(
           Effect.map((result) => ({
             valid: result.valid,
@@ -132,10 +179,7 @@ export const authApiHandler = HttpApiBuilder.group(
       )
       .handle("presignUserImageUpload", ({ payload, request }) =>
         Effect.gen(function* () {
-          const session = yield* Effect.tryPromise({
-            try: () => auth.api.getSession({ headers: request.headers }),
-            catch: internalServerError,
-          });
+          const session = yield* requestAuthSession(request);
 
           if (!session) return yield* new HttpApiError.Unauthorized({});
 

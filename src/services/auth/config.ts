@@ -17,8 +17,6 @@ import {
   allowedHostsForRequest,
   cookieDomainFromRequest,
   hostFromRequest,
-  isPrimaryAuthHost,
-  normalizeAuthHost,
   parseCsv,
 } from "@/services/domains";
 import {
@@ -39,16 +37,6 @@ const apiKeyRateLimit = {
 const googleClientId = process.env.GOOGLE_CLIENT_ID;
 const googleClientSecret = process.env.GOOGLE_CLIENT_SECRET;
 const betterAuthUrl = process.env.BETTER_AUTH_URL ?? "http://localhost:3000";
-const defaultAllowedHosts = Array.from(
-  new Set(
-    [
-      normalizeAuthHost(betterAuthUrl),
-      ...(isDev
-        ? ["localhost:3001", "localhost:3000", "auth.local.kokobi.test:3001"]
-        : []),
-    ].filter((host): host is string => Boolean(host)),
-  ),
-);
 
 const createAuth = ({
   allowedHosts,
@@ -62,6 +50,7 @@ const createAuth = ({
     baseURL: {
       allowedHosts: Array.from(allowedHosts),
       protocol: isDev ? "http" : "https",
+      fallback: betterAuthUrl,
     },
     database: drizzleAdapter(db, {
       provider: "pg",
@@ -193,20 +182,11 @@ const createAuth = ({
     ],
   });
 
-export const auth = createAuth({ allowedHosts: defaultAllowedHosts });
-
 const authByRequestScope = new Map<string, ReturnType<typeof createAuth>>();
 
 export const authForRequest = async (request: Request) => {
   const host = hostFromRequest(request);
-  if (!host) return auth;
   const allowedHosts = await allowedHostsForRequest(request);
-  const isAllowedHost = allowedHosts.includes(host);
-
-  if (!isAllowedHost && !isPrimaryAuthHost(host)) {
-    return auth;
-  }
-
   const cookieDomain = await cookieDomainFromRequest(request);
   const cacheKey = `${host}|${cookieDomain ?? ""}|${allowedHosts.join(",")}`;
 
@@ -218,4 +198,5 @@ export const authForRequest = async (request: Request) => {
   return next;
 };
 
-export type AuthSession = typeof auth.$Infer.Session;
+export type Auth = ReturnType<typeof createAuth>;
+export type AuthSession = Auth["$Infer"]["Session"];

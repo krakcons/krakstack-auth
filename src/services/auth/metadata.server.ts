@@ -2,8 +2,9 @@ import {
   oauthProviderAuthServerMetadata,
   oauthProviderOpenIdConfigMetadata,
 } from "@better-auth/oauth-provider";
+import { Effect } from "effect";
 
-import { authForRequest } from "@/services/auth/config";
+import { BetterAuthRequest } from "@/services/auth/better-auth-request";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -11,11 +12,21 @@ const corsHeaders = {
 };
 
 export const openIdConfigurationHandler = async (request: Request) =>
-  oauthProviderOpenIdConfigMetadata(await authForRequest(request), {
-    headers: corsHeaders,
-  })(request);
+  oauthProviderOpenIdConfigMetadata(
+    (
+      await Effect.runPromise(
+        BetterAuthRequest.pipe(Effect.provide(BetterAuthRequest.make(request))),
+      )
+    ).auth,
+    { headers: corsHeaders },
+  )(request);
 
 export const oauthAuthorizationServerHandler = async (request: Request) =>
-  oauthProviderAuthServerMetadata(await authForRequest(request), {
-    headers: corsHeaders,
-  })(request);
+  oauthProviderAuthServerMetadata(
+    (
+      await Effect.runPromise(
+        BetterAuthRequest.pipe(Effect.provide(BetterAuthRequest.make(request))),
+      )
+    ).auth,
+    { headers: corsHeaders },
+  )(request);

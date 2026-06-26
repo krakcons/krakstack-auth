@@ -3,7 +3,7 @@ import { HttpServerRequest } from "effect/unstable/http";
 import { HttpApiBuilder, HttpApiError } from "effect/unstable/httpapi";
 
 import { FrontendApi } from "@/api";
-import { authForRequest } from "@/services/auth/config";
+import { BetterAuthRequest } from "@/services/auth/better-auth-request";
 import { S3Service } from "@/services/s3";
 import { s3AssetUrl } from "@/services/s3/asset-url";
 
@@ -23,17 +23,14 @@ const internalServerError = (error: unknown) => {
   return new HttpApiError.InternalServerError({});
 };
 
-const toWebRequest = (request: HttpServerRequest.HttpServerRequest) =>
-  HttpServerRequest.toWeb(request).pipe(Effect.mapError(internalServerError));
-
 const currentSession = (request: HttpServerRequest.HttpServerRequest) =>
   Effect.gen(function* () {
-    const webRequest = yield* toWebRequest(request);
+    const betterAuth = yield* BetterAuthRequest.pipe(
+      Effect.provide(BetterAuthRequest.make(request)),
+      Effect.mapError(internalServerError),
+    );
     return yield* Effect.tryPromise({
-      try: async () =>
-        (await authForRequest(webRequest)).api.getSession({
-          headers: webRequest.headers,
-        }),
+      try: () => betterAuth.api.getSession({ headers: betterAuth.headers }),
       catch: internalServerError,
     });
   });
@@ -57,12 +54,15 @@ const requireServiceApiKey = (request: HttpServerRequest.HttpServerRequest) =>
       request.headers["x-api-key"];
     if (!key) return yield* new HttpApiError.Unauthorized({});
 
-    const webRequest = yield* toWebRequest(request);
+    const betterAuth = yield* BetterAuthRequest.pipe(
+      Effect.provide(BetterAuthRequest.make(request)),
+      Effect.mapError(internalServerError),
+    );
     const result = yield* Effect.tryPromise({
-      try: async () =>
-        (await authForRequest(webRequest)).api.verifyApiKey({
+      try: () =>
+        betterAuth.api.verifyApiKey({
           body: { key, configId: "service" },
-          headers: webRequest.headers,
+          headers: betterAuth.headers,
         }),
       catch: internalServerError,
     });

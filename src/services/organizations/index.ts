@@ -1,7 +1,6 @@
 import { Context, Effect, Layer } from "effect";
-import { HttpServerRequest } from "effect/unstable/http";
 
-import { authForRequest } from "@/services/auth/config";
+import { BetterAuthRequest } from "@/services/auth/better-auth-request";
 
 import type {
   CreateOrganizationPayload,
@@ -12,68 +11,53 @@ export class Organizations extends Context.Service<Organizations>()(
   "Organizations",
   {
     make: Effect.sync(() => {
-      const toWebRequest = (request: HttpServerRequest.HttpServerRequest) =>
-        HttpServerRequest.toWeb(request);
-
-      const list = Effect.fn("Organizations.list")(function* ({
-        request,
-      }: {
-        request: HttpServerRequest.HttpServerRequest;
-      }) {
-        const webRequest = yield* toWebRequest(request);
-        return yield* Effect.promise(async () =>
-          (await authForRequest(webRequest)).api.listOrganizations({
-            headers: webRequest.headers,
-          }),
+      const list = Effect.fn("Organizations.list")(function* () {
+        const betterAuth = yield* BetterAuthRequest;
+        return yield* Effect.promise(() =>
+          betterAuth.api.listOrganizations({ headers: betterAuth.headers }),
         );
       });
 
       const create = Effect.fn("Organizations.create")(function* ({
-        request,
         payload,
       }: {
-        request: HttpServerRequest.HttpServerRequest;
         payload: CreateOrganizationPayload;
       }) {
-        const webRequest = yield* toWebRequest(request);
-        return yield* Effect.promise(async () =>
-          (await authForRequest(webRequest)).api.createOrganization({
+        const betterAuth = yield* BetterAuthRequest;
+        return yield* Effect.promise(() =>
+          betterAuth.api.createOrganization({
             body: payload,
-            headers: webRequest.headers,
+            headers: betterAuth.headers,
           }),
         );
       });
 
       const update = Effect.fn("Organizations.update")(function* ({
-        request,
         id,
         payload,
       }: {
-        request: HttpServerRequest.HttpServerRequest;
         id: string;
         payload: UpdateOrganizationPayload;
       }) {
-        const webRequest = yield* toWebRequest(request);
-        return yield* Effect.promise(async () =>
-          (await authForRequest(webRequest)).api.updateOrganization({
+        const betterAuth = yield* BetterAuthRequest;
+        return yield* Effect.promise(() =>
+          betterAuth.api.updateOrganization({
             body: { organizationId: id, data: payload },
-            headers: webRequest.headers,
+            headers: betterAuth.headers,
           }),
         );
       });
 
       const _delete = Effect.fn("Organizations.delete")(function* ({
-        request,
         id,
       }: {
-        request: HttpServerRequest.HttpServerRequest;
         id: string;
       }) {
-        const webRequest = yield* toWebRequest(request);
-        return yield* Effect.promise(async () =>
-          (await authForRequest(webRequest)).api.deleteOrganization({
+        const betterAuth = yield* BetterAuthRequest;
+        return yield* Effect.promise(() =>
+          betterAuth.api.deleteOrganization({
             body: { organizationId: id },
-            headers: webRequest.headers,
+            headers: betterAuth.headers,
           }),
         );
       });

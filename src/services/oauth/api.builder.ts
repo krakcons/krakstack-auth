@@ -2,6 +2,7 @@ import { Cause, Effect } from "effect";
 import { HttpApiBuilder, HttpApiError } from "effect/unstable/httpapi";
 
 import { AdminApi, FrontendApi } from "@/api";
+import { BetterAuthRequest } from "@/services/auth/better-auth-request";
 import { S3Service } from "@/services/s3";
 import { s3AssetUrl } from "@/services/s3/asset-url";
 
@@ -56,7 +57,8 @@ export const adminOAuthClientsApiHandler = HttpApiBuilder.group(
         Effect.gen(function* () {
           const clients = yield* OAuthClients;
           return yield* clients
-            .list({ headers: request.headers })
+            .list()
+            .pipe(Effect.provide(BetterAuthRequest.make(request)))
             .pipe(Effect.mapError(internalServerError));
         }),
       )
@@ -64,7 +66,8 @@ export const adminOAuthClientsApiHandler = HttpApiBuilder.group(
         Effect.gen(function* () {
           const clients = yield* OAuthClients;
           return yield* clients
-            .create({ headers: request.headers, payload })
+            .create({ payload })
+            .pipe(Effect.provide(BetterAuthRequest.make(request)))
             .pipe(Effect.mapError(internalServerError));
         }),
       )
@@ -74,9 +77,9 @@ export const adminOAuthClientsApiHandler = HttpApiBuilder.group(
           const client = yield* clients
             .update({
               clientId: params.clientId,
-              headers: request.headers,
               payload,
             })
+            .pipe(Effect.provide(BetterAuthRequest.make(request)))
             .pipe(Effect.mapError(internalServerError));
 
           if (!client) return yield* new HttpApiError.NotFound({});
@@ -87,7 +90,8 @@ export const adminOAuthClientsApiHandler = HttpApiBuilder.group(
         Effect.gen(function* () {
           const clients = yield* OAuthClients;
           const client = yield* clients
-            .delete({ clientId: params.clientId, headers: request.headers })
+            .delete({ clientId: params.clientId })
+            .pipe(Effect.provide(BetterAuthRequest.make(request)))
             .pipe(Effect.mapError(internalServerError));
 
           if (!client) return yield* new HttpApiError.NotFound({});

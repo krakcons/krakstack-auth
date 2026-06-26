@@ -38,6 +38,7 @@ const configuredPrimaryHosts = () => {
   if (process.env.NODE_ENV === "development") {
     hosts.add("localhost:3001");
     hosts.add("localhost:3000");
+    hosts.add("auth.local.kokobi.test:3001");
   }
 
   return hosts;

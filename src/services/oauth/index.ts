@@ -1,10 +1,9 @@
 import { Context, Effect, Layer, Schema } from "effect";
-import type { Headers } from "effect/unstable/http/Headers";
 import { eq } from "drizzle-orm";
 
 import { oauthClient, project } from "@/db/auth-schema";
 import { DB } from "@/services/database";
-import { auth } from "@/services/auth/config";
+import { BetterAuthRequest } from "@/services/auth/better-auth-request";
 import { decodeProjectDataOrEmpty } from "@/services/projects";
 import type { ProjectData } from "@/services/projects/schema";
 
@@ -148,13 +147,10 @@ export class OAuthClients extends Context.Service<OAuthClients>()(
         };
       };
 
-      const list = Effect.fn("OAuthClients.list")(function* ({
-        headers,
-      }: {
-        headers: Headers;
-      }) {
+      const list = Effect.fn("OAuthClients.list")(function* () {
+        const betterAuth = yield* BetterAuthRequest;
         const clients = yield* Effect.promise(() =>
-          auth.api.getOAuthClients({ headers }),
+          betterAuth.api.getOAuthClients({ headers: betterAuth.headers }),
         );
 
         return yield* Effect.all(
@@ -176,15 +172,14 @@ export class OAuthClients extends Context.Service<OAuthClients>()(
       });
 
       const create = Effect.fn("OAuthClients.create")(function* ({
-        headers,
         payload,
       }: {
-        headers: Headers;
         payload: CreateOAuthClientPayload;
       }) {
+        const betterAuth = yield* BetterAuthRequest;
         const client = yield* Effect.promise(() =>
-          auth.api.adminCreateOAuthClient({
-            headers,
+          betterAuth.api.adminCreateOAuthClient({
+            headers: betterAuth.headers,
             body: {
               redirect_uris: Array.from(payload.redirectUris),
               scope: scopesFromString(payload.scope).join(" "),
@@ -237,16 +232,15 @@ export class OAuthClients extends Context.Service<OAuthClients>()(
 
       const update = Effect.fn("OAuthClients.update")(function* ({
         clientId,
-        headers,
         payload,
       }: {
         clientId: string;
-        headers: Headers;
         payload: UpdateOAuthClientPayload;
       }) {
+        const betterAuth = yield* BetterAuthRequest;
         const client = yield* Effect.promise(() =>
-          auth.api.adminUpdateOAuthClient({
-            headers,
+          betterAuth.api.adminUpdateOAuthClient({
+            headers: betterAuth.headers,
             body: {
               client_id: clientId,
               update: {
@@ -285,21 +279,20 @@ export class OAuthClients extends Context.Service<OAuthClients>()(
 
       const _delete = Effect.fn("OAuthClients.delete")(function* ({
         clientId,
-        headers,
       }: {
         clientId: string;
-        headers: Headers;
       }) {
+        const betterAuth = yield* BetterAuthRequest;
         const client = yield* Effect.promise(() =>
-          auth.api.getOAuthClient({
-            headers,
+          betterAuth.api.getOAuthClient({
+            headers: betterAuth.headers,
             query: { client_id: clientId },
           }),
         );
 
         yield* Effect.promise(() =>
-          auth.api.deleteOAuthClient({
-            headers,
+          betterAuth.api.deleteOAuthClient({
+            headers: betterAuth.headers,
             body: { client_id: clientId },
           }),
         );

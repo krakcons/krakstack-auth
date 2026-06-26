@@ -2,7 +2,7 @@ import { Effect, Layer, Option } from "effect";
 import { Headers, HttpServerRequest } from "effect/unstable/http";
 import { HttpApiError } from "effect/unstable/httpapi";
 
-import { authForRequest } from "@/services/auth/config";
+import { BetterAuthRequest } from "@/services/auth/better-auth-request";
 import {
   AdminAuthMiddleware,
   ServiceApiKeyMiddleware,
@@ -38,14 +38,12 @@ export const adminAuthMiddlewareLayer = Layer.succeed(
   (effect) =>
     Effect.gen(function* () {
       const request = yield* HttpServerRequest.HttpServerRequest;
-      const webRequest = yield* HttpServerRequest.toWeb(request).pipe(
+      const betterAuth = yield* BetterAuthRequest.pipe(
+        Effect.provide(BetterAuthRequest.make(request)),
         Effect.mapError(internalServerError),
       );
       const session = yield* Effect.tryPromise({
-        try: async () =>
-          (await authForRequest(webRequest)).api.getSession({
-            headers: webRequest.headers,
-          }),
+        try: () => betterAuth.api.getSession({ headers: betterAuth.headers }),
         catch: internalServerError,
       });
 
@@ -66,14 +64,15 @@ export const serviceApiKeyMiddlewareLayer = Layer.succeed(
       const key = serviceApiKey(request.headers);
       if (!key) return yield* new HttpApiError.Unauthorized({});
 
-      const webRequest = yield* HttpServerRequest.toWeb(request).pipe(
+      const betterAuth = yield* BetterAuthRequest.pipe(
+        Effect.provide(BetterAuthRequest.make(request)),
         Effect.mapError(internalServerError),
       );
       const result = yield* Effect.tryPromise({
-        try: async () =>
-          (await authForRequest(webRequest)).api.verifyApiKey({
+        try: () =>
+          betterAuth.api.verifyApiKey({
             body: { key, configId: "service" },
-            headers: webRequest.headers,
+            headers: betterAuth.headers,
           }),
         catch: internalServerError,
       });

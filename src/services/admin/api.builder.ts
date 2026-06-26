@@ -3,6 +3,7 @@ import { and, count, countDistinct, gt, gte } from "drizzle-orm";
 import { HttpApiBuilder, HttpApiError } from "effect/unstable/httpapi";
 
 import { AdminApi } from "@/api";
+import { BetterAuthRequest } from "@/services/auth/better-auth-request";
 import {
   apikey,
   domains,
@@ -174,7 +175,8 @@ export const adminApiHandler = HttpApiBuilder.group(
         Effect.gen(function* () {
           const service = yield* Organizations;
           return yield* service
-            .list({ request })
+            .list()
+            .pipe(Effect.provide(BetterAuthRequest.make(request)))
             .pipe(Effect.mapError(internalServerError));
         }),
       )
@@ -182,7 +184,8 @@ export const adminApiHandler = HttpApiBuilder.group(
         Effect.gen(function* () {
           const service = yield* Organizations;
           return yield* service
-            .create({ request, payload })
+            .create({ payload })
+            .pipe(Effect.provide(BetterAuthRequest.make(request)))
             .pipe(Effect.mapError(internalServerError));
         }),
       )
@@ -190,7 +193,8 @@ export const adminApiHandler = HttpApiBuilder.group(
         Effect.gen(function* () {
           const service = yield* Organizations;
           const organization = yield* service
-            .update({ request, id: params.id, payload })
+            .update({ id: params.id, payload })
+            .pipe(Effect.provide(BetterAuthRequest.make(request)))
             .pipe(Effect.mapError(internalServerError));
 
           if (!organization) return yield* new HttpApiError.NotFound({});
@@ -201,7 +205,8 @@ export const adminApiHandler = HttpApiBuilder.group(
         Effect.gen(function* () {
           const service = yield* Organizations;
           const organization = yield* service
-            .delete({ request, id: params.id })
+            .delete({ id: params.id })
+            .pipe(Effect.provide(BetterAuthRequest.make(request)))
             .pipe(Effect.mapError(internalServerError));
 
           if (!organization) return yield* new HttpApiError.NotFound({});

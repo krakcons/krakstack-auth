@@ -16,7 +16,7 @@ import { AuthDocsApi } from "@/api.docs";
 import { corsMiddleware } from "@/lib/cors";
 import { adminApiHandler } from "@/services/admin/api.builder";
 import { authApiHandler } from "@/services/auth/api.builder";
-import { authForRequest } from "@/services/auth/config";
+import { BetterAuthRequest } from "@/services/auth/better-auth-request";
 import {
   adminAuthMiddlewareLayer,
   serviceApiKeyMiddlewareLayer,
@@ -58,7 +58,11 @@ const CloudflareLive = Layer.mergeAll(
 );
 
 export const authWebHandler = async (request: Request) =>
-  (await authForRequest(request)).handler(request);
+  (
+    await Effect.runPromise(
+      BetterAuthRequest.pipe(Effect.provide(BetterAuthRequest.make(request))),
+    )
+  ).handler(request);
 
 const authHandlerEffect = HttpEffect.fromWebHandler((request) =>
   Promise.resolve(authWebHandler(request)),
