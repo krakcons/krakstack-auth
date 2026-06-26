@@ -62,6 +62,7 @@ const requireServiceApiKey = (request: HttpServerRequest.HttpServerRequest) =>
       try: async () =>
         (await authForRequest(webRequest)).api.verifyApiKey({
           body: { key, configId: "service" },
+          headers: webRequest.headers,
         }),
       catch: internalServerError,
     });

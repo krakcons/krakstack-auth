@@ -66,6 +66,7 @@ export const authApiHandler = HttpApiBuilder.group(
                 )
               : undefined;
             const result = await auth.api.createApiKey({
+              headers: request.headers,
               body: {
                 configId: payload.configId,
                 userId: session.user.id,
@@ -82,7 +83,7 @@ export const authApiHandler = HttpApiBuilder.group(
           catch: authError("Could not create API key"),
         }),
       )
-      .handle("verifyApiKey", ({ payload }) =>
+      .handle("verifyApiKey", ({ payload, request }) =>
         Effect.tryPromise({
           try: () => {
             const permissions = payload.permissions
@@ -98,7 +99,7 @@ export const authApiHandler = HttpApiBuilder.group(
               ...(permissions ? { permissions } : {}),
             };
 
-            return auth.api.verifyApiKey({ body });
+            return auth.api.verifyApiKey({ body, headers: request.headers });
           },
           catch: authError("Could not verify API key"),
         }).pipe(
