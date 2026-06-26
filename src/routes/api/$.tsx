@@ -1,16 +1,19 @@
 import { createFileRoute } from "@tanstack/react-router";
 
-import { apiHandler } from "@/api-handler";
+const handler = async (request: Request) => {
+  const { apiHandler } = await import("@/api-handler.server");
+  return apiHandler(request);
+};
 
 export const Route = createFileRoute("/api/$")({
   server: {
     handlers: {
-      GET: ({ request }) => apiHandler(request),
-      POST: ({ request }) => apiHandler(request),
-      PUT: ({ request }) => apiHandler(request),
-      PATCH: ({ request }) => apiHandler(request),
-      DELETE: ({ request }) => apiHandler(request),
-      OPTIONS: ({ request }) => apiHandler(request),
+      GET: ({ request }) => handler(request),
+      POST: ({ request }) => handler(request),
+      PUT: ({ request }) => handler(request),
+      PATCH: ({ request }) => handler(request),
+      DELETE: ({ request }) => handler(request),
+      OPTIONS: ({ request }) => handler(request),
     },
   },
 });

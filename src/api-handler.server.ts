@@ -11,22 +11,33 @@ import {
 } from "effect/unstable/http";
 import { HttpApiBuilder, OpenApi } from "effect/unstable/httpapi";
 
-import { AdminApi, AuthDocsApi, FrontendApi } from "@/api";
+import { AdminApi, FrontendApi } from "@/api";
+import { AuthDocsApi } from "@/api.docs";
 import { corsMiddleware } from "@/lib/cors";
 import { adminApiHandler } from "@/services/admin/api.builder";
 import { authApiHandler } from "@/services/auth/api.builder";
 import { authForRequest } from "@/services/auth/config";
+import {
+  adminAuthMiddlewareLayer,
+  serviceApiKeyMiddlewareLayer,
+} from "@/services/auth/middleware.server";
 import { BackendAuth } from "@/services/backend-auth";
 import { backendAuthApiHandler } from "@/services/backend-auth/api.builder";
 import { BackendAuthApi } from "@/services/backend-auth/api.group";
 import { Domains } from "@/services/domains";
 import { OAuthClients } from "@/services/oauth";
-import { adminOAuthClientsApiHandler } from "@/services/oauth/api.builder";
+import {
+  adminOAuthClientsApiHandler,
+  publicOAuthClientsApiHandler,
+} from "@/services/oauth/api.builder";
 import { OpenTelemetry } from "@/services/opentelemetry";
 import { Organizations } from "@/services/organizations";
 import { organizationsApiHandler } from "@/services/organizations/api.builder";
 import { Projects } from "@/services/projects";
-import { adminProjectsApiHandler } from "@/services/projects/api.builder";
+import {
+  adminProjectsApiHandler,
+  publicProjectsApiHandler,
+} from "@/services/projects/api.builder";
 import { S3Service } from "@/services/s3";
 
 const fileSystemLayer = FileSystem.layerNoop({});
@@ -160,14 +171,20 @@ const apiLayer = Layer.mergeAll(
     Layer.provide(adminApiHandler),
     Layer.provide(adminOAuthClientsApiHandler),
     Layer.provide(adminProjectsApiHandler),
+    Layer.provide(adminAuthMiddlewareLayer),
   ),
   HttpApiBuilder.layer(FrontendApi).pipe(
     Layer.provide(authApiHandler),
     Layer.provide(organizationsApiHandler),
+    Layer.provide(publicOAuthClientsApiHandler),
+    Layer.provide(publicProjectsApiHandler),
   ),
   HttpApiBuilder.layer(BackendAuthApi, {
     openapiPath: "/api/backend-openapi.json",
-  }).pipe(Layer.provide(backendAuthApiHandler)),
+  }).pipe(
+    Layer.provide(backendAuthApiHandler),
+    Layer.provide(serviceApiKeyMiddlewareLayer),
+  ),
   docsLayer,
   authDocsOpenApiLayer,
   logoAssetRoutesLayer,

@@ -7,6 +7,7 @@ import {
 } from "effect/unstable/httpapi";
 
 import { AuthMember, AuthOrganization, AuthUser } from "@/lib/auth-schema";
+import { ServiceApiKeyMiddleware } from "@/services/auth/middleware";
 import {
   ServerCreateDomainPayload,
   ServerDomain,
@@ -84,7 +85,8 @@ export const BackendAuthUsersApiGroup = HttpApiGroup.make("backendUsers")
       title: "Users (Server)",
       description: "Server-to-server user endpoints for trusted services.",
     }),
-  );
+  )
+  .middleware(ServiceApiKeyMiddleware);
 
 export const BackendAuthOrganizationsApiGroup = HttpApiGroup.make(
   "backendOrganizations",
@@ -171,7 +173,8 @@ export const BackendAuthOrganizationsApiGroup = HttpApiGroup.make(
       description:
         "Server-to-server organization and membership endpoints for trusted services.",
     }),
-  );
+  )
+  .middleware(ServiceApiKeyMiddleware);
 
 export const BackendAuthDomainsApiGroup = HttpApiGroup.make("backendDomains")
   .add(
@@ -241,7 +244,8 @@ export const BackendAuthDomainsApiGroup = HttpApiGroup.make("backendDomains")
       title: "Domains (Server)",
       description: "Server-to-server auth custom hostname endpoints.",
     }),
-  );
+  )
+  .middleware(ServiceApiKeyMiddleware);
 
 export const BackendAuthApi = HttpApi.make("BackendAuthApi")
   .annotateMerge(

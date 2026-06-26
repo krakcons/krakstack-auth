@@ -15,6 +15,35 @@ import {
 } from "./schema";
 import { ProjectPublicConfig } from "@/services/projects/schema";
 import { PresignedUpload, PresignUploadPayload } from "@/services/s3/schema";
+import { AdminAuthMiddleware } from "@/services/auth/middleware";
+
+export const PublicOAuthClientsApiGroup = HttpApiGroup.make(
+  "publicOAuthClients",
+)
+  .add(
+    HttpApiEndpoint.get(
+      "getOAuthClientConfig",
+      "/oauth/clients/:clientId/config",
+      {
+        params: OAuthClientIdParams,
+        success: ProjectPublicConfig,
+        error: [HttpApiError.NotFound, HttpApiError.InternalServerError],
+      },
+    ).annotateMerge(
+      OpenApi.annotations({
+        title: "Get OAuth client public config",
+        summary: "Get public OAuth client white-label config",
+        description:
+          "Returns logo, sanitized theme CSS, and resolved authentication options for an OAuth client.",
+      }),
+    ),
+  )
+  .annotateMerge(
+    OpenApi.annotations({
+      title: "OAuth clients",
+      description: "Public OAuth client white-label endpoints.",
+    }),
+  );
 
 export const AdminOAuthClientsApiGroup = HttpApiGroup.make("oauthClients")
   .add(
@@ -49,24 +78,6 @@ export const AdminOAuthClientsApiGroup = HttpApiGroup.make("oauthClients")
         summary: "Create an OAuth client for administrators",
         description:
           "Registers an OAuth client with redirect URIs, scopes, white-label metadata, and a generated client secret returned once.",
-      }),
-    ),
-  )
-  .add(
-    HttpApiEndpoint.get(
-      "getOAuthClientConfig",
-      "/oauth/clients/:clientId/config",
-      {
-        params: OAuthClientIdParams,
-        success: ProjectPublicConfig,
-        error: [HttpApiError.NotFound, HttpApiError.InternalServerError],
-      },
-    ).annotateMerge(
-      OpenApi.annotations({
-        title: "Get OAuth client public config",
-        summary: "Get public OAuth client white-label config",
-        description:
-          "Returns logo, sanitized theme CSS, and resolved authentication options for an OAuth client.",
       }),
     ),
   )
@@ -144,4 +155,5 @@ export const AdminOAuthClientsApiGroup = HttpApiGroup.make("oauthClients")
       title: "OAuth clients",
       description: "Administrative OAuth client white-label endpoints.",
     }),
-  );
+  )
+  .middleware(AdminAuthMiddleware);

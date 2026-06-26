@@ -7,6 +7,7 @@ import {
 import { Schema } from "effect";
 
 import { OAuthStatsResponse } from "./schema";
+import { AdminAuthMiddleware } from "@/services/auth/middleware";
 import {
   CreateOrganizationPayload,
   Organization,
@@ -205,4 +206,5 @@ export const AdminApiGroup = HttpApiGroup.make("admin")
       title: "Admin",
       description: "Administrative KrakStack authentication endpoints.",
     }),
-  );
+  )
+  .middleware(AdminAuthMiddleware);

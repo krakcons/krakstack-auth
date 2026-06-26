@@ -1,7 +1,7 @@
 import { Atom, AsyncResult } from "effect/unstable/reactivity";
 import { useAtomSuspense } from "@effect/atom-react";
 
-import { AdminApiClient } from "@/lib/admin-api-client";
+import { ApiClient } from "@/lib/api-client";
 
 import type { ProjectPublicConfig } from "@/services/projects/schema";
 
@@ -46,7 +46,7 @@ export const projectPublicConfigAtom = Atom.family(
     host: string | null;
   }) =>
     projectId || clientId || host
-      ? AdminApiClient.query("projects", "getProjectPublicConfig", {
+      ? ApiClient.query("publicProjects", "getProjectPublicConfig", {
           query: {
             ...(projectId ? { projectId } : {}),
             ...(clientId ? { clientId } : {}),

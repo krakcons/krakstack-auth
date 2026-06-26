@@ -7,6 +7,7 @@ import {
 } from "effect/unstable/httpapi";
 
 import { PresignedUpload, PresignUploadPayload } from "@/services/s3/schema";
+import { AdminAuthMiddleware } from "@/services/auth/middleware";
 
 import {
   CreateProjectPayload,
@@ -17,7 +18,7 @@ import {
   UpdateProjectPayload,
 } from "./schema";
 
-export const AdminProjectsApiGroup = HttpApiGroup.make("projects")
+export const PublicProjectsApiGroup = HttpApiGroup.make("publicProjects")
   .add(
     HttpApiEndpoint.get("getProjectPublicConfig", "/projects/config", {
       query: ProjectPublicConfigQuery,
@@ -32,6 +33,14 @@ export const AdminProjectsApiGroup = HttpApiGroup.make("projects")
       }),
     ),
   )
+  .annotateMerge(
+    OpenApi.annotations({
+      title: "Projects",
+      description: "Public project white-label endpoints.",
+    }),
+  );
+
+export const AdminProjectsApiGroup = HttpApiGroup.make("projects")
   .add(
     HttpApiEndpoint.get("listProjects", "/admin/projects", {
       success: Schema.Array(Project),
@@ -105,4 +114,5 @@ export const AdminProjectsApiGroup = HttpApiGroup.make("projects")
       title: "Projects",
       description: "Administrative project white-label endpoints.",
     }),
-  );
+  )
+  .middleware(AdminAuthMiddleware);

@@ -1,60 +1,25 @@
 import { Effect } from "effect";
 import { count } from "drizzle-orm";
-import { HttpServerRequest } from "effect/unstable/http";
 import { HttpApiBuilder, HttpApiError } from "effect/unstable/httpapi";
 
 import { AdminApi } from "@/api";
 import { oauthClient, oauthConsent, project, user } from "@/db/auth-schema";
-import { authForRequest } from "@/services/auth/config";
 import { Domains } from "@/services/domains";
 import { db } from "@/services/database";
 import { Organizations } from "@/services/organizations";
-
-const userRole = (value: unknown) => {
-  if (typeof value !== "object" || value === null || !("role" in value)) {
-    return undefined;
-  }
-  return Reflect.get(value, "role");
-};
-
-const hasAdminRole = (role: unknown) =>
-  typeof role === "string" &&
-  role.split(",").some((item) => item.trim() === "admin");
 
 const internalServerError = (error: unknown) => {
   console.error("Failed to fetch OAuth stats:", error);
   return new HttpApiError.InternalServerError({});
 };
 
-const requireAdmin = (request: HttpServerRequest.HttpServerRequest) =>
-  Effect.gen(function* () {
-    const webRequest = yield* HttpServerRequest.toWeb(request).pipe(
-      Effect.mapError(internalServerError),
-    );
-    const session = yield* Effect.tryPromise({
-      try: async () =>
-        (await authForRequest(webRequest)).api.getSession({
-          headers: webRequest.headers,
-        }),
-      catch: internalServerError,
-    });
-
-    if (!session) return yield* new HttpApiError.Unauthorized({});
-
-    if (!hasAdminRole(userRole(session.user))) {
-      return yield* new HttpApiError.Forbidden({});
-    }
-  });
-
 export const adminApiHandler = HttpApiBuilder.group(
   AdminApi,
   "admin",
   (handlers) =>
     handlers
-      .handle("oauthStats", ({ request }) =>
+      .handle("oauthStats", () =>
         Effect.gen(function* () {
-          yield* requireAdmin(request);
-
           const clients = yield* Effect.tryPromise({
             try: () =>
               db
@@ -112,8 +77,6 @@ export const adminApiHandler = HttpApiBuilder.group(
       )
       .handle("listOrganizations", ({ request }) =>
         Effect.gen(function* () {
-          yield* requireAdmin(request);
-
           const service = yield* Organizations;
           return yield* service
             .list({ request })
@@ -122,8 +85,6 @@ export const adminApiHandler = HttpApiBuilder.group(
       )
       .handle("createOrganization", ({ payload, request }) =>
         Effect.gen(function* () {
-          yield* requireAdmin(request);
-
           const service = yield* Organizations;
           return yield* service
             .create({ request, payload })
@@ -132,8 +93,6 @@ export const adminApiHandler = HttpApiBuilder.group(
       )
       .handle("updateOrganization", ({ params, payload, request }) =>
         Effect.gen(function* () {
-          yield* requireAdmin(request);
-
           const service = yield* Organizations;
           const organization = yield* service
             .update({ request, id: params.id, payload })
@@ -145,8 +104,6 @@ export const adminApiHandler = HttpApiBuilder.group(
       )
       .handle("deleteOrganization", ({ params, request }) =>
         Effect.gen(function* () {
-          yield* requireAdmin(request);
-
           const service = yield* Organizations;
           const organization = yield* service
             .delete({ request, id: params.id })
@@ -156,20 +113,16 @@ export const adminApiHandler = HttpApiBuilder.group(
           return organization;
         }),
       )
-      .handle("listDomains", ({ request }) =>
+      .handle("listDomains", () =>
         Effect.gen(function* () {
-          yield* requireAdmin(request);
-
           const service = yield* Domains;
           return yield* service
             .list()
             .pipe(Effect.mapError(internalServerError));
         }),
       )
-      .handle("createDomain", ({ payload, request }) =>
+      .handle("createDomain", ({ payload }) =>
         Effect.gen(function* () {
-          yield* requireAdmin(request);
-
           const service = yield* Domains;
           const domain = yield* service
             .create({ payload })
@@ -179,10 +132,8 @@ export const adminApiHandler = HttpApiBuilder.group(
           return domain;
         }),
       )
-      .handle("updateDomain", ({ params, payload, request }) =>
+      .handle("updateDomain", ({ params, payload }) =>
         Effect.gen(function* () {
-          yield* requireAdmin(request);
-
           const service = yield* Domains;
           const domain = yield* service
             .update({ id: params.id, payload })
@@ -192,10 +143,8 @@ export const adminApiHandler = HttpApiBuilder.group(
           return domain;
         }),
       )
-      .handle("getDomainRecords", ({ params, request }) =>
+      .handle("getDomainRecords", ({ params }) =>
         Effect.gen(function* () {
-          yield* requireAdmin(request);
-
           const service = yield* Domains;
           const records = yield* service
             .records({ id: params.id })
@@ -205,10 +154,8 @@ export const adminApiHandler = HttpApiBuilder.group(
           return records;
         }),
       )
-      .handle("deleteDomain", ({ params, request }) =>
+      .handle("deleteDomain", ({ params }) =>
         Effect.gen(function* () {
-          yield* requireAdmin(request);
-
           const service = yield* Domains;
           const domain = yield* service
             .delete({ id: params.id })
