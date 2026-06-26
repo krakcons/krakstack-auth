@@ -1,8 +1,8 @@
 import { trustedOrigins } from "@/lib/trusted-origins";
 import {
+  authDomainContextForRequest,
   normalizeAuthHost,
-  registeredAuthDomainForRequest,
-} from "@/lib/auth-domains";
+} from "@/services/domains";
 
 export type CorsOptions = {
   allowedOrigins?: "*" | readonly string[];
@@ -35,13 +35,8 @@ const registeredDomainOrigin = async (request: Request, origin: string) => {
   const originHost = normalizeAuthHost(origin);
   if (!originHost) return undefined;
 
-  const domain = await registeredAuthDomainForRequest(request);
-  if (
-    !domain ||
-    (originHost !== domain.rootHostname && originHost !== domain.hostname)
-  ) {
-    return undefined;
-  }
+  const context = await authDomainContextForRequest(request);
+  if (!context?.hosts.includes(originHost)) return undefined;
 
   try {
     return new URL(origin).origin;

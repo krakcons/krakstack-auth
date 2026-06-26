@@ -1,14 +1,100 @@
 import { and, eq } from "drizzle-orm";
 import { Context, Effect, Layer } from "effect";
+import { getDomain } from "tldts";
 import { CredentialsFromEnv } from "@distilled.cloud/cloudflare";
 import * as CustomHostnames from "@distilled.cloud/cloudflare/custom-hostnames";
 import * as FetchHttpClient from "effect/unstable/http/FetchHttpClient";
 
 import { domains } from "@/db/auth-schema";
-import { normalizeAuthHost } from "@/lib/domain-utils";
+import {
+  normalizeAuthHost,
+  normalizeOAuthClientDomains,
+  parseCsv,
+} from "@/lib/domain-utils";
 import { DB } from "@/services/database";
 import type { ServerCreateDomainPayload } from "../../../packages/sdk/src/server/schema";
 import type { ServerUpdateDomainPayload } from "../../../packages/sdk/src/server/schema";
+
+export { normalizeAuthHost, normalizeOAuthClientDomains, parseCsv };
+
+export type AuthDomainContext = {
+  readonly requestHost: string;
+  readonly hosts: readonly string[];
+  readonly origins: readonly string[];
+  readonly cookieDomain: string | undefined;
+};
+
+export const hostFromRequest = (request: Request) =>
+  normalizeAuthHost(
+    request.headers.get("x-forwarded-host") ?? request.headers.get("host"),
+  ) ?? normalizeAuthHost(request.url);
+
+const configuredPrimaryHosts = () => {
+  const hosts = new Set<string>();
+
+  const betterAuthHost = normalizeAuthHost(process.env.BETTER_AUTH_URL);
+  if (betterAuthHost) hosts.add(betterAuthHost);
+
+  if (process.env.NODE_ENV === "development") {
+    hosts.add("localhost:3001");
+    hosts.add("localhost:3000");
+  }
+
+  return hosts;
+};
+
+export const isPrimaryAuthHost = (host: string | null | undefined) =>
+  Boolean(host && configuredPrimaryHosts().has(host));
+
+const originForHost = (host: string, protocol: string) => {
+  const normalized = normalizeAuthHost(host);
+  if (!normalized) return null;
+
+  return `${protocol.replace(/:$/, "")}://${normalized}`;
+};
+
+const requestProtocol = (request: Request) =>
+  request.headers.get("x-forwarded-proto")?.split(",")[0]?.trim() ||
+  new URL(request.url).protocol.replace(":", "");
+
+const hostLabels = (host: string) => host.split(":")[0]?.split(".") ?? [];
+
+const sharedCookieDomain = (
+  firstHost: string | null | undefined,
+  secondHost: string | null | undefined,
+) => {
+  const first = firstHost ? hostLabels(firstHost) : [];
+  const second = secondHost ? hostLabels(secondHost) : [];
+  const common: string[] = [];
+
+  while (first.length && second.length) {
+    const firstLabel = first.pop();
+    const secondLabel = second.pop();
+    if (!firstLabel || firstLabel !== secondLabel) break;
+    common.unshift(firstLabel);
+  }
+
+  return common.length >= 2 ? `.${common.join(".")}` : undefined;
+};
+
+const fallbackCookieDomain = (host: string) => {
+  const hostname = normalizeAuthHost(host)?.split(":")[0];
+  if (!hostname) return undefined;
+
+  const domain = getDomain(hostname);
+  return domain ? `.${domain}` : undefined;
+};
+
+const originsForHosts = (hosts: Iterable<string>, protocol: string) => {
+  const origins = new Set<string>();
+
+  for (const host of hosts) {
+    const origin = originForHost(host, protocol);
+    if (origin) origins.add(origin);
+  }
+
+  return Array.from(origins);
+};
 
 const cloudflareZoneId = () =>
   process.env.AUTH_CLOUDFLARE_ZONE_ID ?? process.env.CLOUDFLARE_ZONE_ID;
@@ -119,6 +205,93 @@ export class Domains extends Context.Service<Domains>()("Domains", {
       });
       return domain ?? null;
     });
+
+    const registeredForRequest = Effect.fn("Domains.registeredForRequest")(
+      function* ({ request }: { request: Request }) {
+        const host = hostFromRequest(request);
+        if (!host) return null;
+
+        const domain = yield* db.query.domains.findFirst({
+          where: { hostname: host, active: true },
+        });
+        return domain ?? null;
+      },
+    );
+
+    const contextForRequest = Effect.fn("Domains.contextForRequest")(
+      function* ({ request }: { request: Request }) {
+        const requestHost = hostFromRequest(request);
+        if (!requestHost) return null;
+
+        const hosts = new Set<string>();
+        const domain = yield* registeredForRequest({ request });
+
+        if (domain) {
+          hosts.add(domain.hostname);
+          hosts.add(domain.rootHostname);
+        } else if (isPrimaryAuthHost(requestHost)) {
+          hosts.add(requestHost);
+        } else {
+          return null;
+        }
+
+        const hostList = Array.from(hosts);
+
+        return {
+          requestHost,
+          hosts: hostList,
+          origins: originsForHosts(hostList, requestProtocol(request)),
+          cookieDomain:
+            sharedCookieDomain(domain?.hostname, domain?.rootHostname) ??
+            fallbackCookieDomain(requestHost),
+        } satisfies AuthDomainContext;
+      },
+    );
+
+    const allowedHostsForRequest = Effect.fn("Domains.allowedHostsForRequest")(
+      function* ({ request }: { request?: Request } = {}) {
+        const hosts = new Set(configuredPrimaryHosts());
+        if (!request) return Array.from(hosts);
+
+        const context = yield* contextForRequest({ request });
+        for (const host of context?.hosts ?? []) {
+          hosts.add(host);
+        }
+
+        return Array.from(hosts);
+      },
+    );
+
+    const trustedOriginsForRequest = Effect.fn(
+      "Domains.trustedOriginsForRequest",
+    )(function* ({ request }: { request?: Request } = {}) {
+      const origins = new Set(
+        parseCsv(process.env.BETTER_AUTH_TRUSTED_ORIGINS) ?? [],
+      );
+
+      for (const origin of originsForHosts(configuredPrimaryHosts(), "https")) {
+        origins.add(origin);
+      }
+
+      if (!request) return Array.from(origins);
+
+      const context = yield* contextForRequest({ request });
+      for (const origin of context?.origins ?? []) {
+        origins.add(origin);
+      }
+
+      return Array.from(origins);
+    });
+
+    const cookieDomainForRequest = Effect.fn("Domains.cookieDomainForRequest")(
+      function* ({ request }: { request: Request }) {
+        const context = yield* contextForRequest({ request });
+        return (
+          context?.cookieDomain ??
+          fallbackCookieDomain(hostFromRequest(request) ?? "")
+        );
+      },
+    );
 
     const create = Effect.fn("Domains.create")(function* ({
       payload,
@@ -306,7 +479,20 @@ export class Domains extends Context.Service<Domains>()("Domains", {
       return domain;
     });
 
-    return { list, create, update, get, getByHost, records, delete: _delete };
+    return {
+      list,
+      create,
+      update,
+      get,
+      getByHost,
+      registeredForRequest,
+      contextForRequest,
+      allowedHostsForRequest,
+      trustedOriginsForRequest,
+      cookieDomainForRequest,
+      records,
+      delete: _delete,
+    };
   }),
 }) {
   static readonly layer = Layer.effect(this, this.make).pipe(
@@ -318,3 +504,53 @@ export class Domains extends Context.Service<Domains>()("Domains", {
     Layer.provideMerge(DB.testLayer),
   );
 }
+
+const runDomains = <A, E>(effect: Effect.Effect<A, E, Domains>) =>
+  Effect.runPromise(effect.pipe(Effect.provide(Domains.layer)));
+
+export const registeredAuthDomainForRequest = (request: Request) =>
+  runDomains(
+    Effect.gen(function* () {
+      const domains = yield* Domains;
+      return yield* domains.registeredForRequest({ request });
+    }),
+  );
+
+export const authDomainContextForRequest = (request: Request) =>
+  runDomains(
+    Effect.gen(function* () {
+      const domains = yield* Domains;
+      return yield* domains.contextForRequest({ request });
+    }),
+  );
+
+export const isRegisteredAuthHost = async (request: Request) =>
+  Boolean(await registeredAuthDomainForRequest(request));
+
+export const allowedHostsForRequest = (request?: Request) =>
+  runDomains(
+    Effect.gen(function* () {
+      const domains = yield* Domains;
+      return yield* domains.allowedHostsForRequest(
+        request ? { request } : undefined,
+      );
+    }),
+  );
+
+export const trustedOriginsForRequest = (request?: Request) =>
+  runDomains(
+    Effect.gen(function* () {
+      const domains = yield* Domains;
+      return yield* domains.trustedOriginsForRequest(
+        request ? { request } : undefined,
+      );
+    }),
+  );
+
+export const cookieDomainFromRequest = (request: Request) =>
+  runDomains(
+    Effect.gen(function* () {
+      const domains = yield* Domains;
+      return yield* domains.cookieDomainForRequest({ request });
+    }),
+  );

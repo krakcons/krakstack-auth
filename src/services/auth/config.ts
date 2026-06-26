@@ -20,7 +20,7 @@ import {
   isPrimaryAuthHost,
   normalizeAuthHost,
   parseCsv,
-} from "@/lib/auth-domains";
+} from "@/services/domains";
 import {
   sendResetPasswordEmail,
   sendEmailVerificationOtpEmail,
@@ -207,7 +207,7 @@ export const authForRequest = async (request: Request) => {
     return auth;
   }
 
-  const cookieDomain = cookieDomainFromRequest(request);
+  const cookieDomain = await cookieDomainFromRequest(request);
   const cacheKey = `${host}|${cookieDomain ?? ""}|${allowedHosts.join(",")}`;
 
   const cached = authByRequestScope.get(cacheKey);
