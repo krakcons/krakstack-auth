@@ -1,16 +1,25 @@
 import { Effect } from "effect";
-import { count } from "drizzle-orm";
+import { and, count, countDistinct, gt, gte } from "drizzle-orm";
 import { HttpApiBuilder, HttpApiError } from "effect/unstable/httpapi";
 
 import { AdminApi } from "@/api";
-import { oauthClient, oauthConsent, project, user } from "@/db/auth-schema";
+import { organization, session, user } from "@/db/auth-schema";
 import { Domains } from "@/services/domains";
 import { db } from "@/services/database";
 import { Organizations } from "@/services/organizations";
 
 const internalServerError = (error: unknown) => {
-  console.error("Failed to fetch OAuth stats:", error);
+  console.error("Failed to fetch dashboard stats:", error);
   return new HttpApiError.InternalServerError({});
+};
+
+const dayKey = (date: Date) => date.toISOString().slice(0, 10);
+
+const daysAgo = (days: number) => {
+  const date = new Date();
+  date.setUTCHours(0, 0, 0, 0);
+  date.setUTCDate(date.getUTCDate() - days);
+  return date;
 };
 
 export const adminApiHandler = HttpApiBuilder.group(
@@ -18,60 +27,106 @@ export const adminApiHandler = HttpApiBuilder.group(
   "admin",
   (handlers) =>
     handlers
-      .handle("oauthStats", () =>
+      .handle("dashboardStats", () =>
         Effect.gen(function* () {
-          const clients = yield* Effect.tryPromise({
-            try: () =>
-              db
-                .select({
-                  id: oauthClient.id,
-                  clientId: oauthClient.clientId,
-                  name: oauthClient.name,
-                  icon: oauthClient.icon,
-                  disabled: oauthClient.disabled,
-                })
-                .from(oauthClient),
-            catch: internalServerError,
-          });
-
-          const consentCounts = yield* Effect.tryPromise({
-            try: () =>
-              db
-                .select({
-                  clientId: oauthConsent.clientId,
-                  userCount: count(oauthConsent.userId),
-                })
-                .from(oauthConsent)
-                .groupBy(oauthConsent.clientId),
-            catch: internalServerError,
-          });
-
           const userTotals = yield* Effect.tryPromise({
             try: () => db.select({ count: count() }).from(user),
             catch: internalServerError,
           });
 
-          const projectTotals = yield* Effect.tryPromise({
-            try: () => db.select({ count: count() }).from(project),
+          const organizationTotals = yield* Effect.tryPromise({
+            try: () => db.select({ count: count() }).from(organization),
+            catch: internalServerError,
+          });
+
+          const since = new Date(Date.now() - 24 * 60 * 60 * 1000);
+          const chartStart = daysAgo(13);
+          const activeUserTotals = yield* Effect.tryPromise({
+            try: () =>
+              db
+                .select({ count: countDistinct(session.userId) })
+                .from(session)
+                .where(
+                  and(
+                    gte(session.updatedAt, since),
+                    gt(session.expiresAt, new Date()),
+                  ),
+                ),
+            catch: internalServerError,
+          });
+
+          const recentSessions = yield* Effect.tryPromise({
+            try: () =>
+              db
+                .select({
+                  userId: session.userId,
+                  updatedAt: session.updatedAt,
+                })
+                .from(session)
+                .where(
+                  and(
+                    gte(session.updatedAt, chartStart),
+                    gt(session.expiresAt, new Date()),
+                  ),
+                ),
+            catch: internalServerError,
+          });
+
+          const recentUsers = yield* Effect.tryPromise({
+            try: () =>
+              db
+                .select({ createdAt: user.createdAt })
+                .from(user)
+                .where(gte(user.createdAt, chartStart)),
             catch: internalServerError,
           });
 
           const totalUsers = Number(userTotals[0]?.count ?? 0);
-          const totalProjects = Number(projectTotals[0]?.count ?? 0);
-          const consentMap = new Map(
-            consentCounts.map((c) => [c.clientId, Number(c.userCount)]),
+          const totalOrganizations = Number(organizationTotals[0]?.count ?? 0);
+          const dailyActiveUsers = Number(activeUserTotals[0]?.count ?? 0);
+          const activeUsersByDay = new Map<string, Set<string>>();
+
+          for (const item of recentSessions) {
+            const key = dayKey(item.updatedAt);
+            const users = activeUsersByDay.get(key) ?? new Set<string>();
+            users.add(item.userId);
+            activeUsersByDay.set(key, users);
+          }
+
+          const dailyActiveUsersByDay = Array.from(
+            { length: 14 },
+            (_, index) => {
+              const date = daysAgo(13 - index);
+              const key = dayKey(date);
+              return {
+                date: key,
+                count: activeUsersByDay.get(key)?.size ?? 0,
+              };
+            },
           );
 
-          const clientStats = clients.map((client) => ({
-            ...client,
-            userCount: consentMap.get(client.clientId) ?? 0,
-          }));
+          const signupsByDate = new Map<string, number>();
+
+          for (const item of recentUsers) {
+            const key = dayKey(item.createdAt);
+            signupsByDate.set(key, (signupsByDate.get(key) ?? 0) + 1);
+          }
+
+          const signupsByDay = Array.from({ length: 14 }, (_, index) => {
+            const date = daysAgo(13 - index);
+            const key = dayKey(date);
+            return {
+              date: key,
+              count: signupsByDate.get(key) ?? 0,
+            };
+          });
 
           return {
             totalUsers,
-            totalProjects,
-            totalClients: clients.length,
-            clients: clientStats,
+            totalOrganizations,
+            dailyActiveUsers,
+            dailyActiveUsersByDay,
+            signupsByDay,
           };
         }),
       )

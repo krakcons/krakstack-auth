@@ -1,10 +1,11 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { Link, createFileRoute } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
-import { Bar, BarChart, CartesianGrid, XAxis, YAxis } from "recharts";
-import { FolderKanban, KeyRound, Loader2, Users } from "lucide-react";
+import { Area, AreaChart, CartesianGrid, XAxis, YAxis } from "recharts";
+import { Building2, Users } from "lucide-react";
 
 import { m } from "@/paraglide/messages";
 import { SidebarPageHeader } from "@/components/ui/sidebar-layout";
+import { StatsCard } from "@/components/ui/stats-card";
 import {
   Card,
   CardContent,
@@ -23,27 +24,19 @@ export const Route = createFileRoute("/admin/")({
   component: DashboardPage,
 });
 
-type ClientStats = {
-  id: string;
-  clientId: string;
-  name: string | null;
-  icon: string | null;
-  disabled: boolean | null;
-  userCount: number;
-};
-
 type DashboardStats = {
   totalUsers: number;
-  totalProjects: number;
-  totalClients: number;
-  clients: ClientStats[];
+  totalOrganizations: number;
+  dailyActiveUsers: number;
+  dailyActiveUsersByDay: { date: string; count: number }[];
+  signupsByDay: { date: string; count: number }[];
 };
 
 function useDashboardStats() {
   return useQuery({
     queryKey: ["admin", "dashboard"],
     queryFn: async () => {
-      const res = await fetch("/api/admin/oauth-stats", {
+      const res = await fetch("/api/admin/dashboard-stats", {
         credentials: "include",
       });
       if (!res.ok) throw new Error("Failed to fetch dashboard stats.");
@@ -53,19 +46,31 @@ function useDashboardStats() {
 }
 
 const chartConfig = {
-  userCount: {
-    label: m.admin_total_users(),
+  count: {
+    label: m.admin_daily_active_users(),
     color: "var(--chart-1)",
   },
 } satisfies ChartConfig;
 
+const signupsChartConfig = {
+  count: {
+    label: m.admin_signups(),
+    color: "var(--chart-2)",
+  },
+} satisfies ChartConfig;
+
+const formatDay = (value: string) =>
+  new Date(`${value}T00:00:00Z`).toLocaleDateString(undefined, {
+    month: "short",
+    day: "numeric",
+    timeZone: "UTC",
+  });
+
 function DashboardPage() {
   const { data: stats, isLoading, error } = useDashboardStats();
 
-  const chartData = (stats?.clients ?? []).map((c) => ({
-    name: c.name ?? c.clientId,
-    userCount: c.userCount,
-  }));
+  const formatStat = (value: number | undefined) =>
+    isLoading ? "..." : (value ?? 0).toLocaleString();
 
   return (
     <>
@@ -78,91 +83,132 @@ function DashboardPage() {
         <p className="text-destructive text-sm">{error.message}</p>
       ) : (
         <>
-          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-            <Card>
-              <CardHeader>
-                <div className="flex items-center justify-between gap-3">
-                  <CardDescription>{m.admin_total_users()}</CardDescription>
-                  <Users className="text-muted-foreground size-4" />
-                </div>
-                <CardTitle className="text-3xl font-bold tabular-nums">
-                  {isLoading ? (
-                    <Loader2 className="size-6 animate-spin" />
-                  ) : (
-                    (stats?.totalUsers ?? 0).toLocaleString()
-                  )}
-                </CardTitle>
-              </CardHeader>
-            </Card>
-            <Card>
-              <CardHeader>
-                <div className="flex items-center justify-between gap-3">
-                  <CardDescription>{m.admin_total_projects()}</CardDescription>
-                  <FolderKanban className="text-muted-foreground size-4" />
-                </div>
-                <CardTitle className="text-3xl font-bold tabular-nums">
-                  {isLoading ? (
-                    <Loader2 className="size-6 animate-spin" />
-                  ) : (
-                    (stats?.totalProjects ?? 0).toLocaleString()
-                  )}
-                </CardTitle>
-              </CardHeader>
-            </Card>
-            <Card>
-              <CardHeader>
-                <div className="flex items-center justify-between gap-3">
-                  <CardDescription>{m.admin_oauth_clients()}</CardDescription>
-                  <KeyRound className="text-muted-foreground size-4" />
-                </div>
-                <CardTitle className="text-3xl font-bold tabular-nums">
-                  {isLoading ? (
-                    <Loader2 className="size-6 animate-spin" />
-                  ) : (
-                    (stats?.totalClients ?? 0).toLocaleString()
-                  )}
-                </CardTitle>
-              </CardHeader>
-            </Card>
+          <div className="grid gap-4 md:grid-cols-2">
+            <Link
+              to="/admin/users"
+              preload="intent"
+              className="group/card-link focus-visible:ring-ring/50 min-w-0 rounded-xl outline-none focus-visible:ring-[3px]"
+            >
+              <StatsCard
+                title={m.admin_users_title()}
+                value={formatStat(stats?.totalUsers)}
+                description={m.admin_registered_users()}
+                icon={<Users className="text-muted-foreground" />}
+              />
+            </Link>
+            <Link
+              to="/admin/organizations"
+              preload="intent"
+              className="group/card-link focus-visible:ring-ring/50 min-w-0 rounded-xl outline-none focus-visible:ring-[3px]"
+            >
+              <StatsCard
+                title={m.admin_organizations_title()}
+                value={formatStat(stats?.totalOrganizations)}
+                description={m.admin_registered_organizations()}
+                icon={<Building2 className="text-muted-foreground" />}
+              />
+            </Link>
           </div>
-
-          {chartData.length > 0 && (
-            <Card>
-              <CardHeader>
-                <CardTitle>{m.admin_oauth_client_users()}</CardTitle>
-                <CardDescription>
-                  {m.admin_oauth_client_users_description()}
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                <ChartContainer
-                  config={chartConfig}
-                  className="min-h-[200px] w-full"
+          <Card>
+            <CardHeader>
+              <CardTitle>{m.admin_dau_chart_title()}</CardTitle>
+              <CardDescription>
+                {m.admin_dau_chart_description()}
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <ChartContainer
+                config={chartConfig}
+                className="min-h-[260px] w-full"
+              >
+                <AreaChart
+                  accessibilityLayer
+                  data={stats?.dailyActiveUsersByDay ?? []}
+                  margin={{ left: 0, right: 8 }}
                 >
-                  <BarChart accessibilityLayer data={chartData}>
-                    <CartesianGrid vertical={false} />
-                    <XAxis
-                      dataKey="name"
-                      tickLine={false}
-                      tickMargin={10}
-                      axisLine={false}
-                    />
-                    <YAxis
-                      allowDecimals={false}
-                      tickLine={false}
-                      axisLine={false}
-                    />
-                    <ChartTooltip content={<ChartTooltipContent />} />
-                    <Bar
-                      dataKey="userCount"
-                      fill="var(--color-userCount)"
-                      radius={4}
-                    />
-                  </BarChart>
-                </ChartContainer>
-              </CardContent>
-            </Card>
-          )}
+                  <CartesianGrid vertical={false} />
+                  <XAxis
+                    dataKey="date"
+                    tickFormatter={formatDay}
+                    tickLine={false}
+                    tickMargin={10}
+                    axisLine={false}
+                  />
+                  <YAxis
+                    allowDecimals={false}
+                    width={28}
+                    tickLine={false}
+                    axisLine={false}
+                  />
+                  <ChartTooltip
+                    content={
+                      <ChartTooltipContent
+                        labelFormatter={(value) => formatDay(String(value))}
+                      />
+                    }
+                  />
+                  <Area
+                    dataKey="count"
+                    type="monotone"
+                    fill="var(--color-count)"
+                    fillOpacity={0.2}
+                    stroke="var(--color-count)"
+                    strokeWidth={2}
+                  />
+                </AreaChart>
+              </ChartContainer>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardHeader>
+              <CardTitle>{m.admin_signups_chart_title()}</CardTitle>
+              <CardDescription>
+                {m.admin_signups_chart_description()}
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <ChartContainer
+                config={signupsChartConfig}
+                className="min-h-[260px] w-full"
+              >
+                <AreaChart
+                  accessibilityLayer
+                  data={stats?.signupsByDay ?? []}
+                  margin={{ left: 0, right: 8 }}
+                >
+                  <CartesianGrid vertical={false} />
+                  <XAxis
+                    dataKey="date"
+                    tickFormatter={formatDay}
+                    tickLine={false}
+                    tickMargin={10}
+                    axisLine={false}
+                  />
+                  <YAxis
+                    allowDecimals={false}
+                    width={28}
+                    tickLine={false}
+                    axisLine={false}
+                  />
+                  <ChartTooltip
+                    content={
+                      <ChartTooltipContent
+                        labelFormatter={(value) => formatDay(String(value))}
+                      />
+                    }
+                  />
+                  <Area
+                    dataKey="count"
+                    type="monotone"
+                    fill="var(--color-count)"
+                    fillOpacity={0.2}
+                    stroke="var(--color-count)"
+                    strokeWidth={2}
+                  />
+                </AreaChart>
+              </ChartContainer>
+            </CardContent>
+          </Card>
         </>
       )}
     </>

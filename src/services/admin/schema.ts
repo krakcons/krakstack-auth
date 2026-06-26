@@ -1,52 +1,42 @@
 import { Schema } from "effect";
 
-export const OAuthClientStats = Schema.Struct({
-  id: Schema.String,
-  clientId: Schema.String,
-  name: Schema.NullOr(Schema.String),
-  icon: Schema.NullOr(Schema.String),
-  disabled: Schema.NullOr(Schema.Boolean),
-  userCount: Schema.Number,
+export const DailyActiveUsersByDay = Schema.Struct({
+  date: Schema.String,
+  count: Schema.Number,
 }).annotate({
-  identifier: "OAuthClientStats",
-  title: "OAuth client stats",
-  description: "Usage statistics for a registered OAuth client.",
-  examples: [
-    {
-      id: "client-row-id",
-      clientId: "oauth-client-id",
-      name: "Example app",
-      icon: null,
-      disabled: false,
-      userCount: 12,
-    },
-  ],
+  identifier: "DailyActiveUsersByDay",
+  title: "Daily active users by day",
+  description: "Distinct authenticated users active on a calendar day.",
+  examples: [{ date: "2026-06-26", count: 18 }],
 });
 
-export const OAuthStatsResponse = Schema.Struct({
-  totalUsers: Schema.Number,
-  totalProjects: Schema.Number,
-  totalClients: Schema.Number,
-  clients: Schema.Array(OAuthClientStats),
+export const SignupsByDay = Schema.Struct({
+  date: Schema.String,
+  count: Schema.Number,
 }).annotate({
-  identifier: "OAuthStatsResponse",
-  title: "OAuth stats response",
-  description: "Administrative OAuth usage statistics.",
+  identifier: "SignupsByDay",
+  title: "Signups by day",
+  description: "Users registered on a calendar day.",
+  examples: [{ date: "2026-06-26", count: 4 }],
+});
+
+export const DashboardStatsResponse = Schema.Struct({
+  totalUsers: Schema.Number,
+  totalOrganizations: Schema.Number,
+  dailyActiveUsers: Schema.Number,
+  dailyActiveUsersByDay: Schema.Array(DailyActiveUsersByDay),
+  signupsByDay: Schema.Array(SignupsByDay),
+}).annotate({
+  identifier: "DashboardStatsResponse",
+  title: "Dashboard stats response",
+  description: "Administrative dashboard statistics.",
   examples: [
     {
       totalUsers: 42,
-      totalProjects: 2,
-      totalClients: 1,
-      clients: [
-        {
-          id: "client-row-id",
-          clientId: "oauth-client-id",
-          name: "Example app",
-          icon: null,
-          disabled: false,
-          userCount: 12,
-        },
-      ],
+      totalOrganizations: 3,
+      dailyActiveUsers: 18,
+      dailyActiveUsersByDay: [{ date: "2026-06-26", count: 18 }],
+      signupsByDay: [{ date: "2026-06-26", count: 4 }],
     },
   ],
 });

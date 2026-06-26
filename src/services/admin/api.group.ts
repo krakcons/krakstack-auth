@@ -6,7 +6,7 @@ import {
 } from "effect/unstable/httpapi";
 import { Schema } from "effect";
 
-import { OAuthStatsResponse } from "./schema";
+import { DashboardStatsResponse } from "./schema";
 import { AdminAuthMiddleware } from "@/services/auth/middleware";
 import {
   CreateOrganizationPayload,
@@ -24,8 +24,8 @@ import {
 
 export const AdminApiGroup = HttpApiGroup.make("admin")
   .add(
-    HttpApiEndpoint.get("oauthStats", "/admin/oauth-stats", {
-      success: OAuthStatsResponse,
+    HttpApiEndpoint.get("dashboardStats", "/admin/dashboard-stats", {
+      success: DashboardStatsResponse,
       error: [
         HttpApiError.Unauthorized,
         HttpApiError.Forbidden,
@@ -33,10 +33,10 @@ export const AdminApiGroup = HttpApiGroup.make("admin")
       ],
     }).annotateMerge(
       OpenApi.annotations({
-        title: "OAuth stats",
-        summary: "Get OAuth usage statistics",
+        title: "Dashboard stats",
+        summary: "Get dashboard statistics",
         description:
-          "Returns OAuth client and consent counts for authenticated administrators.",
+          "Returns user, organization, and daily active user counts for authenticated administrators.",
       }),
     ),
   )
