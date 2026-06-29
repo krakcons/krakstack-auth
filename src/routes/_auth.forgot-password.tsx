@@ -1,4 +1,5 @@
 import { createFileRoute, useRouterState } from "@tanstack/react-router";
+import { useState } from "react";
 
 import { useAppForm } from "@/components/ui/form";
 import {
@@ -16,6 +17,7 @@ export const Route = createFileRoute("/_auth/forgot-password")({
 });
 
 function ForgotPassword() {
+  const [successMessage, setSuccessMessage] = useState("");
   const searchString = useRouterState({
     select: (state) => state.location.searchStr,
   });
@@ -25,6 +27,7 @@ function ForgotPassword() {
     },
     onSubmit: async ({ value, formApi }) => {
       formApi.setErrorMap({ onSubmit: undefined });
+      setSuccessMessage("");
 
       const result = await authClient.requestPasswordReset({
         email: value.email.trim(),
@@ -41,12 +44,7 @@ function ForgotPassword() {
         return;
       }
 
-      formApi.setErrorMap({
-        onSubmit: {
-          form: m.forgot_password_success(),
-          fields: {},
-        },
-      });
+      setSuccessMessage(m.forgot_password_success());
     },
   });
 
@@ -77,6 +75,11 @@ function ForgotPassword() {
               )}
             </form.AppField>
             <form.FormError />
+            {successMessage ? (
+              <p className="bg-card text-card-foreground rounded-lg border px-4 py-3 text-sm shadow-xs">
+                {successMessage}
+              </p>
+            ) : null}
             <form.SubmitButton />
           </form>
         </form.AppForm>
