@@ -59,8 +59,9 @@ const clientConfigOptions = ({ baseUrl, apiKey }: AuthServiceLayerOptions) => ({
   ...(apiKey ? { apiKey } : {}),
 });
 
-const isBetterAuthSessionRequest = (request: HttpClientRequest.HttpClientRequest) =>
-  request.url.endsWith("/api/auth/get-session");
+const isBetterAuthSessionRequest = (
+  request: HttpClientRequest.HttpClientRequest,
+) => request.url.endsWith("/api/auth/get-session");
 
 class SessionLookup extends Context.Service<
   SessionLookup,

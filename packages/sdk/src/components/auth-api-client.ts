@@ -30,7 +30,10 @@ const createAuthApiClient = (key: string) =>
       ),
   });
 
-const authApiClients = new Map<string, ReturnType<typeof createAuthApiClient>>();
+const authApiClients = new Map<
+  string,
+  ReturnType<typeof createAuthApiClient>
+>();
 
 export const authApiClient = (baseUrl?: string | undefined) => {
   const key = authApiUrl(baseUrl);

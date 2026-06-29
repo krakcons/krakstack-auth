@@ -23,7 +23,7 @@ import {
   sendResetPasswordEmail,
   sendEmailVerificationOtpEmail,
   sendTwoFactorOtpEmail,
-} from "@/services/auth/email";
+} from "@/services/auth/email.server";
 
 const isDev = process.env.NODE_ENV === "development";
 

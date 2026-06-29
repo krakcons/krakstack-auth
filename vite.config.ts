@@ -8,6 +8,13 @@ import viteReact from "@vitejs/plugin-react";
 import tailwindcss from "@tailwindcss/vite";
 
 const config = defineConfig({
+  optimizeDeps: {
+    exclude: [
+      "@aws-sdk/credential-provider-web-identity",
+      "@aws-sdk/credential-providers",
+      "@distilled.cloud/aws",
+    ],
+  },
   resolve: {
     alias: [
       {
