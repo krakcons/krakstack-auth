@@ -19,7 +19,8 @@
     "type:check": "tsc --noEmit",
     "auth:generate": "bunx @better-auth/cli@latest generate --config ./src/services/auth/config.ts --output ./src/db/auth-schema.ts",
     "auth:migrate": "bunx @better-auth/cli@latest migrate --config ./src/services/auth/config.ts",
-    "shadcn:update": "for file in src/components/ui/*.tsx; do bunx shadcn@latest add -y -o $(basename \"$file\" .tsx); done"
+    "shadcn:update": "for file in src/components/ui/*.tsx; do bunx shadcn@latest add -y -o $(basename \"$file\" .tsx); done",
+    "prepare": "effect-tsgo patch"
   },
   "dependencies": {
     "@aws-sdk/client-sesv2": "^3.1063.0",
@@ -66,6 +67,7 @@
     "react-resizable-panels": "^4.11.2",
     "recharts": "3.8.0",
     "shadcn": "^4.10.0",
+    "shiki": "^4.3.0",
     "sonner": "^2.0.7",
     "tailwind-merge": "^3.6.0",
     "tailwindcss": "^4.3.0",
@@ -74,17 +76,19 @@
     "zod": "^4.4.3"
   },
   "devDependencies": {
+    "@effect/tsgo": "0.14.6",
     "@inlang/paraglide-js": "^2.18.2",
     "@tailwindcss/typography": "^0.5.19",
     "@types/node": "^22.19.20",
     "@types/pg": "^8.20.0",
     "@types/react": "^19.2.17",
     "@types/react-dom": "^19.2.3",
+    "@typescript/native-preview": "latest",
     "@vitejs/plugin-react": "^6.0.2",
     "drizzle-kit": "^1.0.0-rc.4-ca0f029",
     "oxfmt": "^0.52.0",
     "oxlint": "^1.68.0",
-    "typescript": "^6.0.3",
+    "typescript": "7.0.1-rc",
     "vite": "^8.0.16"
   }
 }

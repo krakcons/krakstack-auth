@@ -7,6 +7,7 @@ import {
   Building2,
   Check,
   ChevronsUpDown,
+  Copy,
   KeyRound,
   Mail,
   PencilIcon,
@@ -77,6 +78,7 @@ const messages = {
     organization_create_description:
       "Create a workspace for team-based access.",
     organization_create_error: "Could not create the organization.",
+    organization_copy_id: "Copy organization ID",
     organization_create_slug_conflict:
       "That organization slug is already in use. Choose a different slug.",
     organization_create_title: "Create organization",
@@ -166,6 +168,7 @@ const messages = {
     organization_create_description:
       "Créez un espace de travail pour l'accès en équipe.",
     organization_create_error: "Impossible de créer l'organisation.",
+    organization_copy_id: "Copier l'ID de l'organisation",
     organization_create_slug_conflict:
       "Ce slug d'organisation est déjà utilisé. Choisissez un autre slug.",
     organization_create_title: "Créer une organisation",
@@ -826,6 +829,16 @@ export function OrganizationSwitcher({
               {activeOrganization.data ? (
                 <>
                   <DropdownMenuSeparator />
+                  <DropdownMenuItem
+                    onClick={() => {
+                      void navigator.clipboard.writeText(
+                        activeOrganization.data.id,
+                      );
+                    }}
+                  >
+                    <Copy />
+                    {m.organization_copy_id()}
+                  </DropdownMenuItem>
                   <DropdownMenuItem onClick={() => setDialog("manage")}>
                     <PencilIcon />
                     {m.organization_switcher_manage()}
