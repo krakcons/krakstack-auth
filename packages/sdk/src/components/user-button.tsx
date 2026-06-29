@@ -485,7 +485,15 @@ export const UserButton = ({
           <DropdownMenuTrigger
             render={
               <Button variant="outline" size="icon">
-                <UserIcon className="size-4.5" />
+                {displayImage ? (
+                  <img
+                    src={displayImage}
+                    alt={displayName || displayEmail}
+                    className="size-full rounded-md object-cover"
+                  />
+                ) : (
+                  <UserIcon className="size-4.5" />
+                )}
                 <span className="sr-only">{m.user_button_aria_label()}</span>
               </Button>
             }
