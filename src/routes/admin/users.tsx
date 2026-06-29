@@ -9,6 +9,7 @@ import {
   TableSearchSchemaStandard as TableSearchSchema,
 } from "@/components/ui/data-table";
 import { ErrorMessage } from "@/components/ui/form";
+import { AppBrand } from "@/components/ui/app-brand";
 import { SidebarPageHeader } from "@/components/ui/sidebar-layout";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -21,7 +22,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { authClient } from "@/services/auth/client";
+import { authBaseUrl, authClient } from "@/services/auth/client";
 import { m } from "@/paraglide/messages";
 
 export const Route = createFileRoute("/admin/users")({
@@ -40,6 +41,15 @@ type User = {
   banned: boolean | null;
   banReason: string | null;
   banExpires: Date | null;
+};
+
+const assetUrl = (value: string | null | undefined) => {
+  const url = value?.trim();
+  if (!url) return "";
+  if (!url.startsWith("/api/assets/")) return url;
+  if (!authBaseUrl?.trim()) return url;
+
+  return new URL(url, authBaseUrl).toString();
 };
 
 function useUsers() {
@@ -148,27 +158,20 @@ const userColumns = (): ColumnDef<User>[] => [
   {
     accessorKey: "name",
     header: m.admin_column_user(),
-    cell: ({ row }) => (
-      <div className="flex min-w-48 items-center gap-3">
-        <div className="bg-muted flex size-8 shrink-0 items-center justify-center rounded-full">
-          {row.original.image ? (
-            <img
-              alt={row.original.name}
-              className="size-8 rounded-full"
-              src={row.original.image}
-            />
-          ) : (
-            <UserIcon className="text-muted-foreground size-4" />
-          )}
-        </div>
-        <div className="flex flex-col gap-0.5">
-          <span className="font-medium">{row.original.name}</span>
-          <span className="text-muted-foreground truncate text-xs">
-            {row.original.email}
-          </span>
-        </div>
-      </div>
-    ),
+    cell: ({ row }) => {
+      const image = assetUrl(row.original.image);
+
+      return (
+        <AppBrand
+          to={null}
+          label={row.original.name}
+          subtitle={row.original.email}
+          icon={UserIcon}
+          className="min-w-48"
+          {...(image ? { imageSrc: image } : {})}
+        />
+      );
+    },
   },
   {
     accessorKey: "emailVerified",

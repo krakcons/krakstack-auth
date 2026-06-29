@@ -1,12 +1,13 @@
 import { useAtomSet, useAtomValue } from "@effect/atom-react";
 import { type ColumnDef } from "@tanstack/react-table";
 import { Atom, AsyncResult } from "effect/unstable/reactivity";
-import { Eye, Pencil, Trash2 } from "lucide-react";
+import { Eye, FolderKanban, Pencil, Trash2 } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
 
 import { DataTable } from "@/components/ui/data-table";
 import { ErrorMessage } from "@/components/ui/form";
+import { AppBrand } from "@/components/ui/app-brand";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -20,6 +21,7 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { AdminApiClient } from "@/lib/admin-api-client";
 import { m } from "@/paraglide/messages";
+import { authBaseUrl } from "@/services/auth/client";
 import type { Project } from "@/services/projects/schema";
 
 import { ProjectForm } from "./form";
@@ -33,6 +35,15 @@ const projectsAtom = Atom.family((reloadKey: number) =>
 );
 
 const deleteProjectAtom = AdminApiClient.mutation("projects", "deleteProject");
+
+const assetUrl = (value: string | null | undefined) => {
+  const url = value?.trim();
+  if (!url) return "";
+  if (!url.startsWith("/api/assets/")) return url;
+  if (!authBaseUrl?.trim()) return url;
+
+  return new URL(url, authBaseUrl).toString();
+};
 
 export function ProjectsTable({ reloadKey = 0 }: { reloadKey?: number }) {
   const result = useAtomValue(projectsAtom(reloadKey));
@@ -120,25 +131,20 @@ const projectColumns = (): ColumnDef<Project>[] => [
   {
     accessorKey: "name",
     header: m.project(),
-    cell: ({ row }) => (
-      <div className="flex min-w-56 items-center gap-3">
-        {row.original.logo ? (
-          <img
-            src={row.original.logo}
-            alt=""
-            className="size-9 rounded-md border object-contain"
-          />
-        ) : (
-          <div className="bg-muted size-9 rounded-md border" />
-        )}
-        <div className="flex min-w-0 flex-col gap-1">
-          <span className="truncate font-medium">{row.original.name}</span>
-          <code className="text-muted-foreground truncate text-xs">
-            {row.original.id}
-          </code>
-        </div>
-      </div>
-    ),
+    cell: ({ row }) => {
+      const logo = assetUrl(row.original.logo);
+
+      return (
+        <AppBrand
+          to={null}
+          label={row.original.name}
+          subtitle={row.original.id}
+          icon={FolderKanban}
+          className="min-w-56"
+          {...(logo ? { imageSrc: logo } : {})}
+        />
+      );
+    },
   },
   {
     id: "authOptions",

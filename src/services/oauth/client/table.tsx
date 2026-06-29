@@ -1,12 +1,13 @@
 import { useAtomSet, useAtomValue } from "@effect/atom-react";
 import { type ColumnDef } from "@tanstack/react-table";
 import { Atom, AsyncResult } from "effect/unstable/reactivity";
-import { Pencil, Trash2 } from "lucide-react";
+import { FolderKanban, KeyRound, Pencil, Trash2 } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
 
 import { DataTable } from "@/components/ui/data-table";
 import { ErrorMessage } from "@/components/ui/form";
+import { AppBrand } from "@/components/ui/app-brand";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -19,6 +20,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import { m } from "@/paraglide/messages";
 import { AdminApiClient } from "@/lib/admin-api-client";
+import { authBaseUrl } from "@/services/auth/client";
 
 import type { OAuthClientAdmin } from "../schema";
 import { OAuthClientForm } from "./form";
@@ -35,6 +37,15 @@ const deleteOAuthClientAtom = AdminApiClient.mutation(
   "oauthClients",
   "deleteOAuthClient",
 );
+
+const assetUrl = (value: string | null | undefined) => {
+  const url = value?.trim();
+  if (!url) return "";
+  if (!url.startsWith("/api/assets/")) return url;
+  if (!authBaseUrl?.trim()) return url;
+
+  return new URL(url, authBaseUrl).toString();
+};
 
 export function OAuthClientsTable({ reloadKey = 0 }: { reloadKey?: number }) {
   const result = useAtomValue(oauthClientsAtom(reloadKey));
@@ -119,47 +130,38 @@ const clientColumns = (): ColumnDef<OAuthClientAdmin>[] => [
   {
     accessorKey: "name",
     header: m.admin_column_client(),
-    cell: ({ row }) => (
-      <div className="flex min-w-56 items-center gap-3">
-        {row.original.icon ? (
-          <img
-            src={row.original.icon}
-            alt=""
-            className="size-9 rounded-md border object-contain"
-          />
-        ) : (
-          <div className="bg-muted size-9 rounded-md border" />
-        )}
-        <div className="flex min-w-0 flex-col gap-1">
-          <span className="truncate font-medium">
-            {row.original.name ?? row.original.clientId}
-          </span>
-          <code className="text-muted-foreground truncate text-xs">
-            {row.original.clientId}
-          </code>
-        </div>
-      </div>
-    ),
+    cell: ({ row }) => {
+      const icon = assetUrl(row.original.icon);
+
+      return (
+        <AppBrand
+          to={null}
+          label={row.original.name ?? row.original.clientId}
+          subtitle={row.original.clientId}
+          icon={KeyRound}
+          className="min-w-56"
+          {...(icon ? { imageSrc: icon } : {})}
+        />
+      );
+    },
   },
   {
     id: "project",
     header: m.project(),
-    cell: ({ row }) => (
-      <div className="flex min-w-48 items-center gap-3">
-        {row.original.projectLogo ? (
-          <img
-            src={row.original.projectLogo}
-            alt=""
-            className="size-8 rounded-md border object-contain"
-          />
-        ) : (
-          <div className="bg-muted size-8 rounded-md border" />
-        )}
-        <span className="truncate text-sm">
-          {row.original.projectName ?? m.project_none()}
-        </span>
-      </div>
-    ),
+    cell: ({ row }) => {
+      const logo = assetUrl(row.original.projectLogo);
+
+      return (
+        <AppBrand
+          to={null}
+          label={row.original.projectName ?? m.project_none()}
+          subtitle={row.original.projectId ?? ""}
+          icon={FolderKanban}
+          className="min-w-48"
+          {...(logo ? { imageSrc: logo } : {})}
+        />
+      );
+    },
   },
   {
     accessorKey: "redirectUris",

@@ -1,12 +1,56 @@
 import { type ColumnDef } from "@tanstack/react-table";
+import { Schema } from "effect";
+import { Building2 } from "lucide-react";
 import { useEffect, useState } from "react";
 
 import { DataTable } from "@/components/ui/data-table";
 import { ErrorMessage } from "@/components/ui/form";
+import { AppBrand } from "@/components/ui/app-brand";
 import { Badge } from "@/components/ui/badge";
 import { m } from "@/paraglide/messages";
+import { getLocale } from "@/paraglide/runtime";
+import { authBaseUrl } from "@/services/auth/client";
+import { OrganizationMetadata } from "@krak-stack/auth/schema";
 
 import type { Organization } from "../schema";
+
+const assetUrl = (value: string | null | undefined) => {
+  const url = value?.trim();
+  if (!url) return "";
+  if (!url.startsWith("/api/assets/")) return url;
+  if (!authBaseUrl?.trim()) return url;
+
+  return new URL(url, authBaseUrl).toString();
+};
+
+const parseOrganizationMetadata = (metadata: unknown) => {
+  try {
+    const value =
+      typeof metadata === "string" ? JSON.parse(metadata) : metadata;
+
+    return Schema.decodeUnknownSync(OrganizationMetadata)(value);
+  } catch {
+    return { translations: [] };
+  }
+};
+
+const organizationDisplay = (organization: Organization) => {
+  const locale = getLocale() === "fr" ? "fr" : "en";
+  const translations = parseOrganizationMetadata(
+    organization.metadata,
+  ).translations;
+  const translation =
+    translations.find((item) => item.locale === locale) ??
+    translations.find((item) => item.locale === "en") ??
+    translations[0];
+
+  return {
+    name: translation?.name || organization.name,
+    image: assetUrl(
+      translation?.icon || translation?.logo || organization.logo,
+    ),
+  };
+};
 
 const listOrganizations = async () => {
   const response = await fetch("/api/admin/organizations");
@@ -51,25 +95,20 @@ const organizationColumns: ColumnDef<Organization>[] = [
   {
     accessorKey: "name",
     header: m.admin_column_organization(),
-    cell: ({ row }) => (
-      <div className="flex min-w-56 items-center gap-3">
-        {row.original.logo ? (
-          <img
-            src={row.original.logo}
-            alt=""
-            className="size-9 rounded-md border object-contain"
-          />
-        ) : (
-          <div className="bg-muted size-9 rounded-md border" />
-        )}
-        <div className="flex min-w-0 flex-col gap-1">
-          <span className="truncate font-medium">{row.original.name}</span>
-          <code className="text-muted-foreground truncate text-xs">
-            {row.original.slug}
-          </code>
-        </div>
-      </div>
-    ),
+    cell: ({ row }) => {
+      const display = organizationDisplay(row.original);
+
+      return (
+        <AppBrand
+          to={null}
+          label={display.name}
+          subtitle={row.original.slug}
+          icon={Building2}
+          className="min-w-56"
+          {...(display.image ? { imageSrc: display.image } : {})}
+        />
+      );
+    },
   },
   {
     accessorKey: "logo",

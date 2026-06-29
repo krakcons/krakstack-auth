@@ -13,6 +13,7 @@ import {
   PencilIcon,
   Plus,
   Trash2,
+  UserIcon,
   UserPlus,
   Users,
   X,
@@ -543,15 +544,6 @@ const formatOrganizationDate = (date: Date | string) =>
   new Intl.DateTimeFormat(getLocale(), { dateStyle: "medium" }).format(
     new Date(date),
   );
-
-const initialsFromName = (name: string) =>
-  name
-    .trim()
-    .split(/\s+/)
-    .slice(0, 2)
-    .map((part) => part[0])
-    .join("")
-    .toUpperCase() || "?";
 
 const organizationMetadataFromForm = async (
   authClient: AuthUiClient,
@@ -1915,25 +1907,14 @@ const memberColumns = ({
       const image = assetUrl(row.original.user.image, baseUrl);
 
       return (
-        <div className="flex min-w-0 items-center gap-3">
-          {image ? (
-            <img
-              src={image}
-              alt={row.original.user.name}
-              className="size-9 shrink-0 rounded-full border object-cover"
-            />
-          ) : (
-            <span className="bg-muted flex size-9 shrink-0 items-center justify-center rounded-full border text-sm font-semibold">
-              {initialsFromName(row.original.user.name)}
-            </span>
-          )}
-          <div className="min-w-0">
-            <p className="truncate font-medium">{row.original.user.name}</p>
-            <p className="text-muted-foreground truncate text-sm">
-              {row.original.user.email}
-            </p>
-          </div>
-        </div>
+        <AppBrand
+          to={null}
+          label={row.original.user.name}
+          subtitle={row.original.user.email}
+          icon={UserIcon}
+          className="min-w-0"
+          {...(image ? { imageSrc: image } : {})}
+        />
       );
     },
   },

@@ -16,6 +16,7 @@ import {
 import { AdminApiClient } from "@/lib/admin-api-client";
 import { ApiClient } from "@/lib/api-client";
 import { m } from "@/paraglide/messages";
+import { authBaseUrl } from "@/services/auth/client";
 
 import { CreateOrganizationPayload, type Organization } from "../schema";
 
@@ -33,6 +34,15 @@ const slugify = (value: string) =>
     .replace(/^-+|-+$/g, "");
 
 const isFile = (value: unknown): value is File => value instanceof File;
+
+const assetUrl = (value: string | null | undefined) => {
+  const url = value?.trim();
+  if (!url) return null;
+  if (!url.startsWith("/api/assets/")) return url;
+  if (!authBaseUrl?.trim()) return url;
+
+  return new URL(url, authBaseUrl).toString();
+};
 
 const createOrganizationAtom = AdminApiClient.mutation(
   "admin",
@@ -78,7 +88,7 @@ export function OrganizationForm({
     defaultValues: {
       name: organization?.name ?? "",
       slug: organization?.slug ?? "",
-      logo: organization?.logo ?? null,
+      logo: assetUrl(organization?.logo),
     } satisfies OrganizationFormValues,
     onSubmit: async ({ value }) => {
       setError("");

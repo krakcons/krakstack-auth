@@ -15,6 +15,7 @@ import {
 } from "@/components/ui/dialog";
 import { m } from "@/paraglide/messages";
 import { AdminApiClient } from "@/lib/admin-api-client";
+import { authBaseUrl } from "@/services/auth/client";
 import { ProjectData, type Project } from "@/services/projects/schema";
 
 const createProjectAtom = AdminApiClient.mutation("projects", "createProject");
@@ -35,6 +36,15 @@ type ProjectFormValues = {
 };
 
 const isFile = (value: unknown): value is File => value instanceof File;
+
+const assetUrl = (value: string | null | undefined) => {
+  const url = value?.trim();
+  if (!url) return null;
+  if (!url.startsWith("/api/assets/")) return url;
+  if (!authBaseUrl?.trim()) return url;
+
+  return new URL(url, authBaseUrl).toString();
+};
 
 const valuesToData = (value: ProjectFormValues) =>
   Schema.decodeUnknownSync(ProjectData)({
@@ -65,7 +75,7 @@ export function ProjectForm({
   const form = useAppForm({
     defaultValues: {
       name: project?.name ?? "",
-      logo: project?.logo ?? null,
+      logo: assetUrl(project?.logo),
       themeCss: project?.data.branding?.themeCss ?? "",
       emailPassword: project?.data.authOptions?.emailPassword ?? true,
       google: project?.data.authOptions?.google ?? true,
