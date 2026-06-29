@@ -413,9 +413,16 @@ const credentialedFetchLayer = Layer.provide(
   Layer.succeed(FetchHttpClient.RequestInit, { credentials: "include" }),
 );
 
+const createAuthApiClient = (key: string) =>
+  AtomHttpApi.Service<object>()(`OrganizationSwitcherAuthApi:${key}`, {
+    api: AuthApi,
+    baseUrl: key,
+    httpClient: credentialedFetchLayer,
+  });
+
 const authApiClients = new Map<
   string,
-  ReturnType<typeof AtomHttpApi.Service>
+  ReturnType<typeof createAuthApiClient>
 >();
 
 const authApiClient = (baseUrl?: string | undefined) => {
@@ -429,11 +436,7 @@ const authApiClient = (baseUrl?: string | undefined) => {
 
   if (existing) return existing;
 
-  const client = AtomHttpApi.Service(`OrganizationSwitcherAuthApi:${key}`, {
-    api: AuthApi,
-    baseUrl: key,
-    httpClient: credentialedFetchLayer,
-  });
+  const client = createAuthApiClient(key);
 
   authApiClients.set(key, client);
   return client;
