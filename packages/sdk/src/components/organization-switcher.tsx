@@ -1,8 +1,11 @@
 // @ts-nocheck
 import type { ApiKey } from "@better-auth/api-key/client";
+import { useAtomSet } from "@effect/atom-react";
 import { useStore } from "@tanstack/react-form";
 import { type ColumnDef } from "@tanstack/react-table";
-import { Schema } from "effect";
+import { Layer, Schema } from "effect";
+import { FetchHttpClient } from "effect/unstable/http";
+import { AtomHttpApi } from "effect/unstable/reactivity";
 import {
   Building2,
   Check,
@@ -67,6 +70,7 @@ import {
 
 import type { AuthUiClient } from "./auth-client";
 import { createApiKey } from "./api-key";
+import { ExtraApi } from "../extra/api";
 import { assetPath, assetUrl, isRecord } from "./utils";
 
 type Locale = "en" | "fr";
@@ -404,25 +408,51 @@ const parsePresignedUpload = (
   return { uploadUrl: value.uploadUrl, url: value.url };
 };
 
+const credentialedFetchLayer = Layer.provide(
+  FetchHttpClient.layer,
+  Layer.succeed(FetchHttpClient.RequestInit, { credentials: "include" }),
+);
+
+const extraApiClients = new Map<
+  string,
+  ReturnType<typeof AtomHttpApi.Service>
+>();
+
+const extraApiClient = (baseUrl?: string | undefined) => {
+  const url =
+    baseUrl?.trim() ||
+    (typeof window === "undefined"
+      ? "http://localhost:3000"
+      : window.location.origin);
+  const key = url.replace(/\/$/, "");
+  const existing = extraApiClients.get(key);
+
+  if (existing) return existing;
+
+  const client = AtomHttpApi.Service(`OrganizationSwitcherExtraApi:${key}`, {
+    api: ExtraApi,
+    baseUrl: key,
+    httpClient: credentialedFetchLayer,
+  });
+
+  extraApiClients.set(key, client);
+  return client;
+};
+
 const uploadOrganizationLogo = async (
-  authClient: AuthUiClient,
   file: File,
   m: ReturnType<typeof organizationMessageFns>,
+  presignOrganizationLogo: (input: {
+    payload: { fileName: string; contentType: string };
+  }) => Promise<unknown>,
 ) => {
   const contentType = file.type || "image/png";
-  const presignResult = await authClient.$fetch(
-    "../organizations/logo/presign",
-    {
-      method: "POST",
-      body: { fileName: file.name, contentType },
-    },
+  const presigned = parsePresignedUpload(
+    await presignOrganizationLogo({
+      payload: { fileName: file.name, contentType },
+    }),
+    m,
   );
-
-  if (presignResult.error) {
-    throw new Error(m.organization_logo_upload_error());
-  }
-
-  const presigned = parsePresignedUpload(presignResult.data, m);
   const uploadResponse = await fetch(presigned.uploadUrl, {
     method: "PUT",
     headers: { "Content-Type": contentType },
@@ -511,12 +541,14 @@ const organizationFormDefaults = (
 };
 
 const organizationLogoFromForm = async (
-  authClient: AuthUiClient,
   value: File | string | null,
   m: ReturnType<typeof organizationMessageFns>,
+  presignOrganizationLogo: (input: {
+    payload: { fileName: string; contentType: string };
+  }) => Promise<unknown>,
 ) => {
   if (value instanceof File)
-    return await uploadOrganizationLogo(authClient, value, m);
+    return await uploadOrganizationLogo(value, m, presignOrganizationLogo);
   if (typeof value === "string") return assetPath(value);
   return null;
 };
@@ -546,17 +578,35 @@ const formatOrganizationDate = (date: Date | string) =>
   );
 
 const organizationMetadataFromForm = async (
-  authClient: AuthUiClient,
   value: OrganizationFormValues,
   m: ReturnType<typeof organizationMessageFns>,
+  presignOrganizationLogo: (input: {
+    payload: { fileName: string; contentType: string };
+  }) => Promise<unknown>,
 ): Promise<OrganizationMetadata> => {
   const translations: OrganizationTranslation[] = [];
   const enName = value.enName.trim() || value.name.trim();
   const frName = value.frName.trim();
-  const enLogo = await organizationLogoFromForm(authClient, value.enLogo, m);
-  const enIcon = await organizationLogoFromForm(authClient, value.enIcon, m);
-  const frLogo = await organizationLogoFromForm(authClient, value.frLogo, m);
-  const frIcon = await organizationLogoFromForm(authClient, value.frIcon, m);
+  const enLogo = await organizationLogoFromForm(
+    value.enLogo,
+    m,
+    presignOrganizationLogo,
+  );
+  const enIcon = await organizationLogoFromForm(
+    value.enIcon,
+    m,
+    presignOrganizationLogo,
+  );
+  const frLogo = await organizationLogoFromForm(
+    value.frLogo,
+    m,
+    presignOrganizationLogo,
+  );
+  const frIcon = await organizationLogoFromForm(
+    value.frIcon,
+    m,
+    presignOrganizationLogo,
+  );
 
   if (enName) {
     translations.push({
@@ -1170,6 +1220,10 @@ function EditOrganizationSection({
   onUpdated: () => Promise<void>;
 }) {
   const m = useOrganizationMessages();
+  const presignOrganizationLogo = useAtomSet(
+    extraApiClient(baseUrl).mutation("extra", "presign"),
+    { mode: "promise" },
+  );
   const [editingLocale, setEditingLocale] = useState<OrganizationLocale>(
     currentOrganizationLocale(),
   );
@@ -1182,9 +1236,9 @@ function EditOrganizationSection({
         const name = value.name.trim();
         const slug = value.slug.trim().toLowerCase();
         const metadata = await organizationMetadataFromForm(
-          authClient,
           value,
           m,
+          presignOrganizationLogo,
         );
 
         const result = await authClient.organization.update({
@@ -1387,6 +1441,10 @@ function CreateOrganizationSection({
   onCreated: (organization: OrganizationSummary) => Promise<void>;
 }) {
   const m = useOrganizationMessages();
+  const presignOrganizationLogo = useAtomSet(
+    extraApiClient(baseUrl).mutation("extra", "presign"),
+    { mode: "promise" },
+  );
   const [editingLocale, setEditingLocale] = useState<OrganizationLocale>(
     currentOrganizationLocale(),
   );
@@ -1399,13 +1457,13 @@ function CreateOrganizationSection({
         const name = value.name.trim();
         const slug = (value.slug.trim() || slugify(name)).toLowerCase();
         const metadata = await organizationMetadataFromForm(
-          authClient,
           {
             ...value,
             name,
             slug,
           },
           m,
+          presignOrganizationLogo,
         );
 
         const result = await authClient.organization.create({
