@@ -1,4 +1,5 @@
 import type { ApiKey } from "@better-auth/api-key/client";
+import { useAtomSet } from "@effect/atom-react";
 import { type ColumnDef } from "@tanstack/react-table";
 import { createFileRoute } from "@tanstack/react-router";
 import { Check, Copy, Plus, Trash2 } from "lucide-react";
@@ -21,6 +22,7 @@ import {
 } from "@/components/ui/dialog";
 import { useAppForm } from "@/components/ui/form";
 import { Separator } from "@/components/ui/separator";
+import { ApiClient } from "@/lib/api-client";
 import { authClient } from "@/services/auth/client";
 import { m } from "@/paraglide/messages";
 
@@ -31,22 +33,10 @@ export const Route = createFileRoute("/admin/api-keys")({
 
 type ApiKeySummary = Omit<ApiKey, "key"> & { key?: string };
 
-type CreatedApiKey = {
-  id: string;
-  key: string;
-};
-
-const getCreatedApiKey = (value: unknown): CreatedApiKey | null => {
-  if (typeof value !== "object" || value === null) return null;
-  if (!("id" in value) || !("key" in value)) return null;
-
-  const id = Reflect.get(value, "id");
-  const key = Reflect.get(value, "key");
-
-  return typeof id === "string" && typeof key === "string" ? { id, key } : null;
-};
+const createApiKeyAtom = ApiClient.mutation("auth", "createApiKey");
 
 function ApiKeysPage() {
+  const createApiKey = useAtomSet(createApiKeyAtom, { mode: "promise" });
   const [keys, setKeys] = useState<ApiKeySummary[]>([]);
   const [creating, setCreating] = useState(false);
   const [createdKey, setCreatedKey] = useState<string | null>(null);
@@ -82,30 +72,30 @@ function ApiKeysPage() {
       setCreatedKey(null);
       setCopiedKey(false);
 
-      const result = await authClient.$fetch("/create-api-key", {
-        method: "POST",
-        body: {
-          configId: "service",
-          name: value.name.trim(),
-        },
-      });
-      const created = getCreatedApiKey(result.data);
+      try {
+        const created = await createApiKey({
+          payload: {
+            configId: "service",
+            name: value.name.trim(),
+          },
+        });
 
-      if (result.error || !created) {
+        setCreatedKey(created.key);
+        createForm.reset();
+        setCreating(true);
+        toast.success(m.admin_api_key_created_toast());
+        await loadKeys();
+      } catch (cause) {
         formApi.setErrorMap({
           onSubmit: {
-            form: result.error?.message ?? m.admin_api_key_create_error(),
+            form:
+              cause instanceof Error
+                ? cause.message
+                : m.admin_api_key_create_error(),
             fields: {},
           },
         });
-        return;
       }
-
-      setCreatedKey(created.key);
-      createForm.reset();
-      setCreating(true);
-      toast.success(m.admin_api_key_created_toast());
-      await loadKeys();
     },
   });
 

@@ -39,6 +39,8 @@
   },
   "scripts": {
     "build": "rm -rf dist && tsc -p tsconfig.json",
+    "build:watch": "rm -rf dist && tsc -p tsconfig.json --watch --preserveWatchOutput",
+    "dev": "bun run build:watch",
     "prepack": "bun run build",
     "type:check": "tsc -p tsconfig.json --noEmit"
   },

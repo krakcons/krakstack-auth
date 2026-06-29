@@ -64,6 +64,7 @@ import {
 } from "@krak-stack/auth/schema";
 
 import type { AuthUiClient } from "./auth-client";
+import { createApiKey } from "./api-key";
 import { assetPath, assetUrl, isRecord } from "./utils";
 
 type Locale = "en" | "fr";
@@ -2086,25 +2087,30 @@ function OrganizationApiKeyManager({
     onSubmit: async ({ value, formApi }) => {
       formApi.setErrorMap({ onSubmit: undefined });
       setCreatedKey(null);
-      const result = await authClient.apiKey.create({
-        configId: "organization",
-        organizationId: organization.id,
-        name: value.name.trim(),
-      });
+      try {
+        const created = await createApiKey(
+          {
+            configId: "organization",
+            organizationId: organization.id,
+            name: value.name.trim(),
+          },
+          m.user_api_key_create_error(),
+        );
 
-      if (result.error || !result.data) {
+        setCreatedKey(created.key);
+        createForm.reset();
+        await loadKeys();
+      } catch (cause) {
         formApi.setErrorMap({
           onSubmit: {
-            form: result.error?.message ?? m.user_api_key_create_error(),
+            form:
+              cause instanceof Error
+                ? cause.message
+                : m.user_api_key_create_error(),
             fields: {},
           },
         });
-        return;
       }
-
-      setCreatedKey(result.data.key);
-      createForm.reset();
-      await loadKeys();
     },
   });
 

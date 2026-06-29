@@ -108,7 +108,6 @@ export const authApiHandler = HttpApiBuilder.group(
           const result = yield* Effect.tryPromise({
             try: () =>
               client.api.createApiKey({
-                headers: client.headers,
                 body: {
                   configId: payload.configId,
                   userId: session.user.id,

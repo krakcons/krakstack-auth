@@ -61,6 +61,7 @@ import {
 import { Separator } from "@/components/ui/separator";
 
 import type { AuthUiClient } from "./auth-client";
+import { createApiKey } from "./api-key";
 import { assetPath, assetUrl, isRecord } from "./utils";
 
 const messages = {
@@ -1541,31 +1542,31 @@ function ApiKeyManager({
         permissionOptions,
         selectedPermissions,
       );
-      const result = await authClient.$fetch("/create-api-key", {
-        method: "POST",
-        body: {
-          configId: "user",
-          name: value.name.trim(),
-          permissions: selectedPermissionObject,
-        },
-      });
+      try {
+        const created = await createApiKey(
+          {
+            configId: "user",
+            name: value.name.trim(),
+            permissions: selectedPermissionObject,
+          },
+          m.user_api_key_create_error(),
+        );
 
-      const created = getCreatedApiKey(result.data);
-
-      if (result.error || !created) {
+        setCreatedKey(created.key);
+        createForm.reset();
+        setSelectedPermissions({});
+        await loadKeys();
+      } catch (cause) {
         formApi.setErrorMap({
           onSubmit: {
-            form: result.error?.message ?? m.user_api_key_create_error(),
+            form:
+              cause instanceof Error
+                ? cause.message
+                : m.user_api_key_create_error(),
             fields: {},
           },
         });
-        return;
       }
-
-      setCreatedKey(created.key);
-      createForm.reset();
-      setSelectedPermissions({});
-      await loadKeys();
     },
   });
 
@@ -1820,17 +1821,4 @@ const isAuthErrorResult = (
     typeof result.error === "object" &&
     result.error !== null
   );
-};
-
-const getCreatedApiKey = (data: unknown) => {
-  if (
-    typeof data === "object" &&
-    data !== null &&
-    "key" in data &&
-    typeof data.key === "string"
-  ) {
-    return { key: data.key };
-  }
-
-  return null;
 };
