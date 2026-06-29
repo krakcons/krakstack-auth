@@ -3,9 +3,7 @@ import type { ApiKey } from "@better-auth/api-key/client";
 import { useAtomSet } from "@effect/atom-react";
 import { useStore } from "@tanstack/react-form";
 import { type ColumnDef } from "@tanstack/react-table";
-import { Layer, Schema } from "effect";
-import { FetchHttpClient } from "effect/unstable/http";
-import { AtomHttpApi } from "effect/unstable/reactivity";
+import { Schema } from "effect";
 import {
   Building2,
   Check,
@@ -69,9 +67,10 @@ import {
 } from "@krak-stack/auth/schema";
 
 import type { AuthUiClient } from "./auth-client";
+import { authApiClient } from "./auth-api-client";
 import { createApiKey } from "./api-key";
-import { AuthApi } from "../api";
-import { assetPath, assetUrl, isRecord } from "./utils";
+import { ExtraPresignedUpload } from "../extra/schema";
+import { assetPath, assetUrl } from "./utils";
 
 type Locale = "en" | "fr";
 
@@ -378,12 +377,13 @@ const slugify = (value: string) =>
     .replace(/^-+|-+$/g, "");
 
 const isOrganizationSlugConflict = (error: unknown) => {
-  if (!isRecord(error)) return false;
+  if (typeof error !== "object" || error === null) return false;
 
-  const code = typeof error.code === "string" ? error.code : "";
-  const message = typeof error.message === "string" ? error.message : "";
+  const code = Reflect.get(error, "code");
+  const message = Reflect.get(error, "message");
 
   return [code, message].some((value) => {
+    if (typeof value !== "string") return false;
     const normalized = value.toLowerCase().replaceAll("_", " ");
 
     return normalized.includes("organization already exists");
@@ -393,54 +393,7 @@ const isOrganizationSlugConflict = (error: unknown) => {
 const nullableString = (value: unknown) =>
   typeof value === "string" && value.trim() ? value.trim() : null;
 
-const parsePresignedUpload = (
-  value: unknown,
-  m: ReturnType<typeof organizationMessageFns>,
-) => {
-  if (
-    !isRecord(value) ||
-    typeof value.uploadUrl !== "string" ||
-    typeof value.url !== "string"
-  ) {
-    throw new Error(m.organization_logo_upload_error());
-  }
-
-  return { uploadUrl: value.uploadUrl, url: value.url };
-};
-
-const credentialedFetchLayer = Layer.provide(
-  FetchHttpClient.layer,
-  Layer.succeed(FetchHttpClient.RequestInit, { credentials: "include" }),
-);
-
-const createAuthApiClient = (key: string) =>
-  AtomHttpApi.Service<object>()(`OrganizationSwitcherAuthApi:${key}`, {
-    api: AuthApi,
-    baseUrl: key,
-    httpClient: credentialedFetchLayer,
-  });
-
-const authApiClients = new Map<
-  string,
-  ReturnType<typeof createAuthApiClient>
->();
-
-const authApiClient = (baseUrl?: string | undefined) => {
-  const url =
-    baseUrl?.trim() ||
-    (typeof window === "undefined"
-      ? "http://localhost:3000"
-      : window.location.origin);
-  const key = url.replace(/\/$/, "");
-  const existing = authApiClients.get(key);
-
-  if (existing) return existing;
-
-  const client = createAuthApiClient(key);
-
-  authApiClients.set(key, client);
-  return client;
-};
+const decodePresignedUpload = Schema.decodeUnknownPromise(ExtraPresignedUpload);
 
 const uploadOrganizationLogo = async (
   file: File,
@@ -450,11 +403,10 @@ const uploadOrganizationLogo = async (
   }) => Promise<unknown>,
 ) => {
   const contentType = file.type || "image/png";
-  const presigned = parsePresignedUpload(
+  const presigned = await decodePresignedUpload(
     await presignOrganizationLogo({
       payload: { fileName: file.name, contentType },
     }),
-    m,
   );
   const uploadResponse = await fetch(presigned.uploadUrl, {
     method: "PUT",

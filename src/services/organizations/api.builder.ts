@@ -35,13 +35,6 @@ const currentSession = (request: HttpServerRequest.HttpServerRequest) =>
     });
   });
 
-const requireSession = (request: HttpServerRequest.HttpServerRequest) =>
-  Effect.gen(function* () {
-    const session = yield* currentSession(request);
-    if (!session) return yield* new HttpApiError.Unauthorized({});
-    return session;
-  });
-
 const bearerToken = (value: string | undefined) => {
   if (!value?.startsWith("Bearer ")) return undefined;
   return value.slice("Bearer ".length).trim() || undefined;
@@ -75,7 +68,11 @@ const requireSessionOrService = (
 ) =>
   requireServiceApiKey(request).pipe(
     Effect.catchTag("Unauthorized", () =>
-      requireSession(request).pipe(Effect.asVoid),
+      currentSession(request).pipe(
+        Effect.flatMap((session) =>
+          session ? Effect.void : new HttpApiError.Unauthorized({}),
+        ),
+      ),
     ),
   );
 

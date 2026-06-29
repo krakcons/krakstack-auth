@@ -1,11 +1,13 @@
 // @ts-nocheck
 import type { ApiKey } from "@better-auth/api-key/client";
+import { useAtomSet } from "@effect/atom-react";
 import { type ColumnDef } from "@tanstack/react-table";
 import {
   type UseNavigateResult,
   useNavigate,
   useRouterState,
 } from "@tanstack/react-router";
+import { Schema } from "effect";
 import {
   Check,
   Copy,
@@ -61,8 +63,10 @@ import {
 import { Separator } from "@/components/ui/separator";
 
 import type { AuthUiClient } from "./auth-client";
+import { authApiClient } from "./auth-api-client";
 import { createApiKey } from "./api-key";
-import { assetPath, assetUrl, isRecord } from "./utils";
+import { ExtraPresignedUpload } from "../extra/schema";
+import { assetPath, assetUrl } from "./utils";
 
 const messages = {
   en: {
@@ -324,34 +328,22 @@ type UserFormType = {
 
 const isFile = (value: unknown): value is File => value instanceof File;
 
-type PresignedImageUpload = {
-  uploadUrl: string;
-  url: string;
-};
+const decodePresignedUpload = Schema.decodeUnknownPromise(ExtraPresignedUpload);
 
 const presignUserImageUpload = async (
-  authClient: AuthUiClient,
   file: File,
-  m: ReturnType<typeof userButtonMessages>,
-): Promise<PresignedImageUpload> => {
+  m: ReturnType<typeof userButtonMessageFns>,
+  presignUserImage: (input: {
+    payload: { fileName: string; contentType: string };
+  }) => Promise<unknown>,
+) => {
   const contentType = file.type || "image/png";
-  const result = await authClient.$fetch("/image/presign", {
-    method: "POST",
-    body: { fileName: file.name, contentType },
-  });
 
-  if (result.error || !isRecord(result.data)) {
-    throw new Error(m.user_profile_image_upload_error());
-  }
-
-  const uploadUrl = Reflect.get(result.data, "uploadUrl");
-  const url = Reflect.get(result.data, "url");
-
-  if (typeof uploadUrl !== "string" || typeof url !== "string") {
-    throw new Error(m.user_profile_image_upload_error());
-  }
-
-  return { uploadUrl, url };
+  return await decodePresignedUpload(
+    await presignUserImage({
+      payload: { fileName: file.name, contentType },
+    }),
+  );
 };
 
 type TotpSetup = {
@@ -408,6 +400,10 @@ export const UserButton = ({
   const settingsDialog =
     controlledDialog !== undefined ? controlledDialog : uncontrolledDialog;
   const [formError, setFormError] = useState<string | null>(null);
+  const presignUserImage = useAtomSet(
+    authApiClient(baseUrl).mutation("authExtra", "presignUserImageUpload"),
+    { mode: "promise" },
+  );
 
   const setSettingsDialog = (
     next:
@@ -445,9 +441,9 @@ export const UserButton = ({
     const image = imageFile
       ? await (async () => {
           const presigned = await presignUserImageUpload(
-            authClient,
             imageFile,
             m,
+            presignUserImage,
           );
           const uploadResponse = await fetch(presigned.uploadUrl, {
             method: "PUT",
