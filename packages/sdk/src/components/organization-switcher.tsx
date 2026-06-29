@@ -70,7 +70,7 @@ import {
 
 import type { AuthUiClient } from "./auth-client";
 import { createApiKey } from "./api-key";
-import { ExtraApi } from "../extra/api";
+import { AuthApi } from "../api";
 import { assetPath, assetUrl, isRecord } from "./utils";
 
 type Locale = "en" | "fr";
@@ -413,29 +413,29 @@ const credentialedFetchLayer = Layer.provide(
   Layer.succeed(FetchHttpClient.RequestInit, { credentials: "include" }),
 );
 
-const extraApiClients = new Map<
+const authApiClients = new Map<
   string,
   ReturnType<typeof AtomHttpApi.Service>
 >();
 
-const extraApiClient = (baseUrl?: string | undefined) => {
+const authApiClient = (baseUrl?: string | undefined) => {
   const url =
     baseUrl?.trim() ||
     (typeof window === "undefined"
       ? "http://localhost:3000"
       : window.location.origin);
   const key = url.replace(/\/$/, "");
-  const existing = extraApiClients.get(key);
+  const existing = authApiClients.get(key);
 
   if (existing) return existing;
 
-  const client = AtomHttpApi.Service(`OrganizationSwitcherExtraApi:${key}`, {
-    api: ExtraApi,
+  const client = AtomHttpApi.Service(`OrganizationSwitcherAuthApi:${key}`, {
+    api: AuthApi,
     baseUrl: key,
     httpClient: credentialedFetchLayer,
   });
 
-  extraApiClients.set(key, client);
+  authApiClients.set(key, client);
   return client;
 };
 
@@ -1221,7 +1221,7 @@ function EditOrganizationSection({
 }) {
   const m = useOrganizationMessages();
   const presignOrganizationLogo = useAtomSet(
-    extraApiClient(baseUrl).mutation("extra", "presign"),
+    authApiClient(baseUrl).mutation("authExtra", "presign"),
     { mode: "promise" },
   );
   const [editingLocale, setEditingLocale] = useState<OrganizationLocale>(
@@ -1442,7 +1442,7 @@ function CreateOrganizationSection({
 }) {
   const m = useOrganizationMessages();
   const presignOrganizationLogo = useAtomSet(
-    extraApiClient(baseUrl).mutation("extra", "presign"),
+    authApiClient(baseUrl).mutation("authExtra", "presign"),
     { mode: "promise" },
   );
   const [editingLocale, setEditingLocale] = useState<OrganizationLocale>(

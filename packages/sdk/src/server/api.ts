@@ -24,7 +24,7 @@ import {
   ServerUsersResponse,
 } from "./schema";
 
-export const ServerUsersApiGroup = HttpApiGroup.make("serverUsers")
+export const ServerUsersApiGroup = HttpApiGroup.make("users")
   .add(
     HttpApiEndpoint.get("listUsersByIds", "/users", {
       query: ServerIdsQuery,
@@ -82,9 +82,7 @@ export const ServerUsersApiGroup = HttpApiGroup.make("serverUsers")
     }),
   );
 
-export const ServerOrganizationsApiGroup = HttpApiGroup.make(
-  "serverOrganizations",
-)
+export const ServerOrganizationsApiGroup = HttpApiGroup.make("organizations")
   .add(
     HttpApiEndpoint.get("listOrganizations", "/organizations", {
       query: ServerOrganizationsQuery,
@@ -169,7 +167,7 @@ export const ServerOrganizationsApiGroup = HttpApiGroup.make(
     }),
   );
 
-export const ServerDomainsApiGroup = HttpApiGroup.make("serverDomains")
+export const ServerDomainsApiGroup = HttpApiGroup.make("domains")
   .add(
     HttpApiEndpoint.post("createDomain", "/domains", {
       payload: ServerCreateDomainPayload,

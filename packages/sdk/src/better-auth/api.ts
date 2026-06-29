@@ -7,7 +7,7 @@ import {
 
 import { GetSessionResponse, TooManyRequests } from "./schema";
 
-export const BetterAuthApiGroup = HttpApiGroup.make("betterAuth")
+export const BetterAuthApiGroup = HttpApiGroup.make("auth")
   .add(
     HttpApiEndpoint.get("getSession", "/get-session", {
       success: GetSessionResponse,

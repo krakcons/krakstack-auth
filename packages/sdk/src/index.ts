@@ -1,9 +1,6 @@
 export * from "./schema";
-export {
-  AuthApiClients,
-  AuthClient,
-  type AuthClientLayerOptions,
-} from "./client";
+export { AuthApi } from "./api";
+export { AuthService, type AuthServiceLayerOptions } from "./service";
 export { AuthClientConfig } from "./config";
 export {
   OrganizationSwitcher,

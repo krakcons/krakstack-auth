@@ -1,4 +1,4 @@
-export { AuthClient } from "../client";
+export { AuthService } from "../service";
 export { AuthClientConfig } from "../config";
 export {
   ServerApi,

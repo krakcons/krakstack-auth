@@ -18,7 +18,7 @@ import {
   ExtraVerifyPasswordPayload,
 } from "./schema";
 
-export const ExtraApiGroup = HttpApiGroup.make("extra")
+export const ExtraApiGroup = HttpApiGroup.make("authExtra")
   .add(
     HttpApiEndpoint.post("setPassword", "/auth/set-password", {
       payload: ExtraSetPasswordPayload,
