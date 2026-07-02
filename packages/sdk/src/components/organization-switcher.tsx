@@ -69,7 +69,7 @@ import {
 import type { AuthUiClient } from "./auth-client";
 import { authApiClient } from "./auth-api-client";
 import { createApiKey } from "./api-key";
-import { ExtraPresignedUpload } from "../extra/schema";
+import { ExtraUploadedAsset } from "../extra/schema";
 import { assetPath, assetUrl } from "./utils";
 
 type Locale = "en" | "fr";
@@ -393,32 +393,25 @@ const isOrganizationSlugConflict = (error: unknown) => {
 const nullableString = (value: unknown) =>
   typeof value === "string" && value.trim() ? value.trim() : null;
 
-const decodePresignedUpload = Schema.decodeUnknownPromise(ExtraPresignedUpload);
+const decodeUploadedAsset = Schema.decodeUnknownPromise(ExtraUploadedAsset);
 
-const uploadOrganizationLogo = async (
+const uploadOrganizationLogoAsset = async (
   file: File,
   m: ReturnType<typeof organizationMessageFns>,
-  presignOrganizationLogo: (input: {
-    payload: { fileName: string; contentType: string };
-  }) => Promise<unknown>,
+  uploadOrganizationLogo: (input: { payload: FormData }) => Promise<unknown>,
 ) => {
-  const contentType = file.type || "image/png";
-  const presigned = await decodePresignedUpload(
-    await presignOrganizationLogo({
-      payload: { fileName: file.name, contentType },
-    }),
-  );
-  const uploadResponse = await fetch(presigned.uploadUrl, {
-    method: "PUT",
-    headers: { "Content-Type": contentType },
-    body: file,
-  });
+  const payload = new FormData();
+  payload.append("file", file);
 
-  if (!uploadResponse.ok) {
+  try {
+    const uploaded = await decodeUploadedAsset(
+      await uploadOrganizationLogo({ payload }),
+    );
+
+    return assetPath(uploaded.url);
+  } catch {
     throw new Error(m.organization_logo_upload_error());
   }
-
-  return assetPath(presigned.url);
 };
 
 const currentOrganizationLocale = (): OrganizationLocale =>
@@ -498,12 +491,10 @@ const organizationFormDefaults = (
 const organizationLogoFromForm = async (
   value: File | string | null,
   m: ReturnType<typeof organizationMessageFns>,
-  presignOrganizationLogo: (input: {
-    payload: { fileName: string; contentType: string };
-  }) => Promise<unknown>,
+  uploadOrganizationLogo: (input: { payload: FormData }) => Promise<unknown>,
 ) => {
   if (value instanceof File)
-    return await uploadOrganizationLogo(value, m, presignOrganizationLogo);
+    return await uploadOrganizationLogoAsset(value, m, uploadOrganizationLogo);
   if (typeof value === "string") return assetPath(value);
   return null;
 };
@@ -535,9 +526,7 @@ const formatOrganizationDate = (date: Date | string) =>
 const organizationMetadataFromForm = async (
   value: OrganizationFormValues,
   m: ReturnType<typeof organizationMessageFns>,
-  presignOrganizationLogo: (input: {
-    payload: { fileName: string; contentType: string };
-  }) => Promise<unknown>,
+  uploadOrganizationLogo: (input: { payload: FormData }) => Promise<unknown>,
 ): Promise<OrganizationMetadata> => {
   const translations: OrganizationTranslation[] = [];
   const enName = value.enName.trim() || value.name.trim();
@@ -545,22 +534,22 @@ const organizationMetadataFromForm = async (
   const enLogo = await organizationLogoFromForm(
     value.enLogo,
     m,
-    presignOrganizationLogo,
+    uploadOrganizationLogo,
   );
   const enIcon = await organizationLogoFromForm(
     value.enIcon,
     m,
-    presignOrganizationLogo,
+    uploadOrganizationLogo,
   );
   const frLogo = await organizationLogoFromForm(
     value.frLogo,
     m,
-    presignOrganizationLogo,
+    uploadOrganizationLogo,
   );
   const frIcon = await organizationLogoFromForm(
     value.frIcon,
     m,
-    presignOrganizationLogo,
+    uploadOrganizationLogo,
   );
 
   if (enName) {
@@ -1175,8 +1164,8 @@ function EditOrganizationSection({
   onUpdated: () => Promise<void>;
 }) {
   const m = useOrganizationMessages();
-  const presignOrganizationLogo = useAtomSet(
-    authApiClient(baseUrl).mutation("authExtra", "presign"),
+  const uploadOrganizationLogo = useAtomSet(
+    authApiClient(baseUrl).mutation("authExtra", "uploadOrganizationLogo"),
     { mode: "promise" },
   );
   const [editingLocale, setEditingLocale] = useState<OrganizationLocale>(
@@ -1193,7 +1182,7 @@ function EditOrganizationSection({
         const metadata = await organizationMetadataFromForm(
           value,
           m,
-          presignOrganizationLogo,
+          uploadOrganizationLogo,
         );
 
         const result = await authClient.organization.update({
@@ -1396,8 +1385,8 @@ function CreateOrganizationSection({
   onCreated: (organization: OrganizationSummary) => Promise<void>;
 }) {
   const m = useOrganizationMessages();
-  const presignOrganizationLogo = useAtomSet(
-    authApiClient(baseUrl).mutation("authExtra", "presign"),
+  const uploadOrganizationLogo = useAtomSet(
+    authApiClient(baseUrl).mutation("authExtra", "uploadOrganizationLogo"),
     { mode: "promise" },
   );
   const [editingLocale, setEditingLocale] = useState<OrganizationLocale>(
@@ -1418,7 +1407,7 @@ function CreateOrganizationSection({
             slug,
           },
           m,
-          presignOrganizationLogo,
+          uploadOrganizationLogo,
         );
 
         const result = await authClient.organization.create({

@@ -20,10 +20,7 @@ import { ProjectData, type Project } from "@/services/projects/schema";
 
 const createProjectAtom = AdminApiClient.mutation("projects", "createProject");
 const updateProjectAtom = AdminApiClient.mutation("projects", "updateProject");
-const presignLogoUploadAtom = AdminApiClient.mutation(
-  "projects",
-  "presignProjectLogoUpload",
-);
+const uploadLogoAtom = AdminApiClient.mutation("projects", "uploadProjectLogo");
 
 type ProjectFormValues = {
   name: string;
@@ -68,7 +65,7 @@ export function ProjectForm({
 }) {
   const createProject = useAtomSet(createProjectAtom, { mode: "promise" });
   const updateProject = useAtomSet(updateProjectAtom, { mode: "promise" });
-  const presignLogoUpload = useAtomSet(presignLogoUploadAtom, {
+  const uploadLogo = useAtomSet(uploadLogoAtom, {
     mode: "promise",
   });
   const [error, setError] = useState("");
@@ -88,20 +85,10 @@ export function ProjectForm({
         const logoFile = isFile(value.logo) ? value.logo : null;
         const logo = logoFile
           ? await (async () => {
-              const presigned = await presignLogoUpload({
-                payload: {
-                  fileName: logoFile.name,
-                  contentType: logoFile.type,
-                },
-              });
-              const uploadResponse = await fetch(presigned.uploadUrl, {
-                method: "PUT",
-                headers: { "Content-Type": logoFile.type },
-                body: logoFile,
-              });
+              const payload = new FormData();
+              payload.append("file", logoFile);
 
-              if (!uploadResponse.ok) throw new Error(m.project_save_error());
-              return presigned.url;
+              return (await uploadLogo({ payload })).url;
             })()
           : value.logo;
         const data = valuesToData(value);

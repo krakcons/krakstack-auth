@@ -9,10 +9,10 @@ import {
   ExtraBadRequest,
   ExtraCreateApiKeyPayload,
   ExtraCreateApiKeyResponse,
+  ExtraImageUploadMultipartPayload,
   ExtraOkResponse,
-  ExtraPresignedUpload,
-  ExtraPresignUploadPayload,
   ExtraSetPasswordPayload,
+  ExtraUploadedAsset,
   ExtraVerifyApiKeyPayload,
   ExtraVerifyApiKeyResponse,
   ExtraVerifyPasswordPayload,
@@ -76,9 +76,9 @@ export const ExtraApiGroup = HttpApiGroup.make("authExtra")
     ),
   )
   .add(
-    HttpApiEndpoint.post("presignUserImageUpload", "/auth/image/presign", {
-      payload: ExtraPresignUploadPayload,
-      success: ExtraPresignedUpload,
+    HttpApiEndpoint.post("uploadUserImage", "/auth/image/upload", {
+      payload: ExtraImageUploadMultipartPayload,
+      success: ExtraUploadedAsset,
       error: [
         ExtraBadRequest,
         HttpApiError.Unauthorized,
@@ -86,24 +86,28 @@ export const ExtraApiGroup = HttpApiGroup.make("authExtra")
       ],
     }).annotateMerge(
       OpenApi.annotations({
-        title: "Presign user image upload",
-        summary: "Create a presigned user image upload URL",
+        title: "Upload user image",
+        summary: "Upload a user profile image",
         description:
-          "Returns a short-lived S3 upload URL and stable asset URL for the current user's profile image.",
+          "Accepts a multipart image upload and stores it as the current user's profile image asset.",
       }),
     ),
   )
   .add(
-    HttpApiEndpoint.post("presign", "/organizations/logo/presign", {
-      payload: ExtraPresignUploadPayload,
-      success: ExtraPresignedUpload,
-      error: [
-        HttpApiError.BadRequest,
-        HttpApiError.Unauthorized,
-        HttpApiError.Forbidden,
-        HttpApiError.InternalServerError,
-      ],
-    }),
+    HttpApiEndpoint.post(
+      "uploadOrganizationLogo",
+      "/organizations/logo/upload",
+      {
+        payload: ExtraImageUploadMultipartPayload,
+        success: ExtraUploadedAsset,
+        error: [
+          HttpApiError.BadRequest,
+          HttpApiError.Unauthorized,
+          HttpApiError.Forbidden,
+          HttpApiError.InternalServerError,
+        ],
+      },
+    ),
   )
   .annotateMerge(
     OpenApi.annotations({

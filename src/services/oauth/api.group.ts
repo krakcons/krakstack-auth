@@ -14,7 +14,10 @@ import {
   UpdateOAuthClientPayload,
 } from "./schema";
 import { ProjectPublicConfig } from "@/services/projects/schema";
-import { PresignedUpload, PresignUploadPayload } from "@/services/s3/schema";
+import {
+  ImageUploadMultipartPayload,
+  UploadedAsset,
+} from "@/services/s3/schema";
 import { AdminAuthMiddleware } from "@/services/auth/middleware";
 
 export const PublicOAuthClientsApiGroup = HttpApiGroup.make(
@@ -129,11 +132,11 @@ export const AdminOAuthClientsApiGroup = HttpApiGroup.make("oauthClients")
   )
   .add(
     HttpApiEndpoint.post(
-      "presignOAuthClientLogoUpload",
-      "/admin/oauth/clients/logo/presign",
+      "uploadOAuthClientLogo",
+      "/admin/oauth/clients/logo/upload",
       {
-        payload: PresignUploadPayload,
-        success: PresignedUpload,
+        payload: ImageUploadMultipartPayload,
+        success: UploadedAsset,
         error: [
           HttpApiError.BadRequest,
           HttpApiError.Unauthorized,
@@ -143,10 +146,10 @@ export const AdminOAuthClientsApiGroup = HttpApiGroup.make("oauthClients")
       },
     ).annotateMerge(
       OpenApi.annotations({
-        title: "Presign OAuth client logo upload",
-        summary: "Create a presigned OAuth client logo upload URL",
+        title: "Upload OAuth client logo",
+        summary: "Upload an OAuth client logo",
         description:
-          "Returns a short-lived S3 upload URL and the stable asset URL to store on an OAuth client.",
+          "Accepts a multipart image upload and returns the stable asset URL to store on an OAuth client.",
       }),
     ),
   )

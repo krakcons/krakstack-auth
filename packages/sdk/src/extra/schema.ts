@@ -1,15 +1,19 @@
 import { Schema } from "effect";
+import { Multipart } from "effect/unstable/http";
+import { HttpApiSchema } from "effect/unstable/httpapi";
 
-export const ExtraPresignUploadPayload = Schema.Struct({
-  fileName: Schema.NonEmptyString,
-  contentType: Schema.NonEmptyString,
+export const ExtraImageUploadPayload = Schema.Struct({
+  file: Multipart.SingleFileSchema,
 }).annotate({
-  identifier: "ExtraPresignUploadPayload",
-  title: "Extra presign upload payload",
+  identifier: "ExtraImageUploadPayload",
+  title: "Extra image upload payload",
   description:
-    "Payload used to request a presigned organization logo upload URL.",
-  examples: [{ fileName: "logo.png", contentType: "image/png" }],
+    "Multipart form data payload containing a single image file for user or organization assets.",
 });
+
+export const ExtraImageUploadMultipartPayload = ExtraImageUploadPayload.pipe(
+  HttpApiSchema.asMultipartStream(),
+);
 
 export const ExtraSetPasswordPayload = Schema.Struct({
   newPassword: Schema.NonEmptyString,
@@ -163,13 +167,12 @@ export const ExtraOkResponse = Schema.Struct({
   examples: [{ ok: true }],
 });
 
-export const ExtraPresignedUpload = Schema.Struct({
-  uploadUrl: Schema.String,
+export const ExtraUploadedAsset = Schema.Struct({
   url: Schema.String,
 }).annotate({
-  identifier: "ExtraPresignedUpload",
-  title: "Extra presigned upload",
-  description: "Presigned upload URL and stable public asset URL.",
+  identifier: "ExtraUploadedAsset",
+  title: "Extra uploaded asset",
+  description: "Stable public asset URL returned after an image upload.",
 });
 
 export class ExtraBadRequest extends Schema.ErrorClass<ExtraBadRequest>(
@@ -187,8 +190,8 @@ export class ExtraBadRequest extends Schema.ErrorClass<ExtraBadRequest>(
   },
 ) {}
 
-export type ExtraPresignUploadPayload = typeof ExtraPresignUploadPayload.Type;
-export type ExtraPresignedUpload = typeof ExtraPresignedUpload.Type;
+export type ExtraImageUploadPayload = typeof ExtraImageUploadPayload.Type;
+export type ExtraUploadedAsset = typeof ExtraUploadedAsset.Type;
 export type ExtraSetPasswordPayload = typeof ExtraSetPasswordPayload.Type;
 export type ExtraVerifyPasswordPayload = typeof ExtraVerifyPasswordPayload.Type;
 export type ExtraCreateApiKeyPayload = typeof ExtraCreateApiKeyPayload.Type;

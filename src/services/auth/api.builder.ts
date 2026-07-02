@@ -4,8 +4,7 @@ import { HttpApiBuilder, HttpApiError } from "effect/unstable/httpapi";
 
 import { FrontendApi } from "@/api";
 import { BetterAuthRequest } from "@/services/auth/better-auth-request";
-import { S3Service } from "@/services/s3";
-import { s3AssetUrl } from "@/services/s3/asset-url";
+import { uploadImageFromMultipart } from "@/services/s3/upload";
 
 import { AuthBadRequest } from "./schema";
 
@@ -37,13 +36,6 @@ const requestAuthSession = (request: HttpServerRequest.HttpServerRequest) =>
       catch: internalServerError,
     });
   });
-
-const safeFileName = (name: string) =>
-  name
-    .trim()
-    .toLowerCase()
-    .replace(/[^a-z0-9._-]+/g, "-")
-    .replace(/^-+|-+$/g, "") || "profile-image";
 
 export const authApiHandler = HttpApiBuilder.group(
   FrontendApi,
@@ -176,29 +168,21 @@ export const authApiHandler = HttpApiBuilder.group(
           })),
         ),
       )
-      .handle("presignUserImageUpload", ({ payload, request }) =>
+      .handle("uploadUserImage", ({ payload, request }) =>
         Effect.gen(function* () {
           const session = yield* requestAuthSession(request);
 
           if (!session) return yield* new HttpApiError.Unauthorized({});
 
-          if (!payload.contentType.startsWith("image/")) {
-            return yield* new AuthBadRequest({
-              message: "Only image uploads are supported",
-            });
-          }
+          const url = yield* uploadImageFromMultipart({
+            payload,
+            prefix: `logos/users/${session.user.id}`,
+            fallbackFileName: "profile-image",
+            badRequest: (message) => new AuthBadRequest({ message }),
+            internalServerError,
+          });
 
-          const s3 = yield* S3Service;
-          const key = `logos/users/${session.user.id}/${crypto.randomUUID()}-${safeFileName(payload.fileName)}`;
-          const uploadUrl = yield* s3
-            .presign(key, {
-              expiresIn: 300,
-              method: "PUT",
-              type: payload.contentType,
-            })
-            .pipe(Effect.mapError(internalServerError));
-
-          return { uploadUrl, url: s3AssetUrl(key) };
+          return { url };
         }),
       ),
 );

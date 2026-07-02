@@ -4,8 +4,7 @@ import { HttpApiBuilder, HttpApiError } from "effect/unstable/httpapi";
 
 import { FrontendApi } from "@/api";
 import { BetterAuthRequest } from "@/services/auth/better-auth-request";
-import { S3Service } from "@/services/s3";
-import { s3AssetUrl } from "@/services/s3/asset-url";
+import { uploadImageFromMultipart } from "@/services/s3/upload";
 
 const internalServerError = (error: unknown) => {
   const cause =
@@ -76,36 +75,23 @@ const requireSessionOrService = (
     ),
   );
 
-const safeFileName = (name: string) =>
-  name
-    .trim()
-    .toLowerCase()
-    .replace(/[^a-z0-9._-]+/g, "-")
-    .replace(/^-+|-+$/g, "") || "logo";
-
 export const organizationsApiHandler = HttpApiBuilder.group(
   FrontendApi,
   "organizations",
   (handlers) =>
-    handlers.handle("presignOrganizationLogoUpload", ({ payload, request }) =>
+    handlers.handle("uploadOrganizationLogo", ({ payload, request }) =>
       Effect.gen(function* () {
         yield* requireSessionOrService(request);
 
-        if (!payload.contentType.startsWith("image/")) {
-          return yield* new HttpApiError.BadRequest({});
-        }
+        const url = yield* uploadImageFromMultipart({
+          payload,
+          prefix: "logos/organizations",
+          fallbackFileName: "logo",
+          badRequest: () => new HttpApiError.BadRequest({}),
+          internalServerError,
+        });
 
-        const s3 = yield* S3Service;
-        const key = `logos/organizations/${crypto.randomUUID()}-${safeFileName(payload.fileName)}`;
-        const uploadUrl = yield* s3
-          .presign(key, {
-            expiresIn: 300,
-            method: "PUT",
-            type: payload.contentType,
-          })
-          .pipe(Effect.mapError(internalServerError));
-
-        return { uploadUrl, url: s3AssetUrl(key) };
+        return { url };
       }),
     ),
 );

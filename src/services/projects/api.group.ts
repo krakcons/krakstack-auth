@@ -6,7 +6,10 @@ import {
   OpenApi,
 } from "effect/unstable/httpapi";
 
-import { PresignedUpload, PresignUploadPayload } from "@/services/s3/schema";
+import {
+  ImageUploadMultipartPayload,
+  UploadedAsset,
+} from "@/services/s3/schema";
 import { AdminAuthMiddleware } from "@/services/auth/middleware";
 
 import {
@@ -94,20 +97,16 @@ export const AdminProjectsApiGroup = HttpApiGroup.make("projects")
     }),
   )
   .add(
-    HttpApiEndpoint.post(
-      "presignProjectLogoUpload",
-      "/admin/projects/logo/presign",
-      {
-        payload: PresignUploadPayload,
-        success: PresignedUpload,
-        error: [
-          HttpApiError.BadRequest,
-          HttpApiError.Unauthorized,
-          HttpApiError.Forbidden,
-          HttpApiError.InternalServerError,
-        ],
-      },
-    ),
+    HttpApiEndpoint.post("uploadProjectLogo", "/admin/projects/logo/upload", {
+      payload: ImageUploadMultipartPayload,
+      success: UploadedAsset,
+      error: [
+        HttpApiError.BadRequest,
+        HttpApiError.Unauthorized,
+        HttpApiError.Forbidden,
+        HttpApiError.InternalServerError,
+      ],
+    }),
   )
   .annotateMerge(
     OpenApi.annotations({

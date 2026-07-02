@@ -3,8 +3,7 @@ import { HttpApiBuilder, HttpApiError } from "effect/unstable/httpapi";
 
 import { AdminApi, FrontendApi } from "@/api";
 import { Projects } from "@/services/projects";
-import { S3Service } from "@/services/s3";
-import { s3AssetUrl } from "@/services/s3/asset-url";
+import { uploadImageFromMultipart } from "@/services/s3/upload";
 
 const internalServerError = (error: unknown) => {
   const cause =
@@ -21,13 +20,6 @@ const internalServerError = (error: unknown) => {
   );
   return new HttpApiError.InternalServerError({});
 };
-
-const safeFileName = (name: string) =>
-  name
-    .trim()
-    .toLowerCase()
-    .replace(/[^a-z0-9._-]+/g, "-")
-    .replace(/^-+|-+$/g, "") || "logo";
 
 export const publicProjectsApiHandler = HttpApiBuilder.group(
   FrontendApi,
@@ -93,23 +85,17 @@ export const adminProjectsApiHandler = HttpApiBuilder.group(
           return project;
         }),
       )
-      .handle("presignProjectLogoUpload", ({ payload }) =>
+      .handle("uploadProjectLogo", ({ payload }) =>
         Effect.gen(function* () {
-          if (!payload.contentType.startsWith("image/")) {
-            return yield* new HttpApiError.BadRequest({});
-          }
+          const url = yield* uploadImageFromMultipart({
+            payload,
+            prefix: "logos/projects",
+            fallbackFileName: "logo",
+            badRequest: () => new HttpApiError.BadRequest({}),
+            internalServerError,
+          });
 
-          const s3 = yield* S3Service;
-          const key = `logos/projects/${crypto.randomUUID()}-${safeFileName(payload.fileName)}`;
-          const uploadUrl = yield* s3
-            .presign(key, {
-              expiresIn: 300,
-              method: "PUT",
-              type: payload.contentType,
-            })
-            .pipe(Effect.mapError(internalServerError));
-
-          return { uploadUrl, url: s3AssetUrl(key) };
+          return { url };
         }),
       ),
 );

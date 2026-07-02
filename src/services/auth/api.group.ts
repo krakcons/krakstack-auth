@@ -5,7 +5,10 @@ import {
   OpenApi,
 } from "effect/unstable/httpapi";
 
-import { PresignedUpload, PresignUploadPayload } from "@/services/s3/schema";
+import {
+  ImageUploadMultipartPayload,
+  UploadedAsset,
+} from "@/services/s3/schema";
 
 import {
   AuthBadRequest,
@@ -76,9 +79,9 @@ export const AuthApiGroup = HttpApiGroup.make("auth")
     ),
   )
   .add(
-    HttpApiEndpoint.post("presignUserImageUpload", "/auth/image/presign", {
-      payload: PresignUploadPayload,
-      success: PresignedUpload,
+    HttpApiEndpoint.post("uploadUserImage", "/auth/image/upload", {
+      payload: ImageUploadMultipartPayload,
+      success: UploadedAsset,
       error: [
         AuthBadRequest,
         HttpApiError.Unauthorized,
@@ -86,10 +89,10 @@ export const AuthApiGroup = HttpApiGroup.make("auth")
       ],
     }).annotateMerge(
       OpenApi.annotations({
-        title: "Presign user image upload",
-        summary: "Create a presigned user image upload URL",
+        title: "Upload user image",
+        summary: "Upload a user profile image",
         description:
-          "Returns a short-lived S3 upload URL and stable asset URL for the current user's profile image.",
+          "Accepts a multipart image upload and stores it as the current user's profile image asset.",
       }),
     ),
   )

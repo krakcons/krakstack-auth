@@ -5,16 +5,19 @@ import {
   OpenApi,
 } from "effect/unstable/httpapi";
 
-import { PresignedUpload, PresignUploadPayload } from "@/services/s3/schema";
+import {
+  ImageUploadMultipartPayload,
+  UploadedAsset,
+} from "@/services/s3/schema";
 
 export const OrganizationsApiGroup = HttpApiGroup.make("organizations")
   .add(
     HttpApiEndpoint.post(
-      "presignOrganizationLogoUpload",
-      "/organizations/logo/presign",
+      "uploadOrganizationLogo",
+      "/organizations/logo/upload",
       {
-        payload: PresignUploadPayload,
-        success: PresignedUpload,
+        payload: ImageUploadMultipartPayload,
+        success: UploadedAsset,
         error: [
           HttpApiError.BadRequest,
           HttpApiError.Unauthorized,
@@ -24,10 +27,10 @@ export const OrganizationsApiGroup = HttpApiGroup.make("organizations")
       },
     ).annotateMerge(
       OpenApi.annotations({
-        title: "Presign organization logo upload",
-        summary: "Create a presigned organization logo upload URL",
+        title: "Upload organization logo",
+        summary: "Upload an organization logo",
         description:
-          "Returns a short-lived S3 upload URL and the stable asset URL to store in organization metadata. Requires an authenticated user session.",
+          "Accepts a multipart image upload and returns the stable asset URL to store in organization metadata. Requires an authenticated user session.",
       }),
     ),
   )

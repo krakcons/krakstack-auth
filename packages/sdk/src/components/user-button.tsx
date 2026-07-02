@@ -65,7 +65,7 @@ import { Separator } from "@/components/ui/separator";
 import type { AuthUiClient } from "./auth-client";
 import { authApiClient } from "./auth-api-client";
 import { createApiKey } from "./api-key";
-import { ExtraPresignedUpload } from "../extra/schema";
+import { ExtraUploadedAsset } from "../extra/schema";
 import { assetPath, assetUrl } from "./utils";
 
 const messages = {
@@ -328,22 +328,21 @@ type UserFormType = {
 
 const isFile = (value: unknown): value is File => value instanceof File;
 
-const decodePresignedUpload = Schema.decodeUnknownPromise(ExtraPresignedUpload);
+const decodeUploadedAsset = Schema.decodeUnknownPromise(ExtraUploadedAsset);
 
-const presignUserImageUpload = async (
+const uploadUserImageAsset = async (
   file: File,
   m: ReturnType<typeof userButtonMessageFns>,
-  presignUserImage: (input: {
-    payload: { fileName: string; contentType: string };
-  }) => Promise<unknown>,
+  uploadUserImage: (input: { payload: FormData }) => Promise<unknown>,
 ) => {
-  const contentType = file.type || "image/png";
+  const payload = new FormData();
+  payload.append("file", file);
 
-  return await decodePresignedUpload(
-    await presignUserImage({
-      payload: { fileName: file.name, contentType },
-    }),
-  );
+  try {
+    return await decodeUploadedAsset(await uploadUserImage({ payload }));
+  } catch {
+    throw new Error(m.user_profile_image_upload_error());
+  }
 };
 
 type TotpSetup = {
@@ -400,8 +399,8 @@ export const UserButton = ({
   const settingsDialog =
     controlledDialog !== undefined ? controlledDialog : uncontrolledDialog;
   const [formError, setFormError] = useState<string | null>(null);
-  const presignUserImage = useAtomSet(
-    authApiClient(baseUrl).mutation("authExtra", "presignUserImageUpload"),
+  const uploadUserImage = useAtomSet(
+    authApiClient(baseUrl).mutation("authExtra", "uploadUserImage"),
     { mode: "promise" },
   );
 
@@ -440,22 +439,13 @@ export const UserButton = ({
     const imageFile = isFile(values.image) ? values.image : null;
     const image = imageFile
       ? await (async () => {
-          const presigned = await presignUserImageUpload(
+          const uploaded = await uploadUserImageAsset(
             imageFile,
             m,
-            presignUserImage,
+            uploadUserImage,
           );
-          const uploadResponse = await fetch(presigned.uploadUrl, {
-            method: "PUT",
-            headers: { "Content-Type": imageFile.type || "image/png" },
-            body: imageFile,
-          });
 
-          if (!uploadResponse.ok) {
-            throw new Error(m.user_profile_image_upload_error());
-          }
-
-          return assetPath(presigned.url);
+          return assetPath(uploaded.url);
         })()
       : typeof values.image === "string"
         ? assetPath(values.image)

@@ -52,9 +52,9 @@ const updateOrganizationAtom = AdminApiClient.mutation(
   "admin",
   "updateOrganization",
 );
-const presignLogoUploadAtom = ApiClient.mutation(
+const uploadLogoAtom = ApiClient.mutation(
   "organizations",
-  "presignOrganizationLogoUpload",
+  "uploadOrganizationLogo",
 );
 
 const valuesToPayload = (value: OrganizationFormValues, logo: string | null) =>
@@ -79,7 +79,7 @@ export function OrganizationForm({
   const updateOrganization = useAtomSet(updateOrganizationAtom, {
     mode: "promise",
   });
-  const presignLogoUpload = useAtomSet(presignLogoUploadAtom, {
+  const uploadLogo = useAtomSet(uploadLogoAtom, {
     mode: "promise",
   });
   const [error, setError] = useState("");
@@ -96,23 +96,10 @@ export function OrganizationForm({
         const logoFile = isFile(value.logo) ? value.logo : null;
         const logo = logoFile
           ? await (async () => {
-              const presigned = await presignLogoUpload({
-                payload: {
-                  fileName: logoFile.name,
-                  contentType: logoFile.type,
-                },
-              });
-              const uploadResponse = await fetch(presigned.uploadUrl, {
-                method: "PUT",
-                headers: { "Content-Type": logoFile.type },
-                body: logoFile,
-              });
+              const payload = new FormData();
+              payload.append("file", logoFile);
 
-              if (!uploadResponse.ok) {
-                throw new Error(m.organization_update_error());
-              }
-
-              return presigned.url;
+              return (await uploadLogo({ payload })).url;
             })()
           : value.logo;
         const payload = valuesToPayload(value, logo);

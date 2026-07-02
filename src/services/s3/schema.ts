@@ -1,32 +1,33 @@
 import { Schema } from "effect";
+import { Multipart } from "effect/unstable/http";
+import { HttpApiSchema } from "effect/unstable/httpapi";
 
-export const PresignUploadPayload = Schema.Struct({
-  fileName: Schema.NonEmptyString,
-  contentType: Schema.NonEmptyString,
+export const ImageUploadPayload = Schema.Struct({
+  file: Multipart.SingleFileSchema,
 }).annotate({
-  identifier: "PresignUploadPayload",
-  title: "Presign upload payload",
-  description: "Payload used to request a presigned S3 upload URL.",
-  examples: [{ fileName: "logo.png", contentType: "image/png" }],
+  identifier: "ImageUploadPayload",
+  title: "Image upload payload",
+  description: "Multipart form data payload containing a single image file.",
 });
 
-export const PresignedUpload = Schema.Struct({
-  uploadUrl: Schema.String,
+export const ImageUploadMultipartPayload = ImageUploadPayload.pipe(
+  HttpApiSchema.asMultipartStream(),
+);
+
+export const UploadedAsset = Schema.Struct({
   url: Schema.String,
 }).annotate({
-  identifier: "PresignedUpload",
-  title: "Presigned upload",
-  description: "Presigned S3 upload URL and stable public asset URL.",
+  identifier: "UploadedAsset",
+  title: "Uploaded asset",
+  description: "Stable public asset URL for an uploaded file.",
   examples: [
     {
-      uploadUrl:
-        "https://s3.example.com/bucket/logos/organizations/logo.png?signature=...",
       url: "https://auth.example.com/api/assets/logos/organizations/logo.png",
     },
   ],
 });
 
-export type PresignUploadPayload = typeof PresignUploadPayload.Type;
+export type ImageUploadPayload = typeof ImageUploadPayload.Type;
 
 export class S3ServiceError extends Schema.TaggedErrorClass<S3ServiceError>()(
   "S3ServiceError",
