@@ -1,10 +1,11 @@
 {
   "name": "@krak-stack/auth",
-  "version": "0.1.28",
+  "version": "0.1.29",
   "description": "Effect HttpApi clients and schemas for KrakStack Auth.",
   "license": "MIT",
   "files": [
-    "dist"
+    "dist",
+    "tailwind.css"
   ],
   "type": "module",
   "sideEffects": false,
@@ -29,6 +30,7 @@
       "types": "./dist/components/index.d.ts",
       "default": "./dist/components/index.js"
     },
+    "./tailwind.css": "./tailwind.css",
     "./better-auth": {
       "types": "./dist/better-auth/index.d.ts",
       "default": "./dist/better-auth/index.js"
