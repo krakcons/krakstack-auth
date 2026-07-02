@@ -1,5 +1,6 @@
 import { Context, Effect, Layer, Schema } from "effect";
 import { eq } from "drizzle-orm";
+import { OrganizationMetadata } from "@krak-stack/auth/schema";
 
 import { oauthClient, project } from "@/db/auth-schema";
 import { normalizeAuthHost } from "@/lib/domain-utils";
@@ -14,6 +15,12 @@ import {
 
 const emptyData: ProjectData = {};
 
+type OrganizationBrandingRow = {
+  name: string;
+  logo: string | null;
+  metadata: string | null;
+};
+
 const googleConfigured = Boolean(
   process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET,
 );
@@ -24,6 +31,32 @@ const authOptions = (data: ProjectData) => ({
   signUp: data.authOptions?.signUp ?? true,
   signUpName: data.authOptions?.signUpName ?? true,
 });
+
+const parseOrganizationMetadata = (metadata: unknown) => {
+  try {
+    const value =
+      typeof metadata === "string" ? JSON.parse(metadata) : metadata;
+
+    return Schema.decodeUnknownSync(OrganizationMetadata)(value);
+  } catch {
+    return { translations: [] };
+  }
+};
+
+const organizationBranding = (organization: OrganizationBrandingRow | null) => {
+  if (!organization) return null;
+
+  const translations = parseOrganizationMetadata(
+    organization.metadata,
+  ).translations;
+  const translation =
+    translations.find((item) => item.locale === "en") ?? translations[0];
+
+  return {
+    name: translation?.name || organization.name,
+    logo: translation?.icon || translation?.logo || organization.logo || null,
+  };
+};
 
 const StoredProjectData = Schema.Struct({
   branding: ProjectData.fields.branding,
@@ -144,6 +177,9 @@ export class Projects extends Context.Service<Projects>()("Projects", {
                 where: { id: domain.organizationId },
               })
             : null;
+          const organizationDisplay = organizationBranding(
+            organization ?? null,
+          );
           const data = value ? row(value).data : {};
           const projectKey =
             [domain.projectId, domain.organizationId]
@@ -152,8 +188,8 @@ export class Projects extends Context.Service<Projects>()("Projects", {
 
           return {
             projectKey,
-            name: organization?.name ?? value?.name ?? null,
-            logoUrl: organization?.logo ?? value?.logo ?? null,
+            name: organizationDisplay?.name ?? value?.name ?? null,
+            logoUrl: organizationDisplay?.logo ?? value?.logo ?? null,
             authDomain: domain.hostname,
             rootDomain: domain.rootHostname,
             themeCss: sanitizeThemeCss(data.branding?.themeCss, projectKey),
