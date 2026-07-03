@@ -1,13 +1,14 @@
 // @ts-nocheck
 import type { ApiKey } from "@better-auth/api-key/client";
-import { useAtomSet } from "@effect/atom-react";
+import { useAtomRefresh, useAtomSet, useAtomValue } from "@effect/atom-react";
 import { type ColumnDef } from "@tanstack/react-table";
 import {
   type UseNavigateResult,
   useNavigate,
   useRouterState,
 } from "@tanstack/react-router";
-import { Schema } from "effect";
+import { Effect, Schema } from "effect";
+import { AsyncResult, Atom } from "effect/unstable/reactivity";
 import {
   Check,
   Copy,
@@ -24,8 +25,6 @@ import {
   type ReactNode,
   createContext,
   useContext,
-  useEffect,
-  useEffectEvent,
   useState,
 } from "react";
 
@@ -65,6 +64,7 @@ import { Separator } from "@/components/ui/separator";
 import type { AuthUiClient } from "./auth-client";
 import { authApiClient } from "./auth-api-client";
 import { createApiKey } from "./api-key";
+import { useOpenedOnce } from "./hooks";
 import { ExtraUploadedAsset } from "../extra/schema";
 import { assetPath, assetUrl } from "./utils";
 
@@ -158,6 +158,7 @@ const messages = {
     user_two_factor_disabled: "Disabled",
     user_two_factor_disabled_message: "Two-factor authentication is disabled.",
     user_two_factor_enable_error: "Could not start two-factor setup.",
+    user_two_factor_enable_submit: "Enable",
     user_two_factor_enabled: "Enabled",
     user_two_factor_enabled_message: "Two-factor authentication is enabled.",
     user_two_factor_scan_description:
@@ -263,6 +264,7 @@ const messages = {
       "L'authentification à deux facteurs est désactivée.",
     user_two_factor_enable_error:
       "Impossible de démarrer la configuration à deux facteurs.",
+    user_two_factor_enable_submit: "Activer",
     user_two_factor_enabled: "Activée",
     user_two_factor_enabled_message:
       "L'authentification à deux facteurs est activée.",
@@ -358,6 +360,56 @@ type LinkedAccount = {
   accountId: string;
 };
 
+type AccountCache = {
+  accounts: LinkedAccount[] | null;
+  error: string | null;
+  reload: () => Promise<void>;
+};
+
+const userAccountsAtom = Atom.family((authClient: AuthUiClient) =>
+  Atom.keepAlive(
+    Atom.make(
+      Effect.tryPromise({
+        try: async () => {
+          const result = await authClient.listAccounts();
+
+          if (result.error) {
+            throw new Error(result.error.message ?? "Could not load accounts.");
+          }
+
+          return result.data ?? [];
+        },
+        catch: (error) => error,
+      }),
+    ),
+  ),
+);
+
+const emptyAccountsAtom = Atom.make(Effect.succeed([] as LinkedAccount[]));
+
+const userApiKeysAtom = Atom.family((authClient: AuthUiClient) =>
+  Atom.keepAlive(
+    Atom.make(
+      Effect.tryPromise({
+        try: async () => {
+          const result = await authClient.apiKey.list({
+            query: { configId: "user" },
+          });
+
+          if (result.error) {
+            throw new Error(result.error.message ?? "Could not load API keys.");
+          }
+
+          return result.data?.apiKeys ?? [];
+        },
+        catch: (error) => error,
+      }),
+    ),
+  ),
+);
+
+const emptyApiKeysAtom = Atom.make(Effect.succeed([] as ApiKeySummary[]));
+
 type UserDropdownProps = {
   authClient: AuthUiClient;
   baseUrl?: string | undefined;
@@ -399,10 +451,32 @@ export const UserButton = ({
   const settingsDialog =
     controlledDialog !== undefined ? controlledDialog : uncontrolledDialog;
   const [formError, setFormError] = useState<string | null>(null);
+  const shouldLoadAccounts =
+    Boolean(session) &&
+    (settingsDialog === "account" || settingsDialog === "security");
+  const accountsAtom = shouldLoadAccounts
+    ? userAccountsAtom(authClient)
+    : emptyAccountsAtom;
+  const accountsResult = useAtomValue(accountsAtom);
+  const refreshAccounts = useAtomRefresh(accountsAtom);
   const uploadUserImage = useAtomSet(
     authApiClient(baseUrl).mutation("authExtra", "uploadUserImage"),
     { mode: "promise" },
   );
+
+  const accountCache: AccountCache = {
+    accounts: AsyncResult.match(accountsResult, {
+      onInitial: () => null,
+      onFailure: () => null,
+      onSuccess: ({ value }) => Array.from(value),
+    }),
+    error: AsyncResult.match(accountsResult, {
+      onInitial: () => null,
+      onFailure: () => m.user_accounts_load_error(),
+      onSuccess: () => null,
+    }),
+    reload: async () => refreshAccounts(),
+  };
 
   const setSettingsDialog = (
     next:
@@ -569,11 +643,11 @@ export const UserButton = ({
               <Separator />
               <ConnectedAccounts
                 authClient={authClient}
+                baseUrl={baseUrl}
+                accountCache={accountCache}
                 currentSiteHref={currentSiteHref}
                 navigate={navigate}
               />
-              <Separator />
-              <PasswordSettings authClient={authClient} />
             </div>
           )}
         </DialogContent>
@@ -596,7 +670,18 @@ export const UserButton = ({
             </DialogDescription>
           </DialogHeader>
           <Separator />
-          <AccountSecuritySettings authClient={authClient} />
+          <div className="flex flex-col gap-6">
+            <PasswordSettings
+              authClient={authClient}
+              baseUrl={baseUrl}
+              accountCache={accountCache}
+            />
+            <Separator />
+            <AccountSecuritySettings
+              authClient={authClient}
+              accountCache={accountCache}
+            />
+          </div>
         </DialogContent>
       </Dialog>
       <Dialog
@@ -619,6 +704,7 @@ export const UserButton = ({
           <Separator />
           <ApiKeyManager
             authClient={authClient}
+            active={settingsDialog === "apiKeys"}
             permissions={apiKeyPermissions ?? {}}
           />
         </DialogContent>
@@ -629,40 +715,23 @@ export const UserButton = ({
 
 function ConnectedAccounts({
   authClient,
+  baseUrl,
+  accountCache,
   currentSiteHref,
   navigate,
 }: {
   authClient: AuthUiClient;
+  baseUrl?: string | undefined;
+  accountCache: AccountCache;
   currentSiteHref: string;
   navigate: UseNavigateResult<string>;
 }) {
   const m = useUserButtonMessages();
-  const [accounts, setAccounts] = useState<LinkedAccount[]>([]);
-  const [error, setError] = useState<string | null>(null);
-  const [loading, setLoading] = useState(true);
   const [isLinking, setIsLinking] = useState(false);
   const [revokingAccount, setRevokingAccount] = useState<LinkedAccount | null>(
     null,
   );
-
-  const loadAccounts = useEffectEvent(async () => {
-    setLoading(true);
-    setError(null);
-    const result = await authClient.listAccounts();
-
-    if (result.error) {
-      setError(result.error.message ?? m.user_accounts_load_error());
-      setLoading(false);
-      return;
-    }
-
-    setAccounts(result.data ?? []);
-    setLoading(false);
-  });
-
-  useEffect(() => {
-    void loadAccounts();
-  }, []);
+  const accounts = accountCache.accounts ?? [];
 
   const googleAccount = accounts.find(
     (account) => account.providerId === "google",
@@ -708,7 +777,7 @@ function ConnectedAccounts({
     }
 
     setRevokingAccount(null);
-    await loadAccounts();
+    await accountCache.reload();
   };
 
   return (
@@ -721,40 +790,45 @@ function ConnectedAccounts({
           {m.user_accounts_description()}
         </p>
       </div>
-      {loading ? (
+      {accountCache.accounts ? (
+        <>
+          <AccountProviderRow
+            icon={<GoogleLogo />}
+            title={m.user_account_google_title()}
+            description={m.user_account_google_description()}
+            account={googleAccount}
+            connected={Boolean(googleAccount)}
+            canRevoke={canRevokeAccount}
+            connectLabel={m.user_account_google_connect()}
+            revokeLabel={m.user_account_revoke()}
+            onlyMethodLabel={m.user_account_only_method()}
+            isConnecting={isLinking}
+            renderDisconnected={undefined}
+            onConnect={linkGoogle}
+            onRevoke={(account) => setRevokingAccount(account)}
+          />
+          {revokingAccount ? (
+            <RevokeAccountForm
+              baseUrl={baseUrl}
+              account={revokingAccount}
+              requirePassword={hasPassword}
+              onCancel={() => setRevokingAccount(null)}
+              onRevoke={revokeAccount}
+            />
+          ) : null}
+        </>
+      ) : !accountCache.error ? (
         <p className="text-muted-foreground text-sm">{m.user_loading()}</p>
       ) : null}
-      <AccountProviderRow
-        initial="G"
-        title={m.user_account_google_title()}
-        description={m.user_account_google_description()}
-        account={googleAccount}
-        connected={Boolean(googleAccount)}
-        canRevoke={canRevokeAccount}
-        connectLabel={m.user_account_google_connect()}
-        revokeLabel={m.user_account_revoke()}
-        onlyMethodLabel={m.user_account_only_method()}
-        isConnecting={isLinking}
-        renderDisconnected={undefined}
-        onConnect={linkGoogle}
-        onRevoke={(account) => setRevokingAccount(account)}
-      />
-      {revokingAccount ? (
-        <RevokeAccountForm
-          authClient={authClient}
-          account={revokingAccount}
-          requirePassword={hasPassword}
-          onCancel={() => setRevokingAccount(null)}
-          onRevoke={revokeAccount}
-        />
+      {accountCache.error ? (
+        <p className="text-destructive text-sm">{accountCache.error}</p>
       ) : null}
-      {error ? <p className="text-destructive text-sm">{error}</p> : null}
     </section>
   );
 }
 
 function AccountProviderRow({
-  initial,
+  icon,
   title,
   description,
   account,
@@ -768,7 +842,7 @@ function AccountProviderRow({
   onConnect,
   onRevoke,
 }: {
-  initial: string;
+  icon: ReactNode;
   title: ReactNode;
   description: ReactNode;
   account: LinkedAccount | undefined;
@@ -788,7 +862,7 @@ function AccountProviderRow({
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex min-w-0 items-center gap-3">
           <span className="bg-background flex size-9 shrink-0 items-center justify-center rounded-full border text-sm font-semibold">
-            {initial}
+            {icon}
           </span>
           <div className="min-w-0">
             <div className="flex flex-wrap items-center gap-2">
@@ -828,33 +902,44 @@ function AccountProviderRow({
   );
 }
 
-function PasswordSettings({ authClient }: { authClient: AuthUiClient }) {
-  const m = useUserButtonMessages();
-  const [accounts, setAccounts] = useState<LinkedAccount[]>([]);
+function GoogleLogo() {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true" className="size-5">
+      <path
+        fill="#4285F4"
+        d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"
+      />
+      <path
+        fill="#34A853"
+        d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"
+      />
+      <path
+        fill="#FBBC05"
+        d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"
+      />
+      <path
+        fill="#EA4335"
+        d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84C6.71 7.31 9.14 5.38 12 5.38z"
+      />
+    </svg>
+  );
+}
+
+function PasswordSettings({
+  authClient,
+  baseUrl,
+  accountCache,
+}: {
+  authClient: AuthUiClient;
+  baseUrl?: string | undefined;
+  accountCache: AccountCache;
+}) {
   const [error, setError] = useState<string | null>(null);
-  const [loading, setLoading] = useState(true);
   const [revokingAccount, setRevokingAccount] = useState<LinkedAccount | null>(
     null,
   );
-
-  const loadAccounts = useEffectEvent(async () => {
-    setLoading(true);
-    setError(null);
-    const result = await authClient.listAccounts();
-
-    if (result.error) {
-      setError(result.error.message ?? m.user_accounts_load_error());
-      setLoading(false);
-      return;
-    }
-
-    setAccounts(result.data ?? []);
-    setLoading(false);
-  });
-
-  useEffect(() => {
-    void loadAccounts();
-  }, []);
+  const m = useUserButtonMessages();
+  const accounts = accountCache.accounts ?? [];
 
   const passwordAccount = accounts.find(
     (account) => account.providerId === "credential",
@@ -875,7 +960,7 @@ function PasswordSettings({ authClient }: { authClient: AuthUiClient }) {
     }
 
     setRevokingAccount(null);
-    await loadAccounts();
+    await accountCache.reload();
   };
 
   return (
@@ -888,10 +973,7 @@ function PasswordSettings({ authClient }: { authClient: AuthUiClient }) {
           {m.user_account_password_description()}
         </p>
       </div>
-      {loading ? (
-        <p className="text-muted-foreground text-sm">{m.user_loading()}</p>
-      ) : null}
-      {hasPassword && passwordAccount ? (
+      {accountCache.accounts && hasPassword && passwordAccount ? (
         <div className="flex flex-col gap-4">
           <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border p-4">
             <div className="flex flex-col gap-1">
@@ -916,7 +998,7 @@ function PasswordSettings({ authClient }: { authClient: AuthUiClient }) {
           </div>
           {revokingAccount ? (
             <RevokeAccountForm
-              authClient={authClient}
+              baseUrl={baseUrl}
               account={revokingAccount}
               requirePassword
               onCancel={() => setRevokingAccount(null)}
@@ -926,9 +1008,17 @@ function PasswordSettings({ authClient }: { authClient: AuthUiClient }) {
           <Separator />
           <ChangePasswordForm authClient={authClient} />
         </div>
-      ) : (
-        <SetPasswordForm authClient={authClient} onSaved={loadAccounts} />
-      )}
+      ) : accountCache.accounts ? (
+        <SetPasswordForm
+          authClient={authClient}
+          onSaved={accountCache.reload}
+        />
+      ) : !accountCache.error ? (
+        <p className="text-muted-foreground text-sm">{m.user_loading()}</p>
+      ) : null}
+      {accountCache.error ? (
+        <p className="text-destructive text-sm">{accountCache.error}</p>
+      ) : null}
       {error ? <p className="text-destructive text-sm">{error}</p> : null}
     </section>
   );
@@ -1077,34 +1167,38 @@ function SetPasswordForm({
 }
 
 function RevokeAccountForm({
-  authClient,
+  baseUrl,
   account,
   requirePassword,
   onCancel,
   onRevoke,
 }: {
-  authClient: AuthUiClient;
+  baseUrl?: string | undefined;
   account: LinkedAccount;
   requirePassword: boolean;
   onCancel: () => void;
   onRevoke: (account: LinkedAccount) => Promise<void>;
 }) {
   const m = useUserButtonMessages();
+  const verifyPassword = useAtomSet(
+    authApiClient(baseUrl).mutation("authExtra", "verifyPassword"),
+    { mode: "promise" },
+  );
   const form = useAppForm({
     defaultValues: { password: "" },
     onSubmit: async ({ value, formApi }) => {
       formApi.setErrorMap({ onSubmit: undefined });
 
       if (requirePassword) {
-        const verified = await authClient.$fetch("/verify-password", {
-          method: "POST",
-          body: { password: value.password },
-        });
-
-        if (verified.error) {
+        try {
+          await verifyPassword({ payload: { password: value.password } });
+        } catch (error) {
           formApi.setErrorMap({
             onSubmit: {
-              form: m.user_account_password_verify_error(),
+              form:
+                error instanceof Error
+                  ? error.message
+                  : m.user_account_password_verify_error(),
               fields: {},
             },
           });
@@ -1235,12 +1329,23 @@ const UserForm = ({
   );
 };
 
-function AccountSecuritySettings({ authClient }: { authClient: AuthUiClient }) {
+function AccountSecuritySettings({
+  authClient,
+  accountCache,
+}: {
+  authClient: AuthUiClient;
+  accountCache: AccountCache;
+}) {
   const m = useUserButtonMessages();
   const session = authClient.useSession();
   const [setup, setSetup] = useState<TotpSetup | null>(null);
   const [message, setMessage] = useState<string | null>(null);
   const twoFactorEnabled = hasTwoFactorEnabled(session.data?.user);
+  const requirePassword = accountCache.accounts
+    ? accountCache.accounts.some(
+        (account) => account.providerId === "credential",
+      )
+    : null;
 
   return (
     <div className="flex flex-col gap-6">
@@ -1259,9 +1364,20 @@ function AccountSecuritySettings({ authClient }: { authClient: AuthUiClient }) {
             : m.user_two_factor_disabled()}
         </Badge>
       </div>
-      {twoFactorEnabled ? (
+      {requirePassword === null ? (
+        <p
+          className={
+            accountCache.error
+              ? "text-destructive text-sm"
+              : "text-muted-foreground text-sm"
+          }
+        >
+          {accountCache.error ?? m.user_loading()}
+        </p>
+      ) : twoFactorEnabled ? (
         <DisableTotpForm
           authClient={authClient}
+          requirePassword={requirePassword}
           onDisabled={async () => {
             setMessage(m.user_two_factor_disabled_message());
             await session.refetch();
@@ -1278,7 +1394,11 @@ function AccountSecuritySettings({ authClient }: { authClient: AuthUiClient }) {
           }}
         />
       ) : (
-        <EnableTotpForm authClient={authClient} onEnabled={setSetup} />
+        <EnableTotpForm
+          authClient={authClient}
+          requirePassword={requirePassword}
+          onEnabled={setSetup}
+        />
       )}
       {message ? (
         <p className="text-muted-foreground text-sm">{message}</p>
@@ -1289,9 +1409,11 @@ function AccountSecuritySettings({ authClient }: { authClient: AuthUiClient }) {
 
 function EnableTotpForm({
   authClient,
+  requirePassword,
   onEnabled,
 }: {
   authClient: AuthUiClient;
+  requirePassword: boolean;
   onEnabled: (setup: TotpSetup) => void;
 }) {
   const m = useUserButtonMessages();
@@ -1299,9 +1421,9 @@ function EnableTotpForm({
     defaultValues: { password: "" },
     onSubmit: async ({ value, formApi }) => {
       formApi.setErrorMap({ onSubmit: undefined });
-      const result = await authClient.twoFactor.enable({
-        password: value.password,
-      });
+      const result = await authClient.twoFactor.enable(
+        requirePassword ? { password: value.password } : {},
+      );
 
       if (result.error || !result.data) {
         formApi.setErrorMap({
@@ -1330,18 +1452,22 @@ function EnableTotpForm({
           form.handleSubmit();
         }}
       >
-        <form.AppField name="password">
-          {(field) => (
-            <field.TextField
-              label={m.user_field_password()}
-              type="password"
-              autoComplete="current-password"
-              required
-            />
-          )}
-        </form.AppField>
+        {requirePassword ? (
+          <form.AppField name="password">
+            {(field) => (
+              <field.TextField
+                label={m.user_field_password()}
+                type="password"
+                autoComplete="current-password"
+                required
+              />
+            )}
+          </form.AppField>
+        ) : null}
         <form.FormError />
-        <form.SubmitButton />
+        <form.SubmitButton>
+          {m.user_two_factor_enable_submit()}
+        </form.SubmitButton>
       </form>
     </form.AppForm>
   );
@@ -1432,9 +1558,11 @@ function VerifyTotpSetup({
 
 function DisableTotpForm({
   authClient,
+  requirePassword,
   onDisabled,
 }: {
   authClient: AuthUiClient;
+  requirePassword: boolean;
   onDisabled: () => Promise<void>;
 }) {
   const m = useUserButtonMessages();
@@ -1442,9 +1570,9 @@ function DisableTotpForm({
     defaultValues: { password: "" },
     onSubmit: async ({ value, formApi }) => {
       formApi.setErrorMap({ onSubmit: undefined });
-      const result = await authClient.twoFactor.disable({
-        password: value.password,
-      });
+      const result = await authClient.twoFactor.disable(
+        requirePassword ? { password: value.password } : {},
+      );
 
       if (result.error) {
         formApi.setErrorMap({
@@ -1470,16 +1598,18 @@ function DisableTotpForm({
           form.handleSubmit();
         }}
       >
-        <form.AppField name="password">
-          {(field) => (
-            <field.TextField
-              label={m.user_field_password()}
-              type="password"
-              autoComplete="current-password"
-              required
-            />
-          )}
-        </form.AppField>
+        {requirePassword ? (
+          <form.AppField name="password">
+            {(field) => (
+              <field.TextField
+                label={m.user_field_password()}
+                type="password"
+                autoComplete="current-password"
+                required
+              />
+            )}
+          </form.AppField>
+        ) : null}
         <form.FormError />
         <form.SubmitButton />
       </form>
@@ -1489,42 +1619,36 @@ function DisableTotpForm({
 
 function ApiKeyManager({
   authClient,
+  active,
   permissions = {},
 }: {
   authClient: AuthUiClient;
+  active: boolean;
   permissions?: Record<string, string[]>;
 }) {
   const m = useUserButtonMessages();
-  const [keys, setKeys] = useState<ApiKeySummary[]>([]);
+  const hasOpened = useOpenedOnce(active);
+  const keysAtom = hasOpened ? userApiKeysAtom(authClient) : emptyApiKeysAtom;
+  const keysResult = useAtomValue(keysAtom);
+  const refreshKeys = useAtomRefresh(keysAtom);
   const [createdKey, setCreatedKey] = useState<string | null>(null);
   const [copiedKey, setCopiedKey] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [loading, setLoading] = useState(true);
   const permissionOptions = getPermissionOptions(permissions);
   const [selectedPermissions, setSelectedPermissions] = useState<
     Record<string, boolean>
   >({});
-
-  const loadKeys = useEffectEvent(async () => {
-    setLoading(true);
-    setError(null);
-    const result = await authClient.apiKey.list({
-      query: { configId: "user" },
-    });
-
-    if (result.error) {
-      setError(result.error.message ?? m.user_api_keys_load_error());
-      setLoading(false);
-      return;
-    }
-
-    setKeys(result.data?.apiKeys ?? []);
-    setLoading(false);
+  const keys = AsyncResult.match(keysResult, {
+    onInitial: () => [],
+    onFailure: () => [],
+    onSuccess: ({ value }) => Array.from(value),
   });
-
-  useEffect(() => {
-    void loadKeys();
-  }, []);
+  const keysError = AsyncResult.match(keysResult, {
+    onInitial: () => null,
+    onFailure: () => m.user_api_keys_load_error(),
+    onSuccess: () => null,
+  });
+  const loading = keysResult._tag === "Initial";
 
   const createForm = useAppForm({
     defaultValues: { name: "" },
@@ -1549,7 +1673,7 @@ function ApiKeyManager({
         setCreatedKey(created.key);
         createForm.reset();
         setSelectedPermissions({});
-        await loadKeys();
+        refreshKeys();
       } catch (cause) {
         formApi.setErrorMap({
           onSubmit: {
@@ -1587,7 +1711,7 @@ function ApiKeyManager({
       return;
     }
 
-    await loadKeys();
+    refreshKeys();
   };
 
   return (
@@ -1663,6 +1787,9 @@ function ApiKeyManager({
             </Button>
           </div>
         </div>
+      ) : null}
+      {keysError ? (
+        <p className="text-destructive text-sm">{keysError}</p>
       ) : null}
       {error ? <p className="text-destructive text-sm">{error}</p> : null}
       <Separator />

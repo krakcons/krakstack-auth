@@ -116,6 +116,7 @@ const createAuth = ({
       }),
       twoFactor({
         issuer: "Krakstack Auth",
+        allowPasswordless: true,
         otpOptions: {
           sendOTP: async ({ user, otp }, context) => {
             await sendTwoFactorOtpEmail({

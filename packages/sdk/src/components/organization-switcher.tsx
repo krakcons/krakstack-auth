@@ -1,9 +1,10 @@
 // @ts-nocheck
 import type { ApiKey } from "@better-auth/api-key/client";
-import { useAtomSet } from "@effect/atom-react";
+import { useAtomRefresh, useAtomSet, useAtomValue } from "@effect/atom-react";
 import { useStore } from "@tanstack/react-form";
 import { type ColumnDef } from "@tanstack/react-table";
-import { Schema } from "effect";
+import { Effect, Schema } from "effect";
+import { AsyncResult, Atom } from "effect/unstable/reactivity";
 import {
   Building2,
   Check,
@@ -25,7 +26,6 @@ import {
   createContext,
   useContext,
   useEffect,
-  useEffectEvent,
   useState,
 } from "react";
 
@@ -69,6 +69,7 @@ import {
 import type { AuthUiClient } from "./auth-client";
 import { authApiClient } from "./auth-api-client";
 import { createApiKey } from "./api-key";
+import { useOpenedOnce } from "./hooks";
 import { ExtraUploadedAsset } from "../extra/schema";
 import { assetPath, assetUrl } from "./utils";
 
@@ -354,6 +355,110 @@ type UserInvitationSummary = OrganizationInvitationSummary & {
 };
 type OrganizationRole = "owner" | "admin" | "member";
 
+type OrganizationMembersData = {
+  members: OrganizationMemberSummary[];
+  invitations: OrganizationInvitationSummary[];
+};
+
+const userInvitationsAtom = Atom.family((authClient: AuthUiClient) =>
+  Atom.keepAlive(
+    Atom.make(
+      Effect.tryPromise({
+        try: async () => {
+          const result = await authClient.organization.listUserInvitations({});
+
+          if (result.error) {
+            throw new Error(
+              result.error.message ??
+                "Could not load organization invitations.",
+            );
+          }
+
+          return result.data ?? [];
+        },
+        catch: (error) => error,
+      }),
+    ),
+  ),
+);
+
+const emptyUserInvitationsAtom = Atom.make(
+  Effect.succeed([] as UserInvitationSummary[]),
+);
+
+const organizationMembersAtom = Atom.family((authClient: AuthUiClient) =>
+  Atom.family((organizationId: string) =>
+    Atom.keepAlive(
+      Atom.make(
+        Effect.tryPromise({
+          try: async (): Promise<OrganizationMembersData> => {
+            const [membersResult, invitationsResult] = await Promise.all([
+              authClient.organization.listMembers({
+                query: { organizationId },
+              }),
+              authClient.organization.listInvitations({
+                query: { organizationId },
+              }),
+            ]);
+
+            if (membersResult.error) {
+              throw new Error(
+                membersResult.error.message ?? "Could not load members.",
+              );
+            }
+
+            if (invitationsResult.error) {
+              throw new Error(
+                invitationsResult.error.message ??
+                  "Could not load invitations.",
+              );
+            }
+
+            return {
+              members: membersResult.data?.members ?? [],
+              invitations: invitationsResult.data ?? [],
+            };
+          },
+          catch: (error) => error,
+        }),
+      ),
+    ),
+  ),
+);
+
+const emptyOrganizationMembersAtom = Atom.make(
+  Effect.succeed({ members: [], invitations: [] } as OrganizationMembersData),
+);
+
+const organizationApiKeysAtom = Atom.family((authClient: AuthUiClient) =>
+  Atom.family((organizationId: string) =>
+    Atom.keepAlive(
+      Atom.make(
+        Effect.tryPromise({
+          try: async () => {
+            const result = await authClient.apiKey.list({
+              query: { configId: "organization", organizationId },
+            });
+
+            if (result.error) {
+              throw new Error(
+                result.error.message ?? "Could not load API keys.",
+              );
+            }
+
+            return result.data?.apiKeys ?? [];
+          },
+          catch: (error) => error,
+        }),
+      ),
+    ),
+  ),
+);
+
+const emptyOrganizationApiKeysAtom = Atom.make(
+  Effect.succeed([] as ApiKeySummary[]),
+);
+
 type OrganizationFormValues = {
   name: string;
   slug: string;
@@ -601,34 +706,22 @@ export function OrganizationSwitcher({
     useState<OrganizationSwitcherDialog | null>(defaultDialog);
   const dialog =
     controlledDialog !== undefined ? controlledDialog : uncontrolledDialog;
-  const sessionUserId = session.data?.user.id;
-  const [userInvitations, setUserInvitations] = useState<
-    UserInvitationSummary[]
-  >([]);
-  const [userInvitationsError, setUserInvitationsError] = useState<
-    string | null
-  >(null);
-  const [loadingUserInvitations, setLoadingUserInvitations] = useState(false);
-
-  const loadUserInvitations = useEffectEvent(async () => {
-    if (!session.data) return;
-
-    setLoadingUserInvitations(true);
-    setUserInvitationsError(null);
-
-    const result = await authClient.organization.listUserInvitations({});
-
-    if (result.error) {
-      setUserInvitationsError(
-        result.error.message ?? m.organization_invitations_load_error(),
-      );
-      setLoadingUserInvitations(false);
-      return;
-    }
-
-    setUserInvitations(result.data ?? []);
-    setLoadingUserInvitations(false);
+  const invitationsAtom = session.data
+    ? userInvitationsAtom(authClient)
+    : emptyUserInvitationsAtom;
+  const invitationsResult = useAtomValue(invitationsAtom);
+  const refreshUserInvitations = useAtomRefresh(invitationsAtom);
+  const userInvitations = AsyncResult.match(invitationsResult, {
+    onInitial: () => [],
+    onFailure: () => [],
+    onSuccess: ({ value }) => Array.from(value),
   });
+  const userInvitationsError = AsyncResult.match(invitationsResult, {
+    onInitial: () => null,
+    onFailure: () => m.organization_invitations_load_error(),
+    onSuccess: () => null,
+  });
+  const loadingUserInvitations = invitationsResult._tag === "Initial";
 
   const setDialog = (
     next:
@@ -645,11 +738,6 @@ export function OrganizationSwitcher({
     onDialogChange?.(nextDialog);
   };
   const openCreate = () => setDialog("create");
-
-  useEffect(() => {
-    if (!sessionUserId) return;
-    void loadUserInvitations();
-  }, [sessionUserId]);
 
   if (!session.data) {
     return <>{renderUnauthenticated?.()}</>;
@@ -672,7 +760,7 @@ export function OrganizationSwitcher({
   };
 
   const refreshAfterInvitationAction = async (previousActiveId?: string) => {
-    await loadUserInvitations();
+    refreshUserInvitations();
     await refresh();
 
     if (locked && previousActiveId) {
@@ -801,7 +889,6 @@ export function OrganizationSwitcher({
               <DropdownMenuItem
                 onClick={() => {
                   setDialog("invitations");
-                  void loadUserInvitations();
                 }}
               >
                 <Mail />
@@ -930,6 +1017,7 @@ export function OrganizationSwitcher({
               baseUrl={baseUrl}
               organization={activeOrganization.data}
               currentUserId={session.data.user.id}
+              active={dialog === "members"}
             />
           ) : null}
         </DialogContent>
@@ -956,6 +1044,7 @@ export function OrganizationSwitcher({
             <OrganizationApiKeyManager
               authClient={authClient}
               organization={activeOrganization.data}
+              active={dialog === "apiKeys"}
             />
           ) : null}
         </DialogContent>
@@ -1633,62 +1722,39 @@ function OrganizationMembersManager({
   baseUrl,
   organization,
   currentUserId,
+  active,
 }: {
   authClient: AuthUiClient;
   baseUrl?: string | undefined;
   organization: OrganizationSummary;
   currentUserId: string;
+  active: boolean;
 }) {
   const m = useOrganizationMessages();
-  const [members, setMembers] = useState<OrganizationMemberSummary[]>([]);
-  const [invitations, setInvitations] = useState<
-    OrganizationInvitationSummary[]
-  >([]);
+  const hasOpened = useOpenedOnce(active);
+  const membersAtom = hasOpened
+    ? organizationMembersAtom(authClient)(organization.id)
+    : emptyOrganizationMembersAtom;
+  const membersResult = useAtomValue(membersAtom);
+  const refreshMembers = useAtomRefresh(membersAtom);
   const [error, setError] = useState<string | null>(null);
-  const [loading, setLoading] = useState(true);
   const [updatingMemberId, setUpdatingMemberId] = useState<string | null>(null);
   const [cancellingInvitationId, setCancellingInvitationId] = useState<
     string | null
   >(null);
-
-  const loadMembers = useEffectEvent(async () => {
-    setLoading(true);
-    setError(null);
-
-    const [membersResult, invitationsResult] = await Promise.all([
-      authClient.organization.listMembers({
-        query: { organizationId: organization.id },
-      }),
-      authClient.organization.listInvitations({
-        query: { organizationId: organization.id },
-      }),
-    ]);
-
-    if (membersResult.error) {
-      setError(
-        membersResult.error.message ?? m.organization_members_load_error(),
-      );
-      setLoading(false);
-      return;
-    }
-
-    if (invitationsResult.error) {
-      setError(
-        invitationsResult.error.message ??
-          m.organization_invitations_load_error(),
-      );
-      setLoading(false);
-      return;
-    }
-
-    setMembers(membersResult.data?.members ?? []);
-    setInvitations(invitationsResult.data ?? []);
-    setLoading(false);
+  const membersData = AsyncResult.match(membersResult, {
+    onInitial: () => ({ members: [], invitations: [] }),
+    onFailure: () => ({ members: [], invitations: [] }),
+    onSuccess: ({ value }) => value,
   });
-
-  useEffect(() => {
-    void loadMembers();
-  }, [organization.id]);
+  const members = membersData.members;
+  const invitations = membersData.invitations;
+  const membersError = AsyncResult.match(membersResult, {
+    onInitial: () => null,
+    onFailure: () => m.organization_members_load_error(),
+    onSuccess: () => null,
+  });
+  const loading = membersResult._tag === "Initial";
 
   const inviteForm = useAppForm({
     defaultValues: { email: "", role: "member" },
@@ -1711,7 +1777,7 @@ function OrganizationMembersManager({
       }
 
       inviteForm.reset();
-      await loadMembers();
+      refreshMembers();
     },
   });
 
@@ -1735,7 +1801,7 @@ function OrganizationMembersManager({
       return;
     }
 
-    await loadMembers();
+    refreshMembers();
   };
 
   const removeMember = async (member: OrganizationMemberSummary) => {
@@ -1754,7 +1820,7 @@ function OrganizationMembersManager({
       return;
     }
 
-    await loadMembers();
+    refreshMembers();
   };
 
   const cancelInvitation = async (
@@ -1776,7 +1842,7 @@ function OrganizationMembersManager({
       return;
     }
 
-    await loadMembers();
+    refreshMembers();
   };
 
   return (
@@ -1826,6 +1892,9 @@ function OrganizationMembersManager({
           <inviteForm.FormError />
         </form>
       </inviteForm.AppForm>
+      {membersError ? (
+        <p className="text-destructive text-sm">{membersError}</p>
+      ) : null}
       {error ? <p className="text-destructive text-sm">{error}</p> : null}
       <section className="flex min-w-0 flex-col gap-3">
         <div>
@@ -2047,36 +2116,32 @@ const invitationRowActions = ({
 function OrganizationApiKeyManager({
   authClient,
   organization,
+  active,
 }: {
   authClient: AuthUiClient;
   organization: OrganizationSummary;
+  active: boolean;
 }) {
   const m = useOrganizationMessages();
-  const [keys, setKeys] = useState<ApiKeySummary[]>([]);
+  const hasOpened = useOpenedOnce(active);
+  const keysAtom = hasOpened
+    ? organizationApiKeysAtom(authClient)(organization.id)
+    : emptyOrganizationApiKeysAtom;
+  const keysResult = useAtomValue(keysAtom);
+  const refreshKeys = useAtomRefresh(keysAtom);
   const [createdKey, setCreatedKey] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [loading, setLoading] = useState(true);
-
-  const loadKeys = useEffectEvent(async () => {
-    setLoading(true);
-    setError(null);
-    const result = await authClient.apiKey.list({
-      query: { configId: "organization", organizationId: organization.id },
-    });
-
-    if (result.error) {
-      setError(result.error.message ?? m.user_api_keys_load_error());
-      setLoading(false);
-      return;
-    }
-
-    setKeys(result.data?.apiKeys ?? []);
-    setLoading(false);
+  const keys = AsyncResult.match(keysResult, {
+    onInitial: () => [],
+    onFailure: () => [],
+    onSuccess: ({ value }) => Array.from(value),
   });
-
-  useEffect(() => {
-    void loadKeys();
-  }, [organization.id]);
+  const keysError = AsyncResult.match(keysResult, {
+    onInitial: () => null,
+    onFailure: () => m.user_api_keys_load_error(),
+    onSuccess: () => null,
+  });
+  const loading = keysResult._tag === "Initial";
 
   const createForm = useAppForm({
     defaultValues: { name: "" },
@@ -2095,7 +2160,7 @@ function OrganizationApiKeyManager({
 
         setCreatedKey(created.key);
         createForm.reset();
-        await loadKeys();
+        refreshKeys();
       } catch (cause) {
         formApi.setErrorMap({
           onSubmit: {
@@ -2121,7 +2186,7 @@ function OrganizationApiKeyManager({
       return;
     }
 
-    await loadKeys();
+    refreshKeys();
   };
 
   return (
@@ -2160,6 +2225,9 @@ function OrganizationApiKeyManager({
             {createdKey}
           </code>
         </div>
+      ) : null}
+      {keysError ? (
+        <p className="text-destructive text-sm">{keysError}</p>
       ) : null}
       {error ? <p className="text-destructive text-sm">{error}</p> : null}
       <Separator />
