@@ -1,4 +1,5 @@
 // @ts-nocheck
+import { useAtomSuspense } from "@effect/atom-react";
 import { useNavigate, useRouterState } from "@tanstack/react-router";
 import { REGEXP_ONLY_DIGITS } from "input-otp";
 import { KeyRound, Mail } from "lucide-react";
@@ -21,9 +22,9 @@ import {
   InputOTPSlot,
 } from "@/components/ui/input-otp";
 import { cn } from "@/lib/utils";
-import { useAuthBrandingConfig } from "@/services/auth/client/branding";
 
 import type { AuthUiClient } from "./auth-client";
+import { authApiClient } from "./auth-api-client";
 
 const EMAIL_OTP_RESEND_COOLDOWN_SECONDS = 60;
 
@@ -151,6 +152,40 @@ const labels = () => ({
   ...defaultMessages[currentLocale()],
 });
 
+type AuthFormProps = {
+  authClient: AuthUiClient;
+  baseUrl?: string | undefined;
+};
+
+const useAuthProjectConfig = (
+  baseUrl: string | undefined,
+  searchString: string,
+) => {
+  const projectId = getSearchParam(searchString, "projectId");
+  const clientId = getSearchParam(searchString, "client_id");
+  const host = getBrowserAuthHost();
+  const result = useAtomSuspense(
+    authApiClient(baseUrl).query("authExtra", "getProjectPublicConfig", {
+      query: {
+        ...(projectId ? { projectId } : {}),
+        ...(clientId ? { clientId } : {}),
+        ...(host ? { host } : {}),
+      },
+      timeToLive: "5 minutes",
+      reactivityKeys: [
+        "project-public-config",
+        ...(projectId ? [`project:${projectId}`] : []),
+        ...(clientId ? [`client:${clientId}`] : []),
+        ...(host ? [`host:${host}`] : []),
+      ],
+      serializationKey: `project-public-config:${projectId ?? ""}:${clientId ?? ""}:${host ?? ""}`,
+    }),
+    { suspendOnWaiting: true },
+  );
+
+  return result.value;
+};
+
 const currentLocale = () =>
   typeof navigator !== "undefined" &&
   navigator.language.toLowerCase().startsWith("fr")
@@ -163,12 +198,12 @@ const text = (value: string, params?: Record<string, string>) =>
     value,
   );
 
-export function Signin({ authClient }: { authClient: AuthUiClient }) {
+export function Signin({ authClient, baseUrl }: AuthFormProps) {
   const navigate = useNavigate();
   const searchString = useRouterState({
     select: (state) => state.location.searchStr,
   });
-  const projectConfig = useAuthBrandingConfig();
+  const projectConfig = useAuthProjectConfig(baseUrl, searchString);
   const redirectTarget = getRedirectTarget(
     searchString,
     projectConfig?.authDomain,
@@ -557,12 +592,12 @@ export function Signin({ authClient }: { authClient: AuthUiClient }) {
   );
 }
 
-export function Signup({ authClient }: { authClient: AuthUiClient }) {
+export function Signup({ authClient, baseUrl }: AuthFormProps) {
   const navigate = useNavigate();
   const searchString = useRouterState({
     select: (state) => state.location.searchStr,
   });
-  const projectConfig = useAuthBrandingConfig();
+  const projectConfig = useAuthProjectConfig(baseUrl, searchString);
   const redirectTarget = getRedirectTarget(
     searchString,
     projectConfig?.authDomain,
@@ -809,12 +844,12 @@ export function ResetPassword({ authClient }: { authClient: AuthUiClient }) {
   );
 }
 
-export function TwoFactor({ authClient }: { authClient: AuthUiClient }) {
+export function TwoFactor({ authClient, baseUrl }: AuthFormProps) {
   const navigate = useNavigate();
   const searchString = useRouterState({
     select: (state) => state.location.searchStr,
   });
-  const projectConfig = useAuthBrandingConfig();
+  const projectConfig = useAuthProjectConfig(baseUrl, searchString);
   const redirectTarget = getRedirectTarget(
     searchString,
     projectConfig?.authDomain,
@@ -1139,6 +1174,9 @@ const normalizeAuthHost = (value: string | null | undefined) => {
 
 const getSearchParam = (searchString: string, key: string) =>
   new URLSearchParams(searchString).get(key);
+
+const getBrowserAuthHost = () =>
+  typeof window === "undefined" ? null : window.location.host;
 
 const navigateTarget = (
   target: string,

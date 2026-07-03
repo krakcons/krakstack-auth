@@ -4,6 +4,7 @@ import { HttpApiBuilder, HttpApiError } from "effect/unstable/httpapi";
 
 import { FrontendApi } from "@/api";
 import { BetterAuthRequest } from "@/services/auth/better-auth-request";
+import { Projects } from "@/services/projects";
 import { uploadImageFromMultipart } from "@/services/s3/upload";
 
 import { AuthBadRequest } from "./schema";
@@ -42,6 +43,18 @@ export const authApiHandler = HttpApiBuilder.group(
   "auth",
   (handlers) =>
     handlers
+      .handle("getProjectPublicConfig", ({ query }) =>
+        Effect.gen(function* () {
+          const projects = yield* Projects;
+          return yield* projects
+            .getPublicConfig({
+              projectId: query.projectId,
+              clientId: query.clientId,
+              host: query.host,
+            })
+            .pipe(Effect.mapError(internalServerError));
+        }),
+      )
       .handle("setPassword", ({ payload, request }) =>
         Effect.gen(function* () {
           const client = yield* requestAuth(request, "Could not set password");

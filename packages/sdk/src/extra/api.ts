@@ -11,6 +11,8 @@ import {
   ExtraCreateApiKeyResponse,
   ExtraImageUploadMultipartPayload,
   ExtraOkResponse,
+  ExtraProjectPublicConfig,
+  ExtraProjectPublicConfigQuery,
   ExtraSetPasswordPayload,
   ExtraUploadedAsset,
   ExtraVerifyApiKeyPayload,
@@ -19,6 +21,20 @@ import {
 } from "./schema";
 
 export const ExtraApiGroup = HttpApiGroup.make("authExtra")
+  .add(
+    HttpApiEndpoint.get("getProjectPublicConfig", "/auth/project-config", {
+      query: ExtraProjectPublicConfigQuery,
+      success: ExtraProjectPublicConfig,
+      error: [HttpApiError.InternalServerError],
+    }).annotateMerge(
+      OpenApi.annotations({
+        title: "Get project public config",
+        summary: "Get host-aware project white-label config",
+        description:
+          "Returns resolved public branding and authentication options through the proxied auth API.",
+      }),
+    ),
+  )
   .add(
     HttpApiEndpoint.post("setPassword", "/auth/set-password", {
       payload: ExtraSetPasswordPayload,

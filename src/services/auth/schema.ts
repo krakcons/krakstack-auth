@@ -163,6 +163,78 @@ export const VerifyApiKeyResponse = Schema.Struct({
   ],
 });
 
+export const AuthProjectPublicConfigQuery = Schema.Struct({
+  projectId: Schema.optional(Schema.String),
+  clientId: Schema.optional(Schema.String),
+  host: Schema.optional(Schema.String),
+}).annotate({
+  identifier: "AuthProjectPublicConfigQuery",
+  title: "Auth project public config query",
+  description:
+    "Optional project ID, auth host, and OAuth client ID used to resolve public project branding through the auth API.",
+  examples: [
+    {
+      projectId: "project-id",
+      host: "auth.example.com",
+      clientId: "oauth-client-id",
+    },
+  ],
+});
+
+export const AuthProjectAuthOptions = Schema.Struct({
+  emailPassword: Schema.Boolean,
+  emailOtp: Schema.Boolean,
+  google: Schema.Boolean,
+  signUp: Schema.Boolean,
+  signUpName: Schema.Boolean,
+}).annotate({
+  identifier: "AuthProjectAuthOptions",
+  title: "Auth project authentication options",
+  description: "Resolved authentication methods visible for auth pages.",
+  examples: [
+    {
+      emailPassword: true,
+      emailOtp: true,
+      google: true,
+      signUp: true,
+      signUpName: true,
+    },
+  ],
+});
+
+export const AuthProjectPublicConfig = Schema.Struct({
+  projectKey: Schema.String,
+  name: Schema.NullOr(Schema.String),
+  logoUrl: Schema.NullOr(Schema.String),
+  authDomain: Schema.NullOr(Schema.String),
+  rootDomain: Schema.NullOr(Schema.String),
+  themeCss: Schema.NullOr(Schema.String),
+  authOptions: AuthProjectAuthOptions,
+}).annotate({
+  identifier: "AuthProjectPublicConfig",
+  title: "Auth project public config",
+  description:
+    "Public white-label configuration used by auth pages for a project.",
+  examples: [
+    {
+      projectKey: "auth.example.com",
+      name: "Example project",
+      logoUrl: "https://example.com/logo.svg",
+      authDomain: "auth.example.com",
+      rootDomain: "example.com",
+      themeCss:
+        '[data-project-theme="auth.example.com"] { --primary: oklch(0.5 0.1 240); }',
+      authOptions: {
+        emailPassword: true,
+        emailOtp: true,
+        google: true,
+        signUp: false,
+        signUpName: true,
+      },
+    },
+  ],
+});
+
 export const AuthOkResponse = Schema.Struct({
   ok: Schema.Boolean,
 }).annotate({

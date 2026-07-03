@@ -12,6 +12,8 @@ import {
 
 import {
   AuthBadRequest,
+  AuthProjectPublicConfig,
+  AuthProjectPublicConfigQuery,
   AuthOkResponse,
   CreateApiKeyPayload,
   CreateApiKeyResponse,
@@ -22,6 +24,20 @@ import {
 } from "./schema";
 
 export const AuthApiGroup = HttpApiGroup.make("auth")
+  .add(
+    HttpApiEndpoint.get("getProjectPublicConfig", "/auth/project-config", {
+      query: AuthProjectPublicConfigQuery,
+      success: AuthProjectPublicConfig,
+      error: [HttpApiError.InternalServerError],
+    }).annotateMerge(
+      OpenApi.annotations({
+        title: "Get project public config",
+        summary: "Get host-aware project white-label config",
+        description:
+          "Returns resolved public branding and authentication options through the auth API.",
+      }),
+    ),
+  )
   .add(
     HttpApiEndpoint.post("setPassword", "/auth/set-password", {
       payload: SetPasswordPayload,
