@@ -1,9 +1,10 @@
 // @ts-nocheck
 import { useNavigate, useRouterState } from "@tanstack/react-router";
 import { REGEXP_ONLY_DIGITS } from "input-otp";
-import { useState } from "react";
+import { KeyRound, Mail } from "lucide-react";
+import { useEffect, useState } from "react";
 
-import { Button } from "@/components/ui/button";
+import { Button, buttonVariants } from "@/components/ui/button";
 import {
   Card,
   CardContent,
@@ -19,9 +20,12 @@ import {
   InputOTPSeparator,
   InputOTPSlot,
 } from "@/components/ui/input-otp";
+import { cn } from "@/lib/utils";
 import { useAuthBrandingConfig } from "@/services/auth/client/branding";
 
 import type { AuthUiClient } from "./auth-client";
+
+const EMAIL_OTP_RESEND_COOLDOWN_SECONDS = 60;
 
 const defaultMessages = {
   en: {
@@ -43,15 +47,16 @@ const defaultMessages = {
     sign_in_change_email: "Change",
     sign_in_continue: "Continue",
     sign_in_description: "Enter your email to continue.",
+    sign_in_email_as: "Signing in as {email}",
     sign_in_email_otp_code: "Email code",
-    sign_in_email_otp_description: "Enter the code sent to {email}.",
     sign_in_email_otp_error: "Unable to verify the sign-in code.",
+    sign_in_email_otp_resend: "Resend code",
+    sign_in_email_otp_resend_countdown: "Resend in {seconds}s",
     sign_in_email_otp_send_error: "Unable to send the sign-in code.",
     sign_in_email_otp_verify: "Verify code",
     sign_in_error: "Unable to sign in.",
     sign_in_forgot_password: "Forgot your password?",
     sign_in_need_account: "Need an account?",
-    sign_in_password_description: "Enter your password for {email}.",
     sign_in_use_email_otp: "Use email code instead",
     sign_in_use_password: "Use password instead",
     sign_up_description: "Enter your details to create an account.",
@@ -101,15 +106,16 @@ const defaultMessages = {
     sign_in_change_email: "Modifier",
     sign_in_continue: "Continuer",
     sign_in_description: "Saisissez votre courriel pour continuer.",
+    sign_in_email_as: "Connexion avec {email}",
     sign_in_email_otp_code: "Code courriel",
-    sign_in_email_otp_description: "Saisissez le code envoyé à {email}.",
     sign_in_email_otp_error: "Impossible de vérifier le code de connexion.",
+    sign_in_email_otp_resend: "Renvoyer le code",
+    sign_in_email_otp_resend_countdown: "Renvoyer dans {seconds} s",
     sign_in_email_otp_send_error: "Impossible d'envoyer le code de connexion.",
     sign_in_email_otp_verify: "Vérifier le code",
     sign_in_error: "Impossible de se connecter.",
     sign_in_forgot_password: "Mot de passe oublié?",
     sign_in_need_account: "Besoin d'un compte?",
-    sign_in_password_description: "Saisissez le mot de passe pour {email}.",
     sign_in_use_email_otp: "Utiliser un code courriel",
     sign_in_use_password: "Utiliser le mot de passe",
     sign_up_description: "Saisissez vos informations pour créer un compte.",
@@ -189,6 +195,8 @@ export function Signin({ authClient }: { authClient: AuthUiClient }) {
     "password",
   );
   const [otpSentTo, setOtpSentTo] = useState("");
+  const [emailOtpResendAvailableAt, setEmailOtpResendAvailableAt] = useState(0);
+  const [emailOtpResendSeconds, setEmailOtpResendSeconds] = useState(0);
   const selectedAuthMethod =
     authMethod === "password" && options.emailPassword
       ? "password"
@@ -197,6 +205,27 @@ export function Signin({ authClient }: { authClient: AuthUiClient }) {
         : "password";
   const hasPrimaryAuth = options.emailPassword || options.emailOtp;
   const canChangeAuthMethod = options.emailPassword && options.emailOtp;
+
+  useEffect(() => {
+    if (!emailOtpResendAvailableAt) {
+      setEmailOtpResendSeconds(0);
+      return;
+    }
+
+    const updateResendSeconds = () => {
+      const seconds = Math.max(
+        0,
+        Math.ceil((emailOtpResendAvailableAt - Date.now()) / 1000),
+      );
+      setEmailOtpResendSeconds(seconds);
+      if (seconds === 0) setEmailOtpResendAvailableAt(0);
+    };
+
+    updateResendSeconds();
+    const interval = window.setInterval(updateResendSeconds, 1000);
+
+    return () => window.clearInterval(interval);
+  }, [emailOtpResendAvailableAt]);
 
   const form = useAppForm({
     defaultValues: { email: "", password: "", otp: "" },
@@ -293,6 +322,9 @@ export function Signin({ authClient }: { authClient: AuthUiClient }) {
       setAuthMethod("emailOtp");
       setEmailSubmitted(true);
       setOtpSentTo(email);
+      setEmailOtpResendAvailableAt(
+        Date.now() + EMAIL_OTP_RESEND_COOLDOWN_SECONDS * 1000,
+      );
     } catch {
       setError(m.sign_in_email_otp_send_error);
     }
@@ -301,6 +333,7 @@ export function Signin({ authClient }: { authClient: AuthUiClient }) {
   const resetEmailStep = () => {
     setEmailSubmitted(false);
     setOtpSentTo("");
+    setEmailOtpResendAvailableAt(0);
     form.setFieldValue("password", "");
     form.setFieldValue("otp", "");
     form.setErrorMap({ onSubmit: undefined });
@@ -313,8 +346,17 @@ export function Signin({ authClient }: { authClient: AuthUiClient }) {
     if (selectedAuthMethod === "emailOtp") {
       setAuthMethod("password");
       setOtpSentTo("");
+      setEmailOtpResendAvailableAt(0);
       return;
     }
+    await sendEmailOtp(form.state.values.email.trim(), (message) =>
+      form.setErrorMap({ onSubmit: { form: message, fields: {} } }),
+    );
+  };
+
+  const resendEmailOtp = async () => {
+    form.setErrorMap({ onSubmit: undefined });
+    form.setFieldValue("otp", "");
     await sendEmailOtp(form.state.values.email.trim(), (message) =>
       form.setErrorMap({ onSubmit: { form: message, fields: {} } }),
     );
@@ -344,21 +386,27 @@ export function Signin({ authClient }: { authClient: AuthUiClient }) {
     }
   };
 
-  const description = !emailSubmitted
-    ? m.sign_in_description
-    : selectedAuthMethod === "emailOtp"
-      ? text(m.sign_in_email_otp_description, {
-          email: form.state.values.email,
-        })
-      : text(m.sign_in_password_description, {
-          email: form.state.values.email,
-        });
-
   return (
     <Card className="w-full max-w-md">
       <CardHeader>
         <CardTitle className="text-3xl">{m.auth_sign_in}</CardTitle>
-        <CardDescription>{description}</CardDescription>
+        <CardDescription>
+          {!emailSubmitted ? (
+            m.sign_in_description
+          ) : (
+            <>
+              {text(m.sign_in_email_as, { email: form.state.values.email })}{" "}
+              <Button
+                type="button"
+                variant="link"
+                className="h-auto px-0"
+                onClick={resetEmailStep}
+              >
+                {m.sign_in_change_email}
+              </Button>
+            </>
+          )}
+        </CardDescription>
       </CardHeader>
       <CardContent>
         {hasPrimaryAuth ? (
@@ -397,27 +445,25 @@ export function Signin({ authClient }: { authClient: AuthUiClient }) {
                   </form.AppField>
                   <div className="flex flex-wrap gap-x-4 gap-y-2 text-sm">
                     <a
-                      className="text-foreground font-medium underline-offset-4 hover:underline"
+                      className={cn(
+                        buttonVariants({ variant: "link" }),
+                        "h-auto px-0",
+                      )}
                       href={`/forgot-password${searchString}`}
                     >
                       {m.sign_in_forgot_password}
                     </a>
                     {canChangeAuthMethod ? (
-                      <button
+                      <Button
                         type="button"
-                        className="text-foreground font-medium underline-offset-4 hover:underline"
+                        variant="link"
+                        className="h-auto px-0"
                         onClick={switchAuthMethod}
                       >
+                        <Mail />
                         {m.sign_in_use_email_otp}
-                      </button>
+                      </Button>
                     ) : null}
-                    <button
-                      type="button"
-                      className="text-muted-foreground hover:text-foreground font-medium underline-offset-4 hover:underline"
-                      onClick={resetEmailStep}
-                    >
-                      {m.sign_in_change_email}
-                    </button>
                   </div>
                 </div>
               ) : null}
@@ -432,22 +478,32 @@ export function Signin({ authClient }: { authClient: AuthUiClient }) {
                     )}
                   </form.AppField>
                   <div className="flex flex-wrap gap-x-4 gap-y-2 text-sm">
-                    {canChangeAuthMethod ? (
-                      <button
+                    {otpSentTo ? (
+                      <Button
                         type="button"
-                        className="text-foreground font-medium underline-offset-4 hover:underline"
+                        variant="link"
+                        className="h-auto px-0"
+                        disabled={emailOtpResendSeconds > 0}
+                        onClick={resendEmailOtp}
+                      >
+                        {emailOtpResendSeconds > 0
+                          ? text(m.sign_in_email_otp_resend_countdown, {
+                              seconds: String(emailOtpResendSeconds),
+                            })
+                          : m.sign_in_email_otp_resend}
+                      </Button>
+                    ) : null}
+                    {canChangeAuthMethod ? (
+                      <Button
+                        type="button"
+                        variant="link"
+                        className="h-auto px-0"
                         onClick={switchAuthMethod}
                       >
+                        <KeyRound />
                         {m.sign_in_use_password}
-                      </button>
+                      </Button>
                     ) : null}
-                    <button
-                      type="button"
-                      className="text-muted-foreground hover:text-foreground font-medium underline-offset-4 hover:underline"
-                      onClick={resetEmailStep}
-                    >
-                      {m.sign_in_change_email}
-                    </button>
                   </div>
                 </div>
               ) : null}
@@ -489,7 +545,7 @@ export function Signin({ authClient }: { authClient: AuthUiClient }) {
           <p className="text-muted-foreground mt-6 text-center text-sm">
             {m.sign_in_need_account}{" "}
             <a
-              className="text-foreground font-medium underline-offset-4 hover:underline"
+              className={cn(buttonVariants({ variant: "link" }), "h-auto px-0")}
               href={`/sign-up${searchString}`}
             >
               {m.auth_sign_up}
