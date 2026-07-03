@@ -1,6 +1,6 @@
 // @ts-nocheck
 import { useAtomSuspense } from "@effect/atom-react";
-import { useNavigate, useRouterState } from "@tanstack/react-router";
+import { Link, useNavigate, useRouterState } from "@tanstack/react-router";
 import { REGEXP_ONLY_DIGITS } from "input-otp";
 import { KeyRound, Mail } from "lucide-react";
 import { useEffect, useState } from "react";
@@ -210,6 +210,14 @@ const text = (value: string, params?: Record<string, string>) =>
     (current, [key, replacement]) => current.replace(`{${key}}`, replacement),
     value,
   );
+
+const authLinkClassName = cn(
+  buttonVariants({ variant: "link" }),
+  "h-auto px-0 align-baseline",
+);
+
+const searchObject = (searchString: string) =>
+  Object.fromEntries(new URLSearchParams(searchString));
 
 export function Signin(props: AuthFormProps) {
   const { authClient, baseUrl, labels: m } = useAuthFormOptions(props);
@@ -492,15 +500,13 @@ export function Signin(props: AuthFormProps) {
                     )}
                   </form.AppField>
                   <div className="flex flex-wrap gap-x-4 gap-y-2 text-sm">
-                    <a
-                      className={cn(
-                        buttonVariants({ variant: "link" }),
-                        "h-auto px-0",
-                      )}
-                      href={`/forgot-password${searchString}`}
+                    <Link
+                      className={authLinkClassName}
+                      to="/forgot-password"
+                      search={searchObject(searchString)}
                     >
                       {m.sign_in_forgot_password}
-                    </a>
+                    </Link>
                     {canChangeAuthMethod ? (
                       <Button
                         type="button"
@@ -592,12 +598,13 @@ export function Signin(props: AuthFormProps) {
         {options.signUp ? (
           <p className="text-muted-foreground mt-6 text-center text-sm">
             {m.sign_in_need_account}{" "}
-            <a
-              className={cn(buttonVariants({ variant: "link" }), "h-auto px-0")}
-              href={`/sign-up${searchString}`}
+            <Link
+              className={authLinkClassName}
+              to="/sign-up"
+              search={searchObject(searchString)}
             >
               {m.auth_sign_up}
-            </a>
+            </Link>
           </p>
         ) : null}
       </CardContent>
@@ -694,12 +701,13 @@ export function Signup(props: AuthFormProps) {
         <CardContent>
           <p className="text-muted-foreground text-center text-sm">
             {m.sign_up_have_account}{" "}
-            <a
-              className="text-foreground font-medium underline-offset-4 hover:underline"
-              href={`/sign-in${searchString}`}
+            <Link
+              className={authLinkClassName}
+              to="/sign-in"
+              search={searchObject(searchString)}
             >
               {m.auth_sign_in}
-            </a>
+            </Link>
           </p>
         </CardContent>
       </Card>
@@ -774,12 +782,13 @@ export function Signup(props: AuthFormProps) {
         ) : null}
         <p className="text-muted-foreground mt-6 text-center text-sm">
           {m.sign_up_have_account}{" "}
-          <a
-            className="text-foreground font-medium underline-offset-4 hover:underline"
-            href={`/sign-in${searchString}`}
+          <Link
+            className={authLinkClassName}
+            to="/sign-in"
+            search={searchObject(searchString)}
           >
             {m.auth_sign_in}
-          </a>
+          </Link>
         </p>
       </CardContent>
     </Card>
