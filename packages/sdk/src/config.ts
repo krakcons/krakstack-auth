@@ -5,7 +5,9 @@ export const normalizeBaseUrl = (value: string) => value.replace(/\/$/, "");
 export const defaultBaseUrl = () => {
   const env = globalThis.process?.env;
   return normalizeBaseUrl(
-    env?.VITE_KRAKSTACK_AUTH_URL ?? "http://localhost:3000",
+    env?.KRAKSTACK_AUTH_URL ??
+      env?.VITE_KRAKSTACK_AUTH_URL ??
+      "http://localhost:3000",
   );
 };
 
@@ -20,7 +22,9 @@ export class AuthClientConfig extends Context.Service<AuthClientConfig>()(
     make: (options: Partial<ClientConfig> = {}) =>
       Effect.gen(function* () {
         const baseUrl =
-          options.baseUrl ?? (yield* Config.string("VITE_KRAKSTACK_AUTH_URL"));
+          options.baseUrl ??
+          process.env.KRAKSTACK_AUTH_URL ??
+          (yield* Config.string("VITE_KRAKSTACK_AUTH_URL"));
         const apiKey =
           options.apiKey ??
           (yield* Config.redacted("KRAKSTACK_AUTH_SERVICE_API_KEY"));

@@ -45,6 +45,11 @@ const configuredPrimaryHosts = () => {
   const betterAuthHost = normalizeAuthHost(process.env.BETTER_AUTH_URL);
   if (betterAuthHost) hosts.add(betterAuthHost);
 
+  for (const host of parseCsv(process.env.BETTER_AUTH_ADDITIONAL_HOSTS) ?? []) {
+    const normalized = normalizeAuthHost(host);
+    if (normalized) hosts.add(normalized);
+  }
+
   if (process.env.NODE_ENV === "development") {
     hosts.add("localhost:3001");
     hosts.add("localhost:3000");

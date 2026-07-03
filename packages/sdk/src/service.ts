@@ -25,14 +25,21 @@ export type AuthServiceLayerOptions = Partial<ClientConfig> & {
 const forwardedAuthHeaderNames = [
   "accept-language",
   "cookie",
+  "origin",
+  "referer",
   "user-agent",
 ] as const;
 
 const forwardedAuthHeaders = (headers: Record<string, string>) => {
+  const normalizedHeaders: Record<string, string> = {};
   const forwarded: Record<string, string> = {};
 
+  for (const [key, value] of Object.entries(headers)) {
+    normalizedHeaders[key.toLowerCase()] = value;
+  }
+
   for (const name of forwardedAuthHeaderNames) {
-    const value = headers[name];
+    const value = normalizedHeaders[name];
     if (value) forwarded[name] = value;
   }
 
