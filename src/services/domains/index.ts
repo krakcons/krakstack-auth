@@ -33,6 +33,9 @@ export const hostFromRequest = (request: Request) =>
       request.headers.get("host"),
   ) ?? normalizeAuthHost(request.url);
 
+const originHostFromRequest = (request: Request) =>
+  normalizeAuthHost(request.headers.get("origin"));
+
 const configuredPrimaryHosts = () => {
   const hosts = new Set<string>();
 
@@ -230,13 +233,30 @@ export class Domains extends Context.Service<Domains>()("Domains", {
       },
     );
 
+    const registeredOriginForRequest = Effect.fn(
+      "Domains.registeredOriginForRequest",
+    )(function* ({ request }: { request: Request }) {
+      const host = originHostFromRequest(request);
+      if (!host) return null;
+
+      const domain = yield* db.query.domains.findFirst({
+        where: { hostname: host, active: true },
+      });
+      return domain ?? null;
+    });
+
     const contextForRequest = Effect.fn("Domains.contextForRequest")(
       function* ({ request }: { request: Request }) {
         const requestHost = hostFromRequest(request);
         if (!requestHost) return null;
 
         const hosts = new Set<string>();
-        const domain = yield* registeredForRequest({ request });
+        const hostDomain = yield* registeredForRequest({ request });
+        const originDomain = isPrimaryAuthHost(requestHost)
+          ? yield* registeredOriginForRequest({ request })
+          : null;
+        const domain = hostDomain ?? originDomain;
+        const isOriginDomain = !hostDomain && Boolean(originDomain);
 
         if (domain) {
           hosts.add(domain.hostname);
@@ -253,9 +273,10 @@ export class Domains extends Context.Service<Domains>()("Domains", {
           requestHost,
           hosts: hostList,
           origins: originsForHosts(hostList, requestProtocol(request)),
-          cookieDomain:
-            sharedCookieDomain(domain?.hostname, domain?.rootHostname) ??
-            fallbackCookieDomain(requestHost),
+          cookieDomain: isOriginDomain
+            ? domain?.hostname
+            : (sharedCookieDomain(domain?.hostname, domain?.rootHostname) ??
+              fallbackCookieDomain(requestHost)),
         } satisfies AuthDomainContext;
       },
     );

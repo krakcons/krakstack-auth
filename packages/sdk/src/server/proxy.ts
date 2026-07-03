@@ -13,9 +13,27 @@ const blockedRequestHeaders = [
   "cdn-loop",
 ] as const;
 
+const parseUrl = (value: string | null) => {
+  if (!value) return null;
+
+  try {
+    return new URL(value);
+  } catch {
+    return null;
+  }
+};
+
+const forwardedUrl = (request: Request) => {
+  return (
+    parseUrl(request.headers.get("origin")) ??
+    parseUrl(request.headers.get("referer")) ??
+    new URL(request.url)
+  );
+};
+
 const proxyHeaders = (request: Request) => {
   const headers = new Headers(request.headers);
-  const url = new URL(request.url);
+  const url = forwardedUrl(request);
 
   for (const header of blockedRequestHeaders) headers.delete(header);
   for (const header of Array.from(headers.keys())) {
