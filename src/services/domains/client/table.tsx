@@ -174,6 +174,7 @@ const createDomainPayloadFromValue = (
 const updateDomainPayloadFromValue = (
   value: DomainFormValues,
 ): ServerUpdateDomainPayload => ({
+  hostname: value.hostname.trim(),
   rootHostname: value.rootHostname.trim(),
   projectId: value.projectId.trim() || null,
   organizationId: value.organizationId.trim() || null,
@@ -248,7 +249,7 @@ function DomainDialog({
                 <field.TextField
                   label={m.domain_hostname()}
                   description={m.domain_hostname_description()}
-                  disabled={isEditing}
+                  disabled={isEditing && domain?.managed}
                   autoFocus
                 />
               )}

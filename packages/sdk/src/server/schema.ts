@@ -149,6 +149,7 @@ export const ServerCreateDomainPayload = Schema.Struct({
 });
 
 export const ServerUpdateDomainPayload = Schema.Struct({
+  hostname: Schema.NonEmptyString,
   rootHostname: Schema.NonEmptyString,
   projectId: Schema.optional(Schema.NullOr(Schema.String)),
   organizationId: Schema.optional(Schema.NullOr(Schema.String)),
@@ -160,6 +161,7 @@ export const ServerUpdateDomainPayload = Schema.Struct({
     "Payload used by administrators to update an auth hostname's trust target, ownership links, and Cloudflare management mode.",
   examples: [
     {
+      hostname: "auth.institute.example.com",
       rootHostname: "institute.example.com",
       projectId: "kokobi",
       organizationId: "org_1",

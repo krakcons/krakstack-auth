@@ -15,6 +15,7 @@ const blockedRequestHeaders = [
 
 const proxyHeaders = (request: Request) => {
   const headers = new Headers(request.headers);
+  const url = new URL(request.url);
 
   for (const header of blockedRequestHeaders) headers.delete(header);
   for (const header of Array.from(headers.keys())) {
@@ -22,6 +23,9 @@ const proxyHeaders = (request: Request) => {
       headers.delete(header);
     }
   }
+
+  headers.set("x-forwarded-host", url.host);
+  headers.set("x-forwarded-proto", url.protocol.replace(":", ""));
 
   return headers;
 };

@@ -146,13 +146,20 @@ const normalizePayload = (payload: ServerCreateDomainPayload) => {
 };
 
 const normalizeUpdatePayload = (payload: ServerUpdateDomainPayload) => {
+  const hostname = normalizeAuthHost(payload.hostname);
   const rootHostname = normalizeAuthHost(payload.rootHostname);
-  if (!rootHostname) return null;
+  if (!hostname || !rootHostname) return null;
 
   const projectId = payload.projectId?.trim() || null;
   const organizationId = payload.organizationId?.trim() || null;
 
-  return { rootHostname, projectId, organizationId, managed: payload.managed };
+  return {
+    hostname,
+    rootHostname,
+    projectId,
+    organizationId,
+    managed: payload.managed,
+  };
 };
 
 export class Domains extends Context.Service<Domains>()("Domains", {
@@ -375,6 +382,21 @@ export class Domains extends Context.Service<Domains>()("Domains", {
       const existing = yield* db.query.domains.findFirst({ where: { id } });
       if (!existing) return null;
 
+      const hostnameChanged = existing.hostname !== normalized.hostname;
+      if (hostnameChanged && existing.managed) {
+        throw new Error("Managed domain hostnames cannot be changed");
+      }
+
+      if (hostnameChanged) {
+        const conflicting = yield* db.query.domains.findFirst({
+          where: { hostname: normalized.hostname },
+          columns: { id: true },
+        });
+        if (conflicting && conflicting.id !== id) {
+          throw new Error(`Domain already exists: ${normalized.hostname}`);
+        }
+      }
+
       const linkedProject = normalized.projectId
         ? yield* db.query.project.findFirst({
             where: { id: normalized.projectId },
@@ -393,7 +415,7 @@ export class Domains extends Context.Service<Domains>()("Domains", {
           const zoneId = yield* requireCloudflareZoneId;
           hostnameId = (yield* CustomHostnames.createCustomHostname({
             zoneId,
-            hostname: existing.hostname,
+            hostname: normalized.hostname,
             ssl: {
               method: "http",
               type: "dv",
@@ -419,6 +441,7 @@ export class Domains extends Context.Service<Domains>()("Domains", {
       const [domain] = yield* db
         .update(domains)
         .set({
+          hostname: normalized.hostname,
           rootHostname: normalized.rootHostname,
           projectId: linkedProject?.id ?? null,
           organizationId: normalized.organizationId,

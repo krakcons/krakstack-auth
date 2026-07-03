@@ -18,6 +18,7 @@ import {
   cookieDomainFromRequest,
   hostFromRequest,
   parseCsv,
+  trustedOriginsForRequest,
 } from "@/services/domains";
 import {
   sendResetPasswordEmail,
@@ -52,6 +53,7 @@ const createAuth = ({
       protocol: isDev ? "http" : "https",
       fallback: betterAuthUrl,
     },
+    trustedOrigins: (request) => trustedOriginsForRequest(request),
     database: drizzleAdapter(db, {
       provider: "pg",
       schema,
