@@ -1,6 +1,7 @@
 // @ts-nocheck
 import { useAtomSuspense } from "@effect/atom-react";
 import { Link, useNavigate, useRouterState } from "@tanstack/react-router";
+import { Atom, AsyncResult } from "effect/unstable/reactivity";
 import { REGEXP_ONLY_DIGITS } from "input-otp";
 import { KeyRound, Mail } from "lucide-react";
 import { useEffect, useState } from "react";
@@ -26,6 +27,7 @@ import { cn } from "@/lib/utils";
 import type { AuthUiClient } from "./auth-client";
 import { authApiClient } from "./auth-api-client";
 import { type KrakstackAuthLocale, useKrakstackAuth } from "./auth-provider";
+import type { ExtraProjectPublicConfig } from "../extra/schema";
 
 const EMAIL_OTP_RESEND_COOLDOWN_SECONDS = 60;
 
@@ -173,34 +175,41 @@ const useAuthFormOptions = ({ authClient, baseUrl, locale }: AuthFormProps) => {
     authClient: resolvedAuthClient,
     baseUrl: baseUrl ?? auth?.baseUrl,
     labels: labels(locale ?? auth?.locale ?? "en"),
+    projectConfig: auth?.projectConfig,
   };
 };
 
 const useAuthProjectConfig = (
   baseUrl: string | undefined,
   searchString: string,
+  projectConfig: ExtraProjectPublicConfig | null | undefined,
 ) => {
   const projectId = getSearchParam(searchString, "projectId");
   const clientId = getSearchParam(searchString, "client_id");
   const host = getBrowserAuthHost();
-  const result = useAtomSuspense(
-    authApiClient(baseUrl).query("authExtra", "getProjectPublicConfig", {
-      query: {
-        ...(projectId ? { projectId } : {}),
-        ...(clientId ? { clientId } : {}),
-        ...(host ? { host } : {}),
-      },
-      timeToLive: "5 minutes",
-      reactivityKeys: [
-        "project-public-config",
-        ...(projectId ? [`project:${projectId}`] : []),
-        ...(clientId ? [`client:${clientId}`] : []),
-        ...(host ? [`host:${host}`] : []),
-      ],
-      serializationKey: `project-public-config:${projectId ?? ""}:${clientId ?? ""}:${host ?? ""}`,
-    }),
-    { suspendOnWaiting: true },
-  );
+  const atom =
+    projectConfig === undefined
+      ? authApiClient(baseUrl).query("authExtra", "getProjectPublicConfig", {
+          query: {
+            ...(projectId ? { projectId } : {}),
+            ...(clientId ? { clientId } : {}),
+            ...(host ? { host } : {}),
+          },
+          timeToLive: "5 minutes",
+          reactivityKeys: [
+            "project-public-config",
+            ...(projectId ? [`project:${projectId}`] : []),
+            ...(clientId ? [`client:${clientId}`] : []),
+            ...(host ? [`host:${host}`] : []),
+          ],
+          serializationKey: `project-public-config:${projectId ?? ""}:${clientId ?? ""}:${host ?? ""}`,
+        })
+      : Atom.make(
+          AsyncResult.success<ExtraProjectPublicConfig | null, never>(
+            projectConfig,
+          ),
+        );
+  const result = useAtomSuspense(atom, { suspendOnWaiting: true });
 
   return result.value;
 };
@@ -220,12 +229,21 @@ const searchObject = (searchString: string) =>
   Object.fromEntries(new URLSearchParams(searchString));
 
 export function Signin(props: AuthFormProps) {
-  const { authClient, baseUrl, labels: m } = useAuthFormOptions(props);
+  const {
+    authClient,
+    baseUrl,
+    labels: m,
+    projectConfig: providedProjectConfig,
+  } = useAuthFormOptions(props);
   const navigate = useNavigate();
   const searchString = useRouterState({
     select: (state) => state.location.searchStr,
   });
-  const projectConfig = useAuthProjectConfig(baseUrl, searchString);
+  const projectConfig = useAuthProjectConfig(
+    baseUrl,
+    searchString,
+    providedProjectConfig,
+  );
   const redirectTarget = getRedirectTarget(
     searchString,
     projectConfig?.authDomain,
@@ -613,12 +631,21 @@ export function Signin(props: AuthFormProps) {
 }
 
 export function Signup(props: AuthFormProps) {
-  const { authClient, baseUrl, labels: m } = useAuthFormOptions(props);
+  const {
+    authClient,
+    baseUrl,
+    labels: m,
+    projectConfig: providedProjectConfig,
+  } = useAuthFormOptions(props);
   const navigate = useNavigate();
   const searchString = useRouterState({
     select: (state) => state.location.searchStr,
   });
-  const projectConfig = useAuthProjectConfig(baseUrl, searchString);
+  const projectConfig = useAuthProjectConfig(
+    baseUrl,
+    searchString,
+    providedProjectConfig,
+  );
   const redirectTarget = getRedirectTarget(
     searchString,
     projectConfig?.authDomain,
@@ -867,12 +894,21 @@ export function ResetPassword(props: AuthFormProps) {
 }
 
 export function TwoFactor(props: AuthFormProps) {
-  const { authClient, baseUrl, labels: m } = useAuthFormOptions(props);
+  const {
+    authClient,
+    baseUrl,
+    labels: m,
+    projectConfig: providedProjectConfig,
+  } = useAuthFormOptions(props);
   const navigate = useNavigate();
   const searchString = useRouterState({
     select: (state) => state.location.searchStr,
   });
-  const projectConfig = useAuthProjectConfig(baseUrl, searchString);
+  const projectConfig = useAuthProjectConfig(
+    baseUrl,
+    searchString,
+    providedProjectConfig,
+  );
   const redirectTarget = getRedirectTarget(
     searchString,
     projectConfig?.authDomain,

@@ -1,51 +1,36 @@
+import { Outlet, createFileRoute } from "@tanstack/react-router";
 import {
-  Outlet,
-  createFileRoute,
-  useRouterState,
-} from "@tanstack/react-router";
-import { createServerFn } from "@tanstack/react-start";
-import { getRequest } from "@tanstack/react-start/server";
+  KrakstackAuthProvider,
+  useKrakstackAuthProjectConfig,
+} from "@krak-stack/auth";
 import { Users } from "lucide-react";
 
 import { AppBrand } from "@/components/ui/app-brand";
 import { LocaleSwitcher } from "@/components/ui/locale-switcher";
 import { ThemeToggle } from "@/components/theme-toggle";
-import { normalizeAuthHost } from "@/lib/domain-utils";
 import { m } from "@/paraglide/messages";
-import {
-  getBrowserAuthHost,
-  getOAuthClientIdFromSearch,
-  getProjectIdFromSearch,
-  useProjectPublicConfigSuspense,
-} from "@/services/auth/client/atoms";
+import { authClient } from "@/services/auth/client";
 import { AuthBrandingProvider } from "@/services/auth/client/branding";
 
-const getAuthHost = createServerFn({ method: "GET" }).handler(() => {
-  const request = getRequest();
-  return (
-    normalizeAuthHost(
-      request.headers.get("x-forwarded-host") ?? request.headers.get("host"),
-    ) ?? normalizeAuthHost(request.url)
-  );
-});
-
 export const Route = createFileRoute("/_auth")({
-  loader: () => getAuthHost(),
   component: AuthLayout,
 });
 
 function AuthLayout() {
-  const searchString = useRouterState({
-    select: (state) => state.location.searchStr,
-  });
-  const serverHost = Route.useLoaderData();
-  const projectId = getProjectIdFromSearch(searchString);
-  const clientId = getOAuthClientIdFromSearch(searchString);
-  const projectConfig = useProjectPublicConfigSuspense(
-    projectId,
-    clientId,
-    serverHost ?? getBrowserAuthHost(),
+  const projectId = import.meta.env.VITE_KRAKSTACK_AUTH_PROJECT_ID;
+
+  return (
+    <KrakstackAuthProvider
+      authClient={authClient}
+      {...(projectId ? { projectId } : {})}
+    >
+      <AuthLayoutContent />
+    </KrakstackAuthProvider>
   );
+}
+
+function AuthLayoutContent() {
+  const projectConfig = useKrakstackAuthProjectConfig();
   const brandHref = projectConfig?.rootDomain
     ? `//${projectConfig.rootDomain}`
     : undefined;

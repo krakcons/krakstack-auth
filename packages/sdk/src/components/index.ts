@@ -1,4 +1,8 @@
-export { KrakstackAuthProvider, useKrakstackAuth } from "./auth-provider";
+export {
+  KrakstackAuthProvider,
+  useKrakstackAuth,
+  useKrakstackAuthProjectConfig,
+} from "./auth-provider";
 export { OrganizationSwitcher } from "./organization-switcher";
 export { ResetPassword, Signin, Signup, TwoFactor } from "./auth-forms";
 export { UserButton } from "./user-button";
