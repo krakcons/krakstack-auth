@@ -4,12 +4,16 @@ export { AuthService, type AuthServiceLayerOptions } from "./service";
 export { AuthClientConfig } from "./config";
 export {
   OrganizationSwitcher,
+  KrakstackAuthProvider,
   ResetPassword,
   Signin,
   Signup,
   TwoFactor,
   UserButton,
   type AuthUiClient,
+  type KrakstackAuthContextValue,
+  type KrakstackAuthLocale,
+  type KrakstackAuthProviderProps,
   type OrganizationSwitcherDialog,
   type UserButtonDialog,
 } from "./components";

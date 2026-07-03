@@ -25,6 +25,7 @@ import { cn } from "@/lib/utils";
 
 import type { AuthUiClient } from "./auth-client";
 import { authApiClient } from "./auth-api-client";
+import { type KrakstackAuthLocale, useKrakstackAuth } from "./auth-provider";
 
 const EMAIL_OTP_RESEND_COOLDOWN_SECONDS = 60;
 
@@ -148,13 +149,31 @@ const defaultMessages = {
   },
 } as const;
 
-const labels = () => ({
-  ...defaultMessages[currentLocale()],
+const labels = (locale: KrakstackAuthLocale) => ({
+  ...defaultMessages[locale],
 });
 
 type AuthFormProps = {
-  authClient: AuthUiClient;
+  authClient?: AuthUiClient;
   baseUrl?: string | undefined;
+  locale?: KrakstackAuthLocale | undefined;
+};
+
+const useAuthFormOptions = ({ authClient, baseUrl, locale }: AuthFormProps) => {
+  const auth = useKrakstackAuth();
+  const resolvedAuthClient = authClient ?? auth?.authClient;
+
+  if (!resolvedAuthClient) {
+    throw new Error(
+      "Krakstack auth components require an authClient prop or KrakstackAuthProvider.",
+    );
+  }
+
+  return {
+    authClient: resolvedAuthClient,
+    baseUrl: baseUrl ?? auth?.baseUrl,
+    labels: labels(locale ?? auth?.locale ?? "en"),
+  };
 };
 
 const useAuthProjectConfig = (
@@ -186,19 +205,14 @@ const useAuthProjectConfig = (
   return result.value;
 };
 
-const currentLocale = () =>
-  typeof navigator !== "undefined" &&
-  navigator.language.toLowerCase().startsWith("fr")
-    ? "fr"
-    : "en";
-
 const text = (value: string, params?: Record<string, string>) =>
   Object.entries(params ?? {}).reduce(
     (current, [key, replacement]) => current.replace(`{${key}}`, replacement),
     value,
   );
 
-export function Signin({ authClient, baseUrl }: AuthFormProps) {
+export function Signin(props: AuthFormProps) {
+  const { authClient, baseUrl, labels: m } = useAuthFormOptions(props);
   const navigate = useNavigate();
   const searchString = useRouterState({
     select: (state) => state.location.searchStr,
@@ -218,7 +232,6 @@ export function Signin({ authClient, baseUrl }: AuthFormProps) {
   const authOptions = projectConfig?.authOptions ?? {};
   const onNavigate = (target: string) => navigateTarget(target, navigate);
   const onTwoFactorRedirect = (href: string) => navigate({ href });
-  const m = labels();
   const options = {
     emailPassword: authOptions.emailPassword ?? true,
     emailOtp: authOptions.emailOtp ?? true,
@@ -592,7 +605,8 @@ export function Signin({ authClient, baseUrl }: AuthFormProps) {
   );
 }
 
-export function Signup({ authClient, baseUrl }: AuthFormProps) {
+export function Signup(props: AuthFormProps) {
+  const { authClient, baseUrl, labels: m } = useAuthFormOptions(props);
   const navigate = useNavigate();
   const searchString = useRouterState({
     select: (state) => state.location.searchStr,
@@ -607,7 +621,6 @@ export function Signup({ authClient, baseUrl }: AuthFormProps) {
   const onNavigate = (target: string) => navigate({ href: target });
   const onVerifyEmail = (email: string) =>
     navigate({ to: "/verify-email", search: { email } });
-  const m = labels();
   const options = {
     google: authOptions.google ?? true,
     signUp: authOptions.signUp ?? true,
@@ -773,14 +786,14 @@ export function Signup({ authClient, baseUrl }: AuthFormProps) {
   );
 }
 
-export function ResetPassword({ authClient }: { authClient: AuthUiClient }) {
+export function ResetPassword(props: AuthFormProps) {
+  const { authClient, labels: m } = useAuthFormOptions(props);
   const navigate = useNavigate();
   const searchString = useRouterState({
     select: (state) => state.location.searchStr,
   });
   const token = getSearchParam(searchString, "token") ?? "";
   const onSuccess = () => navigate({ to: "/sign-in" });
-  const m = labels();
   const form = useAppForm({
     defaultValues: { password: "" },
     onSubmit: async ({ value, formApi }) => {
@@ -844,7 +857,8 @@ export function ResetPassword({ authClient }: { authClient: AuthUiClient }) {
   );
 }
 
-export function TwoFactor({ authClient, baseUrl }: AuthFormProps) {
+export function TwoFactor(props: AuthFormProps) {
+  const { authClient, baseUrl, labels: m } = useAuthFormOptions(props);
   const navigate = useNavigate();
   const searchString = useRouterState({
     select: (state) => state.location.searchStr,
@@ -857,7 +871,6 @@ export function TwoFactor({ authClient, baseUrl }: AuthFormProps) {
   );
   const oauthQuery = getOAuthQuery(searchString);
   const onNavigate = (target: string) => navigateTarget(target, navigate);
-  const m = labels();
   const [mode, setMode] = useState<"totp" | "email" | "backup">("totp");
   const [emailCodeSent, setEmailCodeSent] = useState(false);
   const form = useAppForm({
