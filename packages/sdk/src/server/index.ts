@@ -5,6 +5,7 @@ export {
   ServerOrganizationsApiGroup,
   ServerUsersApiGroup,
 } from "./api";
+export { proxyAuthRequest } from "./proxy";
 export type {
   ServerActiveOrganization,
   ServerMembersResponse,

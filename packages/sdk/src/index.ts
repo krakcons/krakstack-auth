@@ -2,6 +2,7 @@ export * from "./schema";
 export { AuthApi } from "./api";
 export { AuthService, type AuthServiceLayerOptions } from "./service";
 export { AuthClientConfig } from "./config";
+export { proxyAuthRequest } from "./server/proxy";
 export {
   OrganizationSwitcher,
   KrakstackAuthProvider,
