@@ -24,9 +24,13 @@ export type AuthDomainContext = {
   readonly cookieDomain: string | undefined;
 };
 
+const firstForwardedValue = (value: string | null) =>
+  value?.split(",")[0]?.trim() || null;
+
 export const hostFromRequest = (request: Request) =>
   normalizeAuthHost(
-    request.headers.get("x-forwarded-host") ?? request.headers.get("host"),
+    firstForwardedValue(request.headers.get("x-forwarded-host")) ??
+      request.headers.get("host"),
   ) ?? normalizeAuthHost(request.url);
 
 const configuredPrimaryHosts = () => {
@@ -55,7 +59,7 @@ const originForHost = (host: string, protocol: string) => {
 };
 
 const requestProtocol = (request: Request) =>
-  request.headers.get("x-forwarded-proto")?.split(",")[0]?.trim() ||
+  firstForwardedValue(request.headers.get("x-forwarded-proto")) ??
   new URL(request.url).protocol.replace(":", "");
 
 const hostLabels = (host: string) => host.split(":")[0]?.split(".") ?? [];
@@ -286,6 +290,21 @@ export class Domains extends Context.Service<Domains>()("Domains", {
       const context = yield* contextForRequest({ request });
       for (const origin of context?.origins ?? []) {
         origins.add(origin);
+      }
+
+      const originHost = normalizeAuthHost(request.headers.get("origin"));
+      const originDomain = originHost
+        ? yield* db.query.domains.findFirst({
+            where: { hostname: originHost, active: true },
+          })
+        : null;
+      if (originDomain) {
+        for (const origin of originsForHosts(
+          [originDomain.hostname, originDomain.rootHostname],
+          requestProtocol(request),
+        )) {
+          origins.add(origin);
+        }
       }
 
       return Array.from(origins);
