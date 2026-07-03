@@ -17,7 +17,6 @@ import { corsMiddleware } from "@/lib/cors";
 import { adminApiHandler } from "@/services/admin/api.builder";
 import { authApiHandler } from "@/services/auth/api.builder";
 import { BetterAuthRequest } from "@/services/auth/better-auth-request";
-import { logAuthCookieResponse } from "@/services/auth/cookie-debug";
 import {
   adminAuthMiddlewareLayer,
   serviceApiKeyMiddlewareLayer,
@@ -62,10 +61,7 @@ export const authWebHandler = async (request: Request) => {
   const authRequest = await Effect.runPromise(
     BetterAuthRequest.pipe(Effect.provide(BetterAuthRequest.make(request))),
   );
-  const response = await authRequest.handler(request);
-  logAuthCookieResponse(request, response);
-
-  return response;
+  return await authRequest.handler(request);
 };
 
 const authHandlerEffect = HttpEffect.fromWebHandler((request) =>

@@ -25,10 +25,6 @@ import {
   sendEmailVerificationOtpEmail,
   sendTwoFactorOtpEmail,
 } from "@/services/auth/email.server";
-import {
-  isAuthCookieDebugEnabled,
-  sanitizedRequestHeaders,
-} from "@/services/auth/cookie-debug";
 
 const isDev = process.env.NODE_ENV === "development";
 
@@ -197,24 +193,6 @@ export const authForRequest = async (request: Request) => {
   const allowedHosts = await allowedHostsForRequest(request);
   const cookieDomain = await cookieDomainFromRequest(request);
   const cacheKey = `${host}|${cookieDomain ?? ""}|${allowedHosts.join(",")}`;
-
-  if (isAuthCookieDebugEnabled()) {
-    console.info(
-      "[auth-cookie-debug] request-context",
-      JSON.stringify({
-        url: request.url,
-        host,
-        headerHost: request.headers.get("host"),
-        forwardedHost: request.headers.get("x-forwarded-host"),
-        forwardedProto: request.headers.get("x-forwarded-proto"),
-        origin: request.headers.get("origin"),
-        referer: request.headers.get("referer"),
-        allowedHosts,
-        cookieDomain,
-        headers: sanitizedRequestHeaders(request.headers),
-      }),
-    );
-  }
 
   const cached = authByRequestScope.get(cacheKey);
   if (cached) return cached;
