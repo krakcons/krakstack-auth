@@ -35,7 +35,9 @@ export const hostFromRequest = (request: Request) =>
   ) ?? normalizeAuthHost(request.url);
 
 const originHostFromRequest = (request: Request) =>
-  normalizeAuthHost(request.headers.get("origin"));
+  normalizeAuthHost(
+    request.headers.get("origin") ?? request.headers.get("referer"),
+  );
 
 const configuredPrimaryHosts = () => {
   const hosts = new Set<string>();
@@ -275,7 +277,6 @@ export class Domains extends Context.Service<Domains>()("Domains", {
           hosts: hostList,
           origins: originsForHosts(hostList, requestProtocol(request)),
           cookieDomain: cookieDomainForAuthDomainContext({
-            domainHostname: domain?.hostname,
             isOriginDomain,
             sharedCookieDomain: sharedCookieDomain(
               domain?.hostname,

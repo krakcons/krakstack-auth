@@ -10,21 +10,19 @@ describe("domain utils", () => {
     expect(normalizeAuthHost("https://dev.kokobi.org")).toBe("dev.kokobi.org");
   });
 
-  it("uses the exact origin host for proxied primary auth requests", () => {
+  it("omits cookie domain for proxied primary auth requests", () => {
     expect(
       cookieDomainForAuthDomainContext({
-        domainHostname: "dev.kokobi.org",
         isOriginDomain: true,
         sharedCookieDomain: ".kokobi.org",
         fallbackCookieDomain: ".krakstack.net",
       }),
-    ).toBe("dev.kokobi.org");
+    ).toBeUndefined();
   });
 
   it("uses the shared domain for direct custom-domain requests", () => {
     expect(
       cookieDomainForAuthDomainContext({
-        domainHostname: "dev.kokobi.org",
         isOriginDomain: false,
         sharedCookieDomain: ".kokobi.org",
         fallbackCookieDomain: ".kokobi.org",

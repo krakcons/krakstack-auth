@@ -43,16 +43,14 @@ export const normalizeOAuthClientDomains = (values: Iterable<string>) => {
 };
 
 export const cookieDomainForAuthDomainContext = ({
-  domainHostname,
   isOriginDomain,
   sharedCookieDomain,
   fallbackCookieDomain,
 }: {
-  readonly domainHostname?: string | undefined;
   readonly isOriginDomain: boolean;
   readonly sharedCookieDomain?: string | undefined;
   readonly fallbackCookieDomain?: string | undefined;
 }) =>
   isOriginDomain
-    ? domainHostname
+    ? undefined
     : (sharedCookieDomain ?? fallbackCookieDomain);
