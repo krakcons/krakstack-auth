@@ -25,7 +25,10 @@ import {
   sendEmailVerificationOtpEmail,
   sendTwoFactorOtpEmail,
 } from "@/services/auth/email.server";
-import { isAuthCookieDebugEnabled } from "@/services/auth/cookie-debug";
+import {
+  isAuthCookieDebugEnabled,
+  sanitizedRequestHeaders,
+} from "@/services/auth/cookie-debug";
 
 const isDev = process.env.NODE_ENV === "development";
 
@@ -208,6 +211,7 @@ export const authForRequest = async (request: Request) => {
         referer: request.headers.get("referer"),
         allowedHosts,
         cookieDomain,
+        headers: sanitizedRequestHeaders(request.headers),
       }),
     );
   }

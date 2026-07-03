@@ -9,8 +9,36 @@ type CookieAttributes = {
   readonly expires?: string | undefined;
 };
 
+const sensitiveRequestHeaders = new Set([
+  "authorization",
+  "cookie",
+  "proxy-authorization",
+  "x-api-key",
+]);
+
 export const isAuthCookieDebugEnabled = () =>
   process.env.AUTH_COOKIE_DEBUG === "true";
+
+const cookieNames = (value: string | null) =>
+  value
+    ?.split(";")
+    .map((part) => part.trim().split("=")[0])
+    .filter(Boolean) ?? [];
+
+export const sanitizedRequestHeaders = (headers: Headers) => {
+  const values: Record<string, string> = {};
+
+  headers.forEach((value, key) => {
+    values[key] = sensitiveRequestHeaders.has(key.toLowerCase())
+      ? "[redacted]"
+      : value;
+  });
+
+  return {
+    values,
+    cookieNames: cookieNames(headers.get("cookie")),
+  };
+};
 
 const readSetCookies = (headers: Headers) => {
   const setCookies = headers.getSetCookie();
