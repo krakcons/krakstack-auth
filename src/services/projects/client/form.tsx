@@ -15,6 +15,7 @@ import {
 } from "@/components/ui/dialog";
 import { m } from "@/paraglide/messages";
 import { AdminApiClient } from "@/lib/admin-api-client";
+import { assetPath, assetUrl } from "@/lib/assets";
 import { authBaseUrl } from "@/services/auth/client";
 import { ProjectData, type Project } from "@/services/projects/schema";
 
@@ -34,16 +35,6 @@ type ProjectFormValues = {
 };
 
 const isFile = (value: unknown): value is File => value instanceof File;
-
-const assetUrl = (value: string | null | undefined) => {
-  const url = value?.trim();
-  if (!url) return null;
-  if (!url.startsWith("/api/assets/") && !url.startsWith("/api/auth/assets/"))
-    return url;
-  if (!authBaseUrl?.trim()) return url;
-
-  return new URL(url, authBaseUrl).toString();
-};
 
 const valuesToData = (value: ProjectFormValues) =>
   Schema.decodeUnknownSync(ProjectData)({
@@ -75,7 +66,7 @@ export function ProjectForm({
   const form = useAppForm({
     defaultValues: {
       name: project?.name ?? "",
-      logo: assetUrl(project?.logo),
+      logo: assetUrl(project?.logo, authBaseUrl),
       themeCss: project?.data.branding?.themeCss ?? "",
       emailPassword: project?.data.authOptions?.emailPassword ?? true,
       emailOtp: project?.data.authOptions?.emailOtp ?? true,
@@ -92,9 +83,9 @@ export function ProjectForm({
               const payload = new FormData();
               payload.append("file", logoFile);
 
-              return (await uploadLogo({ payload })).url;
+              return assetPath((await uploadLogo({ payload })).url);
             })()
-          : value.logo;
+          : assetPath(value.logo);
         const data = valuesToData(value);
         const saved = project
           ? await updateProject({

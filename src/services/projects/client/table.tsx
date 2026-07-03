@@ -20,6 +20,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import { Badge } from "@/components/ui/badge";
 import { AdminApiClient } from "@/lib/admin-api-client";
+import { assetUrl } from "@/lib/assets";
 import { m } from "@/paraglide/messages";
 import { authBaseUrl } from "@/services/auth/client";
 import type { Project } from "@/services/projects/schema";
@@ -35,16 +36,6 @@ const projectsAtom = Atom.family((reloadKey: number) =>
 );
 
 const deleteProjectAtom = AdminApiClient.mutation("projects", "deleteProject");
-
-const assetUrl = (value: string | null | undefined) => {
-  const url = value?.trim();
-  if (!url) return "";
-  if (!url.startsWith("/api/assets/") && !url.startsWith("/api/auth/assets/"))
-    return url;
-  if (!authBaseUrl?.trim()) return url;
-
-  return new URL(url, authBaseUrl).toString();
-};
 
 export function ProjectsTable({ reloadKey = 0 }: { reloadKey?: number }) {
   const result = useAtomValue(projectsAtom(reloadKey));
@@ -133,7 +124,7 @@ const projectColumns = (): ColumnDef<Project>[] => [
     accessorKey: "name",
     header: m.project(),
     cell: ({ row }) => {
-      const logo = assetUrl(row.original.logo);
+      const logo = assetUrl(row.original.logo, authBaseUrl);
 
       return (
         <AppBrand

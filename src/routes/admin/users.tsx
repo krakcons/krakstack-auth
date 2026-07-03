@@ -24,6 +24,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import { authBaseUrl, authClient } from "@/services/auth/client";
 import { m } from "@/paraglide/messages";
+import { assetUrl } from "@/lib/assets";
 
 export const Route = createFileRoute("/admin/users")({
   validateSearch: TableSearchSchema,
@@ -41,16 +42,6 @@ type User = {
   banned: boolean | null;
   banReason: string | null;
   banExpires: Date | null;
-};
-
-const assetUrl = (value: string | null | undefined) => {
-  const url = value?.trim();
-  if (!url) return "";
-  if (!url.startsWith("/api/assets/") && !url.startsWith("/api/auth/assets/"))
-    return url;
-  if (!authBaseUrl?.trim()) return url;
-
-  return new URL(url, authBaseUrl).toString();
 };
 
 function useUsers() {
@@ -160,7 +151,7 @@ const userColumns = (): ColumnDef<User>[] => [
     accessorKey: "name",
     header: m.admin_column_user(),
     cell: ({ row }) => {
-      const image = assetUrl(row.original.image);
+      const image = assetUrl(row.original.image, authBaseUrl);
 
       return (
         <AppBrand

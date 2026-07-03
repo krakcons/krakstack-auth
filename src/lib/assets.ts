@@ -1,6 +1,3 @@
-export const isRecord = (value: unknown): value is Record<string, unknown> =>
-  typeof value === "object" && value !== null;
-
 const assetRoutePrefix = "/api/auth/assets/";
 const legacyAssetRoutePrefix = "/api/assets/";
 
@@ -37,9 +34,9 @@ export const assetUrl = (
 ) => {
   const path = value?.trim();
   if (!path) return "";
-  const key = assetKey(path);
+  const key = assetPath(path);
 
-  if (!key) return path;
+  if (!key?.startsWith("logos/")) return path;
 
   const route = assetRoute(key);
   if (!baseUrl?.trim()) return route;

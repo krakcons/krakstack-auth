@@ -9,20 +9,11 @@ import { AppBrand } from "@/components/ui/app-brand";
 import { Badge } from "@/components/ui/badge";
 import { m } from "@/paraglide/messages";
 import { getLocale } from "@/paraglide/runtime";
+import { assetUrl } from "@/lib/assets";
 import { authBaseUrl } from "@/services/auth/client";
 import { OrganizationMetadata } from "@krak-stack/auth/schema";
 
 import type { Organization } from "../schema";
-
-const assetUrl = (value: string | null | undefined) => {
-  const url = value?.trim();
-  if (!url) return "";
-  if (!url.startsWith("/api/assets/") && !url.startsWith("/api/auth/assets/"))
-    return url;
-  if (!authBaseUrl?.trim()) return url;
-
-  return new URL(url, authBaseUrl).toString();
-};
 
 const parseOrganizationMetadata = (metadata: unknown) => {
   try {
@@ -49,6 +40,7 @@ const organizationDisplay = (organization: Organization) => {
     name: translation?.name || organization.name,
     image: assetUrl(
       translation?.icon || translation?.logo || organization.logo,
+      authBaseUrl,
     ),
   };
 };

@@ -15,6 +15,7 @@ import {
 } from "@/components/ui/dialog";
 import { AdminApiClient } from "@/lib/admin-api-client";
 import { ApiClient } from "@/lib/api-client";
+import { assetPath, assetUrl } from "@/lib/assets";
 import { m } from "@/paraglide/messages";
 import { authBaseUrl } from "@/services/auth/client";
 
@@ -34,16 +35,6 @@ const slugify = (value: string) =>
     .replace(/^-+|-+$/g, "");
 
 const isFile = (value: unknown): value is File => value instanceof File;
-
-const assetUrl = (value: string | null | undefined) => {
-  const url = value?.trim();
-  if (!url) return null;
-  if (!url.startsWith("/api/assets/") && !url.startsWith("/api/auth/assets/"))
-    return url;
-  if (!authBaseUrl?.trim()) return url;
-
-  return new URL(url, authBaseUrl).toString();
-};
 
 const createOrganizationAtom = AdminApiClient.mutation(
   "admin",
@@ -89,7 +80,7 @@ export function OrganizationForm({
     defaultValues: {
       name: organization?.name ?? "",
       slug: organization?.slug ?? "",
-      logo: assetUrl(organization?.logo),
+      logo: assetUrl(organization?.logo, authBaseUrl),
     } satisfies OrganizationFormValues,
     onSubmit: async ({ value }) => {
       setError("");
@@ -100,9 +91,9 @@ export function OrganizationForm({
               const payload = new FormData();
               payload.append("file", logoFile);
 
-              return (await uploadLogo({ payload })).url;
+              return assetPath((await uploadLogo({ payload })).url);
             })()
-          : value.logo;
+          : assetPath(value.logo);
         const payload = valuesToPayload(value, logo);
         const saved = organization
           ? await updateOrganization({

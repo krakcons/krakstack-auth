@@ -20,6 +20,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import { m } from "@/paraglide/messages";
 import { AdminApiClient } from "@/lib/admin-api-client";
+import { assetUrl } from "@/lib/assets";
 import { authBaseUrl } from "@/services/auth/client";
 
 import type { OAuthClientAdmin } from "../schema";
@@ -37,16 +38,6 @@ const deleteOAuthClientAtom = AdminApiClient.mutation(
   "oauthClients",
   "deleteOAuthClient",
 );
-
-const assetUrl = (value: string | null | undefined) => {
-  const url = value?.trim();
-  if (!url) return "";
-  if (!url.startsWith("/api/assets/") && !url.startsWith("/api/auth/assets/"))
-    return url;
-  if (!authBaseUrl?.trim()) return url;
-
-  return new URL(url, authBaseUrl).toString();
-};
 
 export function OAuthClientsTable({ reloadKey = 0 }: { reloadKey?: number }) {
   const result = useAtomValue(oauthClientsAtom(reloadKey));
@@ -132,7 +123,7 @@ const clientColumns = (): ColumnDef<OAuthClientAdmin>[] => [
     accessorKey: "name",
     header: m.admin_column_client(),
     cell: ({ row }) => {
-      const icon = assetUrl(row.original.icon);
+      const icon = assetUrl(row.original.icon, authBaseUrl);
 
       return (
         <AppBrand
@@ -150,7 +141,7 @@ const clientColumns = (): ColumnDef<OAuthClientAdmin>[] => [
     id: "project",
     header: m.project(),
     cell: ({ row }) => {
-      const logo = assetUrl(row.original.projectLogo);
+      const logo = assetUrl(row.original.projectLogo, authBaseUrl);
 
       return (
         <AppBrand
