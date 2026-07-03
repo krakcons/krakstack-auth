@@ -7,6 +7,7 @@ import * as FetchHttpClient from "effect/unstable/http/FetchHttpClient";
 
 import { domains } from "@/db/auth-schema";
 import {
+  cookieDomainForAuthDomainContext,
   normalizeAuthHost,
   normalizeOAuthClientDomains,
   parseCsv,
@@ -273,10 +274,15 @@ export class Domains extends Context.Service<Domains>()("Domains", {
           requestHost,
           hosts: hostList,
           origins: originsForHosts(hostList, requestProtocol(request)),
-          cookieDomain: isOriginDomain
-            ? domain?.hostname
-            : (sharedCookieDomain(domain?.hostname, domain?.rootHostname) ??
-              fallbackCookieDomain(requestHost)),
+          cookieDomain: cookieDomainForAuthDomainContext({
+            domainHostname: domain?.hostname,
+            isOriginDomain,
+            sharedCookieDomain: sharedCookieDomain(
+              domain?.hostname,
+              domain?.rootHostname,
+            ),
+            fallbackCookieDomain: fallbackCookieDomain(requestHost),
+          }),
         } satisfies AuthDomainContext;
       },
     );
