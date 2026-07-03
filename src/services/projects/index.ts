@@ -27,6 +27,7 @@ const googleConfigured = Boolean(
 
 const authOptions = (data: ProjectData) => ({
   emailPassword: data.authOptions?.emailPassword ?? true,
+  emailOtp: data.authOptions?.emailOtp ?? true,
   google: googleConfigured && (data.authOptions?.google ?? true),
   signUp: data.authOptions?.signUp ?? true,
   signUpName: data.authOptions?.signUpName ?? true,

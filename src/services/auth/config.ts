@@ -103,6 +103,7 @@ const createAuth = ({
       emailOTP({
         overrideDefaultEmailVerification: true,
         sendVerificationOnSignUp: true,
+        disableSignUp: true,
         storeOTP: "encrypted",
         allowedAttempts: 5,
         sendVerificationOTP: async ({ email, otp, type }, context) => {

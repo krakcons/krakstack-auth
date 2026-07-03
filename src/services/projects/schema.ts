@@ -9,6 +9,7 @@ export const ProjectData = Schema.Struct({
   authOptions: Schema.optional(
     Schema.Struct({
       emailPassword: Schema.optional(Schema.Boolean),
+      emailOtp: Schema.optional(Schema.Boolean),
       google: Schema.optional(Schema.Boolean),
       signUp: Schema.optional(Schema.Boolean),
       signUpName: Schema.optional(Schema.Boolean),
@@ -24,6 +25,7 @@ export const ProjectData = Schema.Struct({
       branding: { themeCss: ":root { --primary: oklch(0.5 0.1 240); }" },
       authOptions: {
         emailPassword: true,
+        emailOtp: true,
         google: true,
         signUp: false,
         signUpName: true,
@@ -73,6 +75,7 @@ export const ProjectPublicConfigQuery = Schema.Struct({
 
 export const ProjectAuthOptions = Schema.Struct({
   emailPassword: Schema.Boolean,
+  emailOtp: Schema.Boolean,
   google: Schema.Boolean,
   signUp: Schema.Boolean,
   signUpName: Schema.Boolean,
@@ -81,7 +84,13 @@ export const ProjectAuthOptions = Schema.Struct({
   title: "Project authentication options",
   description: "Resolved authentication methods visible for auth pages.",
   examples: [
-    { emailPassword: true, google: true, signUp: true, signUpName: true },
+    {
+      emailPassword: true,
+      emailOtp: true,
+      google: true,
+      signUp: true,
+      signUpName: true,
+    },
   ],
 });
 
@@ -109,6 +118,7 @@ export const ProjectPublicConfig = Schema.Struct({
         '[data-project-theme="auth.example.com"] { --primary: oklch(0.5 0.1 240); }',
       authOptions: {
         emailPassword: true,
+        emailOtp: true,
         google: true,
         signUp: false,
         signUpName: true,

@@ -223,6 +223,7 @@
   "oauth_client_domains_invalid": "Domaine d'authentification invalide : {domain}",
   "oauth_client_auth_options": "Options d'authentification",
   "oauth_client_auth_email_password": "Courriel et mot de passe",
+  "oauth_client_auth_email_otp": "Code courriel",
   "oauth_client_auth_google": "Google",
   "oauth_client_auth_sign_up": "Inscription",
   "oauth_client_auth_sign_up_name": "Champ du nom à l'inscription",

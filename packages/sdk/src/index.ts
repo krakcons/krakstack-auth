@@ -4,6 +4,10 @@ export { AuthService, type AuthServiceLayerOptions } from "./service";
 export { AuthClientConfig } from "./config";
 export {
   OrganizationSwitcher,
+  ResetPassword,
+  Signin,
+  Signup,
+  TwoFactor,
   UserButton,
   type AuthUiClient,
   type OrganizationSwitcherDialog,

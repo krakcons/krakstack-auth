@@ -61,6 +61,7 @@
     "@tanstack/react-table": "^8.21.3",
     "better-auth": "^1.6.14",
     "effect": "^4.0.0-beta.78",
+    "input-otp": "^1.4.2",
     "lucide-react": "^1.17.0",
     "react": "^19.2.7",
     "react-qr-code": "^2.1.1"

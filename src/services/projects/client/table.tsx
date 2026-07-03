@@ -156,6 +156,9 @@ const projectColumns = (): ColumnDef<Project>[] => [
             {m.oauth_client_auth_email_password()}
           </Badge>
         ) : null}
+        {row.original.data.authOptions?.emailOtp !== false ? (
+          <Badge variant="secondary">{m.oauth_client_auth_email_otp()}</Badge>
+        ) : null}
         {row.original.data.authOptions?.google !== false ? (
           <Badge variant="secondary">{m.oauth_client_auth_google()}</Badge>
         ) : null}

@@ -45,6 +45,7 @@ export const OAuthClientAdmin = Schema.Struct({
         branding: { themeCss: ":root { --primary: oklch(0.5 0.1 240); }" },
         authOptions: {
           emailPassword: true,
+          emailOtp: true,
           google: true,
           signUp: true,
           signUpName: true,
@@ -91,6 +92,7 @@ export const OAuthClientCreated = Schema.Struct({
         branding: { themeCss: ":root { --primary: oklch(0.5 0.1 240); }" },
         authOptions: {
           emailPassword: true,
+          emailOtp: true,
           google: true,
           signUp: true,
           signUpName: true,

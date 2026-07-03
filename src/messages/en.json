@@ -223,6 +223,7 @@
   "oauth_client_domains_invalid": "Invalid auth domain: {domain}",
   "oauth_client_auth_options": "Auth options",
   "oauth_client_auth_email_password": "Email and password",
+  "oauth_client_auth_email_otp": "Email code",
   "oauth_client_auth_google": "Google",
   "oauth_client_auth_sign_up": "Sign up",
   "oauth_client_auth_sign_up_name": "Sign-up name field",

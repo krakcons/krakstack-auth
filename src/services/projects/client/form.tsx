@@ -27,6 +27,7 @@ type ProjectFormValues = {
   logo: File | string | null;
   themeCss: string;
   emailPassword: boolean;
+  emailOtp: boolean;
   google: boolean;
   signUp: boolean;
   signUpName: boolean;
@@ -48,6 +49,7 @@ const valuesToData = (value: ProjectFormValues) =>
     branding: { themeCss: value.themeCss.trim() || undefined },
     authOptions: {
       emailPassword: value.emailPassword,
+      emailOtp: value.emailOtp,
       google: value.google,
       signUp: value.signUp,
       signUpName: value.signUpName,
@@ -75,6 +77,7 @@ export function ProjectForm({
       logo: assetUrl(project?.logo),
       themeCss: project?.data.branding?.themeCss ?? "",
       emailPassword: project?.data.authOptions?.emailPassword ?? true,
+      emailOtp: project?.data.authOptions?.emailOtp ?? true,
       google: project?.data.authOptions?.google ?? true,
       signUp: project?.data.authOptions?.signUp ?? true,
       signUpName: project?.data.authOptions?.signUpName ?? true,
@@ -169,11 +172,18 @@ export function ProjectForm({
                 />
               )}
             </form.AppField>
-            <div className="grid gap-3 rounded-lg border p-4 md:grid-cols-4">
+            <div className="grid gap-3 rounded-lg border p-4 md:grid-cols-5">
               <form.AppField name="emailPassword">
                 {(field) => (
                   <field.CheckboxField
                     label={m.oauth_client_auth_email_password()}
+                  />
+                )}
+              </form.AppField>
+              <form.AppField name="emailOtp">
+                {(field) => (
+                  <field.CheckboxField
+                    label={m.oauth_client_auth_email_otp()}
                   />
                 )}
               </form.AppField>
