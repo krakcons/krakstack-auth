@@ -87,10 +87,11 @@ const logoContentType = (path: string) => {
 };
 
 const logoAssetHandlerEffect = HttpEffect.fromWebHandler(async (request) => {
-  const prefix = "/api/assets/";
-  const path = decodeURIComponent(
-    new URL(request.url).pathname.slice(prefix.length),
-  );
+  const pathname = new URL(request.url).pathname;
+  const prefix = pathname.startsWith("/api/auth/assets/")
+    ? "/api/auth/assets/"
+    : "/api/assets/";
+  const path = decodeURIComponent(pathname.slice(prefix.length));
 
   if (!path.startsWith("logos/") || path.includes("..")) {
     return Response.json({}, { status: 404 });
@@ -116,6 +117,11 @@ const authRoutesLayer = HttpRouter.add("*", "/api/auth/*", authHandlerEffect);
 const logoAssetRoutesLayer = HttpRouter.add(
   "GET",
   "/api/assets/*",
+  logoAssetHandlerEffect,
+);
+const authLogoAssetRoutesLayer = HttpRouter.add(
+  "GET",
+  "/api/auth/assets/*",
   logoAssetHandlerEffect,
 );
 
@@ -192,6 +198,7 @@ const apiLayer = Layer.mergeAll(
   docsLayer,
   authDocsOpenApiLayer,
   logoAssetRoutesLayer,
+  authLogoAssetRoutesLayer,
   authRoutesLayer,
 ).pipe(Layer.provide(platformLayer));
 

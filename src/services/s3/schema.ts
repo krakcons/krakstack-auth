@@ -22,7 +22,7 @@ export const UploadedAsset = Schema.Struct({
   description: "Stable public asset URL for an uploaded file.",
   examples: [
     {
-      url: "https://auth.example.com/api/assets/logos/organizations/logo.png",
+      url: "https://auth.example.com/api/auth/assets/logos/organizations/logo.png",
     },
   ],
 });

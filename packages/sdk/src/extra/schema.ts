@@ -245,6 +245,11 @@ export const ExtraUploadedAsset = Schema.Struct({
   identifier: "ExtraUploadedAsset",
   title: "Extra uploaded asset",
   description: "Stable public asset URL returned after an image upload.",
+  examples: [
+    {
+      url: "https://auth.example.com/api/auth/assets/logos/organizations/logo.png",
+    },
+  ],
 });
 
 export class ExtraBadRequest extends Schema.ErrorClass<ExtraBadRequest>(

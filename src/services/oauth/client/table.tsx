@@ -41,7 +41,8 @@ const deleteOAuthClientAtom = AdminApiClient.mutation(
 const assetUrl = (value: string | null | undefined) => {
   const url = value?.trim();
   if (!url) return "";
-  if (!url.startsWith("/api/assets/")) return url;
+  if (!url.startsWith("/api/assets/") && !url.startsWith("/api/auth/assets/"))
+    return url;
   if (!authBaseUrl?.trim()) return url;
 
   return new URL(url, authBaseUrl).toString();
