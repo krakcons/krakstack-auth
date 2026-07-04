@@ -60,6 +60,8 @@
   "email_two_factor_otp_html": "<p>Votre code de vérification est :</p><p><strong>{otp}</strong></p>",
   "email_otp_verification_subject": "Votre code de vérification de courriel {appName}",
   "email_otp_reset_password_subject": "Votre code de réinitialisation de mot de passe {appName}",
+  "email_otp_verification_description": "Utilisez le code de vérification ci-dessous pour continuer.",
+  "email_reset_password_description": "Utilisez le bouton ci-dessous pour choisir un nouveau mot de passe.",
   "email_otp_verification_text": "Votre code de vérification est : {otp}",
   "email_otp_verification_html": "<p>Votre code de vérification est :</p><p><strong>{otp}</strong></p>",
   "consent_connected_application": "application connectée",

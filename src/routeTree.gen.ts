@@ -8,442 +8,442 @@
 // You should NOT make any changes in this file as it will be overwritten.
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
-import { Route as rootRouteImport } from './routes/__root'
-import { Route as AdminRouteImport } from './routes/admin'
-import { Route as AuthRouteImport } from './routes/_auth'
-import { Route as IndexRouteImport } from './routes/index'
-import { Route as AdminIndexRouteImport } from './routes/admin/index'
-import { Route as ApiSplatRouteImport } from './routes/api/$'
-import { Route as AdminUsersRouteImport } from './routes/admin/users'
-import { Route as AdminProjectsRouteImport } from './routes/admin/projects'
-import { Route as AdminOrganizationsRouteImport } from './routes/admin/organizations'
-import { Route as AdminDomainsRouteImport } from './routes/admin/domains'
-import { Route as AdminApiKeysRouteImport } from './routes/admin/api-keys'
-import { Route as AuthVerifyEmailRouteImport } from './routes/_auth.verify-email'
-import { Route as AuthSignUpRouteImport } from './routes/_auth.sign-up'
-import { Route as AuthSignInRouteImport } from './routes/_auth.sign-in'
-import { Route as AuthResetPasswordRouteImport } from './routes/_auth.reset-password'
-import { Route as AuthForgotPasswordRouteImport } from './routes/_auth.forgot-password'
-import { Route as AuthConsentRouteImport } from './routes/_auth.consent'
-import { Route as Auth2faRouteImport } from './routes/_auth.2fa'
-import { Route as DotwellKnownOpenidConfigurationRouteImport } from './routes/[.]well-known/openid-configuration'
-import { Route as DotwellKnownOauthAuthorizationServerRouteImport } from './routes/[.]well-known/oauth-authorization-server'
-import { Route as AdminOauthClientsRouteImport } from './routes/admin/oauth/clients'
-import { Route as DotwellKnownOauthAuthorizationServerApiAuthRouteImport } from './routes/[.]well-known/oauth-authorization-server/api/auth'
+import { Route as rootRouteImport } from "./routes/__root";
+import { Route as AdminRouteImport } from "./routes/admin";
+import { Route as AuthRouteImport } from "./routes/_auth";
+import { Route as IndexRouteImport } from "./routes/index";
+import { Route as AdminIndexRouteImport } from "./routes/admin/index";
+import { Route as ApiSplatRouteImport } from "./routes/api/$";
+import { Route as AdminUsersRouteImport } from "./routes/admin/users";
+import { Route as AdminProjectsRouteImport } from "./routes/admin/projects";
+import { Route as AdminOrganizationsRouteImport } from "./routes/admin/organizations";
+import { Route as AdminDomainsRouteImport } from "./routes/admin/domains";
+import { Route as AdminApiKeysRouteImport } from "./routes/admin/api-keys";
+import { Route as AuthVerifyEmailRouteImport } from "./routes/_auth.verify-email";
+import { Route as AuthSignUpRouteImport } from "./routes/_auth.sign-up";
+import { Route as AuthSignInRouteImport } from "./routes/_auth.sign-in";
+import { Route as AuthResetPasswordRouteImport } from "./routes/_auth.reset-password";
+import { Route as AuthForgotPasswordRouteImport } from "./routes/_auth.forgot-password";
+import { Route as AuthConsentRouteImport } from "./routes/_auth.consent";
+import { Route as Auth2faRouteImport } from "./routes/_auth.2fa";
+import { Route as DotwellKnownOpenidConfigurationRouteImport } from "./routes/[.]well-known/openid-configuration";
+import { Route as DotwellKnownOauthAuthorizationServerRouteImport } from "./routes/[.]well-known/oauth-authorization-server";
+import { Route as AdminOauthClientsRouteImport } from "./routes/admin/oauth/clients";
+import { Route as DotwellKnownOauthAuthorizationServerApiAuthRouteImport } from "./routes/[.]well-known/oauth-authorization-server/api/auth";
 
 const AdminRoute = AdminRouteImport.update({
-  id: '/admin',
-  path: '/admin',
+  id: "/admin",
+  path: "/admin",
   getParentRoute: () => rootRouteImport,
-} as any)
+} as any);
 const AuthRoute = AuthRouteImport.update({
-  id: '/_auth',
+  id: "/_auth",
   getParentRoute: () => rootRouteImport,
-} as any)
+} as any);
 const IndexRoute = IndexRouteImport.update({
-  id: '/',
-  path: '/',
+  id: "/",
+  path: "/",
   getParentRoute: () => rootRouteImport,
-} as any)
+} as any);
 const AdminIndexRoute = AdminIndexRouteImport.update({
-  id: '/',
-  path: '/',
+  id: "/",
+  path: "/",
   getParentRoute: () => AdminRoute,
-} as any)
+} as any);
 const ApiSplatRoute = ApiSplatRouteImport.update({
-  id: '/api/$',
-  path: '/api/$',
+  id: "/api/$",
+  path: "/api/$",
   getParentRoute: () => rootRouteImport,
-} as any)
+} as any);
 const AdminUsersRoute = AdminUsersRouteImport.update({
-  id: '/users',
-  path: '/users',
+  id: "/users",
+  path: "/users",
   getParentRoute: () => AdminRoute,
-} as any)
+} as any);
 const AdminProjectsRoute = AdminProjectsRouteImport.update({
-  id: '/projects',
-  path: '/projects',
+  id: "/projects",
+  path: "/projects",
   getParentRoute: () => AdminRoute,
-} as any)
+} as any);
 const AdminOrganizationsRoute = AdminOrganizationsRouteImport.update({
-  id: '/organizations',
-  path: '/organizations',
+  id: "/organizations",
+  path: "/organizations",
   getParentRoute: () => AdminRoute,
-} as any)
+} as any);
 const AdminDomainsRoute = AdminDomainsRouteImport.update({
-  id: '/domains',
-  path: '/domains',
+  id: "/domains",
+  path: "/domains",
   getParentRoute: () => AdminRoute,
-} as any)
+} as any);
 const AdminApiKeysRoute = AdminApiKeysRouteImport.update({
-  id: '/api-keys',
-  path: '/api-keys',
+  id: "/api-keys",
+  path: "/api-keys",
   getParentRoute: () => AdminRoute,
-} as any)
+} as any);
 const AuthVerifyEmailRoute = AuthVerifyEmailRouteImport.update({
-  id: '/verify-email',
-  path: '/verify-email',
+  id: "/verify-email",
+  path: "/verify-email",
   getParentRoute: () => AuthRoute,
-} as any)
+} as any);
 const AuthSignUpRoute = AuthSignUpRouteImport.update({
-  id: '/sign-up',
-  path: '/sign-up',
+  id: "/sign-up",
+  path: "/sign-up",
   getParentRoute: () => AuthRoute,
-} as any)
+} as any);
 const AuthSignInRoute = AuthSignInRouteImport.update({
-  id: '/sign-in',
-  path: '/sign-in',
+  id: "/sign-in",
+  path: "/sign-in",
   getParentRoute: () => AuthRoute,
-} as any)
+} as any);
 const AuthResetPasswordRoute = AuthResetPasswordRouteImport.update({
-  id: '/reset-password',
-  path: '/reset-password',
+  id: "/reset-password",
+  path: "/reset-password",
   getParentRoute: () => AuthRoute,
-} as any)
+} as any);
 const AuthForgotPasswordRoute = AuthForgotPasswordRouteImport.update({
-  id: '/forgot-password',
-  path: '/forgot-password',
+  id: "/forgot-password",
+  path: "/forgot-password",
   getParentRoute: () => AuthRoute,
-} as any)
+} as any);
 const AuthConsentRoute = AuthConsentRouteImport.update({
-  id: '/consent',
-  path: '/consent',
+  id: "/consent",
+  path: "/consent",
   getParentRoute: () => AuthRoute,
-} as any)
+} as any);
 const Auth2faRoute = Auth2faRouteImport.update({
-  id: '/2fa',
-  path: '/2fa',
+  id: "/2fa",
+  path: "/2fa",
   getParentRoute: () => AuthRoute,
-} as any)
+} as any);
 const DotwellKnownOpenidConfigurationRoute =
   DotwellKnownOpenidConfigurationRouteImport.update({
-    id: '/.well-known/openid-configuration',
-    path: '/.well-known/openid-configuration',
+    id: "/.well-known/openid-configuration",
+    path: "/.well-known/openid-configuration",
     getParentRoute: () => rootRouteImport,
-  } as any)
+  } as any);
 const DotwellKnownOauthAuthorizationServerRoute =
   DotwellKnownOauthAuthorizationServerRouteImport.update({
-    id: '/.well-known/oauth-authorization-server',
-    path: '/.well-known/oauth-authorization-server',
+    id: "/.well-known/oauth-authorization-server",
+    path: "/.well-known/oauth-authorization-server",
     getParentRoute: () => rootRouteImport,
-  } as any)
+  } as any);
 const AdminOauthClientsRoute = AdminOauthClientsRouteImport.update({
-  id: '/oauth/clients',
-  path: '/oauth/clients',
+  id: "/oauth/clients",
+  path: "/oauth/clients",
   getParentRoute: () => AdminRoute,
-} as any)
+} as any);
 const DotwellKnownOauthAuthorizationServerApiAuthRoute =
   DotwellKnownOauthAuthorizationServerApiAuthRouteImport.update({
-    id: '/api/auth',
-    path: '/api/auth',
+    id: "/api/auth",
+    path: "/api/auth",
     getParentRoute: () => DotwellKnownOauthAuthorizationServerRoute,
-  } as any)
+  } as any);
 
 export interface FileRoutesByFullPath {
-  '/': typeof IndexRoute
-  '/admin': typeof AdminRouteWithChildren
-  '/.well-known/oauth-authorization-server': typeof DotwellKnownOauthAuthorizationServerRouteWithChildren
-  '/.well-known/openid-configuration': typeof DotwellKnownOpenidConfigurationRoute
-  '/2fa': typeof Auth2faRoute
-  '/consent': typeof AuthConsentRoute
-  '/forgot-password': typeof AuthForgotPasswordRoute
-  '/reset-password': typeof AuthResetPasswordRoute
-  '/sign-in': typeof AuthSignInRoute
-  '/sign-up': typeof AuthSignUpRoute
-  '/verify-email': typeof AuthVerifyEmailRoute
-  '/admin/api-keys': typeof AdminApiKeysRoute
-  '/admin/domains': typeof AdminDomainsRoute
-  '/admin/organizations': typeof AdminOrganizationsRoute
-  '/admin/projects': typeof AdminProjectsRoute
-  '/admin/users': typeof AdminUsersRoute
-  '/api/$': typeof ApiSplatRoute
-  '/admin/': typeof AdminIndexRoute
-  '/admin/oauth/clients': typeof AdminOauthClientsRoute
-  '/.well-known/oauth-authorization-server/api/auth': typeof DotwellKnownOauthAuthorizationServerApiAuthRoute
+  "/": typeof IndexRoute;
+  "/admin": typeof AdminRouteWithChildren;
+  "/.well-known/oauth-authorization-server": typeof DotwellKnownOauthAuthorizationServerRouteWithChildren;
+  "/.well-known/openid-configuration": typeof DotwellKnownOpenidConfigurationRoute;
+  "/2fa": typeof Auth2faRoute;
+  "/consent": typeof AuthConsentRoute;
+  "/forgot-password": typeof AuthForgotPasswordRoute;
+  "/reset-password": typeof AuthResetPasswordRoute;
+  "/sign-in": typeof AuthSignInRoute;
+  "/sign-up": typeof AuthSignUpRoute;
+  "/verify-email": typeof AuthVerifyEmailRoute;
+  "/admin/api-keys": typeof AdminApiKeysRoute;
+  "/admin/domains": typeof AdminDomainsRoute;
+  "/admin/organizations": typeof AdminOrganizationsRoute;
+  "/admin/projects": typeof AdminProjectsRoute;
+  "/admin/users": typeof AdminUsersRoute;
+  "/api/$": typeof ApiSplatRoute;
+  "/admin/": typeof AdminIndexRoute;
+  "/admin/oauth/clients": typeof AdminOauthClientsRoute;
+  "/.well-known/oauth-authorization-server/api/auth": typeof DotwellKnownOauthAuthorizationServerApiAuthRoute;
 }
 export interface FileRoutesByTo {
-  '/': typeof IndexRoute
-  '/.well-known/oauth-authorization-server': typeof DotwellKnownOauthAuthorizationServerRouteWithChildren
-  '/.well-known/openid-configuration': typeof DotwellKnownOpenidConfigurationRoute
-  '/2fa': typeof Auth2faRoute
-  '/consent': typeof AuthConsentRoute
-  '/forgot-password': typeof AuthForgotPasswordRoute
-  '/reset-password': typeof AuthResetPasswordRoute
-  '/sign-in': typeof AuthSignInRoute
-  '/sign-up': typeof AuthSignUpRoute
-  '/verify-email': typeof AuthVerifyEmailRoute
-  '/admin/api-keys': typeof AdminApiKeysRoute
-  '/admin/domains': typeof AdminDomainsRoute
-  '/admin/organizations': typeof AdminOrganizationsRoute
-  '/admin/projects': typeof AdminProjectsRoute
-  '/admin/users': typeof AdminUsersRoute
-  '/api/$': typeof ApiSplatRoute
-  '/admin': typeof AdminIndexRoute
-  '/admin/oauth/clients': typeof AdminOauthClientsRoute
-  '/.well-known/oauth-authorization-server/api/auth': typeof DotwellKnownOauthAuthorizationServerApiAuthRoute
+  "/": typeof IndexRoute;
+  "/.well-known/oauth-authorization-server": typeof DotwellKnownOauthAuthorizationServerRouteWithChildren;
+  "/.well-known/openid-configuration": typeof DotwellKnownOpenidConfigurationRoute;
+  "/2fa": typeof Auth2faRoute;
+  "/consent": typeof AuthConsentRoute;
+  "/forgot-password": typeof AuthForgotPasswordRoute;
+  "/reset-password": typeof AuthResetPasswordRoute;
+  "/sign-in": typeof AuthSignInRoute;
+  "/sign-up": typeof AuthSignUpRoute;
+  "/verify-email": typeof AuthVerifyEmailRoute;
+  "/admin/api-keys": typeof AdminApiKeysRoute;
+  "/admin/domains": typeof AdminDomainsRoute;
+  "/admin/organizations": typeof AdminOrganizationsRoute;
+  "/admin/projects": typeof AdminProjectsRoute;
+  "/admin/users": typeof AdminUsersRoute;
+  "/api/$": typeof ApiSplatRoute;
+  "/admin": typeof AdminIndexRoute;
+  "/admin/oauth/clients": typeof AdminOauthClientsRoute;
+  "/.well-known/oauth-authorization-server/api/auth": typeof DotwellKnownOauthAuthorizationServerApiAuthRoute;
 }
 export interface FileRoutesById {
-  __root__: typeof rootRouteImport
-  '/': typeof IndexRoute
-  '/_auth': typeof AuthRouteWithChildren
-  '/admin': typeof AdminRouteWithChildren
-  '/.well-known/oauth-authorization-server': typeof DotwellKnownOauthAuthorizationServerRouteWithChildren
-  '/.well-known/openid-configuration': typeof DotwellKnownOpenidConfigurationRoute
-  '/_auth/2fa': typeof Auth2faRoute
-  '/_auth/consent': typeof AuthConsentRoute
-  '/_auth/forgot-password': typeof AuthForgotPasswordRoute
-  '/_auth/reset-password': typeof AuthResetPasswordRoute
-  '/_auth/sign-in': typeof AuthSignInRoute
-  '/_auth/sign-up': typeof AuthSignUpRoute
-  '/_auth/verify-email': typeof AuthVerifyEmailRoute
-  '/admin/api-keys': typeof AdminApiKeysRoute
-  '/admin/domains': typeof AdminDomainsRoute
-  '/admin/organizations': typeof AdminOrganizationsRoute
-  '/admin/projects': typeof AdminProjectsRoute
-  '/admin/users': typeof AdminUsersRoute
-  '/api/$': typeof ApiSplatRoute
-  '/admin/': typeof AdminIndexRoute
-  '/admin/oauth/clients': typeof AdminOauthClientsRoute
-  '/.well-known/oauth-authorization-server/api/auth': typeof DotwellKnownOauthAuthorizationServerApiAuthRoute
+  __root__: typeof rootRouteImport;
+  "/": typeof IndexRoute;
+  "/_auth": typeof AuthRouteWithChildren;
+  "/admin": typeof AdminRouteWithChildren;
+  "/.well-known/oauth-authorization-server": typeof DotwellKnownOauthAuthorizationServerRouteWithChildren;
+  "/.well-known/openid-configuration": typeof DotwellKnownOpenidConfigurationRoute;
+  "/_auth/2fa": typeof Auth2faRoute;
+  "/_auth/consent": typeof AuthConsentRoute;
+  "/_auth/forgot-password": typeof AuthForgotPasswordRoute;
+  "/_auth/reset-password": typeof AuthResetPasswordRoute;
+  "/_auth/sign-in": typeof AuthSignInRoute;
+  "/_auth/sign-up": typeof AuthSignUpRoute;
+  "/_auth/verify-email": typeof AuthVerifyEmailRoute;
+  "/admin/api-keys": typeof AdminApiKeysRoute;
+  "/admin/domains": typeof AdminDomainsRoute;
+  "/admin/organizations": typeof AdminOrganizationsRoute;
+  "/admin/projects": typeof AdminProjectsRoute;
+  "/admin/users": typeof AdminUsersRoute;
+  "/api/$": typeof ApiSplatRoute;
+  "/admin/": typeof AdminIndexRoute;
+  "/admin/oauth/clients": typeof AdminOauthClientsRoute;
+  "/.well-known/oauth-authorization-server/api/auth": typeof DotwellKnownOauthAuthorizationServerApiAuthRoute;
 }
 export interface FileRouteTypes {
-  fileRoutesByFullPath: FileRoutesByFullPath
+  fileRoutesByFullPath: FileRoutesByFullPath;
   fullPaths:
-    | '/'
-    | '/admin'
-    | '/.well-known/oauth-authorization-server'
-    | '/.well-known/openid-configuration'
-    | '/2fa'
-    | '/consent'
-    | '/forgot-password'
-    | '/reset-password'
-    | '/sign-in'
-    | '/sign-up'
-    | '/verify-email'
-    | '/admin/api-keys'
-    | '/admin/domains'
-    | '/admin/organizations'
-    | '/admin/projects'
-    | '/admin/users'
-    | '/api/$'
-    | '/admin/'
-    | '/admin/oauth/clients'
-    | '/.well-known/oauth-authorization-server/api/auth'
-  fileRoutesByTo: FileRoutesByTo
+    | "/"
+    | "/admin"
+    | "/.well-known/oauth-authorization-server"
+    | "/.well-known/openid-configuration"
+    | "/2fa"
+    | "/consent"
+    | "/forgot-password"
+    | "/reset-password"
+    | "/sign-in"
+    | "/sign-up"
+    | "/verify-email"
+    | "/admin/api-keys"
+    | "/admin/domains"
+    | "/admin/organizations"
+    | "/admin/projects"
+    | "/admin/users"
+    | "/api/$"
+    | "/admin/"
+    | "/admin/oauth/clients"
+    | "/.well-known/oauth-authorization-server/api/auth";
+  fileRoutesByTo: FileRoutesByTo;
   to:
-    | '/'
-    | '/.well-known/oauth-authorization-server'
-    | '/.well-known/openid-configuration'
-    | '/2fa'
-    | '/consent'
-    | '/forgot-password'
-    | '/reset-password'
-    | '/sign-in'
-    | '/sign-up'
-    | '/verify-email'
-    | '/admin/api-keys'
-    | '/admin/domains'
-    | '/admin/organizations'
-    | '/admin/projects'
-    | '/admin/users'
-    | '/api/$'
-    | '/admin'
-    | '/admin/oauth/clients'
-    | '/.well-known/oauth-authorization-server/api/auth'
+    | "/"
+    | "/.well-known/oauth-authorization-server"
+    | "/.well-known/openid-configuration"
+    | "/2fa"
+    | "/consent"
+    | "/forgot-password"
+    | "/reset-password"
+    | "/sign-in"
+    | "/sign-up"
+    | "/verify-email"
+    | "/admin/api-keys"
+    | "/admin/domains"
+    | "/admin/organizations"
+    | "/admin/projects"
+    | "/admin/users"
+    | "/api/$"
+    | "/admin"
+    | "/admin/oauth/clients"
+    | "/.well-known/oauth-authorization-server/api/auth";
   id:
-    | '__root__'
-    | '/'
-    | '/_auth'
-    | '/admin'
-    | '/.well-known/oauth-authorization-server'
-    | '/.well-known/openid-configuration'
-    | '/_auth/2fa'
-    | '/_auth/consent'
-    | '/_auth/forgot-password'
-    | '/_auth/reset-password'
-    | '/_auth/sign-in'
-    | '/_auth/sign-up'
-    | '/_auth/verify-email'
-    | '/admin/api-keys'
-    | '/admin/domains'
-    | '/admin/organizations'
-    | '/admin/projects'
-    | '/admin/users'
-    | '/api/$'
-    | '/admin/'
-    | '/admin/oauth/clients'
-    | '/.well-known/oauth-authorization-server/api/auth'
-  fileRoutesById: FileRoutesById
+    | "__root__"
+    | "/"
+    | "/_auth"
+    | "/admin"
+    | "/.well-known/oauth-authorization-server"
+    | "/.well-known/openid-configuration"
+    | "/_auth/2fa"
+    | "/_auth/consent"
+    | "/_auth/forgot-password"
+    | "/_auth/reset-password"
+    | "/_auth/sign-in"
+    | "/_auth/sign-up"
+    | "/_auth/verify-email"
+    | "/admin/api-keys"
+    | "/admin/domains"
+    | "/admin/organizations"
+    | "/admin/projects"
+    | "/admin/users"
+    | "/api/$"
+    | "/admin/"
+    | "/admin/oauth/clients"
+    | "/.well-known/oauth-authorization-server/api/auth";
+  fileRoutesById: FileRoutesById;
 }
 export interface RootRouteChildren {
-  IndexRoute: typeof IndexRoute
-  AuthRoute: typeof AuthRouteWithChildren
-  AdminRoute: typeof AdminRouteWithChildren
-  DotwellKnownOauthAuthorizationServerRoute: typeof DotwellKnownOauthAuthorizationServerRouteWithChildren
-  DotwellKnownOpenidConfigurationRoute: typeof DotwellKnownOpenidConfigurationRoute
-  ApiSplatRoute: typeof ApiSplatRoute
+  IndexRoute: typeof IndexRoute;
+  AuthRoute: typeof AuthRouteWithChildren;
+  AdminRoute: typeof AdminRouteWithChildren;
+  DotwellKnownOauthAuthorizationServerRoute: typeof DotwellKnownOauthAuthorizationServerRouteWithChildren;
+  DotwellKnownOpenidConfigurationRoute: typeof DotwellKnownOpenidConfigurationRoute;
+  ApiSplatRoute: typeof ApiSplatRoute;
 }
 
-declare module '@tanstack/react-router' {
+declare module "@tanstack/react-router" {
   interface FileRoutesByPath {
-    '/admin': {
-      id: '/admin'
-      path: '/admin'
-      fullPath: '/admin'
-      preLoaderRoute: typeof AdminRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/_auth': {
-      id: '/_auth'
-      path: ''
-      fullPath: '/'
-      preLoaderRoute: typeof AuthRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/': {
-      id: '/'
-      path: '/'
-      fullPath: '/'
-      preLoaderRoute: typeof IndexRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/admin/': {
-      id: '/admin/'
-      path: '/'
-      fullPath: '/admin/'
-      preLoaderRoute: typeof AdminIndexRouteImport
-      parentRoute: typeof AdminRoute
-    }
-    '/api/$': {
-      id: '/api/$'
-      path: '/api/$'
-      fullPath: '/api/$'
-      preLoaderRoute: typeof ApiSplatRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/admin/users': {
-      id: '/admin/users'
-      path: '/users'
-      fullPath: '/admin/users'
-      preLoaderRoute: typeof AdminUsersRouteImport
-      parentRoute: typeof AdminRoute
-    }
-    '/admin/projects': {
-      id: '/admin/projects'
-      path: '/projects'
-      fullPath: '/admin/projects'
-      preLoaderRoute: typeof AdminProjectsRouteImport
-      parentRoute: typeof AdminRoute
-    }
-    '/admin/organizations': {
-      id: '/admin/organizations'
-      path: '/organizations'
-      fullPath: '/admin/organizations'
-      preLoaderRoute: typeof AdminOrganizationsRouteImport
-      parentRoute: typeof AdminRoute
-    }
-    '/admin/domains': {
-      id: '/admin/domains'
-      path: '/domains'
-      fullPath: '/admin/domains'
-      preLoaderRoute: typeof AdminDomainsRouteImport
-      parentRoute: typeof AdminRoute
-    }
-    '/admin/api-keys': {
-      id: '/admin/api-keys'
-      path: '/api-keys'
-      fullPath: '/admin/api-keys'
-      preLoaderRoute: typeof AdminApiKeysRouteImport
-      parentRoute: typeof AdminRoute
-    }
-    '/_auth/verify-email': {
-      id: '/_auth/verify-email'
-      path: '/verify-email'
-      fullPath: '/verify-email'
-      preLoaderRoute: typeof AuthVerifyEmailRouteImport
-      parentRoute: typeof AuthRoute
-    }
-    '/_auth/sign-up': {
-      id: '/_auth/sign-up'
-      path: '/sign-up'
-      fullPath: '/sign-up'
-      preLoaderRoute: typeof AuthSignUpRouteImport
-      parentRoute: typeof AuthRoute
-    }
-    '/_auth/sign-in': {
-      id: '/_auth/sign-in'
-      path: '/sign-in'
-      fullPath: '/sign-in'
-      preLoaderRoute: typeof AuthSignInRouteImport
-      parentRoute: typeof AuthRoute
-    }
-    '/_auth/reset-password': {
-      id: '/_auth/reset-password'
-      path: '/reset-password'
-      fullPath: '/reset-password'
-      preLoaderRoute: typeof AuthResetPasswordRouteImport
-      parentRoute: typeof AuthRoute
-    }
-    '/_auth/forgot-password': {
-      id: '/_auth/forgot-password'
-      path: '/forgot-password'
-      fullPath: '/forgot-password'
-      preLoaderRoute: typeof AuthForgotPasswordRouteImport
-      parentRoute: typeof AuthRoute
-    }
-    '/_auth/consent': {
-      id: '/_auth/consent'
-      path: '/consent'
-      fullPath: '/consent'
-      preLoaderRoute: typeof AuthConsentRouteImport
-      parentRoute: typeof AuthRoute
-    }
-    '/_auth/2fa': {
-      id: '/_auth/2fa'
-      path: '/2fa'
-      fullPath: '/2fa'
-      preLoaderRoute: typeof Auth2faRouteImport
-      parentRoute: typeof AuthRoute
-    }
-    '/.well-known/openid-configuration': {
-      id: '/.well-known/openid-configuration'
-      path: '/.well-known/openid-configuration'
-      fullPath: '/.well-known/openid-configuration'
-      preLoaderRoute: typeof DotwellKnownOpenidConfigurationRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/.well-known/oauth-authorization-server': {
-      id: '/.well-known/oauth-authorization-server'
-      path: '/.well-known/oauth-authorization-server'
-      fullPath: '/.well-known/oauth-authorization-server'
-      preLoaderRoute: typeof DotwellKnownOauthAuthorizationServerRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/admin/oauth/clients': {
-      id: '/admin/oauth/clients'
-      path: '/oauth/clients'
-      fullPath: '/admin/oauth/clients'
-      preLoaderRoute: typeof AdminOauthClientsRouteImport
-      parentRoute: typeof AdminRoute
-    }
-    '/.well-known/oauth-authorization-server/api/auth': {
-      id: '/.well-known/oauth-authorization-server/api/auth'
-      path: '/api/auth'
-      fullPath: '/.well-known/oauth-authorization-server/api/auth'
-      preLoaderRoute: typeof DotwellKnownOauthAuthorizationServerApiAuthRouteImport
-      parentRoute: typeof DotwellKnownOauthAuthorizationServerRoute
-    }
+    "/admin": {
+      id: "/admin";
+      path: "/admin";
+      fullPath: "/admin";
+      preLoaderRoute: typeof AdminRouteImport;
+      parentRoute: typeof rootRouteImport;
+    };
+    "/_auth": {
+      id: "/_auth";
+      path: "";
+      fullPath: "/";
+      preLoaderRoute: typeof AuthRouteImport;
+      parentRoute: typeof rootRouteImport;
+    };
+    "/": {
+      id: "/";
+      path: "/";
+      fullPath: "/";
+      preLoaderRoute: typeof IndexRouteImport;
+      parentRoute: typeof rootRouteImport;
+    };
+    "/admin/": {
+      id: "/admin/";
+      path: "/";
+      fullPath: "/admin/";
+      preLoaderRoute: typeof AdminIndexRouteImport;
+      parentRoute: typeof AdminRoute;
+    };
+    "/api/$": {
+      id: "/api/$";
+      path: "/api/$";
+      fullPath: "/api/$";
+      preLoaderRoute: typeof ApiSplatRouteImport;
+      parentRoute: typeof rootRouteImport;
+    };
+    "/admin/users": {
+      id: "/admin/users";
+      path: "/users";
+      fullPath: "/admin/users";
+      preLoaderRoute: typeof AdminUsersRouteImport;
+      parentRoute: typeof AdminRoute;
+    };
+    "/admin/projects": {
+      id: "/admin/projects";
+      path: "/projects";
+      fullPath: "/admin/projects";
+      preLoaderRoute: typeof AdminProjectsRouteImport;
+      parentRoute: typeof AdminRoute;
+    };
+    "/admin/organizations": {
+      id: "/admin/organizations";
+      path: "/organizations";
+      fullPath: "/admin/organizations";
+      preLoaderRoute: typeof AdminOrganizationsRouteImport;
+      parentRoute: typeof AdminRoute;
+    };
+    "/admin/domains": {
+      id: "/admin/domains";
+      path: "/domains";
+      fullPath: "/admin/domains";
+      preLoaderRoute: typeof AdminDomainsRouteImport;
+      parentRoute: typeof AdminRoute;
+    };
+    "/admin/api-keys": {
+      id: "/admin/api-keys";
+      path: "/api-keys";
+      fullPath: "/admin/api-keys";
+      preLoaderRoute: typeof AdminApiKeysRouteImport;
+      parentRoute: typeof AdminRoute;
+    };
+    "/_auth/verify-email": {
+      id: "/_auth/verify-email";
+      path: "/verify-email";
+      fullPath: "/verify-email";
+      preLoaderRoute: typeof AuthVerifyEmailRouteImport;
+      parentRoute: typeof AuthRoute;
+    };
+    "/_auth/sign-up": {
+      id: "/_auth/sign-up";
+      path: "/sign-up";
+      fullPath: "/sign-up";
+      preLoaderRoute: typeof AuthSignUpRouteImport;
+      parentRoute: typeof AuthRoute;
+    };
+    "/_auth/sign-in": {
+      id: "/_auth/sign-in";
+      path: "/sign-in";
+      fullPath: "/sign-in";
+      preLoaderRoute: typeof AuthSignInRouteImport;
+      parentRoute: typeof AuthRoute;
+    };
+    "/_auth/reset-password": {
+      id: "/_auth/reset-password";
+      path: "/reset-password";
+      fullPath: "/reset-password";
+      preLoaderRoute: typeof AuthResetPasswordRouteImport;
+      parentRoute: typeof AuthRoute;
+    };
+    "/_auth/forgot-password": {
+      id: "/_auth/forgot-password";
+      path: "/forgot-password";
+      fullPath: "/forgot-password";
+      preLoaderRoute: typeof AuthForgotPasswordRouteImport;
+      parentRoute: typeof AuthRoute;
+    };
+    "/_auth/consent": {
+      id: "/_auth/consent";
+      path: "/consent";
+      fullPath: "/consent";
+      preLoaderRoute: typeof AuthConsentRouteImport;
+      parentRoute: typeof AuthRoute;
+    };
+    "/_auth/2fa": {
+      id: "/_auth/2fa";
+      path: "/2fa";
+      fullPath: "/2fa";
+      preLoaderRoute: typeof Auth2faRouteImport;
+      parentRoute: typeof AuthRoute;
+    };
+    "/.well-known/openid-configuration": {
+      id: "/.well-known/openid-configuration";
+      path: "/.well-known/openid-configuration";
+      fullPath: "/.well-known/openid-configuration";
+      preLoaderRoute: typeof DotwellKnownOpenidConfigurationRouteImport;
+      parentRoute: typeof rootRouteImport;
+    };
+    "/.well-known/oauth-authorization-server": {
+      id: "/.well-known/oauth-authorization-server";
+      path: "/.well-known/oauth-authorization-server";
+      fullPath: "/.well-known/oauth-authorization-server";
+      preLoaderRoute: typeof DotwellKnownOauthAuthorizationServerRouteImport;
+      parentRoute: typeof rootRouteImport;
+    };
+    "/admin/oauth/clients": {
+      id: "/admin/oauth/clients";
+      path: "/oauth/clients";
+      fullPath: "/admin/oauth/clients";
+      preLoaderRoute: typeof AdminOauthClientsRouteImport;
+      parentRoute: typeof AdminRoute;
+    };
+    "/.well-known/oauth-authorization-server/api/auth": {
+      id: "/.well-known/oauth-authorization-server/api/auth";
+      path: "/api/auth";
+      fullPath: "/.well-known/oauth-authorization-server/api/auth";
+      preLoaderRoute: typeof DotwellKnownOauthAuthorizationServerApiAuthRouteImport;
+      parentRoute: typeof DotwellKnownOauthAuthorizationServerRoute;
+    };
   }
 }
 
 interface AuthRouteChildren {
-  Auth2faRoute: typeof Auth2faRoute
-  AuthConsentRoute: typeof AuthConsentRoute
-  AuthForgotPasswordRoute: typeof AuthForgotPasswordRoute
-  AuthResetPasswordRoute: typeof AuthResetPasswordRoute
-  AuthSignInRoute: typeof AuthSignInRoute
-  AuthSignUpRoute: typeof AuthSignUpRoute
-  AuthVerifyEmailRoute: typeof AuthVerifyEmailRoute
+  Auth2faRoute: typeof Auth2faRoute;
+  AuthConsentRoute: typeof AuthConsentRoute;
+  AuthForgotPasswordRoute: typeof AuthForgotPasswordRoute;
+  AuthResetPasswordRoute: typeof AuthResetPasswordRoute;
+  AuthSignInRoute: typeof AuthSignInRoute;
+  AuthSignUpRoute: typeof AuthSignUpRoute;
+  AuthVerifyEmailRoute: typeof AuthVerifyEmailRoute;
 }
 
 const AuthRouteChildren: AuthRouteChildren = {
@@ -454,18 +454,18 @@ const AuthRouteChildren: AuthRouteChildren = {
   AuthSignInRoute: AuthSignInRoute,
   AuthSignUpRoute: AuthSignUpRoute,
   AuthVerifyEmailRoute: AuthVerifyEmailRoute,
-}
+};
 
-const AuthRouteWithChildren = AuthRoute._addFileChildren(AuthRouteChildren)
+const AuthRouteWithChildren = AuthRoute._addFileChildren(AuthRouteChildren);
 
 interface AdminRouteChildren {
-  AdminApiKeysRoute: typeof AdminApiKeysRoute
-  AdminDomainsRoute: typeof AdminDomainsRoute
-  AdminOrganizationsRoute: typeof AdminOrganizationsRoute
-  AdminProjectsRoute: typeof AdminProjectsRoute
-  AdminUsersRoute: typeof AdminUsersRoute
-  AdminIndexRoute: typeof AdminIndexRoute
-  AdminOauthClientsRoute: typeof AdminOauthClientsRoute
+  AdminApiKeysRoute: typeof AdminApiKeysRoute;
+  AdminDomainsRoute: typeof AdminDomainsRoute;
+  AdminOrganizationsRoute: typeof AdminOrganizationsRoute;
+  AdminProjectsRoute: typeof AdminProjectsRoute;
+  AdminUsersRoute: typeof AdminUsersRoute;
+  AdminIndexRoute: typeof AdminIndexRoute;
+  AdminOauthClientsRoute: typeof AdminOauthClientsRoute;
 }
 
 const AdminRouteChildren: AdminRouteChildren = {
@@ -476,24 +476,24 @@ const AdminRouteChildren: AdminRouteChildren = {
   AdminUsersRoute: AdminUsersRoute,
   AdminIndexRoute: AdminIndexRoute,
   AdminOauthClientsRoute: AdminOauthClientsRoute,
-}
+};
 
-const AdminRouteWithChildren = AdminRoute._addFileChildren(AdminRouteChildren)
+const AdminRouteWithChildren = AdminRoute._addFileChildren(AdminRouteChildren);
 
 interface DotwellKnownOauthAuthorizationServerRouteChildren {
-  DotwellKnownOauthAuthorizationServerApiAuthRoute: typeof DotwellKnownOauthAuthorizationServerApiAuthRoute
+  DotwellKnownOauthAuthorizationServerApiAuthRoute: typeof DotwellKnownOauthAuthorizationServerApiAuthRoute;
 }
 
 const DotwellKnownOauthAuthorizationServerRouteChildren: DotwellKnownOauthAuthorizationServerRouteChildren =
   {
     DotwellKnownOauthAuthorizationServerApiAuthRoute:
       DotwellKnownOauthAuthorizationServerApiAuthRoute,
-  }
+  };
 
 const DotwellKnownOauthAuthorizationServerRouteWithChildren =
   DotwellKnownOauthAuthorizationServerRoute._addFileChildren(
     DotwellKnownOauthAuthorizationServerRouteChildren,
-  )
+  );
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
@@ -503,16 +503,16 @@ const rootRouteChildren: RootRouteChildren = {
     DotwellKnownOauthAuthorizationServerRouteWithChildren,
   DotwellKnownOpenidConfigurationRoute: DotwellKnownOpenidConfigurationRoute,
   ApiSplatRoute: ApiSplatRoute,
-}
+};
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
-  ._addFileTypes<FileRouteTypes>()
+  ._addFileTypes<FileRouteTypes>();
 
-import type { getRouter } from './router.tsx'
-import type { createStart } from '@tanstack/react-start'
-declare module '@tanstack/react-start' {
+import type { getRouter } from "./router.tsx";
+import type { createStart } from "@tanstack/react-start";
+declare module "@tanstack/react-start" {
   interface Register {
-    ssr: true
-    router: Awaited<ReturnType<typeof getRouter>>
+    ssr: true;
+    router: Awaited<ReturnType<typeof getRouter>>;
   }
 }

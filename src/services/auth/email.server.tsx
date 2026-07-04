@@ -1,9 +1,12 @@
 import * as AwsCredentials from "@distilled.cloud/aws/Credentials";
 import * as AwsRegion from "@distilled.cloud/aws/Region";
 import * as Sesv2 from "@distilled.cloud/aws/sesv2";
+import { render } from "@react-email/components";
 import { Effect, Layer } from "effect";
 import * as FetchHttpClient from "effect/unstable/http/FetchHttpClient";
 
+import { OTPEmail } from "@/emails/OTP";
+import { ResetPasswordEmail } from "@/emails/ResetPassword";
 import { db } from "@/services/database";
 import { hostFromRequest } from "@/services/domains";
 import { m } from "@/paraglide/messages";
@@ -129,6 +132,7 @@ export const sendResetPasswordEmail = async ({
 }) => {
   const locale = localeFromRequest(request);
   const identity = await resolveEmailIdentity(request);
+  const text = m.email_reset_password_text({ url }, { locale });
   await sendAuthEmail({
     from: identity.from,
     to,
@@ -136,8 +140,16 @@ export const sendResetPasswordEmail = async ({
       { appName: identity.appName },
       { locale },
     ),
-    text: m.email_reset_password_text({ url }, { locale }),
-    html: m.email_reset_password_html({ url }, { locale }),
+    text,
+    html: await render(
+      <ResetPasswordEmail
+        appName={identity.appName}
+        url={url}
+        title={m.reset_password_title({}, { locale })}
+        description={m.email_reset_password_description({}, { locale })}
+        action={m.reset_password_submit({}, { locale })}
+      />,
+    ),
   });
 };
 
@@ -152,6 +164,7 @@ export const sendTwoFactorOtpEmail = async ({
 }) => {
   const locale = localeFromRequest(request);
   const identity = await resolveEmailIdentity(request);
+  const text = m.email_two_factor_otp_text({ otp }, { locale });
   await sendAuthEmail({
     from: identity.from,
     to,
@@ -159,8 +172,15 @@ export const sendTwoFactorOtpEmail = async ({
       { appName: identity.appName },
       { locale },
     ),
-    text: m.email_two_factor_otp_text({ otp }, { locale }),
-    html: m.email_two_factor_otp_html({ otp }, { locale }),
+    text,
+    html: await render(
+      <OTPEmail
+        appName={identity.appName}
+        code={otp}
+        title={m.verify_email_title({}, { locale })}
+        description={m.email_otp_verification_description({}, { locale })}
+      />,
+    ),
   });
 };
 
@@ -181,22 +201,38 @@ export const sendEmailVerificationOtpEmail = async ({
 }) => {
   const locale = localeFromRequest(request);
   const identity = await resolveEmailIdentity(request);
-  const subject =
-    type === "forget-password"
-      ? m.email_otp_reset_password_subject(
-          { appName: identity.appName },
-          { locale },
-        )
-      : m.email_otp_verification_subject(
-          { appName: identity.appName },
-          { locale },
-        );
+  const isPasswordReset = type === "forget-password";
+  const subject = isPasswordReset
+    ? m.email_otp_reset_password_subject(
+        { appName: identity.appName },
+        { locale },
+      )
+    : m.email_otp_verification_subject(
+        { appName: identity.appName },
+        { locale },
+      );
+  const text = m.email_otp_verification_text({ otp }, { locale });
 
   await sendAuthEmail({
     from: identity.from,
     to,
     subject,
-    text: m.email_otp_verification_text({ otp }, { locale }),
-    html: m.email_otp_verification_html({ otp }, { locale }),
+    text,
+    html: await render(
+      <OTPEmail
+        appName={identity.appName}
+        code={otp}
+        title={
+          isPasswordReset
+            ? m.reset_password_title({}, { locale })
+            : m.verify_email_title({}, { locale })
+        }
+        description={
+          isPasswordReset
+            ? m.email_reset_password_description({}, { locale })
+            : m.email_otp_verification_description({}, { locale })
+        }
+      />,
+    ),
   });
 };

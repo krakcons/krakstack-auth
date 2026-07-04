@@ -51,6 +51,4 @@ export const cookieDomainForAuthDomainContext = ({
   readonly sharedCookieDomain?: string | undefined;
   readonly fallbackCookieDomain?: string | undefined;
 }) =>
-  isOriginDomain
-    ? undefined
-    : (sharedCookieDomain ?? fallbackCookieDomain);
+  isOriginDomain ? undefined : (sharedCookieDomain ?? fallbackCookieDomain);
