@@ -2,7 +2,6 @@ import {
   Body,
   Container,
   Head,
-  Hr,
   Html,
   Img,
   Preview,
@@ -51,7 +50,6 @@ export const BaseEmail = ({
               {content.extra}
             </Text>
           ) : null}
-          <Hr className="border-border my-8" />
           <Text className="text-foreground m-0 text-sm font-semibold">
             {content.appName}
           </Text>

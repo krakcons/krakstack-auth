@@ -79,8 +79,20 @@ const isVerifiedEmailIdentity = (domain: string) => {
   );
 };
 
+const absoluteUrl = (value: string | null | undefined, request?: Request) => {
+  if (!value) return undefined;
+  if (/^https?:\/\//i.test(value)) return value;
+  const host = request ? hostFromRequest(request) : undefined;
+  if (!host || !value.startsWith("/")) return undefined;
+  return `${process.env.NODE_ENV === "development" ? "http" : "https"}://${host}${value}`;
+};
+
 const resolveEmailIdentity = async (request?: Request | undefined) => {
-  const fallback = { appName: fallbackAppName, from: fallbackFrom };
+  const fallback = {
+    appName: fallbackAppName,
+    from: fallbackFrom,
+    logo: undefined,
+  };
   if (!request || !sesConfigured) return fallback;
 
   const host = hostFromRequest(request);
@@ -106,8 +118,9 @@ const resolveEmailIdentity = async (request?: Request | undefined) => {
       : Promise.resolve(null),
   ]);
   const appName = organization?.name ?? project?.name ?? fallbackAppName;
+  const logo = absoluteUrl(organization?.logo ?? project?.logo, request);
 
-  return { appName, from: fromAddress(appName, senderDomain) };
+  return { appName, from: fromAddress(appName, senderDomain), logo };
 };
 
 const localeFromRequest = (request?: Request | undefined) => {
@@ -144,6 +157,7 @@ export const sendResetPasswordEmail = async ({
     html: await render(
       <ResetPasswordEmail
         appName={identity.appName}
+        logo={identity.logo}
         url={url}
         title={m.reset_password_title({}, { locale })}
         description={m.email_reset_password_description({}, { locale })}
@@ -176,6 +190,7 @@ export const sendTwoFactorOtpEmail = async ({
     html: await render(
       <OTPEmail
         appName={identity.appName}
+        logo={identity.logo}
         code={otp}
         title={m.verify_email_title({}, { locale })}
         description={m.email_otp_verification_description({}, { locale })}
@@ -221,6 +236,7 @@ export const sendEmailVerificationOtpEmail = async ({
     html: await render(
       <OTPEmail
         appName={identity.appName}
+        logo={identity.logo}
         code={otp}
         title={
           isPasswordReset

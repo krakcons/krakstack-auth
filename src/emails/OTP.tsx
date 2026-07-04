@@ -10,17 +10,20 @@ export const OTPEmail = ({
   title = m.verify_email_title(),
   description = m.email_otp_verification_description(),
   extra,
+  logo,
 }: {
   readonly appName?: string | undefined;
   readonly code?: string | undefined;
   readonly title?: string | undefined;
   readonly description?: string | undefined;
   readonly extra?: string | undefined;
+  readonly logo?: string | undefined;
 }) => (
   <BaseEmail
     preview={description}
     content={{
       appName,
+      logo,
       title,
       description,
       extra,
