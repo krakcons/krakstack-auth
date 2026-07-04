@@ -1,5 +1,4 @@
 import { type ColumnDef } from "@tanstack/react-table";
-import { Schema } from "effect";
 import { Building2 } from "lucide-react";
 import { useEffect, useState } from "react";
 
@@ -11,37 +10,17 @@ import { m } from "@/paraglide/messages";
 import { getLocale } from "@/paraglide/runtime";
 import { assetUrl } from "@/lib/assets";
 import { authBaseUrl } from "@/services/auth/client";
-import { OrganizationMetadata } from "@krak-stack/auth/schema";
+import { organizationBranding } from "@/services/organizations/branding";
 
 import type { Organization } from "../schema";
 
-const parseOrganizationMetadata = (metadata: unknown) => {
-  try {
-    const value =
-      typeof metadata === "string" ? JSON.parse(metadata) : metadata;
-
-    return Schema.decodeUnknownSync(OrganizationMetadata)(value);
-  } catch {
-    return { translations: [] };
-  }
-};
-
 const organizationDisplay = (organization: Organization) => {
   const locale = getLocale() === "fr" ? "fr" : "en";
-  const translations = parseOrganizationMetadata(
-    organization.metadata,
-  ).translations;
-  const translation =
-    translations.find((item) => item.locale === locale) ??
-    translations.find((item) => item.locale === "en") ??
-    translations[0];
+  const branding = organizationBranding(organization, locale);
 
   return {
-    name: translation?.name || organization.name,
-    image: assetUrl(
-      translation?.icon || translation?.logo || organization.logo,
-      authBaseUrl,
-    ),
+    name: branding?.name ?? organization.name,
+    image: assetUrl(branding?.logo, authBaseUrl),
   };
 };
 

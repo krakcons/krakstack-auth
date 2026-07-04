@@ -7,12 +7,14 @@ import * as FetchHttpClient from "effect/unstable/http/FetchHttpClient";
 
 import { OTPEmail } from "@/emails/OTP";
 import { ResetPasswordEmail } from "@/emails/ResetPassword";
+import { assetUrl } from "@/lib/assets";
 import { db } from "@/services/database";
 import { hostFromRequest } from "@/services/domains";
 import { m } from "@/paraglide/messages";
 import { NotificationService } from "@/services/notification";
 import { sesNotificationServiceLayer } from "@/services/notification/channels/ses";
 import { testNotificationServiceLayer } from "@/services/notification/channels/test";
+import { organizationBranding } from "@/services/organizations/branding";
 import type { SesEmailNotification } from "@/services/notification/channels/ses/schema";
 
 const notificationLayer =
@@ -79,15 +81,24 @@ const isVerifiedEmailIdentity = (domain: string) => {
   );
 };
 
-const absoluteUrl = (value: string | null | undefined, request?: Request) => {
-  if (!value) return undefined;
-  if (/^https?:\/\//i.test(value)) return value;
-  const host = request ? hostFromRequest(request) : undefined;
-  if (!host || !value.startsWith("/")) return undefined;
-  return `${process.env.NODE_ENV === "development" ? "http" : "https"}://${host}${value}`;
+const firstForwardedValue = (value: string | null) =>
+  value?.split(",")[0]?.trim() || null;
+
+const originFromRequest = (request: Request | undefined) => {
+  if (!request) return undefined;
+  const host = hostFromRequest(request);
+  if (!host) return undefined;
+  const protocol =
+    firstForwardedValue(request.headers.get("x-forwarded-proto")) ??
+    new URL(request.url).protocol.replace(":", "");
+
+  return `${protocol}://${host}`;
 };
 
-const resolveEmailIdentity = async (request?: Request | undefined) => {
+const resolveEmailIdentity = async (
+  request: Request | undefined,
+  locale: "en" | "fr",
+) => {
   const fallback = {
     appName: fallbackAppName,
     from: fallbackFrom,
@@ -117,8 +128,11 @@ const resolveEmailIdentity = async (request?: Request | undefined) => {
       ? db.query.project.findFirst({ where: { id: domain.projectId } })
       : Promise.resolve(null),
   ]);
-  const appName = organization?.name ?? project?.name ?? fallbackAppName;
-  const logo = absoluteUrl(organization?.logo ?? project?.logo, request);
+  const organizationDisplay = organizationBranding(organization ?? null, locale);
+  const appName = organizationDisplay?.name ?? project?.name ?? fallbackAppName;
+  const logo =
+    assetUrl(organizationDisplay?.logo ?? project?.logo, originFromRequest(request)) ||
+    undefined;
 
   return { appName, from: fromAddress(appName, senderDomain), logo };
 };
@@ -144,7 +158,7 @@ export const sendResetPasswordEmail = async ({
   readonly url: string;
 }) => {
   const locale = localeFromRequest(request);
-  const identity = await resolveEmailIdentity(request);
+  const identity = await resolveEmailIdentity(request, locale);
   const text = m.email_reset_password_text({ url }, { locale });
   await sendAuthEmail({
     from: identity.from,
@@ -177,7 +191,7 @@ export const sendTwoFactorOtpEmail = async ({
   readonly otp: string;
 }) => {
   const locale = localeFromRequest(request);
-  const identity = await resolveEmailIdentity(request);
+  const identity = await resolveEmailIdentity(request, locale);
   const text = m.email_two_factor_otp_text({ otp }, { locale });
   await sendAuthEmail({
     from: identity.from,
@@ -215,7 +229,7 @@ export const sendEmailVerificationOtpEmail = async ({
     | "change-email";
 }) => {
   const locale = localeFromRequest(request);
-  const identity = await resolveEmailIdentity(request);
+  const identity = await resolveEmailIdentity(request, locale);
   const isPasswordReset = type === "forget-password";
   const subject = isPasswordReset
     ? m.email_otp_reset_password_subject(
