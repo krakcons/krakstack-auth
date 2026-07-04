@@ -10,14 +10,14 @@ export const OTPEmail = ({
   title = m.verify_email_title(),
   description = m.email_otp_verification_description(),
   extra,
-  logo,
+  logo = "/favicon.ico",
 }: {
   readonly appName?: string | undefined;
   readonly code?: string | undefined;
   readonly title?: string | undefined;
   readonly description?: string | undefined;
   readonly extra?: string | undefined;
-  readonly logo?: string | undefined;
+  readonly logo?: string | null | undefined;
 }) => (
   <BaseEmail
     preview={description}

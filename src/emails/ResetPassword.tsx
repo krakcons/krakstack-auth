@@ -11,7 +11,7 @@ export const ResetPasswordEmail = ({
   description = m.email_reset_password_description(),
   action = m.reset_password_submit(),
   extra,
-  logo,
+  logo = "/favicon.ico",
 }: {
   readonly appName?: string | undefined;
   readonly url?: string | undefined;
@@ -19,7 +19,7 @@ export const ResetPasswordEmail = ({
   readonly description?: string | undefined;
   readonly action?: string | undefined;
   readonly extra?: string | undefined;
-  readonly logo?: string | undefined;
+  readonly logo?: string | null | undefined;
 }) => (
   <BaseEmail
     preview={description}

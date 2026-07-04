@@ -4,19 +4,37 @@ import {
   Head,
   Html,
   Img,
+  Markdown,
   Preview,
-  Section,
   Text,
 } from "@react-email/components";
 
 import { Tailwind } from "./Tailwind";
+
+export const markdownStyles = {
+  markdownContainerStyles: {
+    fontFamily: "sans-serif",
+  },
+  markdownCustomStyles: {
+    h1: {
+      fontSize: "1.5rem",
+      fontWeight: 600,
+      marginTop: "2rem",
+      marginBottom: "1rem",
+    },
+    p: {
+      marginTop: "1rem",
+      marginBottom: "1rem",
+    },
+  },
+};
 
 export interface BaseEmailContent {
   readonly title: string;
   readonly description: string;
   readonly extra?: string | undefined;
   readonly appName: string;
-  readonly logo?: string | undefined;
+  readonly logo?: string | null | undefined;
   readonly action?: React.ReactNode;
 }
 
@@ -36,23 +54,15 @@ export const BaseEmail = ({
           {content.logo ? (
             <Img src={content.logo} alt="logo" height={100} />
           ) : null}
-          <Text className="text-foreground mt-0 text-2xl leading-8 font-semibold">
-            {content.title}
-          </Text>
-          <Text className="text-foreground text-base leading-6">
-            {content.description}
-          </Text>
-          {content.action ? (
-            <Section className="my-6">{content.action}</Section>
-          ) : null}
+          <Markdown {...markdownStyles}>{"# " + content.title}</Markdown>
+          <Markdown {...markdownStyles}>{content.description}</Markdown>
+          {content.action}
           {content.extra ? (
-            <Text className="text-muted-foreground text-sm leading-6">
-              {content.extra}
-            </Text>
+            <Markdown {...markdownStyles}>{content.extra}</Markdown>
           ) : null}
-          <Text className="text-foreground m-0 text-sm font-semibold">
-            {content.appName}
-          </Text>
+          <strong>
+            <Text>{content.appName}</Text>
+          </strong>
         </Container>
       </Body>
     </Tailwind>

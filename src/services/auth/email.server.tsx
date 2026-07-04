@@ -171,7 +171,7 @@ export const sendResetPasswordEmail = async ({
     html: await render(
       <ResetPasswordEmail
         appName={identity.appName}
-        logo={identity.logo}
+        logo={identity.logo ?? null}
         url={url}
         title={m.reset_password_title({}, { locale })}
         description={m.email_reset_password_description({}, { locale })}
@@ -204,7 +204,7 @@ export const sendTwoFactorOtpEmail = async ({
     html: await render(
       <OTPEmail
         appName={identity.appName}
-        logo={identity.logo}
+        logo={identity.logo ?? null}
         code={otp}
         title={m.verify_email_title({}, { locale })}
         description={m.email_otp_verification_description({}, { locale })}
@@ -250,7 +250,7 @@ export const sendEmailVerificationOtpEmail = async ({
     html: await render(
       <OTPEmail
         appName={identity.appName}
-        logo={identity.logo}
+        logo={identity.logo ?? null}
         code={otp}
         title={
           isPasswordReset
