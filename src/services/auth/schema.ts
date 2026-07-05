@@ -167,6 +167,7 @@ export const AuthProjectPublicConfigQuery = Schema.Struct({
   projectId: Schema.optional(Schema.String),
   clientId: Schema.optional(Schema.String),
   host: Schema.optional(Schema.String),
+  rootHost: Schema.optional(Schema.String),
 }).annotate({
   identifier: "AuthProjectPublicConfigQuery",
   title: "Auth project public config query",
@@ -176,6 +177,7 @@ export const AuthProjectPublicConfigQuery = Schema.Struct({
     {
       projectId: "project-id",
       host: "auth.example.com",
+      rootHost: "example.com",
       clientId: "oauth-client-id",
     },
   ],

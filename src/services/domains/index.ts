@@ -1,4 +1,4 @@
-import { and, eq } from "drizzle-orm";
+import { and, eq, ne } from "drizzle-orm";
 import { Context, Effect, Layer } from "effect";
 import { getDomain } from "tldts";
 import { CredentialsFromEnv } from "@distilled.cloud/cloudflare";
@@ -225,6 +225,7 @@ export class Domains extends Context.Service<Domains>()("Domains", {
       if (!normalized) return null;
       const domain = yield* db.query.domains.findFirst({
         where: { hostname: normalized },
+        orderBy: { createdAt: "asc" },
       });
       return domain ?? null;
     });
@@ -234,10 +235,11 @@ export class Domains extends Context.Service<Domains>()("Domains", {
         const host = hostFromRequest(request);
         if (!host) return null;
 
-        const domain = yield* db.query.domains.findFirst({
+        const rows = yield* db.query.domains.findMany({
           where: { hostname: host, active: true },
+          limit: 2,
         });
-        return domain ?? null;
+        return rows.length === 1 ? (rows[0] ?? null) : null;
       },
     );
 
@@ -248,7 +250,7 @@ export class Domains extends Context.Service<Domains>()("Domains", {
       if (!host) return null;
 
       const domain = yield* db.query.domains.findFirst({
-        where: { hostname: host, active: true },
+        where: { rootHostname: host, active: true },
       });
       return domain ?? null;
     });
@@ -328,7 +330,7 @@ export class Domains extends Context.Service<Domains>()("Domains", {
       const originHost = normalizeAuthHost(request.headers.get("origin"));
       const originDomain = originHost
         ? yield* db.query.domains.findFirst({
-            where: { hostname: originHost, active: true },
+            where: { rootHostname: originHost, active: true },
           })
         : null;
       if (originDomain) {
@@ -372,13 +374,15 @@ export class Domains extends Context.Service<Domains>()("Domains", {
       }
 
       const existing = yield* db.query.domains.findFirst({
-        where: { hostname: normalized.hostname },
+        where: {
+          hostname: normalized.hostname,
+          rootHostname: normalized.rootHostname,
+        },
       });
       if (existing) {
         const [domain] = yield* db
           .update(domains)
           .set({
-            rootHostname: normalized.rootHostname,
             projectId: linkedProject?.id ?? null,
             organizationId: normalized.organizationId,
             managed: normalized.managed,
@@ -390,8 +394,14 @@ export class Domains extends Context.Service<Domains>()("Domains", {
         return domain ?? { ...existing, managed: normalized.managed };
       }
 
-      let hostnameId: string = crypto.randomUUID();
-      if (normalized.managed) {
+      const hostSibling = yield* db.query.domains.findFirst({
+        where: { hostname: normalized.hostname },
+        orderBy: { createdAt: "asc" },
+      });
+
+      let hostnameId: string = hostSibling?.hostnameId ?? crypto.randomUUID();
+      const active = hostSibling?.active ?? !normalized.managed;
+      if (!hostSibling && normalized.managed) {
         const zoneId = yield* requireCloudflareZoneId;
         hostnameId = (yield* CustomHostnames.createCustomHostname({
           zoneId,
@@ -414,7 +424,7 @@ export class Domains extends Context.Service<Domains>()("Domains", {
           organizationId: normalized.organizationId,
           hostnameId,
           managed: normalized.managed,
-          active: !normalized.managed,
+          active,
         })
         .returning();
 
@@ -439,13 +449,21 @@ export class Domains extends Context.Service<Domains>()("Domains", {
         throw new Error("Managed domain hostnames cannot be changed");
       }
 
-      if (hostnameChanged) {
+      if (
+        hostnameChanged ||
+        existing.rootHostname !== normalized.rootHostname
+      ) {
         const conflicting = yield* db.query.domains.findFirst({
-          where: { hostname: normalized.hostname },
+          where: {
+            hostname: normalized.hostname,
+            rootHostname: normalized.rootHostname,
+          },
           columns: { id: true },
         });
         if (conflicting && conflicting.id !== id) {
-          throw new Error(`Domain already exists: ${normalized.hostname}`);
+          throw new Error(
+            `Domain already exists: ${normalized.hostname} -> ${normalized.rootHostname}`,
+          );
         }
       }
 
@@ -462,7 +480,22 @@ export class Domains extends Context.Service<Domains>()("Domains", {
       let hostnameId: string = existing.hostnameId;
       let active = existing.active;
 
-      if (existing.managed !== normalized.managed) {
+      const [hostSibling] = yield* db
+        .select()
+        .from(domains)
+        .where(
+          and(
+            eq(domains.hostname, normalized.hostname),
+            ne(domains.id, existing.id),
+          ),
+        )
+        .orderBy(domains.createdAt)
+        .limit(1);
+
+      if (hostSibling) {
+        hostnameId = hostSibling.hostnameId;
+        active = hostSibling.active;
+      } else if (existing.managed !== normalized.managed) {
         if (normalized.managed) {
           const zoneId = yield* requireCloudflareZoneId;
           hostnameId = (yield* CustomHostnames.createCustomHostname({
@@ -538,7 +571,18 @@ export class Domains extends Context.Service<Domains>()("Domains", {
       const domain = yield* get({ id });
       if (!domain) return null;
 
-      if (domain.managed) {
+      const [hostSibling] = yield* db
+        .select({ id: domains.id })
+        .from(domains)
+        .where(
+          and(
+            eq(domains.hostnameId, domain.hostnameId),
+            ne(domains.id, domain.id),
+          ),
+        )
+        .limit(1);
+
+      if (domain.managed && !hostSibling) {
         const zoneId = yield* requireCloudflareZoneId;
         yield* CustomHostnames.deleteCustomHostname({
           zoneId,

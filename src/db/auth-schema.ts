@@ -260,7 +260,7 @@ export const domains = pgTable(
   "domains",
   {
     id: text("id").primaryKey(),
-    hostname: text("hostname").notNull().unique(),
+    hostname: text("hostname").notNull(),
     rootHostname: text("root_hostname").notNull(),
     projectId: text("project_id").references(() => project.id, {
       onDelete: "set null",
@@ -276,7 +276,10 @@ export const domains = pgTable(
       .notNull(),
   },
   (table) => [
-    uniqueIndex("domains_hostname_uidx").on(table.hostname),
+    uniqueIndex("domains_hostname_rootHostname_uidx").on(
+      table.hostname,
+      table.rootHostname,
+    ),
     index("domains_projectId_idx").on(table.projectId),
     index("domains_organizationId_idx").on(table.organizationId),
   ],

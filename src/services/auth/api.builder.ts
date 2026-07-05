@@ -51,6 +51,7 @@ export const authApiHandler = HttpApiBuilder.group(
               projectId: query.projectId,
               clientId: query.clientId,
               host: query.host,
+              rootHost: query.rootHost,
             })
             .pipe(Effect.mapError(internalServerError));
         }),

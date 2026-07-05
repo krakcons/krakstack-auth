@@ -59,6 +59,7 @@ export const ProjectPublicConfigQuery = Schema.Struct({
   projectId: Schema.optional(Schema.String),
   clientId: Schema.optional(Schema.String),
   host: Schema.optional(Schema.String),
+  rootHost: Schema.optional(Schema.String),
 }).annotate({
   identifier: "ProjectPublicConfigQuery",
   title: "Project public config query",
@@ -68,6 +69,7 @@ export const ProjectPublicConfigQuery = Schema.Struct({
     {
       projectId: "project-id",
       host: "auth.example.com",
+      rootHost: "example.com",
       clientId: "oauth-client-id",
     },
   ],

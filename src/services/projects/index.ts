@@ -113,10 +113,12 @@ export class Projects extends Context.Service<Projects>()("Projects", {
       projectId,
       clientId,
       host,
+      rootHost,
     }: {
       projectId?: string | undefined;
       clientId?: string | undefined;
       host?: string | undefined;
+      rootHost?: string | undefined;
     }) {
       if (projectId) {
         const value = yield* db.query.project.findFirst({
@@ -132,9 +134,19 @@ export class Projects extends Context.Service<Projects>()("Projects", {
 
       const normalizedHost = normalizeAuthHost(host);
       if (normalizedHost) {
-        const domain = yield* db.query.domains.findFirst({
-          where: { hostname: normalizedHost, active: true },
+        const normalizedRootHost = normalizeAuthHost(rootHost);
+        const matchingDomains = yield* db.query.domains.findMany({
+          where: normalizedRootHost
+            ? {
+                hostname: normalizedHost,
+                rootHostname: normalizedRootHost,
+                active: true,
+              }
+            : { hostname: normalizedHost, active: true },
+          limit: 2,
         });
+        const domain =
+          matchingDomains.length === 1 ? (matchingDomains[0] ?? null) : null;
         if (domain) {
           const value = domain.projectId
             ? yield* db.query.project.findFirst({

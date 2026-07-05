@@ -58,16 +58,6 @@ const allowedOrigin = async (
   const domainOrigin = await registeredDomainOrigin(request, origin);
   if (domainOrigin) return domainOrigin;
 
-  try {
-    const originUrl = new URL(origin);
-    const requestUrl = new URL(request.url);
-    const authHostname = `auth.${originUrl.hostname}`;
-
-    if (requestUrl.hostname === authHostname) return origin;
-  } catch {
-    return undefined;
-  }
-
   return undefined;
 };
 

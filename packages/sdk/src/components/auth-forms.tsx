@@ -1204,30 +1204,10 @@ const getAuthRedirectParam = (searchString: string) => {
 };
 
 const getDefaultAuthRedirectTarget = (
-  projectAuthDomain: string | null | undefined,
-  projectRootDomain: string | null | undefined,
+  _projectAuthDomain: string | null | undefined,
+  _projectRootDomain: string | null | undefined,
 ) => {
-  if (typeof window === "undefined") return "/admin";
-
-  const currentHost = normalizeAuthHost(window.location.host);
-  const isProjectDomain = normalizeAuthHost(projectAuthDomain) === currentHost;
-
-  if (!isProjectDomain) return "/admin";
-
-  const rootDomain = normalizeAuthHost(projectRootDomain);
-  if (!rootDomain) return "/admin";
-
-  return `${window.location.protocol}//${rootDomain}`;
-};
-
-const normalizeAuthHost = (value: string | null | undefined) => {
-  const raw = value?.trim().toLowerCase();
-  if (!raw) return null;
-  try {
-    return new URL(raw.includes("://") ? raw : `https://${raw}`).host;
-  } catch {
-    return raw.split("/")[0]?.trim() || null;
-  }
+  return "/admin";
 };
 
 const getSearchParam = (searchString: string, key: string) =>

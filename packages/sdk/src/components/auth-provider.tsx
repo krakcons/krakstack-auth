@@ -56,6 +56,25 @@ const getSearchParam = (searchString: string, key: string) => {
 const getBrowserAuthHost = () =>
   typeof window === "undefined" ? null : window.location.host;
 
+const getRedirectHost = (searchString: string) => {
+  if (!searchString) return null;
+
+  const search = new URLSearchParams(searchString);
+  const target =
+    search.get("callbackURL") ??
+    search.get("redirect") ??
+    search.get("redirectTo") ??
+    search.get("returnTo") ??
+    search.get("redirect_uri");
+  if (!target) return null;
+
+  try {
+    return new URL(target).host;
+  } catch {
+    return null;
+  }
+};
+
 const useProjectConfig = (
   baseUrl: string | undefined,
   providedProjectId: string | null | undefined,
@@ -67,12 +86,14 @@ const useProjectConfig = (
     providedProjectId ?? getSearchParam(searchString, "projectId");
   const clientId = getSearchParam(searchString, "client_id");
   const host = getBrowserAuthHost();
+  const rootHost = getRedirectHost(searchString);
   const result = useAtomSuspense(
     authApiClient(baseUrl).query("authExtra", "getProjectPublicConfig", {
       query: {
         ...(projectId ? { projectId } : {}),
         ...(clientId ? { clientId } : {}),
         ...(host ? { host } : {}),
+        ...(rootHost ? { rootHost } : {}),
       },
       timeToLive: "5 minutes",
       reactivityKeys: [
@@ -80,8 +101,9 @@ const useProjectConfig = (
         ...(projectId ? [`project:${projectId}`] : []),
         ...(clientId ? [`client:${clientId}`] : []),
         ...(host ? [`host:${host}`] : []),
+        ...(rootHost ? [`root-host:${rootHost}`] : []),
       ],
-      serializationKey: `project-public-config:${projectId ?? ""}:${clientId ?? ""}:${host ?? ""}`,
+      serializationKey: `project-public-config:${projectId ?? ""}:${clientId ?? ""}:${host ?? ""}:${rootHost ?? ""}`,
     }),
     { suspendOnWaiting: true },
   );
