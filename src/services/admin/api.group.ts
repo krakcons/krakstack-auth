@@ -6,8 +6,15 @@ import {
 } from "effect/unstable/httpapi";
 import { Schema } from "effect";
 
-import { DashboardStatsQuery, DashboardStatsResponse } from "./schema";
+import { Query } from "@/lib/query";
 import { AdminAuthMiddleware } from "@/services/auth/middleware";
+
+import {
+  DashboardStatsQuery,
+  DashboardStatsResponse,
+  PaginatedAdminUsers,
+  PaginatedOrganizations,
+} from "./schema";
 import {
   CreateOrganizationPayload,
   Organization,
@@ -42,8 +49,27 @@ export const AdminApiGroup = HttpApiGroup.make("admin")
     ),
   )
   .add(
+    HttpApiEndpoint.get("listUsers", "/admin/users", {
+      query: Query,
+      success: PaginatedAdminUsers,
+      error: [
+        HttpApiError.Unauthorized,
+        HttpApiError.Forbidden,
+        HttpApiError.InternalServerError,
+      ],
+    }).annotateMerge(
+      OpenApi.annotations({
+        title: "List users",
+        summary: "List users for administrators",
+        description:
+          "Returns paginated auth user records with optional filtering and sorting.",
+      }),
+    ),
+  )
+  .add(
     HttpApiEndpoint.get("listOrganizations", "/admin/organizations", {
-      success: Schema.Array(Organization),
+      query: Query,
+      success: PaginatedOrganizations,
       error: [
         HttpApiError.Unauthorized,
         HttpApiError.Forbidden,
@@ -53,7 +79,8 @@ export const AdminApiGroup = HttpApiGroup.make("admin")
       OpenApi.annotations({
         title: "List organizations",
         summary: "List organizations for administrators",
-        description: "Returns app-managed organization records.",
+        description:
+          "Returns paginated app-managed organization records with optional filtering and sorting.",
       }),
     ),
   )

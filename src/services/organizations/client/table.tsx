@@ -1,8 +1,10 @@
+import { useAtomValue } from "@effect/atom-react";
 import { type ColumnDef } from "@tanstack/react-table";
+import { Atom, AsyncResult } from "effect/unstable/reactivity";
 import { Building2 } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useState } from "react";
 
-import { DataTable } from "@/components/ui/data-table";
+import { DataTable, type TableParams } from "@/components/ui/data-table";
 import { ErrorMessage } from "@/components/ui/form";
 import { AppBrand } from "@/components/ui/app-brand";
 import { Badge } from "@/components/ui/badge";
@@ -11,6 +13,7 @@ import { getLocale } from "@/paraglide/runtime";
 import { assetUrl } from "@/lib/assets";
 import { authBaseUrl } from "@/services/auth/client";
 import { organizationBranding } from "@/services/organizations/branding";
+import { AdminApiClient } from "@/lib/admin-api-client";
 
 import type { Organization } from "../schema";
 
@@ -24,30 +27,65 @@ const organizationDisplay = (organization: Organization) => {
   };
 };
 
-const listOrganizations = async () => {
-  const response = await fetch("/api/admin/organizations");
-  if (!response.ok) throw new Error(m.organization_fetch_error());
-  return (await response.json()) as Organization[];
-};
-
-export function OrganizationsTable({ reloadKey = 0 }: { reloadKey?: number }) {
-  const [organizations, setOrganizations] = useState<Organization[]>([]);
-  const [error, setError] = useState("");
-
-  const loadOrganizations = async () => {
-    setError("");
-    try {
-      setOrganizations(await listOrganizations());
-    } catch (cause) {
-      setError(
-        cause instanceof Error ? cause.message : m.organization_fetch_error(),
-      );
-    }
+const organizationsQuery = (search: TableParams) => {
+  const query = {
+    page: search.page ?? 0,
+    pageSize: search.pageSize ?? 10,
+    ...(search.globalFilter ? { globalFilter: search.globalFilter } : {}),
+    ...(search.sort ? { sort: search.sort } : {}),
   };
 
-  useEffect(() => {
-    void loadOrganizations();
-  }, [reloadKey]);
+  return {
+    query,
+    key: JSON.stringify(query),
+  };
+};
+
+const organizationsAtom = Atom.family(
+  ({ reloadKey, search }: { reloadKey: number; search: TableParams }) => {
+    const request = organizationsQuery(search);
+
+    return AdminApiClient.query("admin", "listOrganizations", {
+      query: request.query,
+      timeToLive: "1 minute",
+      reactivityKeys: ["organizations"],
+      serializationKey: `organizations:${reloadKey}:${request.key}`,
+    });
+  },
+);
+
+export function OrganizationsTable({
+  reloadKey = 0,
+  search,
+}: {
+  reloadKey?: number;
+  search: TableParams;
+}) {
+  const [refreshKey, setRefreshKey] = useState(0);
+  const result = useAtomValue(
+    organizationsAtom({ reloadKey: reloadKey + refreshKey, search }),
+  );
+
+  const organizations = AsyncResult.match(result, {
+    onInitial: () => [],
+    onFailure: () => [],
+    onSuccess: ({ value }) => Array.from(value.data),
+  });
+  const total = AsyncResult.match(result, {
+    onInitial: () => 0,
+    onFailure: () => 0,
+    onSuccess: ({ value }) => value.meta.total,
+  });
+  const error = AsyncResult.match(result, {
+    onInitial: () => "",
+    onFailure: () => m.organization_fetch_error(),
+    onSuccess: () => "",
+  });
+  const isLoading = AsyncResult.match(result, {
+    onInitial: () => true,
+    onFailure: () => false,
+    onSuccess: () => false,
+  });
 
   return (
     <div className="flex flex-col gap-4">
@@ -58,6 +96,9 @@ export function OrganizationsTable({ reloadKey = 0 }: { reloadKey?: number }) {
         exportFileName="organizations.csv"
         features={{ gallery: false }}
         from="/admin/organizations"
+        isLoading={isLoading}
+        onRefresh={() => setRefreshKey((current) => current + 1)}
+        serverPagination={{ rowCount: total }}
       />
     </div>
   );

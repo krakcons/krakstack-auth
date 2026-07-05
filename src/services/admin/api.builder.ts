@@ -1,5 +1,15 @@
-import { Effect } from "effect";
-import { and, count, countDistinct, gt, gte } from "drizzle-orm";
+import { Effect, Schema } from "effect";
+import {
+  and,
+  asc,
+  count,
+  countDistinct,
+  desc,
+  gt,
+  gte,
+  ilike,
+  or,
+} from "drizzle-orm";
 import { HttpApiBuilder, HttpApiError } from "effect/unstable/httpapi";
 
 import { AdminApi } from "@/api";
@@ -13,6 +23,7 @@ import {
   session,
   user,
 } from "@/db/auth-schema";
+import { SortParamsFromString, type QueryType } from "@/lib/query";
 import { Domains } from "@/services/domains";
 import { db } from "@/services/database";
 import { Organizations } from "@/services/organizations";
@@ -33,6 +44,95 @@ const daysAgo = (days: number) => {
 
 const chartRangeDays = (days: "7" | "14" | "30" | "90" | undefined) =>
   days ? Number(days) : 14;
+
+const paginationMeta = ({
+  page,
+  pageSize,
+  total,
+}: {
+  page: number;
+  pageSize: number;
+  total: number;
+}) => ({
+  page,
+  pageSize,
+  total,
+  pageCount: Math.ceil(total / pageSize),
+});
+
+const userOrderBy = (query: QueryType) => {
+  const sort = query.sort
+    ? Schema.decodeSync(SortParamsFromString)(query.sort)
+    : [];
+
+  return sort.flatMap((sortParam) => {
+    const direction = sortParam.direction === "desc" ? desc : asc;
+
+    switch (sortParam.id) {
+      case "name":
+        return [direction(user.name)];
+      case "email":
+        return [direction(user.email)];
+      case "emailVerified":
+        return [direction(user.emailVerified)];
+      case "role":
+        return [direction(user.role)];
+      case "banned":
+        return [direction(user.banned)];
+      case "createdAt":
+        return [direction(user.createdAt)];
+      default:
+        return [];
+    }
+  });
+};
+
+const organizationOrderBy = (query: QueryType) => {
+  const sort = query.sort
+    ? Schema.decodeSync(SortParamsFromString)(query.sort)
+    : [];
+
+  return sort.flatMap((sortParam) => {
+    const direction = sortParam.direction === "desc" ? desc : asc;
+
+    switch (sortParam.id) {
+      case "name":
+        return [direction(organization.name)];
+      case "slug":
+        return [direction(organization.slug)];
+      case "logo":
+        return [direction(organization.logo)];
+      case "createdAt":
+        return [direction(organization.createdAt)];
+      default:
+        return [];
+    }
+  });
+};
+
+const userFilter = (globalFilter: string | undefined) => {
+  const filter = globalFilter?.trim();
+  if (!filter) return undefined;
+  const pattern = `%${filter}%`;
+
+  return or(
+    ilike(user.name, pattern),
+    ilike(user.email, pattern),
+    ilike(user.role, pattern),
+  );
+};
+
+const organizationFilter = (globalFilter: string | undefined) => {
+  const filter = globalFilter?.trim();
+  if (!filter) return undefined;
+  const pattern = `%${filter}%`;
+
+  return or(
+    ilike(organization.name, pattern),
+    ilike(organization.slug, pattern),
+    ilike(organization.logo, pattern),
+  );
+};
 
 export const adminApiHandler = HttpApiBuilder.group(
   AdminApi,
@@ -171,13 +271,95 @@ export const adminApiHandler = HttpApiBuilder.group(
           };
         }),
       )
-      .handle("listOrganizations", ({ request }) =>
+      .handle("listUsers", ({ query }) =>
         Effect.gen(function* () {
-          const service = yield* Organizations;
-          return yield* service
-            .list()
-            .pipe(Effect.provide(BetterAuthRequest.make(request)))
-            .pipe(Effect.mapError(internalServerError));
+          const where = userFilter(query.globalFilter);
+          const orderBy = userOrderBy(query);
+          const fallbackOrderBy = [desc(user.createdAt)];
+          const offset = query.page * query.pageSize;
+
+          const totals = yield* Effect.tryPromise({
+            try: () => db.select({ count: count() }).from(user).where(where),
+            catch: internalServerError,
+          });
+
+          const users = yield* Effect.tryPromise({
+            try: () =>
+              db
+                .select({
+                  id: user.id,
+                  name: user.name,
+                  email: user.email,
+                  emailVerified: user.emailVerified,
+                  image: user.image,
+                  createdAt: user.createdAt,
+                  role: user.role,
+                  banned: user.banned,
+                  banReason: user.banReason,
+                  banExpires: user.banExpires,
+                })
+                .from(user)
+                .where(where)
+                .orderBy(...(orderBy.length ? orderBy : fallbackOrderBy))
+                .limit(query.pageSize)
+                .offset(offset),
+            catch: internalServerError,
+          });
+
+          const total = Number(totals[0]?.count ?? 0);
+
+          return {
+            data: users,
+            meta: paginationMeta({
+              page: query.page,
+              pageSize: query.pageSize,
+              total,
+            }),
+          };
+        }),
+      )
+      .handle("listOrganizations", ({ query }) =>
+        Effect.gen(function* () {
+          const where = organizationFilter(query.globalFilter);
+          const orderBy = organizationOrderBy(query);
+          const fallbackOrderBy = [desc(organization.createdAt)];
+          const offset = query.page * query.pageSize;
+
+          const totals = yield* Effect.tryPromise({
+            try: () =>
+              db.select({ count: count() }).from(organization).where(where),
+            catch: internalServerError,
+          });
+
+          const organizations = yield* Effect.tryPromise({
+            try: () =>
+              db
+                .select({
+                  id: organization.id,
+                  name: organization.name,
+                  slug: organization.slug,
+                  logo: organization.logo,
+                  metadata: organization.metadata,
+                  createdAt: organization.createdAt,
+                })
+                .from(organization)
+                .where(where)
+                .orderBy(...(orderBy.length ? orderBy : fallbackOrderBy))
+                .limit(query.pageSize)
+                .offset(offset),
+            catch: internalServerError,
+          });
+
+          const total = Number(totals[0]?.count ?? 0);
+
+          return {
+            data: organizations,
+            meta: paginationMeta({
+              page: query.page,
+              pageSize: query.pageSize,
+              total,
+            }),
+          };
         }),
       )
       .handle("createOrganization", ({ payload, request }) =>

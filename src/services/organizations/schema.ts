@@ -5,7 +5,7 @@ export const Organization = Schema.Struct({
   name: Schema.String,
   slug: Schema.String,
   logo: Schema.optional(Schema.NullOr(Schema.String)),
-  metadata: Schema.optional(Schema.Unknown),
+  metadata: Schema.optional(Schema.NullOr(Schema.String)),
   createdAt: Schema.Date,
 }).annotate({
   identifier: "Organization",
@@ -17,7 +17,7 @@ export const Organization = Schema.Struct({
       name: "KrakStack",
       slug: "krakstack",
       logo: "https://example.com/logo.svg",
-      metadata: { tier: "internal" },
+      metadata: '{"tier":"internal"}',
       createdAt: new Date("2026-01-01T00:00:00.000Z"),
     },
   ],

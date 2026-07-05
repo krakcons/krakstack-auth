@@ -128,11 +128,16 @@ const resolveEmailIdentity = async (
       ? db.query.project.findFirst({ where: { id: domain.projectId } })
       : Promise.resolve(null),
   ]);
-  const organizationDisplay = organizationBranding(organization ?? null, locale);
+  const organizationDisplay = organizationBranding(
+    organization ?? null,
+    locale,
+  );
   const appName = organizationDisplay?.name ?? project?.name ?? fallbackAppName;
   const logo =
-    assetUrl(organizationDisplay?.logo ?? project?.logo, originFromRequest(request)) ||
-    undefined;
+    assetUrl(
+      organizationDisplay?.logo ?? project?.logo,
+      originFromRequest(request),
+    ) || undefined;
 
   return { appName, from: fromAddress(appName, senderDomain), logo };
 };

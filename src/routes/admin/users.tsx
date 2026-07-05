@@ -1,6 +1,8 @@
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useAtomValue } from "@effect/atom-react";
+import { useMutation } from "@tanstack/react-query";
 import { createFileRoute } from "@tanstack/react-router";
 import { type ColumnDef } from "@tanstack/react-table";
+import { Atom, AsyncResult } from "effect/unstable/reactivity";
 import { Ban, Loader2, ShieldOff, UserIcon } from "lucide-react";
 import { useState } from "react";
 
@@ -25,6 +27,7 @@ import {
 import { authBaseUrl, authClient } from "@/services/auth/client";
 import { m } from "@/paraglide/messages";
 import { assetUrl } from "@/lib/assets";
+import { AdminApiClient } from "@/lib/admin-api-client";
 
 export const Route = createFileRoute("/admin/users")({
   validateSearch: TableSearchSchema,
@@ -44,58 +47,86 @@ type User = {
   banExpires: Date | null;
 };
 
-function useUsers() {
-  return useQuery({
-    queryKey: ["admin", "users"],
-    queryFn: async () => {
-      const result = await authClient.admin.listUsers({
-        query: { limit: 100 },
-      });
-      if (result.error)
-        throw new Error(
-          result.error.message ?? m.admin_error_access_required(),
-        );
-      const data = result.data as { users: User[]; total: number } | undefined;
-      return { users: data?.users ?? [], total: data?.total ?? 0 };
-    },
-  });
-}
+const adminUsersQuery = (search: ReturnType<typeof Route.useSearch>) => {
+  const query = {
+    page: search.page ?? 0,
+    pageSize: search.pageSize ?? 10,
+    ...(search.globalFilter ? { globalFilter: search.globalFilter } : {}),
+    ...(search.sort ? { sort: search.sort } : {}),
+  };
+
+  return {
+    query,
+    key: JSON.stringify(query),
+  };
+};
+
+const usersAtom = Atom.family(
+  ({
+    reloadKey,
+    search,
+  }: {
+    reloadKey: number;
+    search: ReturnType<typeof Route.useSearch>;
+  }) => {
+    const request = adminUsersQuery(search);
+
+    return AdminApiClient.query("admin", "listUsers", {
+      query: request.query,
+      timeToLive: "1 minute",
+      reactivityKeys: ["admin-users"],
+      serializationKey: `admin-users:${reloadKey}:${request.key}`,
+    });
+  },
+);
 
 function useBanUser() {
-  const queryClient = useQueryClient();
   return useMutation({
     mutationFn: async (userId: string) => {
       const result = await authClient.admin.banUser({ userId });
       if (result.error)
         throw new Error(result.error.message ?? m.admin_error_ban());
     },
-    onSuccess: () => {
-      void queryClient.invalidateQueries({ queryKey: ["admin", "users"] });
-    },
   });
 }
 
 function useUnbanUser() {
-  const queryClient = useQueryClient();
   return useMutation({
     mutationFn: async (userId: string) => {
       const result = await authClient.admin.unbanUser({ userId });
       if (result.error)
         throw new Error(result.error.message ?? m.admin_error_unban());
     },
-    onSuccess: () => {
-      void queryClient.invalidateQueries({ queryKey: ["admin", "users"] });
-    },
   });
 }
 
 function UsersPage() {
-  const { data, isLoading, error, refetch } = useUsers();
+  const search = Route.useSearch();
+  const [reloadKey, setReloadKey] = useState(0);
+  const result = useAtomValue(usersAtom({ search, reloadKey }));
   const [banningUser, setBanningUser] = useState<User | null>(null);
   const [unbanningUser, setUnbanningUser] = useState<User | null>(null);
 
-  const users = data?.users ?? [];
-  const total = data?.total ?? 0;
+  const users = AsyncResult.match(result, {
+    onInitial: () => [],
+    onFailure: () => [],
+    onSuccess: ({ value }) => Array.from(value.data),
+  });
+  const total = AsyncResult.match(result, {
+    onInitial: () => 0,
+    onFailure: () => 0,
+    onSuccess: ({ value }) => value.meta.total,
+  });
+  const error = AsyncResult.match(result, {
+    onInitial: () => "",
+    onFailure: () => m.admin_error_access_required(),
+    onSuccess: () => "",
+  });
+  const isLoading = AsyncResult.match(result, {
+    onInitial: () => true,
+    onFailure: () => false,
+    onSuccess: () => false,
+  });
 
   return (
     <>
@@ -105,7 +136,7 @@ function UsersPage() {
         badge={{ label: m.admin_badge_admin() }}
       />
 
-      {error ? <ErrorMessage text={error.message} /> : null}
+      {error ? <ErrorMessage text={error} /> : null}
       <DataTable
         columns={userColumns()}
         data={users}
@@ -113,19 +144,20 @@ function UsersPage() {
         features={{ gallery: false }}
         from="/admin/users"
         isLoading={isLoading}
-        onRefresh={() => void refetch()}
+        onRefresh={() => setReloadKey((current) => current + 1)}
+        serverPagination={{ rowCount: total }}
         rowActions={[
           {
             name: m.admin_action_ban(),
             icon: <Ban className="size-4" />,
             variant: "destructive",
-            onClick: setBanningUser,
+            onClick: (user) => setBanningUser(user),
             visible: (user) => !user.banned,
           },
           {
             name: m.admin_action_unban(),
             icon: <ShieldOff className="size-4" />,
-            onClick: setUnbanningUser,
+            onClick: (user) => setUnbanningUser(user),
             visible: (user) => !!user.banned,
           },
         ]}
@@ -133,12 +165,14 @@ function UsersPage() {
       {banningUser ? (
         <BanUserDialog
           user={banningUser}
+          onBanned={() => setReloadKey((current) => current + 1)}
           onClose={() => setBanningUser(null)}
         />
       ) : null}
       {unbanningUser ? (
         <UnbanUserDialog
           user={unbanningUser}
+          onUnbanned={() => setReloadKey((current) => current + 1)}
           onClose={() => setUnbanningUser(null)}
         />
       ) : null}
@@ -221,7 +255,15 @@ const userColumns = (): ColumnDef<User>[] => [
   },
 ];
 
-function BanUserDialog({ user, onClose }: { user: User; onClose: () => void }) {
+function BanUserDialog({
+  user,
+  onBanned,
+  onClose,
+}: {
+  user: User;
+  onBanned: () => void;
+  onClose: () => void;
+}) {
   const banUser = useBanUser();
 
   return (
@@ -240,7 +282,12 @@ function BanUserDialog({ user, onClose }: { user: User; onClose: () => void }) {
           </AlertDialogCancel>
           <AlertDialogAction
             onClick={() => {
-              banUser.mutate(user.id, { onSuccess: onClose });
+              banUser.mutate(user.id, {
+                onSuccess: () => {
+                  onBanned();
+                  onClose();
+                },
+              });
             }}
             disabled={banUser.isPending}
           >
@@ -257,9 +304,11 @@ function BanUserDialog({ user, onClose }: { user: User; onClose: () => void }) {
 
 function UnbanUserDialog({
   user,
+  onUnbanned,
   onClose,
 }: {
   user: User;
+  onUnbanned: () => void;
   onClose: () => void;
 }) {
   const unbanUser = useUnbanUser();
@@ -282,7 +331,12 @@ function UnbanUserDialog({
           </AlertDialogCancel>
           <AlertDialogAction
             onClick={() => {
-              unbanUser.mutate(user.id, { onSuccess: onClose });
+              unbanUser.mutate(user.id, {
+                onSuccess: () => {
+                  onUnbanned();
+                  onClose();
+                },
+              });
             }}
             disabled={unbanUser.isPending}
           >

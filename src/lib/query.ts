@@ -183,7 +183,7 @@ export const PaginationMeta = Schema.Struct({
 
 export type PaginationMetaType = typeof PaginationMeta.Type;
 
-export const PaginatedResponse = <A>(items: Schema.Schema<A>) =>
+export const PaginatedResponse = <S extends Schema.Top>(items: S) =>
   Schema.Struct({
     data: Schema.Array(items),
     meta: PaginationMeta,

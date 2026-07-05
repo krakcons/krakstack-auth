@@ -15,6 +15,7 @@ export const Route = createFileRoute("/admin/organizations")({
 });
 
 function OrganizationsPage() {
+  const search = Route.useSearch();
   const [creatingOrganization, setCreatingOrganization] = useState(false);
   const [reloadKey, setReloadKey] = useState(0);
 
@@ -31,7 +32,7 @@ function OrganizationsPage() {
           </Button>
         }
       />
-      <OrganizationsTable reloadKey={reloadKey} />
+      <OrganizationsTable reloadKey={reloadKey} search={search} />
       {creatingOrganization ? (
         <OrganizationForm
           onClose={() => setCreatingOrganization(false)}
