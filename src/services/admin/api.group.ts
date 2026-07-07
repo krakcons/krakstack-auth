@@ -6,12 +6,12 @@ import {
 } from "effect/unstable/httpapi";
 import { Schema } from "effect";
 
-import { Query } from "@/lib/query";
 import { AdminAuthMiddleware } from "@/services/auth/middleware";
 
 import {
   DashboardStatsQuery,
   DashboardStatsResponse,
+  AdminListQuery,
   PaginatedAdminUsers,
   PaginatedOrganizations,
 } from "./schema";
@@ -50,7 +50,7 @@ export const AdminApiGroup = HttpApiGroup.make("admin")
   )
   .add(
     HttpApiEndpoint.get("listUsers", "/admin/users", {
-      query: Query,
+      query: AdminListQuery,
       success: PaginatedAdminUsers,
       error: [
         HttpApiError.Unauthorized,
@@ -68,7 +68,7 @@ export const AdminApiGroup = HttpApiGroup.make("admin")
   )
   .add(
     HttpApiEndpoint.get("listOrganizations", "/admin/organizations", {
-      query: Query,
+      query: AdminListQuery,
       success: PaginatedOrganizations,
       error: [
         HttpApiError.Unauthorized,

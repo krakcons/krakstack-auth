@@ -1,4 +1,8 @@
 import { createFileRoute } from "@tanstack/react-router";
+import {
+  AdminOrganizationForm,
+  AdminOrganizationsTable,
+} from "@krak-stack/auth";
 import { Plus } from "lucide-react";
 import { useState } from "react";
 
@@ -6,8 +10,6 @@ import { TableSearchSchemaStandard as TableSearchSchema } from "@/components/ui/
 import { SidebarPageHeader } from "@/components/ui/sidebar-layout";
 import { Button } from "@/components/ui/button";
 import { m } from "@/paraglide/messages";
-import { OrganizationForm } from "@/services/organizations/client/form";
-import { OrganizationsTable } from "@/services/organizations/client/table";
 
 export const Route = createFileRoute("/admin/organizations")({
   validateSearch: TableSearchSchema,
@@ -32,9 +34,13 @@ function OrganizationsPage() {
           </Button>
         }
       />
-      <OrganizationsTable reloadKey={reloadKey} search={search} />
+      <AdminOrganizationsTable
+        from="/admin/organizations"
+        reloadKey={reloadKey}
+        search={search}
+      />
       {creatingOrganization ? (
-        <OrganizationForm
+        <AdminOrganizationForm
           onClose={() => setCreatingOrganization(false)}
           onSaved={() => setReloadKey((current) => current + 1)}
         />

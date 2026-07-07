@@ -1,6 +1,6 @@
 import { Schema } from "effect";
 
-import { PaginatedResponse } from "@/lib/query";
+import { PaginatedResponse, Query } from "@/lib/query";
 import { Organization } from "@/services/organizations/schema";
 
 export const DashboardStatsQuery = Schema.Struct({
@@ -133,6 +133,23 @@ export const PaginatedAdminUsers = PaginatedResponse(AdminUser).annotate({
   description: "Paginated administrative user list response.",
 });
 
+export const AdminListQuery = Schema.Struct({
+  ...Query.fields,
+  projectId: Schema.optional(Schema.String),
+}).annotate({
+  identifier: "AdminListQuery",
+  title: "Admin list query",
+  description:
+    "Paginated administrative list query optionally scoped to linked project records.",
+  examples: [
+    {
+      page: 0,
+      pageSize: 10,
+      projectId: "project-id",
+    },
+  ],
+});
+
 export const PaginatedOrganizations = PaginatedResponse(Organization).annotate({
   identifier: "PaginatedOrganizations",
   title: "Paginated organizations",
@@ -140,3 +157,4 @@ export const PaginatedOrganizations = PaginatedResponse(Organization).annotate({
 });
 
 export type AdminUser = typeof AdminUser.Type;
+export type AdminListQuery = typeof AdminListQuery.Type;

@@ -305,35 +305,65 @@ export const adminApiHandler = HttpApiBuilder.group(
       .handle("listUsers", ({ query }) =>
         Effect.gen(function* () {
           const where = userFilter(query.globalFilter);
+          const projectWhere = query.projectId
+            ? and(where, eq(projectUser.projectId, query.projectId))
+            : where;
           const orderBy = userOrderBy(query);
           const fallbackOrderBy = [desc(user.createdAt)];
           const offset = query.page * query.pageSize;
 
           const totals = yield* Effect.tryPromise({
-            try: () => db.select({ count: count() }).from(user).where(where),
+            try: () =>
+              query.projectId
+                ? db
+                    .select({ count: count() })
+                    .from(user)
+                    .innerJoin(projectUser, eq(projectUser.userId, user.id))
+                    .where(projectWhere)
+                : db.select({ count: count() }).from(user).where(projectWhere),
             catch: internalServerError,
           });
 
           const users = yield* Effect.tryPromise({
             try: () =>
-              db
-                .select({
-                  id: user.id,
-                  name: user.name,
-                  email: user.email,
-                  emailVerified: user.emailVerified,
-                  image: user.image,
-                  createdAt: user.createdAt,
-                  role: user.role,
-                  banned: user.banned,
-                  banReason: user.banReason,
-                  banExpires: user.banExpires,
-                })
-                .from(user)
-                .where(where)
-                .orderBy(...(orderBy.length ? orderBy : fallbackOrderBy))
-                .limit(query.pageSize)
-                .offset(offset),
+              query.projectId
+                ? db
+                    .select({
+                      id: user.id,
+                      name: user.name,
+                      email: user.email,
+                      emailVerified: user.emailVerified,
+                      image: user.image,
+                      createdAt: user.createdAt,
+                      role: user.role,
+                      banned: user.banned,
+                      banReason: user.banReason,
+                      banExpires: user.banExpires,
+                    })
+                    .from(user)
+                    .innerJoin(projectUser, eq(projectUser.userId, user.id))
+                    .where(projectWhere)
+                    .orderBy(...(orderBy.length ? orderBy : fallbackOrderBy))
+                    .limit(query.pageSize)
+                    .offset(offset)
+                : db
+                    .select({
+                      id: user.id,
+                      name: user.name,
+                      email: user.email,
+                      emailVerified: user.emailVerified,
+                      image: user.image,
+                      createdAt: user.createdAt,
+                      role: user.role,
+                      banned: user.banned,
+                      banReason: user.banReason,
+                      banExpires: user.banExpires,
+                    })
+                    .from(user)
+                    .where(projectWhere)
+                    .orderBy(...(orderBy.length ? orderBy : fallbackOrderBy))
+                    .limit(query.pageSize)
+                    .offset(offset),
             catch: internalServerError,
           });
 
@@ -352,32 +382,66 @@ export const adminApiHandler = HttpApiBuilder.group(
       .handle("listOrganizations", ({ query }) =>
         Effect.gen(function* () {
           const where = organizationFilter(query.globalFilter);
+          const projectWhere = query.projectId
+            ? and(where, eq(projectOrganization.projectId, query.projectId))
+            : where;
           const orderBy = organizationOrderBy(query);
           const fallbackOrderBy = [desc(organization.createdAt)];
           const offset = query.page * query.pageSize;
 
           const totals = yield* Effect.tryPromise({
             try: () =>
-              db.select({ count: count() }).from(organization).where(where),
+              query.projectId
+                ? db
+                    .select({ count: count() })
+                    .from(organization)
+                    .innerJoin(
+                      projectOrganization,
+                      eq(projectOrganization.organizationId, organization.id),
+                    )
+                    .where(projectWhere)
+                : db
+                    .select({ count: count() })
+                    .from(organization)
+                    .where(projectWhere),
             catch: internalServerError,
           });
 
           const organizations = yield* Effect.tryPromise({
             try: () =>
-              db
-                .select({
-                  id: organization.id,
-                  name: organization.name,
-                  slug: organization.slug,
-                  logo: organization.logo,
-                  metadata: organization.metadata,
-                  createdAt: organization.createdAt,
-                })
-                .from(organization)
-                .where(where)
-                .orderBy(...(orderBy.length ? orderBy : fallbackOrderBy))
-                .limit(query.pageSize)
-                .offset(offset),
+              query.projectId
+                ? db
+                    .select({
+                      id: organization.id,
+                      name: organization.name,
+                      slug: organization.slug,
+                      logo: organization.logo,
+                      metadata: organization.metadata,
+                      createdAt: organization.createdAt,
+                    })
+                    .from(organization)
+                    .innerJoin(
+                      projectOrganization,
+                      eq(projectOrganization.organizationId, organization.id),
+                    )
+                    .where(projectWhere)
+                    .orderBy(...(orderBy.length ? orderBy : fallbackOrderBy))
+                    .limit(query.pageSize)
+                    .offset(offset)
+                : db
+                    .select({
+                      id: organization.id,
+                      name: organization.name,
+                      slug: organization.slug,
+                      logo: organization.logo,
+                      metadata: organization.metadata,
+                      createdAt: organization.createdAt,
+                    })
+                    .from(organization)
+                    .where(projectWhere)
+                    .orderBy(...(orderBy.length ? orderBy : fallbackOrderBy))
+                    .limit(query.pageSize)
+                    .offset(offset),
             catch: internalServerError,
           });
 

@@ -36,7 +36,11 @@ import {
   authClient,
   ensureKrakOrganizationSelected,
 } from "@/services/auth/client";
-import { OrganizationSwitcher, UserButton } from "@krak-stack/auth";
+import {
+  KrakstackAuthProvider,
+  OrganizationSwitcher,
+  UserButton,
+} from "@krak-stack/auth";
 import type { AuthSession } from "@/services/auth/config";
 
 type SessionData = AuthSession | null;
@@ -150,19 +154,25 @@ function Admin() {
   }
 
   return (
-    <SidebarLayout
-      sidebarHeader={<AdminOrganizationSwitcher />}
-      headerActions={
-        <>
-          <ThemeToggle />
-          <LocaleSwitcher />
-          <UserButton authClient={authClient} baseUrl={authBaseUrl} />
-        </>
-      }
-      groups={adminNavGroups}
+    <KrakstackAuthProvider
+      authClient={authClient}
+      baseUrl={authBaseUrl}
+      projectId={import.meta.env.VITE_KRAKSTACK_AUTH_PROJECT_ID}
     >
-      <Outlet />
-    </SidebarLayout>
+      <SidebarLayout
+        sidebarHeader={<AdminOrganizationSwitcher />}
+        headerActions={
+          <>
+            <ThemeToggle />
+            <LocaleSwitcher />
+            <UserButton authClient={authClient} baseUrl={authBaseUrl} />
+          </>
+        }
+        groups={adminNavGroups}
+      >
+        <Outlet />
+      </SidebarLayout>
+    </KrakstackAuthProvider>
   );
 }
 
