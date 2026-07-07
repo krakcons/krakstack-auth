@@ -45,10 +45,18 @@ import {
   useSensors,
 } from "@dnd-kit/core";
 import {
+  SortableContext,
+  useSortable,
+  verticalListSortingStrategy,
+} from "@dnd-kit/sortable";
+import { CSS } from "@dnd-kit/utilities";
+import {
   useNavigate,
   useRouterState,
   type ValidateFromPath,
 } from "@tanstack/react-router";
+import { useAtom } from "@effect/atom-react";
+import { BrowserKeyValueStore } from "@effect/platform-browser";
 import {
   type Column,
   type ColumnDef,
@@ -62,7 +70,6 @@ import {
   type SortingState,
   type Table as TanstackTable,
   useReactTable,
-  type VisibilityState,
 } from "@tanstack/react-table";
 import {
   ArrowDown,
@@ -77,6 +84,7 @@ import {
   EyeOff,
   FileJson,
   FileText,
+  GripVertical,
   LayoutGrid,
   LinkIcon,
   MoreHorizontal,
@@ -95,6 +103,7 @@ import {
   type ReactNode,
 } from "react";
 import { Schema } from "effect";
+import { Atom } from "effect/unstable/reactivity";
 import { Badge } from "@/components/ui/badge";
 import {
   Card,
@@ -105,6 +114,7 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { getLocale } from "@/paraglide/runtime";
+import { Loading } from "@/components/ui/loading";
 
 const DataTableViewContext = createContext<DataTableView>("table");
 
@@ -114,16 +124,23 @@ export const TableSearchSchema = Schema.Struct({
   globalFilter: Query.fields.globalFilter,
   sort: Query.fields.sort,
   grouping: Schema.optional(Schema.Array(Schema.String)),
-  view: Schema.optional(
-    Schema.Union([Schema.Literal("table"), Schema.Literal("gallery")]),
-  ),
 });
 
 export const TableSearchSchemaStandard =
   Schema.toStandardSchemaV1(TableSearchSchema);
 export type TableParams = Schema.Schema.Type<typeof TableSearchSchema>;
 
-type DataTableView = "table" | "gallery";
+const dataTableStorageRuntime = Atom.runtime(
+  BrowserKeyValueStore.layerLocalStorage,
+);
+
+const DataTableViewSchema = Schema.Union([
+  Schema.Literal("table"),
+  Schema.Literal("gallery"),
+]);
+type DataTableView = typeof DataTableViewSchema.Type;
+
+const ColumnVisibilitySchema = Schema.Record(Schema.String, Schema.Boolean);
 
 export type DataTableMessages = {
   pageSize: string;
@@ -146,6 +163,7 @@ export type DataTableMessages = {
   sortHide: string;
   sortClear: string;
   sortBy: string;
+  reorder: string;
   pageOf: (page: number, total: number) => string;
   goToFirstPage: string;
   goToPreviousPage: string;
@@ -175,6 +193,7 @@ const messages = {
     sortHide: "Hide",
     sortClear: "Clear",
     sortBy: "Sort by",
+    reorder: "Drag to reorder",
     pageOf: (page: number, total: number) => `Page ${page} of ${total}`,
     goToFirstPage: "Go to first page",
     goToPreviousPage: "Go to previous page",
@@ -202,6 +221,7 @@ const messages = {
     sortHide: "Cacher",
     sortClear: "Effacer",
     sortBy: "Trier par",
+    reorder: "Glisser pour réordonner",
     pageOf: (page: number, total: number) => `Page ${page} sur ${total}`,
     goToFirstPage: "Aller à la première page",
     goToPreviousPage: "Aller à la page précédente",
@@ -246,6 +266,13 @@ export interface DataTableGalleryConfig {
   tagIcon?: ReactNode;
 }
 
+export interface DataTableReordering<TData> {
+  onReorder: (rows: TData[]) => void;
+  getRowId: (row: TData) => string;
+  getRowLabel?: (row: TData) => string;
+  handleLabel?: string;
+}
+
 export type DataTableRowAction<TData> = {
   name: string;
   icon?: ReactNode;
@@ -267,6 +294,7 @@ interface DataTableProps<TData, TValue> {
   grouping?: DataTableGrouping<TData>;
   gallery?: DataTableGalleryConfig;
   rowActions?: DataTableRowAction<TData>[];
+  reordering?: DataTableReordering<TData>;
   serverPagination?: {
     rowCount: number;
   };
@@ -343,6 +371,7 @@ const getDefaultGrouping = <TData,>(grouping?: DataTableGrouping<TData>) => {
 
 const getGroupTargetDropId = (key: string) => `group-target:${key}`;
 const getRowDragId = (rowId: string) => `row:${rowId}`;
+const getSortableRowId = (rowId: string) => `sortable-row:${rowId}`;
 
 export const DataTableRowActions = <TData,>({
   actions,
@@ -378,13 +407,17 @@ export const DataTableRowActions = <TData,>({
           </Button>
         }
       />
-      <DropdownMenuContent align="end" className={contentClassName}>
+      <DropdownMenuContent
+        align="end"
+        className={cn("w-max", contentClassName)}
+      >
         <DropdownMenuGroup>
           <DropdownMenuLabel>{title}</DropdownMenuLabel>
           <DropdownMenuSeparator />
           {visibleActions.map((action) => (
             <DropdownMenuItem
               key={action.name}
+              className="whitespace-nowrap"
               onClick={(event) => {
                 event.stopPropagation();
                 action.onClick(row);
@@ -565,35 +598,59 @@ const GroupHeaderCard = <TData,>({
 
 const DataTableRow = <TData,>({
   canDrag,
+  canReorder,
   dragLabel,
   indentDepth = 0,
+  reorderHandleLabel,
   onRowClick,
   row,
   rowActions,
 }: {
   canDrag: boolean;
+  canReorder: boolean;
   dragLabel?: string | undefined;
   indentDepth?: number | undefined;
+  reorderHandleLabel?: string | undefined;
   onRowClick?: ((row: TData) => void) | undefined;
   row: Row<TData>;
   rowActions?: DataTableRowAction<TData>[] | undefined;
 }) => {
-  const { attributes, listeners, setNodeRef, isDragging } = useDraggable({
+  const sortable = useSortable({
+    id: getSortableRowId(row.id),
+    disabled: !canReorder,
+    data: {
+      type: "row-reorder",
+      row: row.original,
+      label: dragLabel,
+    },
+  });
+  const draggable = useDraggable({
     id: getRowDragId(row.id),
-    disabled: !canDrag,
+    disabled: !canDrag || canReorder,
     data: {
       type: "row",
       row: row.original,
       label: dragLabel,
     },
   });
+  const attributes = canReorder ? sortable.attributes : draggable.attributes;
+  const listeners = canReorder ? sortable.listeners : draggable.listeners;
+  const isDragging = canReorder ? sortable.isDragging : draggable.isDragging;
+  const setRowNodeRef = canReorder ? sortable.setNodeRef : draggable.setNodeRef;
+  const transform = canReorder
+    ? CSS.Transform.toString(sortable.transform)
+    : undefined;
   const firstCellIndent =
     indentDepth > 0
       ? `calc(0.5rem + ${(indentDepth - 1) * GROUP_INDENT_PX + GROUP_ROW_INDENT_OFFSET_PX}px)`
       : undefined;
-  const rowAttributes = onRowClick
-    ? { ...attributes, role: "button", tabIndex: 0 }
-    : attributes;
+  const rowAttributes = canReorder
+    ? onRowClick
+      ? { role: "button", tabIndex: 0 }
+      : {}
+    : onRowClick
+      ? { ...attributes, role: "button", tabIndex: 0 }
+      : attributes;
   const visibleCells = row.getVisibleCells();
 
   return (
@@ -618,10 +675,30 @@ const DataTableRow = <TData,>({
         event.preventDefault();
         onRowClick(row.original);
       }}
-      ref={setNodeRef}
+      ref={setRowNodeRef}
+      style={{
+        transform,
+        transition: sortable.transition,
+      }}
       {...rowAttributes}
-      {...listeners}
+      {...(!canReorder ? listeners : {})}
     >
+      {canReorder ? (
+        <TableCell className="w-10 min-w-10 pr-0">
+          <Button
+            aria-label={reorderHandleLabel}
+            className="size-8 cursor-grab active:cursor-grabbing"
+            onClick={(event) => event.stopPropagation()}
+            size="icon"
+            type="button"
+            variant="ghost"
+            {...attributes}
+            {...listeners}
+          >
+            <GripVertical />
+          </Button>
+        </TableCell>
+      ) : null}
       {visibleCells.map((cell, index) => {
         const isLastCell = index === visibleCells.length - 1;
         return (
@@ -696,9 +773,9 @@ const DataTableGalleryCard = <TData,>({
     : null;
 
   if (gallery) {
-    const tagValue = tagCell
-      ? flexRender(tagCell.column.columnDef.cell, tagCell.getContext())
-      : null;
+    const tagValue = gallery.tag ? row.getValue(gallery.tag) : null;
+    const tagLabel =
+      tagValue === null || tagValue === undefined ? null : String(tagValue);
 
     return (
       <Card
@@ -717,19 +794,20 @@ const DataTableGalleryCard = <TData,>({
         {...attributes}
         {...listeners}
       >
-        <CardHeader>
-          {rowActions || tagCell ? (
-            <CardAction onClick={(event) => event.stopPropagation()}>
-              {rowActions ? (
-                <DataTableRowActions actions={rowActions} row={row.original} />
-              ) : null}
-              {tagCell ? (
-                <Badge variant="secondary" className="gap-1">
-                  {gallery.tagIcon}
-                  {tagValue}
-                </Badge>
-              ) : null}
-            </CardAction>
+        {rowActions ? (
+          <div
+            className="absolute top-4 right-4 z-10"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <DataTableRowActions actions={rowActions} row={row.original} />
+          </div>
+        ) : null}
+        <CardHeader className={cn(rowActions && "pr-14")}>
+          {tagCell && tagLabel ? (
+            <Badge variant="secondary" className="mb-1 w-fit gap-1">
+              {gallery.tagIcon}
+              {tagLabel}
+            </Badge>
           ) : null}
           {nameCell ? (
             <CardTitle className="min-w-0 text-base">
@@ -967,14 +1045,17 @@ export function DataTable<TData, TValue>({
   grouping,
   gallery,
   rowActions,
+  reordering,
   serverPagination,
   features = DEFAULT_TABLE_FEATURES,
 }: DataTableProps<TData, TValue>) {
   const labels = dataTableMessages(messages);
   const resolvedEmptyLabel = emptyLabel ?? labels.empty;
-  const search = useRouterState({
-    select: (state) => state.location.search,
-  }) as TableParams | undefined;
+  const location = useRouterState({
+    select: (state) => state.location,
+  });
+  const search = location.search as TableParams | undefined;
+  const pathname = location.pathname;
   const navigate = useNavigate(from ? { from } : undefined);
 
   const {
@@ -983,7 +1064,6 @@ export function DataTable<TData, TValue>({
     sort,
     globalFilter = "",
     grouping: urlGrouping,
-    view = "table",
   } = search ?? {};
   const pagination = { pageIndex: page, pageSize };
   const decodedSort = sort ? Schema.decodeSync(SortParamsFromString)(sort) : [];
@@ -1002,7 +1082,46 @@ export function DataTable<TData, TValue>({
     ...DEFAULT_TABLE_FEATURES,
     ...features,
   };
-  const currentView: DataTableView = showGallery ? view : "table";
+  const tableStorageId = useMemo(() => {
+    const columnIds = columns
+      .map((column, index) => {
+        if ("id" in column && typeof column.id === "string") {
+          return column.id;
+        }
+
+        if ("accessorKey" in column && typeof column.accessorKey === "string") {
+          return column.accessorKey;
+        }
+
+        return String(index);
+      })
+      .join(",");
+
+    return `${pathname}:${exportFileName}:${columnIds}`;
+  }, [columns, exportFileName, pathname]);
+  const columnVisibilityAtom = useMemo(
+    () =>
+      Atom.kvs({
+        runtime: dataTableStorageRuntime,
+        key: `data-table:column-visibility:${tableStorageId}`,
+        schema: ColumnVisibilitySchema,
+        defaultValue: () => ({}),
+      }),
+    [tableStorageId],
+  );
+  const viewAtom = useMemo(
+    () =>
+      Atom.kvs({
+        runtime: dataTableStorageRuntime,
+        key: `data-table:view:${tableStorageId}`,
+        schema: DataTableViewSchema,
+        defaultValue: (): DataTableView => "table",
+      }),
+    [tableStorageId],
+  );
+  const [columnVisibility, setColumnVisibility] = useAtom(columnVisibilityAtom);
+  const [storedView, setStoredView] = useAtom(viewAtom);
+  const currentView: DataTableView = showGallery ? storedView : "table";
   const isGalleryView = currentView === "gallery";
   const emptyStateLabel = isLoading ? labels.loading : resolvedEmptyLabel;
   const hasToolbar = Boolean(
@@ -1015,7 +1134,6 @@ export function DataTable<TData, TValue>({
     showExport,
   );
 
-  const [columnVisibility, setColumnVisibility] = useState<VisibilityState>({});
   const [rowSelection, setRowSelection] = useState({});
   const [collapsedGroups, setCollapsedGroups] = useState<
     Record<string, boolean>
@@ -1055,6 +1173,7 @@ export function DataTable<TData, TValue>({
   const table = useReactTable({
     data,
     columns,
+    ...(reordering ? { getRowId: reordering.getRowId } : {}),
     onPaginationChange: (updater) => {
       const newPagination =
         typeof updater === "function" ? updater(pagination) : updater;
@@ -1125,7 +1244,12 @@ export function DataTable<TData, TValue>({
       ? { manualPagination: true, rowCount: serverPagination.rowCount }
       : { getPaginationRowModel: getPaginationRowModel() }),
     autoResetPageIndex: false,
-    onColumnVisibilityChange: setColumnVisibility,
+    onColumnVisibilityChange: (updater) => {
+      const nextColumnVisibility =
+        typeof updater === "function" ? updater(columnVisibility) : updater;
+
+      setColumnVisibility(nextColumnVisibility);
+    },
     onRowSelectionChange: setRowSelection,
     state: {
       sorting: sorting as SortingState,
@@ -1152,12 +1276,16 @@ export function DataTable<TData, TValue>({
   const hasActiveGrouping = activeGroupingFields.length > 0;
   const exportRows = table.getPrePaginationRowModel().rows;
   const bodyRows = hasActiveGrouping ? exportRows : table.getRowModel().rows;
+  const sortableRowIds = bodyRows.map((row) => getSortableRowId(row.id));
   const groupedSections = useMemo(
     () => buildGroupedSections(bodyRows, activeGroupingFields),
     [activeGroupingFields, bodyRows],
   );
+  const canReorderRows = Boolean(reordering) && !hasActiveGrouping;
   const colSpan =
-    Math.max(table.getVisibleLeafColumns().length, 1) + (rowActions ? 1 : 0);
+    Math.max(table.getVisibleLeafColumns().length, 1) +
+    (rowActions ? 1 : 0) +
+    (canReorderRows ? 1 : 0);
   const canDragRows = activeGroupingFields.some(
     (field) => !!field.onMoveToGroup,
   );
@@ -1199,23 +1327,22 @@ export function DataTable<TData, TValue>({
       return;
     }
 
-    updateTableSearch((current) => ({
-      ...current,
-      view: nextView,
-    }));
+    setStoredView(nextView);
   };
+
+  const renderLoadingState = () => <Loading label={labels.loading} />;
 
   const renderTableEmptyState = () => (
     <TableRow>
       <TableCell className="h-24 text-center" colSpan={colSpan}>
-        {emptyStateLabel}
+        {isLoading ? renderLoadingState() : emptyStateLabel}
       </TableCell>
     </TableRow>
   );
 
   const renderGalleryEmptyState = (message: ReactNode = emptyStateLabel) => (
     <div className="text-muted-foreground rounded-xl border border-dashed px-4 py-10 text-center text-sm">
-      {message}
+      {isLoading ? renderLoadingState() : message}
     </div>
   );
 
@@ -1256,6 +1383,7 @@ export function DataTable<TData, TValue>({
               section.rows.map((row) => (
                 <DataTableRow
                   canDrag={canDragRows}
+                  canReorder={false}
                   dragLabel={grouping?.getRowLabel?.(row.original)}
                   indentDepth={section.depth + 1}
                   key={row.id}
@@ -1273,8 +1401,10 @@ export function DataTable<TData, TValue>({
                     paddingLeft: `calc(0.5rem + ${section.depth * GROUP_INDENT_PX + GROUP_ROW_INDENT_OFFSET_PX}px)`,
                   }}
                 >
-                  {section.field.renderEmptyGroup?.(section.groupId) ??
-                    labels.empty}
+                  {isLoading
+                    ? renderLoadingState()
+                    : (section.field.renderEmptyGroup?.(section.groupId) ??
+                      labels.empty)}
                 </TableCell>
               </TableRow>
             ))}
@@ -1306,8 +1436,10 @@ export function DataTable<TData, TValue>({
               : section.rows.length > 0
                 ? renderGalleryRows(section.rows, canDragRows)
                 : renderGalleryEmptyState(
-                    section.field.renderEmptyGroup?.(section.groupId) ??
-                      labels.empty,
+                    isLoading
+                      ? renderLoadingState()
+                      : (section.field.renderEmptyGroup?.(section.groupId) ??
+                          labels.empty),
                   ))}
         </div>
       );
@@ -1478,6 +1610,34 @@ export function DataTable<TData, TValue>({
 
           const dragType = active.data.current?.type;
 
+          if (dragType === "row-reorder" && reordering && canReorderRows) {
+            const sourceRowId = String(active.id).replace(/^sortable-row:/, "");
+            const targetRowId = String(over.id).replace(/^sortable-row:/, "");
+
+            if (sourceRowId === targetRowId) {
+              return;
+            }
+
+            const currentIndex = bodyRows.findIndex(
+              (row) => row.id === sourceRowId,
+            );
+            const nextIndex = bodyRows.findIndex(
+              (row) => row.id === targetRowId,
+            );
+
+            if (currentIndex === -1 || nextIndex === -1) {
+              return;
+            }
+
+            const rows = bodyRows.map((row) => row.original);
+            const [rowToMove] = rows.splice(currentIndex, 1);
+            if (!rowToMove) return;
+
+            rows.splice(nextIndex, 0, rowToMove);
+            reordering.onReorder(rows);
+            return;
+          }
+
           if (
             dragType !== "row" ||
             over.data.current?.type !== "group-target"
@@ -1504,7 +1664,10 @@ export function DataTable<TData, TValue>({
         }}
         onDragStart={({ active }) => {
           const label = active.data.current?.label;
-          setActiveDragLabel(typeof label === "string" ? label : null);
+          const dragType = active.data.current?.type;
+          setActiveDragLabel(
+            dragType === "row" && typeof label === "string" ? label : null,
+          );
         }}
         sensors={sensors}
       >
@@ -1530,6 +1693,9 @@ export function DataTable<TData, TValue>({
                   <TableHeader>
                     {table.getHeaderGroups().map((headerGroup) => (
                       <TableRow key={headerGroup.id} className="p-4">
+                        {canReorderRows ? (
+                          <TableHead className="w-10 min-w-10 p-0" />
+                        ) : null}
                         {headerGroup.headers.map((header) => {
                           return (
                             <TableHead
@@ -1556,17 +1722,44 @@ export function DataTable<TData, TValue>({
                     )
                   ) : (
                     <TableBody className="px-2">
-                      {bodyRows.length > 0
-                        ? bodyRows.map((row) => (
+                      {bodyRows.length > 0 ? (
+                        canReorderRows ? (
+                          <SortableContext
+                            items={sortableRowIds}
+                            strategy={verticalListSortingStrategy}
+                          >
+                            {bodyRows.map((row) => (
+                              <DataTableRow
+                                canDrag={false}
+                                canReorder
+                                dragLabel={reordering?.getRowLabel?.(
+                                  row.original,
+                                )}
+                                key={row.id}
+                                onRowClick={onRowClick}
+                                reorderHandleLabel={
+                                  reordering?.handleLabel ?? labels.reorder
+                                }
+                                row={row}
+                                rowActions={rowActions}
+                              />
+                            ))}
+                          </SortableContext>
+                        ) : (
+                          bodyRows.map((row) => (
                             <DataTableRow
                               canDrag={false}
+                              canReorder={false}
                               key={row.id}
                               onRowClick={onRowClick}
                               row={row}
                               rowActions={rowActions}
                             />
                           ))
-                        : renderTableEmptyState()}
+                        )
+                      ) : (
+                        renderTableEmptyState()
+                      )}
                     </TableBody>
                   )}
                 </Table>
@@ -1943,6 +2136,12 @@ export function DataTableRelationshipCell({
                       event.stopPropagation();
                       navigate({ to: option.href });
                     }}
+                    onPointerDown={(event) => {
+                      if (!option.href) return;
+
+                      event.preventDefault();
+                      event.stopPropagation();
+                    }}
                     className="max-w-48 cursor-pointer"
                   >
                     {option.href && <LinkIcon className="size-3.5 min-w-3.5" />}
@@ -1969,26 +2168,30 @@ export function DataTableRelationshipCell({
         <DropdownMenuGroup>
           <DropdownMenuLabel>{manageLabel}</DropdownMenuLabel>
           <DropdownMenuSeparator />
-          {options.map((option) => {
-            const checked = selectedValues.has(option.value);
+          {options.length > 0 ? (
+            options.map((option) => {
+              const checked = selectedValues.has(option.value);
 
-            return (
-              <DropdownMenuCheckboxItem
-                checked={checked}
-                key={option.value}
-                onCheckedChange={(nextChecked) => {
-                  if (nextChecked) {
-                    onAdd?.(option.value);
-                    return;
-                  }
+              return (
+                <DropdownMenuCheckboxItem
+                  checked={checked}
+                  key={option.value}
+                  onCheckedChange={(nextChecked) => {
+                    if (nextChecked) {
+                      onAdd?.(option.value);
+                      return;
+                    }
 
-                  onRemove?.(option.value);
-                }}
-              >
-                {option.label}
-              </DropdownMenuCheckboxItem>
-            );
-          })}
+                    onRemove?.(option.value);
+                  }}
+                >
+                  {option.label}
+                </DropdownMenuCheckboxItem>
+              );
+            })
+          ) : (
+            <DropdownMenuItem disabled>{emptyLabel}</DropdownMenuItem>
+          )}
         </DropdownMenuGroup>
       </DropdownMenuContent>
     </DropdownMenu>
@@ -2011,6 +2214,8 @@ export function DataTableColumnHeader<TData, TValue>({
   className,
 }: DataTableColumnHeaderProps<TData, TValue>) {
   const labels = dataTableMessages(messages);
+  const sortDirection = column.getIsSorted();
+
   if (!column.getCanSort()) {
     return (
       <div className={cn("flex h-12 items-center px-2 text-sm", className)}>
@@ -2030,9 +2235,9 @@ export function DataTableColumnHeader<TData, TValue>({
               className="data-[state=open]:bg-accent h-12 w-full justify-start rounded-none px-2"
             >
               <span className="min-w-0 truncate text-sm">{title}</span>
-              {column.getIsSorted() === "desc" ? (
+              {sortDirection === "desc" ? (
                 <ArrowDown />
-              ) : column.getIsSorted() === "asc" ? (
+              ) : sortDirection === "asc" ? (
                 <ArrowUp />
               ) : (
                 <ChevronsUpDown />
@@ -2050,6 +2255,12 @@ export function DataTableColumnHeader<TData, TValue>({
               <ArrowDown className="text-muted-foreground/70 h-3.5 w-3.5" />
               {labels.sortDesc}
             </DropdownMenuItem>
+            {sortDirection ? (
+              <DropdownMenuItem onClick={() => column.clearSorting()}>
+                <X className="text-muted-foreground/70 h-3.5 w-3.5" />
+                {labels.sortClear}
+              </DropdownMenuItem>
+            ) : null}
             <DropdownMenuSeparator />
             <DropdownMenuItem onClick={() => column.toggleVisibility(false)}>
               <EyeOff className="text-muted-foreground/70 h-3.5 w-3.5" />
