@@ -366,6 +366,9 @@ type AccountCache = {
   reload: () => Promise<void>;
 };
 
+const requiresPasswordForAccountRevoke = (accounts: readonly LinkedAccount[]) =>
+  accounts.some((account) => account.providerId === "credential");
+
 const userAccountsAtom = Atom.family((authClient: AuthUiClient) =>
   Atom.keepAlive(
     Atom.make(
@@ -727,6 +730,7 @@ function ConnectedAccounts({
   navigate: UseNavigateResult<string>;
 }) {
   const m = useUserButtonMessages();
+  const [error, setError] = useState<string | null>(null);
   const [isLinking, setIsLinking] = useState(false);
   const [revokingAccount, setRevokingAccount] = useState<LinkedAccount | null>(
     null,
@@ -736,10 +740,7 @@ function ConnectedAccounts({
   const googleAccount = accounts.find(
     (account) => account.providerId === "google",
   );
-  const hasPassword = accounts.some(
-    (account) => account.providerId === "credential",
-  );
-  const canRevokeAccount = accounts.length > 1;
+  const requirePassword = requiresPasswordForAccountRevoke(accounts);
 
   const linkGoogle = async () => {
     setError(null);
@@ -798,10 +799,8 @@ function ConnectedAccounts({
             description={m.user_account_google_description()}
             account={googleAccount}
             connected={Boolean(googleAccount)}
-            canRevoke={canRevokeAccount}
             connectLabel={m.user_account_google_connect()}
             revokeLabel={m.user_account_revoke()}
-            onlyMethodLabel={m.user_account_only_method()}
             isConnecting={isLinking}
             renderDisconnected={undefined}
             onConnect={linkGoogle}
@@ -811,7 +810,7 @@ function ConnectedAccounts({
             <RevokeAccountForm
               baseUrl={baseUrl}
               account={revokingAccount}
-              requirePassword={hasPassword}
+              requirePassword={requirePassword}
               onCancel={() => setRevokingAccount(null)}
               onRevoke={revokeAccount}
             />
@@ -823,6 +822,7 @@ function ConnectedAccounts({
       {accountCache.error ? (
         <p className="text-destructive text-sm">{accountCache.error}</p>
       ) : null}
+      {error ? <p className="text-destructive text-sm">{error}</p> : null}
     </section>
   );
 }
@@ -833,10 +833,8 @@ function AccountProviderRow({
   description,
   account,
   connected,
-  canRevoke,
   connectLabel,
   revokeLabel,
-  onlyMethodLabel,
   isConnecting,
   renderDisconnected,
   onConnect,
@@ -847,10 +845,8 @@ function AccountProviderRow({
   description: ReactNode;
   account: LinkedAccount | undefined;
   connected: boolean;
-  canRevoke: boolean;
   connectLabel: ReactNode;
   revokeLabel: ReactNode;
-  onlyMethodLabel: ReactNode;
   isConnecting?: boolean;
   renderDisconnected: ReactNode | undefined;
   onConnect: () => void;
@@ -880,10 +876,9 @@ function AccountProviderRow({
           <Button
             type="button"
             variant="outline"
-            disabled={!canRevoke}
             onClick={() => onRevoke(account)}
           >
-            {canRevoke ? revokeLabel : onlyMethodLabel}
+            {revokeLabel}
           </Button>
         ) : renderDisconnected ? (
           renderDisconnected
@@ -945,7 +940,7 @@ function PasswordSettings({
     (account) => account.providerId === "credential",
   );
   const hasPassword = Boolean(passwordAccount);
-  const canRevokeAccount = accounts.length > 1;
+  const requirePassword = requiresPasswordForAccountRevoke(accounts);
 
   const revokePassword = async (account: LinkedAccount) => {
     setError(null);
@@ -988,19 +983,16 @@ function PasswordSettings({
             <Button
               type="button"
               variant="outline"
-              disabled={!canRevokeAccount}
               onClick={() => setRevokingAccount(passwordAccount)}
             >
-              {canRevokeAccount
-                ? m.user_account_revoke()
-                : m.user_account_only_method()}
+              {m.user_account_revoke()}
             </Button>
           </div>
           {revokingAccount ? (
             <RevokeAccountForm
               baseUrl={baseUrl}
               account={revokingAccount}
-              requirePassword
+              requirePassword={requirePassword}
               onCancel={() => setRevokingAccount(null)}
               onRevoke={revokePassword}
             />
@@ -1158,9 +1150,7 @@ function SetPasswordForm({
           )}
         </form.AppField>
         <form.FormError />
-        <Button type="submit" className="self-start">
-          {m.user_account_password_set()}
-        </Button>
+        <form.SubmitButton>{m.user_account_password_set()}</form.SubmitButton>
       </form>
     </form.AppForm>
   );

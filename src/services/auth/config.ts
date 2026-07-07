@@ -92,6 +92,9 @@ const createAuth = ({
       : {}),
     account: {
       encryptOAuthTokens: true,
+      accountLinking: {
+        allowUnlinkingAll: true,
+      },
     },
     session: {
       cookieCache: {
