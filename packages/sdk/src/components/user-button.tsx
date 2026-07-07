@@ -63,6 +63,7 @@ import { Separator } from "@/components/ui/separator";
 
 import type { AuthUiClient } from "./auth-client";
 import { authApiClient } from "./auth-api-client";
+import { useKrakstackAuthProjectConfig } from "./auth-provider";
 import { createApiKey } from "./api-key";
 import { useOpenedOnce } from "./hooks";
 import { ExtraUploadedAsset } from "../extra/schema";
@@ -444,6 +445,7 @@ export const UserButton = ({
 }: UserDropdownProps) => {
   const labels = userButtonMessages(messages);
   const m = userButtonMessageFns(labels);
+  const projectConfig = useKrakstackAuthProjectConfig();
   const navigate = useNavigate();
   const currentSiteHref = useRouterState({
     select: (state) => `${import.meta.env.VITE_SITE_URL}${state.location.href}`,
@@ -648,6 +650,7 @@ export const UserButton = ({
                 authClient={authClient}
                 baseUrl={baseUrl}
                 accountCache={accountCache}
+                googleEnabled={projectConfig?.authOptions.google ?? true}
                 currentSiteHref={currentSiteHref}
                 navigate={navigate}
               />
@@ -720,12 +723,14 @@ function ConnectedAccounts({
   authClient,
   baseUrl,
   accountCache,
+  googleEnabled,
   currentSiteHref,
   navigate,
 }: {
   authClient: AuthUiClient;
   baseUrl?: string | undefined;
   accountCache: AccountCache;
+  googleEnabled: boolean;
   currentSiteHref: string;
   navigate: UseNavigateResult<string>;
 }) {
@@ -741,8 +746,15 @@ function ConnectedAccounts({
     (account) => account.providerId === "google",
   );
   const requirePassword = requiresPasswordForAccountRevoke(accounts);
+  const showGoogleAccount = googleEnabled || Boolean(googleAccount);
+
+  if (accountCache.accounts && (accounts.length === 0 || !showGoogleAccount)) {
+    return null;
+  }
 
   const linkGoogle = async () => {
+    if (!googleEnabled) return;
+
     setError(null);
     setIsLinking(true);
 
@@ -793,19 +805,21 @@ function ConnectedAccounts({
       </div>
       {accountCache.accounts ? (
         <>
-          <AccountProviderRow
-            icon={<GoogleLogo />}
-            title={m.user_account_google_title()}
-            description={m.user_account_google_description()}
-            account={googleAccount}
-            connected={Boolean(googleAccount)}
-            connectLabel={m.user_account_google_connect()}
-            revokeLabel={m.user_account_revoke()}
-            isConnecting={isLinking}
-            renderDisconnected={undefined}
-            onConnect={linkGoogle}
-            onRevoke={(account) => setRevokingAccount(account)}
-          />
+          {showGoogleAccount ? (
+            <AccountProviderRow
+              icon={<GoogleLogo />}
+              title={m.user_account_google_title()}
+              description={m.user_account_google_description()}
+              account={googleAccount}
+              connected={Boolean(googleAccount)}
+              connectLabel={m.user_account_google_connect()}
+              revokeLabel={m.user_account_revoke()}
+              isConnecting={isLinking}
+              renderDisconnected={undefined}
+              onConnect={linkGoogle}
+              onRevoke={(account) => setRevokingAccount(account)}
+            />
+          ) : null}
           {revokingAccount ? (
             <RevokeAccountForm
               baseUrl={baseUrl}
