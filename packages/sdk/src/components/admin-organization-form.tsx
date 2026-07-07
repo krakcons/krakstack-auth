@@ -114,7 +114,7 @@ export function AdminOrganizationForm({
     { mode: "promise" },
   );
   const uploadLogo = useAtomSet(
-    authClientApi(baseUrl).mutation("authExtra", "uploadOrganizationLogo"),
+    authClientApi(baseUrl).mutation("authExtra", "uploadUserImage"),
     { mode: "promise" },
   );
   const [error, setError] = useState("");

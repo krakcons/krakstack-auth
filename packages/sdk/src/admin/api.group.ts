@@ -23,6 +23,8 @@ import {
   ServerUpdateDomainPayload,
 } from "./schema";
 
+export * from "./schema";
+
 export const AdminApiGroup = HttpApiGroup.make("admin")
   .add(
     HttpApiEndpoint.get("dashboardStats", "/admin/dashboard-stats", {

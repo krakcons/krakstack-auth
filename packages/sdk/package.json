@@ -36,20 +36,20 @@
     },
     "./tailwind.css": "./tailwind.css",
     "./better-auth": {
-      "types": "./dist/better-auth/index.d.ts",
-      "default": "./dist/better-auth/index.js"
+      "types": "./dist/better-auth/api.group.d.ts",
+      "default": "./dist/better-auth/api.group.js"
     },
     "./extra": {
-      "types": "./dist/extra/index.d.ts",
-      "default": "./dist/extra/index.js"
+      "types": "./dist/extra/api.group.d.ts",
+      "default": "./dist/extra/api.group.js"
     },
     "./server": {
       "types": "./dist/server/index.d.ts",
       "default": "./dist/server/index.js"
     },
     "./admin": {
-      "types": "./dist/admin/index.d.ts",
-      "default": "./dist/admin/index.js"
+      "types": "./dist/admin/api.group.d.ts",
+      "default": "./dist/admin/api.group.js"
     }
   },
   "publishConfig": {

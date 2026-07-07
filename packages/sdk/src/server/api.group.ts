@@ -1,4 +1,4 @@
-import { HttpApi, OpenApi } from "effect/unstable/httpapi";
+import { OpenApi } from "effect/unstable/httpapi";
 import {
   HttpApiEndpoint,
   HttpApiError,
@@ -236,9 +236,3 @@ export const ServerDomainsApiGroup = HttpApiGroup.make("domains")
       description: "Server-to-server auth hostname endpoints.",
     }),
   );
-
-export const ServerApi = HttpApi.make("ServerApi")
-  .add(ServerUsersApiGroup)
-  .add(ServerOrganizationsApiGroup)
-  .add(ServerDomainsApiGroup)
-  .prefix("/api");

@@ -33,7 +33,7 @@ export const Route = createFileRoute("/admin/api-keys")({
 
 type ApiKeySummary = Omit<ApiKey, "key"> & { key?: string };
 
-const createApiKeyAtom = ApiClient.mutation("auth", "createApiKey");
+const createApiKeyAtom = ApiClient.mutation("authExtra", "createApiKey");
 
 function ApiKeysPage() {
   const createApiKey = useAtomSet(createApiKeyAtom, { mode: "promise" });

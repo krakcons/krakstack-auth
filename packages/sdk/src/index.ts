@@ -23,7 +23,7 @@ export {
   type UserButtonDialog,
   useAdminUsersTotal,
 } from "./components";
-export * as BetterAuth from "./better-auth";
-export * as Extra from "./extra";
+export * as BetterAuth from "./better-auth/api.group";
+export * as Extra from "./extra/api.group";
 export * as Server from "./server";
-export * as Admin from "./admin";
+export * as Admin from "./admin/api.group";

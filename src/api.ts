@@ -1,12 +1,11 @@
+import { ExtraApiGroup } from "@krak-stack/auth/extra";
 import { HttpApi, OpenApi } from "effect/unstable/httpapi";
 
 import { AdminApiGroup } from "@/services/admin/api.group";
-import { AuthApiGroup } from "@/services/auth/api.group";
 import {
   AdminOAuthClientsApiGroup,
   PublicOAuthClientsApiGroup,
 } from "@/services/oauth/api.group";
-import { OrganizationsApiGroup } from "@/services/organizations/api.group";
 import {
   AdminProjectsApiGroup,
   PublicProjectsApiGroup,
@@ -23,7 +22,7 @@ export const AdminApi = HttpApi.make("AdminApi")
   .add(AdminApiGroup)
   .add(AdminOAuthClientsApiGroup)
   .add(AdminProjectsApiGroup)
-  .prefix("/api");
+  .prefix("/api/auth");
 
 export const FrontendApi = HttpApi.make("FrontendApi")
   .annotateMerge(
@@ -34,8 +33,7 @@ export const FrontendApi = HttpApi.make("FrontendApi")
         "Frontend API for KrakStack user authentication and browser-facing auth flows.",
     }),
   )
-  .add(AuthApiGroup)
-  .add(OrganizationsApiGroup)
+  .add(ExtraApiGroup)
   .add(PublicOAuthClientsApiGroup)
   .add(PublicProjectsApiGroup)
   .prefix("/api");

@@ -33,7 +33,6 @@ import {
 } from "@/services/oauth/api.builder";
 import { OpenTelemetry } from "@/services/opentelemetry";
 import { Organizations } from "@/services/organizations";
-import { organizationsApiHandler } from "@/services/organizations/api.builder";
 import { Projects } from "@/services/projects";
 import {
   adminProjectsApiHandler,
@@ -135,11 +134,6 @@ const scalarDocsConfig = {
       url: "/api/auth-openapi.json",
     },
     {
-      title: "Admin API",
-      slug: "admin-api",
-      url: "/api/admin-openapi.json",
-    },
-    {
       title: "Better Auth",
       slug: "better-auth",
       url: "/api/auth/open-api/generate-schema",
@@ -176,9 +170,7 @@ const authDocsOpenApiLayer = HttpRouter.add(
 );
 
 const apiLayer = Layer.mergeAll(
-  HttpApiBuilder.layer(AdminApi, {
-    openapiPath: "/api/admin-openapi.json",
-  }).pipe(
+  HttpApiBuilder.layer(AdminApi).pipe(
     Layer.provide(adminApiHandler),
     Layer.provide(adminOAuthClientsApiHandler),
     Layer.provide(adminProjectsApiHandler),
@@ -186,7 +178,6 @@ const apiLayer = Layer.mergeAll(
   ),
   HttpApiBuilder.layer(FrontendApi).pipe(
     Layer.provide(authApiHandler),
-    Layer.provide(organizationsApiHandler),
     Layer.provide(publicOAuthClientsApiHandler),
     Layer.provide(publicProjectsApiHandler),
   ),

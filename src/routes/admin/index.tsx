@@ -83,7 +83,7 @@ function useDashboardStats(range: ChartRange) {
     queryKey: ["admin", "dashboard", range],
     queryFn: async () => {
       const params = new URLSearchParams({ days: range });
-      const res = await fetch(`/api/admin/dashboard-stats?${params}`, {
+      const res = await fetch(`/api/auth/admin/dashboard-stats?${params}`, {
         credentials: "include",
       });
       if (!res.ok) throw new Error("Failed to fetch dashboard stats.");

@@ -32,7 +32,22 @@ const config = defineConfig({
       {
         find: /^@krak-stack\/auth\/admin$/,
         replacement: fileURLToPath(
-          new URL("./packages/sdk/src/admin/index.ts", import.meta.url),
+          new URL("./packages/sdk/src/admin/api.group.ts", import.meta.url),
+        ),
+      },
+      {
+        find: /^@krak-stack\/auth\/extra$/,
+        replacement: fileURLToPath(
+          new URL("./packages/sdk/src/extra/api.group.ts", import.meta.url),
+        ),
+      },
+      {
+        find: /^@krak-stack\/auth\/better-auth$/,
+        replacement: fileURLToPath(
+          new URL(
+            "./packages/sdk/src/better-auth/api.group.ts",
+            import.meta.url,
+          ),
         ),
       },
       {

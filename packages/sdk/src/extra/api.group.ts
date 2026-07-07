@@ -1,4 +1,4 @@
-import { HttpApi, OpenApi } from "effect/unstable/httpapi";
+import { OpenApi } from "effect/unstable/httpapi";
 import {
   HttpApiEndpoint,
   HttpApiError,
@@ -19,6 +19,9 @@ import {
   ExtraVerifyApiKeyResponse,
   ExtraVerifyPasswordPayload,
 } from "./schema";
+
+export * from "./schema";
+export type { Organization, OrganizationMetadata } from "../schema";
 
 export const ExtraApiGroup = HttpApiGroup.make("authExtra")
   .add(
@@ -102,27 +105,11 @@ export const ExtraApiGroup = HttpApiGroup.make("authExtra")
       ],
     }).annotateMerge(
       OpenApi.annotations({
-        title: "Upload user image",
-        summary: "Upload a user profile image",
+        title: "Upload image",
+        summary: "Upload an authenticated image asset",
         description:
-          "Accepts a multipart image upload and stores it as the current user's profile image asset.",
+          "Accepts a multipart image upload and stores it as an authenticated image asset for profiles, organizations, and branding.",
       }),
-    ),
-  )
-  .add(
-    HttpApiEndpoint.post(
-      "uploadOrganizationLogo",
-      "/organizations/logo/upload",
-      {
-        payload: ExtraImageUploadMultipartPayload,
-        success: ExtraUploadedAsset,
-        error: [
-          HttpApiError.BadRequest,
-          HttpApiError.Unauthorized,
-          HttpApiError.Forbidden,
-          HttpApiError.InternalServerError,
-        ],
-      },
     ),
   )
   .annotateMerge(
@@ -132,7 +119,3 @@ export const ExtraApiGroup = HttpApiGroup.make("authExtra")
         "KrakStack-specific endpoints layered on top of Better Auth.",
     }),
   );
-
-export const ExtraApi = HttpApi.make("ExtraApi")
-  .add(ExtraApiGroup)
-  .prefix("/api");

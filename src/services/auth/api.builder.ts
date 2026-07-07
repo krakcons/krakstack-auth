@@ -1,3 +1,4 @@
+import { ExtraBadRequest } from "@krak-stack/auth/extra";
 import { Effect } from "effect";
 import { HttpServerRequest } from "effect/unstable/http";
 import { HttpApiBuilder, HttpApiError } from "effect/unstable/httpapi";
@@ -7,10 +8,8 @@ import { BetterAuthRequest } from "@/services/auth/better-auth-request";
 import { Projects } from "@/services/projects";
 import { uploadImageFromMultipart } from "@/services/s3/upload";
 
-import { AuthBadRequest } from "./schema";
-
 const authError = (fallback: string) => (error: unknown) =>
-  new AuthBadRequest({
+  new ExtraBadRequest({
     message: error instanceof Error ? error.message : fallback,
   });
 
@@ -40,7 +39,7 @@ const requestAuthSession = (request: HttpServerRequest.HttpServerRequest) =>
 
 export const authApiHandler = HttpApiBuilder.group(
   FrontendApi,
-  "auth",
+  "authExtra",
   (handlers) =>
     handlers
       .handle("getProjectPublicConfig", ({ query }) =>
@@ -101,7 +100,7 @@ export const authApiHandler = HttpApiBuilder.group(
           });
 
           if (!session) {
-            return yield* new AuthBadRequest({ message: "Unauthorized" });
+            return yield* new ExtraBadRequest({ message: "Unauthorized" });
           }
 
           const permissions = payload.permissions
@@ -190,9 +189,9 @@ export const authApiHandler = HttpApiBuilder.group(
 
           const url = yield* uploadImageFromMultipart({
             payload,
-            prefix: `logos/users/${session.user.id}`,
-            fallbackFileName: "profile-image",
-            badRequest: (message) => new AuthBadRequest({ message }),
+            prefix: `logos/uploads/${session.user.id}`,
+            fallbackFileName: "image",
+            badRequest: (message) => new ExtraBadRequest({ message }),
             internalServerError,
           });
 

@@ -1,13 +1,13 @@
 import { HttpApi, OpenApi } from "effect/unstable/httpapi";
 
-import { AdminApiGroup } from "./admin/api";
-import { BetterAuthApiGroup } from "./better-auth/api";
-import { ExtraApiGroup } from "./extra/api";
+import { AdminApiGroup } from "./admin/api.group";
+import { BetterAuthApiGroup } from "./better-auth/api.group";
+import { ExtraApiGroup } from "./extra/api.group";
 import {
   ServerDomainsApiGroup,
   ServerOrganizationsApiGroup,
   ServerUsersApiGroup,
-} from "./server/api";
+} from "./server/api.group";
 
 export const AuthServiceApi = HttpApi.make("AuthServiceApi")
   .annotateMerge(
@@ -36,5 +36,5 @@ export const AuthClientApi = HttpApi.make("AuthClientApi")
         "Browser-facing API used by KrakStack Auth React components.",
     }),
   )
-  .add(ExtraApiGroup, AdminApiGroup)
+  .add(ExtraApiGroup, AdminApiGroup.prefix("/auth"))
   .prefix("/api");

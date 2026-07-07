@@ -1,4 +1,4 @@
-import { HttpApi, OpenApi } from "effect/unstable/httpapi";
+import { OpenApi } from "effect/unstable/httpapi";
 import {
   HttpApiEndpoint,
   HttpApiError,
@@ -6,6 +6,9 @@ import {
 } from "effect/unstable/httpapi";
 
 import { GetSessionResponse, TooManyRequests } from "./schema";
+
+export * from "./schema";
+export type { Session, User } from "../schema";
 
 export const BetterAuthApiGroup = HttpApiGroup.make("auth")
   .add(
@@ -34,7 +37,3 @@ export const BetterAuthApiGroup = HttpApiGroup.make("auth")
       description: "Better Auth-owned browser session endpoints.",
     }),
   );
-
-export const BetterAuthApi = HttpApi.make("BetterAuthApi")
-  .add(BetterAuthApiGroup)
-  .prefix("/api/auth");

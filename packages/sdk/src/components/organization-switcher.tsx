@@ -499,18 +499,16 @@ const nullableString = (value: unknown) =>
 
 const decodeUploadedAsset = Schema.decodeUnknownPromise(ExtraUploadedAsset);
 
-const uploadOrganizationLogoAsset = async (
+const uploadImageAsset = async (
   file: File,
   m: ReturnType<typeof organizationMessageFns>,
-  uploadOrganizationLogo: (input: { payload: FormData }) => Promise<unknown>,
+  uploadImage: (input: { payload: FormData }) => Promise<unknown>,
 ) => {
   const payload = new FormData();
   payload.append("file", file);
 
   try {
-    const uploaded = await decodeUploadedAsset(
-      await uploadOrganizationLogo({ payload }),
-    );
+    const uploaded = await decodeUploadedAsset(await uploadImage({ payload }));
 
     return assetPath(uploaded.url);
   } catch {
@@ -595,10 +593,10 @@ const organizationFormDefaults = (
 const organizationLogoFromForm = async (
   value: File | string | null,
   m: ReturnType<typeof organizationMessageFns>,
-  uploadOrganizationLogo: (input: { payload: FormData }) => Promise<unknown>,
+  uploadImage: (input: { payload: FormData }) => Promise<unknown>,
 ) => {
   if (value instanceof File)
-    return await uploadOrganizationLogoAsset(value, m, uploadOrganizationLogo);
+    return await uploadImageAsset(value, m, uploadImage);
   if (typeof value === "string") return assetPath(value);
   return null;
 };
@@ -630,31 +628,15 @@ const formatOrganizationDate = (date: Date | string) =>
 const organizationMetadataFromForm = async (
   value: OrganizationFormValues,
   m: ReturnType<typeof organizationMessageFns>,
-  uploadOrganizationLogo: (input: { payload: FormData }) => Promise<unknown>,
+  uploadImage: (input: { payload: FormData }) => Promise<unknown>,
 ): Promise<OrganizationMetadata> => {
   const translations: OrganizationTranslation[] = [];
   const enName = value.enName.trim() || value.name.trim();
   const frName = value.frName.trim();
-  const enLogo = await organizationLogoFromForm(
-    value.enLogo,
-    m,
-    uploadOrganizationLogo,
-  );
-  const enIcon = await organizationLogoFromForm(
-    value.enIcon,
-    m,
-    uploadOrganizationLogo,
-  );
-  const frLogo = await organizationLogoFromForm(
-    value.frLogo,
-    m,
-    uploadOrganizationLogo,
-  );
-  const frIcon = await organizationLogoFromForm(
-    value.frIcon,
-    m,
-    uploadOrganizationLogo,
-  );
+  const enLogo = await organizationLogoFromForm(value.enLogo, m, uploadImage);
+  const enIcon = await organizationLogoFromForm(value.enIcon, m, uploadImage);
+  const frLogo = await organizationLogoFromForm(value.frLogo, m, uploadImage);
+  const frIcon = await organizationLogoFromForm(value.frIcon, m, uploadImage);
 
   if (enName) {
     translations.push({
@@ -1252,8 +1234,8 @@ function EditOrganizationSection({
   onUpdated: () => Promise<void>;
 }) {
   const m = useOrganizationMessages();
-  const uploadOrganizationLogo = useAtomSet(
-    authClientApi(baseUrl).mutation("authExtra", "uploadOrganizationLogo"),
+  const uploadImage = useAtomSet(
+    authClientApi(baseUrl).mutation("authExtra", "uploadUserImage"),
     { mode: "promise" },
   );
   const [editingLocale, setEditingLocale] = useState<OrganizationLocale>(
@@ -1270,7 +1252,7 @@ function EditOrganizationSection({
         const metadata = await organizationMetadataFromForm(
           value,
           m,
-          uploadOrganizationLogo,
+          uploadImage,
         );
 
         const result = await authClient.organization.update({
@@ -1473,8 +1455,8 @@ function CreateOrganizationSection({
   onCreated: (organization: OrganizationSummary) => Promise<void>;
 }) {
   const m = useOrganizationMessages();
-  const uploadOrganizationLogo = useAtomSet(
-    authClientApi(baseUrl).mutation("authExtra", "uploadOrganizationLogo"),
+  const uploadImage = useAtomSet(
+    authClientApi(baseUrl).mutation("authExtra", "uploadUserImage"),
     { mode: "promise" },
   );
   const [editingLocale, setEditingLocale] = useState<OrganizationLocale>(
@@ -1495,7 +1477,7 @@ function CreateOrganizationSection({
             slug,
           },
           m,
-          uploadOrganizationLogo,
+          uploadImage,
         );
 
         const result = await authClient.organization.create({

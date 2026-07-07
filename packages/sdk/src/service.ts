@@ -18,7 +18,7 @@ import { HttpApiError } from "effect/unstable/httpapi";
 import { AuthServiceApi } from "./api";
 import { AuthClientConfig, type ClientConfig } from "./config";
 import { ExtraVerifiedApiKey } from "./extra/schema";
-import type { GetSessionResponse } from "./better-auth";
+import type { GetSessionResponse } from "./better-auth/api.group";
 import type { Session, User } from "./schema";
 
 type ExtraVerifiedApiKeyType = typeof ExtraVerifiedApiKey.Type;

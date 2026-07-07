@@ -7,11 +7,10 @@ export type {
 } from "../service";
 export { AuthClientConfig } from "../config";
 export {
-  ServerApi,
   ServerDomainsApiGroup,
   ServerOrganizationsApiGroup,
   ServerUsersApiGroup,
-} from "./api";
+} from "./api.group";
 export { proxyAuthRequest } from "./proxy";
 export {
   ApiKeySecurity,
