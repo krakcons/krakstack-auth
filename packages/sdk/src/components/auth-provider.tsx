@@ -2,6 +2,7 @@ import { apiKeyClient } from "@better-auth/api-key/client";
 import { useAtomSuspense } from "@effect/atom-react";
 import { useRouterState } from "@tanstack/react-router";
 import {
+  adminClient,
   emailOTPClient,
   genericOAuthClient,
   lastLoginMethodClient,
@@ -61,6 +62,7 @@ const createAuthUiClient = (baseUrl?: string | undefined): AuthUiClient =>
   createAuthClient({
     ...(baseUrl ? { baseURL: baseUrl } : {}),
     plugins: [
+      adminClient(),
       emailOTPClient(),
       lastLoginMethodClient(),
       organizationClient(),

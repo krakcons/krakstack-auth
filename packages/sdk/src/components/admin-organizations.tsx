@@ -94,7 +94,7 @@ const organizationsAtom = Atom.family(
 );
 
 export function AdminOrganizationsTable({
-  from = "/admin/organizations",
+  from,
   reloadKey = 0,
   search,
 }: {
@@ -140,7 +140,7 @@ export function AdminOrganizationsTable({
         data={organizations}
         exportFileName="organizations.csv"
         features={{ gallery: false }}
-        from={from}
+        {...(from ? { from } : {})}
         isLoading={isLoading}
         onRefresh={() => setRefreshKey((current) => current + 1)}
         serverPagination={{ rowCount: total }}

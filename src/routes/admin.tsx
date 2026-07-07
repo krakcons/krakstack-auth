@@ -150,7 +150,15 @@ function Admin() {
   }
 
   if (!user || !isAdmin) {
-    return <AdminAccessDenied isSignedIn={!!user} />;
+    return (
+      <KrakstackAuthProvider
+        authClient={authClient}
+        baseUrl={authBaseUrl}
+        projectId={import.meta.env.VITE_KRAKSTACK_AUTH_PROJECT_ID}
+      >
+        <AdminAccessDenied isSignedIn={!!user} />
+      </KrakstackAuthProvider>
+    );
   }
 
   return (
@@ -195,6 +203,9 @@ function AdminAccessDenied({ isSignedIn }: { isSignedIn: boolean }) {
       <div className="absolute top-6 right-6 flex items-center gap-2 md:top-10 md:right-10">
         <ThemeToggle />
         <LocaleSwitcher />
+        {isSignedIn ? (
+          <UserButton authClient={authClient} baseUrl={authBaseUrl} />
+        ) : null}
       </div>
       <Card className="w-full max-w-md">
         <CardHeader>

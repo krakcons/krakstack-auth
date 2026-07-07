@@ -161,7 +161,7 @@ const impersonateUser = async (userId: string, m: AdminUsersLabels) => {
 };
 
 export function AdminUsersTable({
-  from = "/admin/users",
+  from,
   reloadKey = 0,
   search,
 }: {
@@ -214,7 +214,7 @@ export function AdminUsersTable({
         data={users}
         exportFileName="users.csv"
         features={{ gallery: false }}
-        from={from}
+        {...(from ? { from } : {})}
         isLoading={isLoading}
         onRefresh={() => setRefreshKey((current) => current + 1)}
         serverPagination={{ rowCount: total }}

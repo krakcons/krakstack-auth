@@ -12,11 +12,14 @@ import { AsyncResult, Atom } from "effect/unstable/reactivity";
 import {
   Check,
   Copy,
+  Building2,
   KeyRound,
   LogOutIcon,
   ShieldCheck,
+  StopCircle,
   Trash2,
   UserCircleIcon,
+  Users,
   UserIcon,
 } from "lucide-react";
 import { QRCode } from "react-qr-code";
@@ -68,6 +71,14 @@ import { createApiKey } from "./api-key";
 import { useOpenedOnce } from "./hooks";
 import { ExtraUploadedAsset } from "../extra/schema";
 import { assetPath, assetUrl } from "./utils";
+import { AdminOrganizationsTable } from "./admin-organizations";
+import { AdminUsersTable } from "./admin-users";
+
+const defaultAdminTableSearch = {
+  page: 0,
+  pageSize: 10,
+  globalFilter: "",
+};
 
 const messages = {
   en: {
@@ -130,10 +141,16 @@ const messages = {
     user_api_keys_load_error: "Could not load API keys.",
     user_api_keys_title: "API keys",
     user_button_account: "Account",
+    user_button_admin_organizations: "Organizations",
+    user_button_admin_organizations_description:
+      "Review and manage organizations.",
+    user_button_admin_users: "Users",
+    user_button_admin_users_description: "Review and manage users.",
     user_button_api_keys: "API keys",
     user_button_aria_label: "Open user menu",
     user_button_logout: "Log out",
     user_button_security: "Security",
+    user_button_stop_impersonating: "Stop impersonating",
     user_delete: "Delete",
     user_field_password: "Password",
     user_form_description:
@@ -232,10 +249,16 @@ const messages = {
     user_api_keys_load_error: "Impossible de charger les clés API.",
     user_api_keys_title: "Clés API",
     user_button_account: "Compte",
+    user_button_admin_organizations: "Organisations",
+    user_button_admin_organizations_description:
+      "Consultez et gérez les organisations.",
+    user_button_admin_users: "Utilisateurs",
+    user_button_admin_users_description: "Consultez et gérez les utilisateurs.",
     user_button_api_keys: "Clés API",
     user_button_aria_label: "Ouvrir le menu utilisateur",
     user_button_logout: "Se déconnecter",
     user_button_security: "Sécurité",
+    user_button_stop_impersonating: "Arrêter l'imitation",
     user_delete: "Supprimer",
     user_field_password: "Mot de passe",
     user_form_description:
@@ -323,6 +346,16 @@ const UserButtonMessagesContext = createContext(
   userButtonMessageFns(userButtonMessages()),
 );
 const useUserButtonMessages = () => useContext(UserButtonMessagesContext);
+
+const hasRole = (role: unknown, roles: readonly string[]) =>
+  typeof role === "string" &&
+  role.split(",").some((item) => roles.includes(item.trim().toLowerCase()));
+
+const hasAdminRole = (user: unknown) =>
+  typeof user === "object" &&
+  user !== null &&
+  "role" in user &&
+  hasRole(user.role, ["admin"]);
 
 type UserFormType = {
   name: string;
@@ -428,7 +461,12 @@ type UserDropdownProps = {
   onDialogChange?: (dialog: UserButtonDialog | null) => void;
 };
 
-export type UserButtonDialog = "account" | "security" | "apiKeys";
+export type UserButtonDialog =
+  | "account"
+  | "security"
+  | "apiKeys"
+  | "adminUsers"
+  | "adminOrganizations";
 
 export const UserButton = ({
   authClient,
@@ -450,9 +488,16 @@ export const UserButton = ({
   const currentSiteHref = useRouterState({
     select: (state) => `${import.meta.env.VITE_SITE_URL}${state.location.href}`,
   });
+  const adminTableSearch = useRouterState({
+    select: (state) => ({
+      ...defaultAdminTableSearch,
+      ...state.location.search,
+    }),
+  });
   const { data: session, isPending, refetch } = authClient.useSession();
   const [uncontrolledDialog, setUncontrolledDialog] =
     useState<UserButtonDialog | null>(defaultDialog);
+  const [isStoppingImpersonation, setIsStoppingImpersonation] = useState(false);
   const settingsDialog =
     controlledDialog !== undefined ? controlledDialog : uncontrolledDialog;
   const [formError, setFormError] = useState<string | null>(null);
@@ -503,6 +548,8 @@ export const UserButton = ({
   const displayName = session.user.name.trim();
   const displayEmail = session.user.email.trim();
   const displayImage = assetUrl(session.user.image, baseUrl);
+  const isImpersonating = Boolean(session.session.impersonatedBy);
+  const isAdmin = hasAdminRole(session.user);
 
   const signOut = async () => {
     const redirectUrl = signOutRedirect.startsWith("http")
@@ -511,6 +558,18 @@ export const UserButton = ({
 
     await authClient.signOut();
     await navigate({ href: redirectUrl });
+  };
+
+  const stopImpersonating = async () => {
+    setIsStoppingImpersonation(true);
+
+    try {
+      await authClient.admin.stopImpersonating();
+      await refetch();
+      await navigate({ href: currentSiteHref });
+    } finally {
+      setIsStoppingImpersonation(false);
+    }
   };
 
   const updateUser = async (values: UserFormType) => {
@@ -599,6 +658,36 @@ export const UserButton = ({
                 {m.user_button_api_keys()}
               </DropdownMenuItem>
               <DropdownMenuSeparator />
+              {isAdmin || isImpersonating ? (
+                <>
+                  {isAdmin ? (
+                    <>
+                      <DropdownMenuItem
+                        onClick={() => setSettingsDialog("adminUsers")}
+                      >
+                        <Users />
+                        {m.user_button_admin_users()}
+                      </DropdownMenuItem>
+                      <DropdownMenuItem
+                        onClick={() => setSettingsDialog("adminOrganizations")}
+                      >
+                        <Building2 />
+                        {m.user_button_admin_organizations()}
+                      </DropdownMenuItem>
+                    </>
+                  ) : null}
+                  {isImpersonating ? (
+                    <DropdownMenuItem
+                      disabled={isStoppingImpersonation}
+                      onClick={stopImpersonating}
+                    >
+                      <StopCircle />
+                      {m.user_button_stop_impersonating()}
+                    </DropdownMenuItem>
+                  ) : null}
+                  <DropdownMenuSeparator />
+                </>
+              ) : null}
               <DropdownMenuItem onClick={signOut}>
                 <LogOutIcon />
                 {m.user_button_logout()}
@@ -715,6 +804,60 @@ export const UserButton = ({
           />
         </DialogContent>
       </Dialog>
+      {isAdmin ? (
+        <>
+          <Dialog
+            open={settingsDialog === "adminUsers"}
+            onOpenChange={(open) => {
+              setSettingsDialog((current) =>
+                open ? "adminUsers" : current === "adminUsers" ? null : current,
+              );
+            }}
+          >
+            <DialogContent className="flex h-[85vh] flex-col overflow-y-auto sm:max-w-6xl">
+              <DialogHeader>
+                <DialogTitle className="text-2xl">
+                  {m.user_button_admin_users()}
+                </DialogTitle>
+                <DialogDescription>
+                  {m.user_button_admin_users_description()}
+                </DialogDescription>
+              </DialogHeader>
+              <Separator />
+              <div className="min-h-0 flex-1">
+                <AdminUsersTable search={adminTableSearch} />
+              </div>
+            </DialogContent>
+          </Dialog>
+          <Dialog
+            open={settingsDialog === "adminOrganizations"}
+            onOpenChange={(open) => {
+              setSettingsDialog((current) =>
+                open
+                  ? "adminOrganizations"
+                  : current === "adminOrganizations"
+                    ? null
+                    : current,
+              );
+            }}
+          >
+            <DialogContent className="flex h-[85vh] flex-col overflow-y-auto sm:max-w-6xl">
+              <DialogHeader>
+                <DialogTitle className="text-2xl">
+                  {m.user_button_admin_organizations()}
+                </DialogTitle>
+                <DialogDescription>
+                  {m.user_button_admin_organizations_description()}
+                </DialogDescription>
+              </DialogHeader>
+              <Separator />
+              <div className="min-h-0 flex-1">
+                <AdminOrganizationsTable search={adminTableSearch} />
+              </div>
+            </DialogContent>
+          </Dialog>
+        </>
+      ) : null}
     </UserButtonMessagesContext.Provider>
   );
 };

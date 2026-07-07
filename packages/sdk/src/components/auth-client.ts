@@ -1,5 +1,6 @@
 import type { apiKeyClient } from "@better-auth/api-key/client";
 import type {
+  adminClient,
   emailOTPClient,
   genericOAuthClient,
   lastLoginMethodClient,
@@ -11,6 +12,7 @@ import type { createAuthClient } from "better-auth/react";
 export type AuthUiClient = ReturnType<
   typeof createAuthClient<{
     plugins: [
+      ReturnType<typeof adminClient>,
       ReturnType<typeof emailOTPClient>,
       ReturnType<typeof lastLoginMethodClient>,
       ReturnType<typeof organizationClient>,
