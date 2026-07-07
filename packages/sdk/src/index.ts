@@ -1,5 +1,6 @@
 export * from "./schema";
-export { AuthApi } from "./api";
+export * as Query from "./query";
+export { AuthClientApi, AuthServiceApi } from "./api";
 export { AuthService, type AuthServiceLayerOptions } from "./service";
 export { AuthClientConfig } from "./config";
 export { proxyAuthRequest } from "./server/proxy";
@@ -25,3 +26,4 @@ export {
 export * as BetterAuth from "./better-auth";
 export * as Extra from "./extra";
 export * as Server from "./server";
+export * as Admin from "./admin";

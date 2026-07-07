@@ -16,8 +16,8 @@ import { DB } from "@/services/database";
 import type {
   ServerCreateDomainPayload,
   ServerDomain,
-} from "../../../packages/sdk/src/server/schema";
-import type { ServerUpdateDomainPayload } from "../../../packages/sdk/src/server/schema";
+  ServerUpdateDomainPayload,
+} from "@krak-stack/auth/server";
 
 export { normalizeAuthHost, normalizeOAuthClientDomains, parseCsv };
 

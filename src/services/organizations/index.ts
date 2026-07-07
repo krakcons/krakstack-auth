@@ -3,9 +3,9 @@ import { Context, Effect, Layer } from "effect";
 import { BetterAuthRequest } from "@/services/auth/better-auth-request";
 
 import type {
-  CreateOrganizationPayload,
-  UpdateOrganizationPayload,
-} from "./schema";
+  AdminCreateOrganizationPayload,
+  AdminUpdateOrganizationPayload,
+} from "@krak-stack/auth/admin";
 
 export class Organizations extends Context.Service<Organizations>()(
   "Organizations",
@@ -21,7 +21,7 @@ export class Organizations extends Context.Service<Organizations>()(
       const create = Effect.fn("Organizations.create")(function* ({
         payload,
       }: {
-        payload: CreateOrganizationPayload;
+        payload: AdminCreateOrganizationPayload;
       }) {
         const betterAuth = yield* BetterAuthRequest;
         return yield* Effect.promise(() =>
@@ -37,7 +37,7 @@ export class Organizations extends Context.Service<Organizations>()(
         payload,
       }: {
         id: string;
-        payload: UpdateOrganizationPayload;
+        payload: AdminUpdateOrganizationPayload;
       }) {
         const betterAuth = yield* BetterAuthRequest;
         return yield* Effect.promise(() =>

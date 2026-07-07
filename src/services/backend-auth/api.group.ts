@@ -14,7 +14,7 @@ import {
   ServerDomainHostParams,
   ServerDomainIdParams,
   ServerDomainRecordsResponse,
-} from "../../../packages/sdk/src/server/schema";
+} from "@krak-stack/auth/server";
 
 import {
   BackendAuthActiveOrganization,

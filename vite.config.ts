@@ -30,6 +30,30 @@ const config = defineConfig({
         ),
       },
       {
+        find: /^@krak-stack\/auth\/admin$/,
+        replacement: fileURLToPath(
+          new URL("./packages/sdk/src/admin/index.ts", import.meta.url),
+        ),
+      },
+      {
+        find: /^@krak-stack\/auth\/api$/,
+        replacement: fileURLToPath(
+          new URL("./packages/sdk/src/api.ts", import.meta.url),
+        ),
+      },
+      {
+        find: /^@krak-stack\/auth\/query$/,
+        replacement: fileURLToPath(
+          new URL("./packages/sdk/src/query.ts", import.meta.url),
+        ),
+      },
+      {
+        find: /^@krak-stack\/auth\/server$/,
+        replacement: fileURLToPath(
+          new URL("./packages/sdk/src/server/index.ts", import.meta.url),
+        ),
+      },
+      {
         find: "@",
         replacement: fileURLToPath(new URL("./src", import.meta.url)),
       },

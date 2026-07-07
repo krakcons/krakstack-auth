@@ -65,7 +65,7 @@ import {
 import { Separator } from "@/components/ui/separator";
 
 import type { AuthUiClient } from "./auth-client";
-import { authApiClient } from "./auth-api-client";
+import { authClientApi } from "./auth-client-api";
 import { useKrakstackAuthProjectConfig } from "./auth-provider";
 import { createApiKey } from "./api-key";
 import { useOpenedOnce } from "./hooks";
@@ -510,7 +510,7 @@ export const UserButton = ({
   const accountsResult = useAtomValue(accountsAtom);
   const refreshAccounts = useAtomRefresh(accountsAtom);
   const uploadUserImage = useAtomSet(
-    authApiClient(baseUrl).mutation("authExtra", "uploadUserImage"),
+    authClientApi(baseUrl).mutation("authExtra", "uploadUserImage"),
     { mode: "promise" },
   );
 
@@ -1328,7 +1328,7 @@ function RevokeAccountForm({
 }) {
   const m = useUserButtonMessages();
   const verifyPassword = useAtomSet(
-    authApiClient(baseUrl).mutation("authExtra", "verifyPassword"),
+    authClientApi(baseUrl).mutation("authExtra", "verifyPassword"),
     { mode: "promise" },
   );
   const form = useAppForm({

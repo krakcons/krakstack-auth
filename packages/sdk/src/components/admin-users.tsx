@@ -20,11 +20,11 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { authBaseUrl, authClient } from "@/services/auth/client";
-import { assetUrl } from "@/lib/assets";
-import { AdminApiClient } from "@/lib/admin-api-client";
 
+import type { AuthUiClient } from "./auth-client";
+import { authClientApi } from "./auth-client-api";
 import { type KrakstackAuthLocale, useKrakstackAuth } from "./auth-provider";
+import { assetUrl } from "./utils";
 
 const defaultMessages = {
   en: {
@@ -122,17 +122,19 @@ const adminUsersQuery = (search: TableParams, projectId?: string | null) => {
 
 const usersAtom = Atom.family(
   ({
+    baseUrl,
     projectId,
     reloadKey,
     search,
   }: {
+    baseUrl?: string | undefined;
     projectId?: string | null | undefined;
     reloadKey: number;
     search: TableParams;
   }) => {
     const request = adminUsersQuery(search, projectId);
 
-    return AdminApiClient.query("admin", "listUsers", {
+    return authClientApi(baseUrl).query("admin", "listUsers", {
       query: request.query,
       timeToLive: "1 minute",
       reactivityKeys: [
@@ -144,18 +146,30 @@ const usersAtom = Atom.family(
   },
 );
 
-const banUser = async (userId: string, m: AdminUsersLabels) => {
+const banUser = async (
+  authClient: AuthUiClient,
+  userId: string,
+  m: AdminUsersLabels,
+) => {
   const result = await authClient.admin.banUser({ userId });
   if (result.error) throw new Error(result.error.message ?? m.admin_error_ban);
 };
 
-const unbanUser = async (userId: string, m: AdminUsersLabels) => {
+const unbanUser = async (
+  authClient: AuthUiClient,
+  userId: string,
+  m: AdminUsersLabels,
+) => {
   const result = await authClient.admin.unbanUser({ userId });
   if (result.error)
     throw new Error(result.error.message ?? m.admin_error_unban);
 };
 
-const impersonateUser = async (userId: string, m: AdminUsersLabels) => {
+const impersonateUser = async (
+  authClient: AuthUiClient,
+  userId: string,
+  m: AdminUsersLabels,
+) => {
   const result = await authClient.admin.impersonateUser({ userId });
   if (result.error)
     throw new Error(result.error.message ?? m.admin_error_impersonate);
@@ -173,6 +187,8 @@ export function AdminUsersTable({
   const navigate = useNavigate();
   const auth = useKrakstackAuth();
   const m = labels(auth?.locale ?? "en");
+  const authClient = auth?.authClient;
+  const baseUrl = auth?.baseUrl;
   const projectId = auth?.projectId;
   const [impersonatingUserId, setImpersonatingUserId] = useState<string | null>(
     null,
@@ -180,7 +196,12 @@ export function AdminUsersTable({
   const [impersonateError, setImpersonateError] = useState("");
   const [refreshKey, setRefreshKey] = useState(0);
   const result = useAtomValue(
-    usersAtom({ projectId, search, reloadKey: reloadKey + refreshKey }),
+    usersAtom({
+      baseUrl,
+      projectId,
+      search,
+      reloadKey: reloadKey + refreshKey,
+    }),
   );
   const [banningUser, setBanningUser] = useState<User | null>(null);
   const [unbanningUser, setUnbanningUser] = useState<User | null>(null);
@@ -231,7 +252,8 @@ export function AdminUsersTable({
               setImpersonateError("");
               setImpersonatingUserId(user.id);
               try {
-                await impersonateUser(user.id, m);
+                if (!authClient) throw new Error(m.admin_error_access_required);
+                await impersonateUser(authClient, user.id, m);
                 await navigate({ to: "/" });
               } catch (cause) {
                 setImpersonateError(
@@ -263,6 +285,7 @@ export function AdminUsersTable({
       {banningUser ? (
         <BanUserDialog
           labels={m}
+          authClient={authClient}
           user={banningUser}
           onBanned={() => setRefreshKey((current) => current + 1)}
           onClose={() => setBanningUser(null)}
@@ -271,6 +294,7 @@ export function AdminUsersTable({
       {unbanningUser ? (
         <UnbanUserDialog
           labels={m}
+          authClient={authClient}
           user={unbanningUser}
           onUnbanned={() => setRefreshKey((current) => current + 1)}
           onClose={() => setUnbanningUser(null)}
@@ -281,8 +305,15 @@ export function AdminUsersTable({
 }
 
 export function useAdminUsersTotal(search: TableParams) {
-  const projectId = useKrakstackAuth()?.projectId;
-  const result = useAtomValue(usersAtom({ projectId, search, reloadKey: 0 }));
+  const auth = useKrakstackAuth();
+  const result = useAtomValue(
+    usersAtom({
+      baseUrl: auth?.baseUrl,
+      projectId: auth?.projectId,
+      search,
+      reloadKey: 0,
+    }),
+  );
   return AsyncResult.match(result, {
     onInitial: () => 0,
     onFailure: () => 0,
@@ -295,7 +326,7 @@ const userColumns = (m: AdminUsersLabels): ColumnDef<User>[] => [
     accessorKey: "email",
     header: m.admin_column_user,
     cell: ({ row }) => {
-      const image = assetUrl(row.original.image, authBaseUrl);
+      const image = assetUrl(row.original.image);
 
       return (
         <AppBrand
@@ -362,11 +393,13 @@ const userColumns = (m: AdminUsersLabels): ColumnDef<User>[] => [
 
 function BanUserDialog({
   labels: m,
+  authClient,
   user,
   onBanned,
   onClose,
 }: {
   labels: AdminUsersLabels;
+  authClient?: AuthUiClient | undefined;
   user: User;
   onBanned: () => void;
   onClose: () => void;
@@ -396,7 +429,8 @@ function BanUserDialog({
               setError("");
               setIsPending(true);
               try {
-                await banUser(user.id, m);
+                if (!authClient) throw new Error(m.admin_error_access_required);
+                await banUser(authClient, user.id, m);
                 onBanned();
                 onClose();
               } catch (cause) {
@@ -422,11 +456,13 @@ function BanUserDialog({
 
 function UnbanUserDialog({
   labels: m,
+  authClient,
   user,
   onUnbanned,
   onClose,
 }: {
   labels: AdminUsersLabels;
+  authClient?: AuthUiClient | undefined;
   user: User;
   onUnbanned: () => void;
   onClose: () => void;
@@ -456,7 +492,8 @@ function UnbanUserDialog({
               setError("");
               setIsPending(true);
               try {
-                await unbanUser(user.id, m);
+                if (!authClient) throw new Error(m.admin_error_access_required);
+                await unbanUser(authClient, user.id, m);
                 onUnbanned();
                 onClose();
               } catch (cause) {

@@ -8,6 +8,7 @@ export type {
 export { AuthClientConfig } from "../config";
 export {
   ServerApi,
+  ServerDomainsApiGroup,
   ServerOrganizationsApiGroup,
   ServerUsersApiGroup,
 } from "./api";
@@ -18,10 +19,16 @@ export {
   makeAuthenticationLive,
 } from "./middleware";
 export type { AuthenticationLiveOptions } from "./middleware";
-export type {
+export {
   ServerActiveOrganization,
+  ServerCreateDomainPayload,
+  ServerDomain,
+  ServerDomainHostParams,
+  ServerDomainIdParams,
+  ServerDomainRecordsResponse,
   ServerMembersResponse,
   ServerOrganizationsResponse,
+  ServerUpdateDomainPayload,
   ServerUsersResponse,
 } from "./schema";
 export type {

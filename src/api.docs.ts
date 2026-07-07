@@ -1,6 +1,6 @@
 import { HttpApi, OpenApi } from "effect/unstable/httpapi";
 
-import { AuthApi } from "../packages/sdk/src/api";
+import { AuthServiceApi } from "@krak-stack/auth/api";
 
 export const AuthDocsApi = HttpApi.make("AuthDocsApi")
   .annotateMerge(
@@ -11,4 +11,4 @@ export const AuthDocsApi = HttpApi.make("AuthDocsApi")
         "Auth API documentation for Better Auth extensions, KrakStack extra endpoints, and trusted server endpoints.",
     }),
   )
-  .addHttpApi(AuthApi);
+  .addHttpApi(AuthServiceApi);

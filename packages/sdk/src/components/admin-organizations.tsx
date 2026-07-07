@@ -10,13 +10,11 @@ import { DataTable, type TableParams } from "@/components/ui/data-table";
 import { ErrorMessage } from "@/components/ui/form";
 import { AppBrand } from "@/components/ui/app-brand";
 import { Badge } from "@/components/ui/badge";
-import { assetUrl } from "@/lib/assets";
-import { authBaseUrl } from "@/services/auth/client";
-import { organizationBranding } from "@/services/organizations/branding";
-import { AdminApiClient } from "@/lib/admin-api-client";
 
-import type { Organization } from "@/services/organizations/schema";
+import type { AdminOrganization } from "../admin/schema";
+import { authClientApi } from "./auth-client-api";
 import { type KrakstackAuthLocale, useKrakstackAuth } from "./auth-provider";
+import { assetUrl, organizationBranding } from "./utils";
 
 const defaultMessages = {
   en: {
@@ -44,14 +42,15 @@ const labels = (locale: KrakstackAuthLocale) => ({
 type AdminOrganizationsLabels = ReturnType<typeof labels>;
 
 const organizationDisplay = (
-  organization: Organization,
+  organization: AdminOrganization,
   locale: KrakstackAuthLocale,
+  baseUrl?: string | undefined,
 ) => {
   const branding = organizationBranding(organization, locale);
 
   return {
     name: branding?.name ?? organization.name,
-    image: assetUrl(branding?.logo, authBaseUrl),
+    image: assetUrl(branding?.logo, baseUrl),
   };
 };
 
@@ -72,17 +71,19 @@ const organizationsQuery = (search: TableParams, projectId?: string | null) => {
 
 const organizationsAtom = Atom.family(
   ({
+    baseUrl,
     projectId,
     reloadKey,
     search,
   }: {
+    baseUrl?: string | undefined;
     projectId?: string | null | undefined;
     reloadKey: number;
     search: TableParams;
   }) => {
     const request = organizationsQuery(search, projectId);
 
-    return AdminApiClient.query("admin", "listOrganizations", {
+    return authClientApi(baseUrl).query("admin", "listOrganizations", {
       query: request.query,
       timeToLive: "1 minute",
       reactivityKeys: [
@@ -106,10 +107,16 @@ export function AdminOrganizationsTable({
   const auth = useKrakstackAuth();
   const locale = auth?.locale ?? "en";
   const m = labels(locale);
+  const baseUrl = auth?.baseUrl;
   const projectId = auth?.projectId;
   const [refreshKey, setRefreshKey] = useState(0);
   const result = useAtomValue(
-    organizationsAtom({ projectId, reloadKey: reloadKey + refreshKey, search }),
+    organizationsAtom({
+      baseUrl,
+      projectId,
+      reloadKey: reloadKey + refreshKey,
+      search,
+    }),
   );
 
   const organizations = AsyncResult.match(result, {
@@ -137,7 +144,7 @@ export function AdminOrganizationsTable({
     <div className="flex flex-col gap-4">
       {error ? <ErrorMessage text={error} /> : null}
       <DataTable
-        columns={organizationColumns(m, locale)}
+        columns={organizationColumns(m, locale, baseUrl)}
         data={organizations}
         exportFileName="organizations.csv"
         features={{ gallery: false }}
@@ -153,12 +160,13 @@ export function AdminOrganizationsTable({
 const organizationColumns = (
   m: AdminOrganizationsLabels,
   locale: KrakstackAuthLocale,
-): ColumnDef<Organization>[] => [
+  baseUrl?: string | undefined,
+): ColumnDef<AdminOrganization>[] => [
   {
     accessorKey: "name",
     header: m.admin_column_organization,
     cell: ({ row }) => {
-      const display = organizationDisplay(row.original, locale);
+      const display = organizationDisplay(row.original, locale, baseUrl);
 
       return (
         <AppBrand

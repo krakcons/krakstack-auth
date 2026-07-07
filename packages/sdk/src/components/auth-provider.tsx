@@ -19,7 +19,7 @@ import {
 } from "react";
 
 import type { AuthUiClient } from "./auth-client";
-import { authApiClient } from "./auth-api-client";
+import { authClientApi } from "./auth-client-api";
 import type { ExtraProjectPublicConfig } from "../extra/schema";
 
 export type KrakstackAuthLocale = "en" | "fr";
@@ -113,7 +113,7 @@ const useProjectConfig = (
   const host = getBrowserAuthHost();
   const rootHost = getRedirectHost(searchString);
   const result = useAtomSuspense(
-    authApiClient(baseUrl).query("authExtra", "getProjectPublicConfig", {
+    authClientApi(baseUrl).query("authExtra", "getProjectPublicConfig", {
       query: {
         ...(projectId ? { projectId } : {}),
         ...(clientId ? { clientId } : {}),

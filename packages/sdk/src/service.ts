@@ -15,7 +15,7 @@ import {
 import { HttpApiClient } from "effect/unstable/httpapi";
 import { HttpApiError } from "effect/unstable/httpapi";
 
-import { AuthApi } from "./api";
+import { AuthServiceApi } from "./api";
 import { AuthClientConfig, type ClientConfig } from "./config";
 import { ExtraVerifiedApiKey } from "./extra/schema";
 import type { GetSessionResponse } from "./better-auth";
@@ -160,7 +160,7 @@ export class AuthService extends Context.Service<AuthService>()(
               ),
         );
 
-        const api = yield* HttpApiClient.makeWith(AuthApi, {
+        const api = yield* HttpApiClient.makeWith(AuthServiceApi, {
           baseUrl: config.baseUrl,
           httpClient,
         });

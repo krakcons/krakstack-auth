@@ -22,11 +22,11 @@ import {
   InputOTPSeparator,
   InputOTPSlot,
 } from "@/components/ui/input-otp";
-import { cn } from "@/lib/utils";
 
 import type { AuthUiClient } from "./auth-client";
-import { authApiClient } from "./auth-api-client";
+import { authClientApi } from "./auth-client-api";
 import { type KrakstackAuthLocale, useKrakstackAuth } from "./auth-provider";
+import { cn } from "./utils";
 import type { ExtraProjectPublicConfig } from "../extra/schema";
 
 const EMAIL_OTP_RESEND_COOLDOWN_SECONDS = 60;
@@ -189,7 +189,7 @@ const useAuthProjectConfig = (
   const host = getBrowserAuthHost();
   const atom =
     projectConfig === undefined
-      ? authApiClient(baseUrl).query("authExtra", "getProjectPublicConfig", {
+      ? authClientApi(baseUrl).query("authExtra", "getProjectPublicConfig", {
           query: {
             ...(projectId ? { projectId } : {}),
             ...(clientId ? { clientId } : {}),

@@ -35,7 +35,7 @@ import type {
   ServerCreateDomainPayload,
   ServerDomain,
   ServerUpdateDomainPayload,
-} from "../../../../packages/sdk/src/server/schema";
+} from "@krak-stack/auth/server";
 
 const domainsAtom = Atom.family((reloadKey: number) =>
   AdminApiClient.query("admin", "listDomains", {

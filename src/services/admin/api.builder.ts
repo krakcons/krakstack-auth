@@ -12,6 +12,10 @@ import {
   or,
 } from "drizzle-orm";
 import { HttpApiBuilder, HttpApiError } from "effect/unstable/httpapi";
+import {
+  SortParamsFromString,
+  type AdminListQuery,
+} from "@krak-stack/auth/admin";
 
 import { AdminApi } from "@/api";
 import { BetterAuthRequest } from "@/services/auth/better-auth-request";
@@ -26,7 +30,6 @@ import {
   session,
   user,
 } from "@/db/schema";
-import { SortParamsFromString, type QueryType } from "@/lib/query";
 import { Domains } from "@/services/domains";
 import { DB } from "@/services/database";
 import { Organizations } from "@/services/organizations";
@@ -63,7 +66,7 @@ const paginationMeta = ({
   pageCount: Math.ceil(total / pageSize),
 });
 
-const userOrderBy = (query: QueryType) => {
+const userOrderBy = (query: AdminListQuery) => {
   const sort = query.sort
     ? Schema.decodeSync(SortParamsFromString)(query.sort)
     : [];
@@ -90,7 +93,7 @@ const userOrderBy = (query: QueryType) => {
   });
 };
 
-const organizationOrderBy = (query: QueryType) => {
+const organizationOrderBy = (query: AdminListQuery) => {
   const sort = query.sort
     ? Schema.decodeSync(SortParamsFromString)(query.sort)
     : [];

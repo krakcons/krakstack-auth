@@ -14,16 +14,14 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { AdminApiClient } from "@/lib/admin-api-client";
-import { ApiClient } from "@/lib/api-client";
-import { assetPath, assetUrl } from "@/lib/assets";
-import { authBaseUrl } from "@/services/auth/client";
 import {
-  CreateOrganizationPayload,
-  type Organization,
-} from "@/services/organizations/schema";
+  AdminCreateOrganizationPayload,
+  type AdminOrganization,
+} from "../admin/schema";
 
+import { authClientApi } from "./auth-client-api";
 import { type KrakstackAuthLocale, useKrakstackAuth } from "./auth-provider";
+import { assetPath, assetUrl } from "./utils";
 
 const defaultMessages = {
   en: {
@@ -88,21 +86,8 @@ const slugify = (value: string) =>
 
 const isFile = (value: unknown): value is File => value instanceof File;
 
-const createOrganizationAtom = AdminApiClient.mutation(
-  "admin",
-  "createOrganization",
-);
-const updateOrganizationAtom = AdminApiClient.mutation(
-  "admin",
-  "updateOrganization",
-);
-const uploadLogoAtom = ApiClient.mutation(
-  "organizations",
-  "uploadOrganizationLogo",
-);
-
 const valuesToPayload = (value: OrganizationFormValues, logo: string | null) =>
-  Schema.decodeUnknownSync(CreateOrganizationPayload)({
+  Schema.decodeUnknownSync(AdminCreateOrganizationPayload)({
     name: value.name.trim(),
     slug: slugify(value.slug || value.name),
     logo: logo ?? undefined,
@@ -113,28 +98,32 @@ export function AdminOrganizationForm({
   onClose,
   onSaved,
 }: {
-  organization?: Organization;
+  organization?: AdminOrganization;
   onClose: () => void;
-  onSaved: (organization: Organization) => void;
+  onSaved: (organization: AdminOrganization) => void;
 }) {
   const auth = useKrakstackAuth();
   const m = labels(auth?.locale ?? "en");
-  const createOrganization = useAtomSet(createOrganizationAtom, {
-    mode: "promise",
-  });
-  const updateOrganization = useAtomSet(updateOrganizationAtom, {
-    mode: "promise",
-  });
-  const uploadLogo = useAtomSet(uploadLogoAtom, {
-    mode: "promise",
-  });
+  const baseUrl = auth?.baseUrl;
+  const createOrganization = useAtomSet(
+    authClientApi(baseUrl).mutation("admin", "createOrganization"),
+    { mode: "promise" },
+  );
+  const updateOrganization = useAtomSet(
+    authClientApi(baseUrl).mutation("admin", "updateOrganization"),
+    { mode: "promise" },
+  );
+  const uploadLogo = useAtomSet(
+    authClientApi(baseUrl).mutation("authExtra", "uploadOrganizationLogo"),
+    { mode: "promise" },
+  );
   const [error, setError] = useState("");
   const isEditing = Boolean(organization);
   const form = useAppForm({
     defaultValues: {
       name: organization?.name ?? "",
       slug: organization?.slug ?? "",
-      logo: assetUrl(organization?.logo, authBaseUrl),
+      logo: assetUrl(organization?.logo, baseUrl),
     } satisfies OrganizationFormValues,
     onSubmit: async ({ value }) => {
       setError("");

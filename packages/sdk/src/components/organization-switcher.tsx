@@ -59,7 +59,6 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Separator } from "@/components/ui/separator";
-import { cn } from "@/lib/utils";
 import {
   OrganizationMetadata,
   type OrganizationLocale,
@@ -67,11 +66,11 @@ import {
 } from "@krak-stack/auth/schema";
 
 import type { AuthUiClient } from "./auth-client";
-import { authApiClient } from "./auth-api-client";
+import { authClientApi } from "./auth-client-api";
 import { createApiKey } from "./api-key";
 import { useOpenedOnce } from "./hooks";
 import { ExtraUploadedAsset } from "../extra/schema";
-import { assetPath, assetUrl } from "./utils";
+import { assetPath, assetUrl, cn } from "./utils";
 
 type Locale = "en" | "fr";
 
@@ -1254,7 +1253,7 @@ function EditOrganizationSection({
 }) {
   const m = useOrganizationMessages();
   const uploadOrganizationLogo = useAtomSet(
-    authApiClient(baseUrl).mutation("authExtra", "uploadOrganizationLogo"),
+    authClientApi(baseUrl).mutation("authExtra", "uploadOrganizationLogo"),
     { mode: "promise" },
   );
   const [editingLocale, setEditingLocale] = useState<OrganizationLocale>(
@@ -1475,7 +1474,7 @@ function CreateOrganizationSection({
 }) {
   const m = useOrganizationMessages();
   const uploadOrganizationLogo = useAtomSet(
-    authApiClient(baseUrl).mutation("authExtra", "uploadOrganizationLogo"),
+    authClientApi(baseUrl).mutation("authExtra", "uploadOrganizationLogo"),
     { mode: "promise" },
   );
   const [editingLocale, setEditingLocale] = useState<OrganizationLocale>(
