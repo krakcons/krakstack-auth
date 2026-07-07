@@ -1,11 +1,11 @@
-import { and, eq, ne } from "drizzle-orm";
+import { and, eq, inArray, ne } from "drizzle-orm";
 import { Context, Effect, Layer } from "effect";
 import { getDomain } from "tldts";
 import { CredentialsFromEnv } from "@distilled.cloud/cloudflare";
 import * as CustomHostnames from "@distilled.cloud/cloudflare/custom-hostnames";
 import * as FetchHttpClient from "effect/unstable/http/FetchHttpClient";
 
-import { domains } from "@/db/auth-schema";
+import { domains, organization, project } from "@/db/auth-schema";
 import {
   cookieDomainForAuthDomainContext,
   normalizeAuthHost,
@@ -13,7 +13,10 @@ import {
   parseCsv,
 } from "@/lib/domain-utils";
 import { DB } from "@/services/database";
-import type { ServerCreateDomainPayload } from "../../../packages/sdk/src/server/schema";
+import type {
+  ServerCreateDomainPayload,
+  ServerDomain,
+} from "../../../packages/sdk/src/server/schema";
 import type { ServerUpdateDomainPayload } from "../../../packages/sdk/src/server/schema";
 
 export { normalizeAuthHost, normalizeOAuthClientDomains, parseCsv };
@@ -181,9 +184,68 @@ export class Domains extends Context.Service<Domains>()("Domains", {
   make: Effect.gen(function* () {
     const db = yield* DB;
 
+    const enrichDomains = Effect.fn("Domains.enrichDomains")(function* (
+      rows: readonly DomainRow[],
+    ) {
+      const projectIds = Array.from(
+        new Set(rows.map((row) => row.projectId).filter((id) => id !== null)),
+      );
+      const organizationIds = Array.from(
+        new Set(
+          rows.map((row) => row.organizationId).filter((id) => id !== null),
+        ),
+      );
+
+      const projects = projectIds.length
+        ? yield* db
+            .select({ id: project.id, name: project.name, logo: project.logo })
+            .from(project)
+            .where(inArray(project.id, projectIds))
+        : [];
+      const organizations = organizationIds.length
+        ? yield* db
+            .select({
+              id: organization.id,
+              name: organization.name,
+              logo: organization.logo,
+            })
+            .from(organization)
+            .where(inArray(organization.id, organizationIds))
+        : [];
+      const projectById = new Map(projects.map((item) => [item.id, item]));
+      const organizationById = new Map(
+        organizations.map((item) => [item.id, item]),
+      );
+
+      return rows.map((row) => {
+        const linkedProject = row.projectId
+          ? projectById.get(row.projectId)
+          : undefined;
+        const linkedOrganization = row.organizationId
+          ? organizationById.get(row.organizationId)
+          : undefined;
+
+        return {
+          ...row,
+          projectName: linkedProject?.name ?? null,
+          projectLogo: linkedProject?.logo ?? null,
+          organizationName: linkedOrganization?.name ?? null,
+          organizationLogo: linkedOrganization?.logo ?? null,
+        } satisfies ServerDomain;
+      });
+    });
+
+    const enrichDomain = Effect.fn("Domains.enrichDomain")(function* (
+      row: DomainRow | null,
+    ) {
+      if (!row) return null;
+      const [domain] = yield* enrichDomains([row]);
+      return domain ?? null;
+    });
+
     const get = Effect.fn("Domains.get")(function* ({ id }: { id: string }) {
       const domain = yield* db.query.domains.findFirst({ where: { id } });
-      return domain ?? null;
+      return yield* enrichDomain(domain ?? null);
     });
 
     const refreshStatus = Effect.fn("Domains.refreshStatus")(function* (
@@ -212,8 +274,11 @@ export class Domains extends Context.Service<Domains>()("Domains", {
       const rows = yield* db.query.domains.findMany({
         orderBy: { createdAt: "desc" },
       });
+      const refreshed = yield* Effect.all(rows.map(refreshStatus), {
+        concurrency: 4,
+      });
 
-      return yield* Effect.all(rows.map(refreshStatus), { concurrency: 4 });
+      return yield* enrichDomains(refreshed);
     });
 
     const getByHost = Effect.fn("Domains.getByHost")(function* ({
@@ -391,7 +456,9 @@ export class Domains extends Context.Service<Domains>()("Domains", {
           .where(eq(domains.id, existing.id))
           .returning();
 
-        return domain ?? { ...existing, managed: normalized.managed };
+        return yield* enrichDomain(
+          domain ?? { ...existing, managed: normalized.managed },
+        );
       }
 
       const hostSibling = yield* db.query.domains.findFirst({
@@ -428,7 +495,7 @@ export class Domains extends Context.Service<Domains>()("Domains", {
         })
         .returning();
 
-      return domain ?? null;
+      return yield* enrichDomain(domain ?? null);
     });
 
     const update = Effect.fn("Domains.update")(function* ({
@@ -538,7 +605,7 @@ export class Domains extends Context.Service<Domains>()("Domains", {
         .where(eq(domains.id, id))
         .returning();
 
-      return domain ?? null;
+      return yield* enrichDomain(domain ?? null);
     });
 
     const records = Effect.fn("Domains.records")(function* ({

@@ -1,13 +1,14 @@
 import { useAtomSet, useAtomValue } from "@effect/atom-react";
 import { type ColumnDef } from "@tanstack/react-table";
 import { Atom, AsyncResult } from "effect/unstable/reactivity";
-import { Pencil, Trash2 } from "lucide-react";
+import { Building2, FolderKanban, Pencil, Trash2 } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
 import { DataTable } from "@/components/ui/data-table";
 import { ErrorMessage, useAppForm } from "@/components/ui/form";
+import { AppBrand } from "@/components/ui/app-brand";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -27,7 +28,9 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { AdminApiClient } from "@/lib/admin-api-client";
+import { assetUrl } from "@/lib/assets";
 import { m } from "@/paraglide/messages";
+import { authBaseUrl } from "@/services/auth/client";
 import type {
   ServerCreateDomainPayload,
   ServerDomain,
@@ -333,26 +336,42 @@ const domainColumns = (): ColumnDef<ServerDomain>[] => [
   {
     accessorKey: "projectId",
     header: m.project(),
-    cell: ({ row }) =>
-      row.original.projectId ? (
-        <code className="text-muted-foreground text-xs">
-          {row.original.projectId}
-        </code>
+    cell: ({ row }) => {
+      const logo = assetUrl(row.original.projectLogo ?? null, authBaseUrl);
+
+      return row.original.projectId ? (
+        <AppBrand
+          to={null}
+          label={row.original.projectName ?? row.original.projectId}
+          subtitle={row.original.projectId}
+          icon={FolderKanban}
+          className="min-w-48"
+          {...(logo ? { imageSrc: logo } : {})}
+        />
       ) : (
         <span className="text-muted-foreground text-sm">{m.admin_none()}</span>
-      ),
+      );
+    },
   },
   {
     accessorKey: "organizationId",
     header: m.admin_column_organization(),
-    cell: ({ row }) =>
-      row.original.organizationId ? (
-        <code className="text-muted-foreground text-xs">
-          {row.original.organizationId}
-        </code>
+    cell: ({ row }) => {
+      const logo = assetUrl(row.original.organizationLogo ?? null, authBaseUrl);
+
+      return row.original.organizationId ? (
+        <AppBrand
+          to={null}
+          label={row.original.organizationName ?? row.original.organizationId}
+          subtitle={row.original.organizationId}
+          icon={Building2}
+          className="min-w-48"
+          {...(logo ? { imageSrc: logo } : {})}
+        />
       ) : (
         <span className="text-muted-foreground text-sm">{m.admin_none()}</span>
-      ),
+      );
+    },
   },
   {
     accessorKey: "createdAt",

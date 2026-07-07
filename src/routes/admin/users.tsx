@@ -182,7 +182,7 @@ function UsersPage() {
 
 const userColumns = (): ColumnDef<User>[] => [
   {
-    accessorKey: "name",
+    accessorKey: "email",
     header: m.admin_column_user(),
     cell: ({ row }) => {
       const image = assetUrl(row.original.image, authBaseUrl);
@@ -190,8 +190,8 @@ const userColumns = (): ColumnDef<User>[] => [
       return (
         <AppBrand
           to={null}
-          label={row.original.name}
-          subtitle={row.original.email}
+          label={row.original.email}
+          subtitle={row.original.name}
           icon={UserIcon}
           className="min-w-48"
           {...(image ? { imageSrc: image } : {})}
