@@ -1,4 +1,10 @@
 export { AuthService } from "../service";
+export type {
+  AuthSession,
+  AuthSessionWithOrganization,
+  AuthSessionWithUser,
+  AuthSessionWithUserAndOrganization,
+} from "../service";
 export { AuthClientConfig } from "../config";
 export {
   ServerApi,
@@ -6,6 +12,12 @@ export {
   ServerUsersApiGroup,
 } from "./api";
 export { proxyAuthRequest } from "./proxy";
+export {
+  ApiKeySecurity,
+  AuthMiddleware,
+  makeAuthenticationLive,
+} from "./middleware";
+export type { AuthenticationLiveOptions } from "./middleware";
 export type {
   ServerActiveOrganization,
   ServerMembersResponse,
