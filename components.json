@@ -19,6 +19,6 @@
   },
   "iconLibrary": "lucide",
   "registries": {
-    "@krak": "https://krakstack.net/r/{name}.json"
+    "@krak-stack": "https://krakstack.net/r/{name}.json"
   }
 }
