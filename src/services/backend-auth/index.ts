@@ -8,7 +8,7 @@ import {
   user,
 } from "@/db/schema";
 import type { AuthOrganization } from "@/lib/auth-schema";
-import { db } from "@/services/database";
+import { DB } from "@/services/database";
 import type {
   BackendAuthActiveOrganization,
   BackendAuthMembersResponse,
@@ -100,7 +100,9 @@ const memberRecord = (record: MemberRow): MemberRecord => ({
 });
 
 export class BackendAuth extends Context.Service<BackendAuth>()("BackendAuth", {
-  make: Effect.sync(() => {
+  make: Effect.gen(function* () {
+    const db = yield* DB;
+
     const listUsersByIds = Effect.fn("BackendAuth.listUsersByIds")(function* ({
       ids,
     }: {
@@ -111,24 +113,20 @@ export class BackendAuth extends Context.Service<BackendAuth>()("BackendAuth", {
         return { data: [], missingIds: [] } satisfies BackendAuthUsersResponse;
       }
 
-      const records = yield* Effect.tryPromise({
-        try: () =>
-          db
-            .select({
-              id: user.id,
-              name: user.name,
-              email: user.email,
-              emailVerified: user.emailVerified,
-              image: user.image,
-              role: user.role,
-              banned: user.banned,
-              createdAt: user.createdAt,
-              updatedAt: user.updatedAt,
-            })
-            .from(user)
-            .where(inArray(user.id, normalizedIds)),
-        catch: (error) => error,
-      });
+      const records = yield* db
+        .select({
+          id: user.id,
+          name: user.name,
+          email: user.email,
+          emailVerified: user.emailVerified,
+          image: user.image,
+          role: user.role,
+          banned: user.banned,
+          createdAt: user.createdAt,
+          updatedAt: user.updatedAt,
+        })
+        .from(user)
+        .where(inArray(user.id, normalizedIds));
 
       return orderedBatch(
         normalizedIds,
@@ -141,25 +139,21 @@ export class BackendAuth extends Context.Service<BackendAuth>()("BackendAuth", {
     }: {
       id: string;
     }) {
-      const [record] = yield* Effect.tryPromise({
-        try: () =>
-          db
-            .select({
-              id: user.id,
-              name: user.name,
-              email: user.email,
-              emailVerified: user.emailVerified,
-              image: user.image,
-              role: user.role,
-              banned: user.banned,
-              createdAt: user.createdAt,
-              updatedAt: user.updatedAt,
-            })
-            .from(user)
-            .where(eq(user.id, id))
-            .limit(1),
-        catch: (error) => error,
-      });
+      const [record] = yield* db
+        .select({
+          id: user.id,
+          name: user.name,
+          email: user.email,
+          emailVerified: user.emailVerified,
+          image: user.image,
+          role: user.role,
+          banned: user.banned,
+          createdAt: user.createdAt,
+          updatedAt: user.updatedAt,
+        })
+        .from(user)
+        .where(eq(user.id, id))
+        .limit(1);
 
       return record;
     });
@@ -175,21 +169,17 @@ export class BackendAuth extends Context.Service<BackendAuth>()("BackendAuth", {
         } satisfies BackendAuthOrganizationsResponse;
       }
 
-      const records = yield* Effect.tryPromise({
-        try: () =>
-          db
-            .select({
-              id: organization.id,
-              name: organization.name,
-              slug: organization.slug,
-              logo: organization.logo,
-              metadata: organization.metadata,
-              createdAt: organization.createdAt,
-            })
-            .from(organization)
-            .where(inArray(organization.id, normalizedIds)),
-        catch: (error) => error,
-      });
+      const records = yield* db
+        .select({
+          id: organization.id,
+          name: organization.name,
+          slug: organization.slug,
+          logo: organization.logo,
+          metadata: organization.metadata,
+          createdAt: organization.createdAt,
+        })
+        .from(organization)
+        .where(inArray(organization.id, normalizedIds));
 
       const organizations: ReadonlyArray<AuthOrganization> = records.map(
         (record) => ({
@@ -206,22 +196,18 @@ export class BackendAuth extends Context.Service<BackendAuth>()("BackendAuth", {
 
     const getOrganization = Effect.fn("BackendAuth.getOrganization")(
       function* ({ id }: { id: string }) {
-        const [record] = yield* Effect.tryPromise({
-          try: () =>
-            db
-              .select({
-                id: organization.id,
-                name: organization.name,
-                slug: organization.slug,
-                logo: organization.logo,
-                metadata: organization.metadata,
-                createdAt: organization.createdAt,
-              })
-              .from(organization)
-              .where(eq(organization.id, id))
-              .limit(1),
-          catch: (error) => error,
-        });
+        const [record] = yield* db
+          .select({
+            id: organization.id,
+            name: organization.name,
+            slug: organization.slug,
+            logo: organization.logo,
+            metadata: organization.metadata,
+            createdAt: organization.createdAt,
+          })
+          .from(organization)
+          .where(eq(organization.id, id))
+          .limit(1);
 
         if (!record) return undefined;
 
@@ -235,22 +221,18 @@ export class BackendAuth extends Context.Service<BackendAuth>()("BackendAuth", {
     const listOrganizationsByUserId = Effect.fn(
       "BackendAuth.listOrganizationsByUserId",
     )(function* ({ userId }: { userId: string }) {
-      const records = yield* Effect.tryPromise({
-        try: () =>
-          db
-            .select({
-              id: organization.id,
-              name: organization.name,
-              slug: organization.slug,
-              logo: organization.logo,
-              metadata: organization.metadata,
-              createdAt: organization.createdAt,
-            })
-            .from(member)
-            .innerJoin(organization, eq(member.organizationId, organization.id))
-            .where(eq(member.userId, userId)),
-        catch: (error) => error,
-      });
+      const records = yield* db
+        .select({
+          id: organization.id,
+          name: organization.name,
+          slug: organization.slug,
+          logo: organization.logo,
+          metadata: organization.metadata,
+          createdAt: organization.createdAt,
+        })
+        .from(member)
+        .innerJoin(organization, eq(member.organizationId, organization.id))
+        .where(eq(member.userId, userId));
 
       return {
         data: records.map((record) => ({
@@ -264,22 +246,18 @@ export class BackendAuth extends Context.Service<BackendAuth>()("BackendAuth", {
     const getUserActiveOrganization = Effect.fn(
       "BackendAuth.getUserActiveOrganization",
     )(function* ({ userId }: { userId: string }) {
-      const [activeSession] = yield* Effect.tryPromise({
-        try: () =>
-          db
-            .select({ id: authSession.activeOrganizationId })
-            .from(authSession)
-            .where(
-              and(
-                eq(authSession.userId, userId),
-                isNotNull(authSession.activeOrganizationId),
-                gt(authSession.expiresAt, new Date()),
-              ),
-            )
-            .orderBy(desc(authSession.updatedAt), desc(authSession.createdAt))
-            .limit(1),
-        catch: (error) => error,
-      });
+      const [activeSession] = yield* db
+        .select({ id: authSession.activeOrganizationId })
+        .from(authSession)
+        .where(
+          and(
+            eq(authSession.userId, userId),
+            isNotNull(authSession.activeOrganizationId),
+            gt(authSession.expiresAt, new Date()),
+          ),
+        )
+        .orderBy(desc(authSession.updatedAt), desc(authSession.createdAt))
+        .limit(1);
 
       return {
         id: activeSession?.id ?? null,
@@ -294,21 +272,17 @@ export class BackendAuth extends Context.Service<BackendAuth>()("BackendAuth", {
         organizationId: string;
         userId: string;
       }) {
-        const [record] = yield* Effect.tryPromise({
-          try: () =>
-            db
-              .select(selectMemberColumns())
-              .from(member)
-              .innerJoin(user, eq(member.userId, user.id))
-              .where(
-                and(
-                  eq(member.organizationId, organizationId),
-                  eq(member.userId, userId),
-                ),
-              )
-              .limit(1),
-          catch: (error) => error,
-        });
+        const [record] = yield* db
+          .select(selectMemberColumns())
+          .from(member)
+          .innerJoin(user, eq(member.userId, user.id))
+          .where(
+            and(
+              eq(member.organizationId, organizationId),
+              eq(member.userId, userId),
+            ),
+          )
+          .limit(1);
 
         return record ? memberRecord(record) : undefined;
       },
@@ -317,15 +291,11 @@ export class BackendAuth extends Context.Service<BackendAuth>()("BackendAuth", {
     const listOrganizationMembers = Effect.fn(
       "BackendAuth.listOrganizationMembers",
     )(function* ({ organizationId }: { organizationId: string }) {
-      const records = yield* Effect.tryPromise({
-        try: () =>
-          db
-            .select(selectMemberColumns())
-            .from(member)
-            .innerJoin(user, eq(member.userId, user.id))
-            .where(eq(member.organizationId, organizationId)),
-        catch: (error) => error,
-      });
+      const records = yield* db
+        .select(selectMemberColumns())
+        .from(member)
+        .innerJoin(user, eq(member.userId, user.id))
+        .where(eq(member.organizationId, organizationId));
 
       return records.map(memberRecord) satisfies BackendAuthMembersResponse;
     });

@@ -24,6 +24,7 @@ import {
 import { BackendAuth } from "@/services/backend-auth";
 import { backendAuthApiHandler } from "@/services/backend-auth/api.builder";
 import { BackendAuthApi } from "@/services/backend-auth/api.group";
+import { DB } from "@/services/database";
 import { Domains } from "@/services/domains";
 import { OAuthClients } from "@/services/oauth";
 import {
@@ -211,7 +212,7 @@ const appServicesLayer = Layer.mergeAll(
   Projects.layer,
   S3Service.layer,
   CloudflareLive,
-);
+).pipe(Layer.provideMerge(DB.layer));
 
 const apiWebHandler = HttpEffect.toWebHandlerLayerWith(appServicesLayer, {
   middleware: HttpMiddleware.logger,
@@ -221,8 +222,9 @@ const apiWebHandler = HttpEffect.toWebHandlerLayerWith(appServicesLayer, {
       Effect.scoped,
     ),
 });
+const emptyHandlerContext = Context.empty() as Context.Context<unknown>;
 
 export const apiHandler = corsMiddleware((request) =>
-  apiWebHandler.handler(request, Context.empty()),
+  apiWebHandler.handler(request, emptyHandlerContext),
 );
 export const disposeApiHandler = apiWebHandler.dispose;

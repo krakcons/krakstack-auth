@@ -28,7 +28,7 @@ import {
 } from "@/db/schema";
 import { SortParamsFromString, type QueryType } from "@/lib/query";
 import { Domains } from "@/services/domains";
-import { db } from "@/services/database";
+import { DB } from "@/services/database";
 import { Organizations } from "@/services/organizations";
 
 const internalServerError = (error: unknown) => {
@@ -144,100 +144,88 @@ export const adminApiHandler = HttpApiBuilder.group(
     handlers
       .handle("dashboardStats", ({ query }) =>
         Effect.gen(function* () {
-          const userTotals = yield* Effect.tryPromise({
-            try: () => db.select({ count: count() }).from(user),
-            catch: internalServerError,
-          });
+          const db = yield* DB;
 
-          const organizationTotals = yield* Effect.tryPromise({
-            try: () => db.select({ count: count() }).from(organization),
-            catch: internalServerError,
-          });
+          const userTotals = yield* db
+            .select({ count: count() })
+            .from(user)
+            .pipe(Effect.mapError(internalServerError));
 
-          const projectTotals = yield* Effect.tryPromise({
-            try: () => db.select({ count: count() }).from(project),
-            catch: internalServerError,
-          });
+          const organizationTotals = yield* db
+            .select({ count: count() })
+            .from(organization)
+            .pipe(Effect.mapError(internalServerError));
 
-          const domainTotals = yield* Effect.tryPromise({
-            try: () => db.select({ count: count() }).from(domains),
-            catch: internalServerError,
-          });
+          const projectTotals = yield* db
+            .select({ count: count() })
+            .from(project)
+            .pipe(Effect.mapError(internalServerError));
 
-          const apiKeyTotals = yield* Effect.tryPromise({
-            try: () => db.select({ count: count() }).from(apikey),
-            catch: internalServerError,
-          });
+          const domainTotals = yield* db
+            .select({ count: count() })
+            .from(domains)
+            .pipe(Effect.mapError(internalServerError));
 
-          const oauthClientTotals = yield* Effect.tryPromise({
-            try: () => db.select({ count: count() }).from(oauthClient),
-            catch: internalServerError,
-          });
+          const apiKeyTotals = yield* db
+            .select({ count: count() })
+            .from(apikey)
+            .pipe(Effect.mapError(internalServerError));
+
+          const oauthClientTotals = yield* db
+            .select({ count: count() })
+            .from(oauthClient)
+            .pipe(Effect.mapError(internalServerError));
 
           const since = new Date(Date.now() - 24 * 60 * 60 * 1000);
           const chartDays = chartRangeDays(query.days);
           const chartStart = daysAgo(chartDays - 1);
-          const activeUserTotals = yield* Effect.tryPromise({
-            try: () =>
-              db
-                .select({ count: countDistinct(session.userId) })
-                .from(session)
-                .where(
-                  and(
-                    gte(session.updatedAt, since),
-                    gt(session.expiresAt, new Date()),
-                  ),
-                ),
-            catch: internalServerError,
-          });
+          const activeUserTotals = yield* db
+            .select({ count: countDistinct(session.userId) })
+            .from(session)
+            .where(
+              and(
+                gte(session.updatedAt, since),
+                gt(session.expiresAt, new Date()),
+              ),
+            )
+            .pipe(Effect.mapError(internalServerError));
 
-          const recentSessions = yield* Effect.tryPromise({
-            try: () =>
-              db
-                .select({
-                  userId: session.userId,
-                  updatedAt: session.updatedAt,
-                })
-                .from(session)
-                .where(
-                  and(
-                    gte(session.updatedAt, chartStart),
-                    gt(session.expiresAt, new Date()),
-                  ),
-                ),
-            catch: internalServerError,
-          });
+          const recentSessions = yield* db
+            .select({
+              userId: session.userId,
+              updatedAt: session.updatedAt,
+            })
+            .from(session)
+            .where(
+              and(
+                gte(session.updatedAt, chartStart),
+                gt(session.expiresAt, new Date()),
+              ),
+            )
+            .pipe(Effect.mapError(internalServerError));
 
-          const recentUsers = yield* Effect.tryPromise({
-            try: () =>
-              db
-                .select({ createdAt: user.createdAt })
-                .from(user)
-                .where(gte(user.createdAt, chartStart)),
-            catch: internalServerError,
-          });
+          const recentUsers = yield* db
+            .select({ createdAt: user.createdAt })
+            .from(user)
+            .where(gte(user.createdAt, chartStart))
+            .pipe(Effect.mapError(internalServerError));
 
-          const projectConnections = yield* Effect.tryPromise({
-            try: () =>
-              db
-                .select({
-                  projectId: project.id,
-                  projectName: project.name,
-                  users: countDistinct(projectUser.userId),
-                  organizations: countDistinct(
-                    projectOrganization.organizationId,
-                  ),
-                })
-                .from(project)
-                .leftJoin(projectUser, eq(projectUser.projectId, project.id))
-                .leftJoin(
-                  projectOrganization,
-                  eq(projectOrganization.projectId, project.id),
-                )
-                .groupBy(project.id, project.name)
-                .orderBy(asc(project.name)),
-            catch: internalServerError,
-          });
+          const projectConnections = yield* db
+            .select({
+              projectId: project.id,
+              projectName: project.name,
+              users: countDistinct(projectUser.userId),
+              organizations: countDistinct(projectOrganization.organizationId),
+            })
+            .from(project)
+            .leftJoin(projectUser, eq(projectUser.projectId, project.id))
+            .leftJoin(
+              projectOrganization,
+              eq(projectOrganization.projectId, project.id),
+            )
+            .groupBy(project.id, project.name)
+            .orderBy(asc(project.name))
+            .pipe(Effect.mapError(internalServerError));
 
           const totalUsers = Number(userTotals[0]?.count ?? 0);
           const totalOrganizations = Number(organizationTotals[0]?.count ?? 0);
@@ -304,6 +292,7 @@ export const adminApiHandler = HttpApiBuilder.group(
       )
       .handle("listUsers", ({ query }) =>
         Effect.gen(function* () {
+          const db = yield* DB;
           const where = userFilter(query.globalFilter);
           const projectWhere = query.projectId
             ? and(where, eq(projectUser.projectId, query.projectId))
@@ -312,60 +301,56 @@ export const adminApiHandler = HttpApiBuilder.group(
           const fallbackOrderBy = [desc(user.createdAt)];
           const offset = query.page * query.pageSize;
 
-          const totals = yield* Effect.tryPromise({
-            try: () =>
-              query.projectId
-                ? db
-                    .select({ count: count() })
-                    .from(user)
-                    .innerJoin(projectUser, eq(projectUser.userId, user.id))
-                    .where(projectWhere)
-                : db.select({ count: count() }).from(user).where(projectWhere),
-            catch: internalServerError,
-          });
+          const totals = yield* (
+            query.projectId
+              ? db
+                  .select({ count: count() })
+                  .from(user)
+                  .innerJoin(projectUser, eq(projectUser.userId, user.id))
+                  .where(projectWhere)
+              : db.select({ count: count() }).from(user).where(projectWhere)
+          ).pipe(Effect.mapError(internalServerError));
 
-          const users = yield* Effect.tryPromise({
-            try: () =>
-              query.projectId
-                ? db
-                    .select({
-                      id: user.id,
-                      name: user.name,
-                      email: user.email,
-                      emailVerified: user.emailVerified,
-                      image: user.image,
-                      createdAt: user.createdAt,
-                      role: user.role,
-                      banned: user.banned,
-                      banReason: user.banReason,
-                      banExpires: user.banExpires,
-                    })
-                    .from(user)
-                    .innerJoin(projectUser, eq(projectUser.userId, user.id))
-                    .where(projectWhere)
-                    .orderBy(...(orderBy.length ? orderBy : fallbackOrderBy))
-                    .limit(query.pageSize)
-                    .offset(offset)
-                : db
-                    .select({
-                      id: user.id,
-                      name: user.name,
-                      email: user.email,
-                      emailVerified: user.emailVerified,
-                      image: user.image,
-                      createdAt: user.createdAt,
-                      role: user.role,
-                      banned: user.banned,
-                      banReason: user.banReason,
-                      banExpires: user.banExpires,
-                    })
-                    .from(user)
-                    .where(projectWhere)
-                    .orderBy(...(orderBy.length ? orderBy : fallbackOrderBy))
-                    .limit(query.pageSize)
-                    .offset(offset),
-            catch: internalServerError,
-          });
+          const users = yield* (
+            query.projectId
+              ? db
+                  .select({
+                    id: user.id,
+                    name: user.name,
+                    email: user.email,
+                    emailVerified: user.emailVerified,
+                    image: user.image,
+                    createdAt: user.createdAt,
+                    role: user.role,
+                    banned: user.banned,
+                    banReason: user.banReason,
+                    banExpires: user.banExpires,
+                  })
+                  .from(user)
+                  .innerJoin(projectUser, eq(projectUser.userId, user.id))
+                  .where(projectWhere)
+                  .orderBy(...(orderBy.length ? orderBy : fallbackOrderBy))
+                  .limit(query.pageSize)
+                  .offset(offset)
+              : db
+                  .select({
+                    id: user.id,
+                    name: user.name,
+                    email: user.email,
+                    emailVerified: user.emailVerified,
+                    image: user.image,
+                    createdAt: user.createdAt,
+                    role: user.role,
+                    banned: user.banned,
+                    banReason: user.banReason,
+                    banExpires: user.banExpires,
+                  })
+                  .from(user)
+                  .where(projectWhere)
+                  .orderBy(...(orderBy.length ? orderBy : fallbackOrderBy))
+                  .limit(query.pageSize)
+                  .offset(offset)
+          ).pipe(Effect.mapError(internalServerError));
 
           const total = Number(totals[0]?.count ?? 0);
 
@@ -381,6 +366,7 @@ export const adminApiHandler = HttpApiBuilder.group(
       )
       .handle("listOrganizations", ({ query }) =>
         Effect.gen(function* () {
+          const db = yield* DB;
           const where = organizationFilter(query.globalFilter);
           const projectWhere = query.projectId
             ? and(where, eq(projectOrganization.projectId, query.projectId))
@@ -389,61 +375,57 @@ export const adminApiHandler = HttpApiBuilder.group(
           const fallbackOrderBy = [desc(organization.createdAt)];
           const offset = query.page * query.pageSize;
 
-          const totals = yield* Effect.tryPromise({
-            try: () =>
-              query.projectId
-                ? db
-                    .select({ count: count() })
-                    .from(organization)
-                    .innerJoin(
-                      projectOrganization,
-                      eq(projectOrganization.organizationId, organization.id),
-                    )
-                    .where(projectWhere)
-                : db
-                    .select({ count: count() })
-                    .from(organization)
-                    .where(projectWhere),
-            catch: internalServerError,
-          });
+          const totals = yield* (
+            query.projectId
+              ? db
+                  .select({ count: count() })
+                  .from(organization)
+                  .innerJoin(
+                    projectOrganization,
+                    eq(projectOrganization.organizationId, organization.id),
+                  )
+                  .where(projectWhere)
+              : db
+                  .select({ count: count() })
+                  .from(organization)
+                  .where(projectWhere)
+          ).pipe(Effect.mapError(internalServerError));
 
-          const organizations = yield* Effect.tryPromise({
-            try: () =>
-              query.projectId
-                ? db
-                    .select({
-                      id: organization.id,
-                      name: organization.name,
-                      slug: organization.slug,
-                      logo: organization.logo,
-                      metadata: organization.metadata,
-                      createdAt: organization.createdAt,
-                    })
-                    .from(organization)
-                    .innerJoin(
-                      projectOrganization,
-                      eq(projectOrganization.organizationId, organization.id),
-                    )
-                    .where(projectWhere)
-                    .orderBy(...(orderBy.length ? orderBy : fallbackOrderBy))
-                    .limit(query.pageSize)
-                    .offset(offset)
-                : db
-                    .select({
-                      id: organization.id,
-                      name: organization.name,
-                      slug: organization.slug,
-                      logo: organization.logo,
-                      metadata: organization.metadata,
-                      createdAt: organization.createdAt,
-                    })
-                    .from(organization)
-                    .where(projectWhere)
-                    .orderBy(...(orderBy.length ? orderBy : fallbackOrderBy))
-                    .limit(query.pageSize)
-                    .offset(offset),
-            catch: internalServerError,
-          });
+          const organizations = yield* (
+            query.projectId
+              ? db
+                  .select({
+                    id: organization.id,
+                    name: organization.name,
+                    slug: organization.slug,
+                    logo: organization.logo,
+                    metadata: organization.metadata,
+                    createdAt: organization.createdAt,
+                  })
+                  .from(organization)
+                  .innerJoin(
+                    projectOrganization,
+                    eq(projectOrganization.organizationId, organization.id),
+                  )
+                  .where(projectWhere)
+                  .orderBy(...(orderBy.length ? orderBy : fallbackOrderBy))
+                  .limit(query.pageSize)
+                  .offset(offset)
+              : db
+                  .select({
+                    id: organization.id,
+                    name: organization.name,
+                    slug: organization.slug,
+                    logo: organization.logo,
+                    metadata: organization.metadata,
+                    createdAt: organization.createdAt,
+                  })
+                  .from(organization)
+                  .where(projectWhere)
+                  .orderBy(...(orderBy.length ? orderBy : fallbackOrderBy))
+                  .limit(query.pageSize)
+                  .offset(offset)
+          ).pipe(Effect.mapError(internalServerError));
 
           const total = Number(totals[0]?.count ?? 0);
 

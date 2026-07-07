@@ -12,6 +12,7 @@ import {
 } from "better-auth/plugins";
 import { oauthProvider } from "@better-auth/oauth-provider";
 import { apiKey } from "@better-auth/api-key";
+import { Effect } from "effect";
 
 import { db } from "../../services/database";
 import { schema } from "../../db/schema";
@@ -27,6 +28,7 @@ import {
   sendEmailVerificationOtpEmail,
   sendTwoFactorOtpEmail,
 } from "@/services/auth/email.server";
+import { DB } from "@/services/database";
 import { connectProjectSession } from "@/services/projects/connections";
 
 const isDev = process.env.NODE_ENV === "development";
@@ -83,11 +85,13 @@ const connectSessionProject = async (
       : null;
 
   try {
-    await connectProjectSession({
-      projectId,
-      userId: session.userId,
-      activeOrganizationId,
-    });
+    await Effect.runPromise(
+      connectProjectSession({
+        projectId,
+        userId: session.userId,
+        activeOrganizationId,
+      }).pipe(Effect.provide(DB.layer)),
+    );
   } catch (error) {
     console.error("Failed to connect auth session to project", error);
   }
