@@ -8,6 +8,7 @@ export const User = Schema.Struct({
   image: Schema.NullOr(Schema.String),
   role: Schema.NullOr(Schema.String),
   banned: Schema.NullOr(Schema.Boolean),
+  lastLoginMethod: Schema.optional(Schema.NullOr(Schema.String)),
   createdAt: Schema.Date,
   updatedAt: Schema.Date,
 }).annotate({
@@ -23,6 +24,7 @@ export const User = Schema.Struct({
       image: null,
       role: "admin",
       banned: false,
+      lastLoginMethod: "email-otp",
       createdAt: new Date("2026-01-01T00:00:00.000Z"),
       updatedAt: new Date("2026-01-01T00:00:00.000Z"),
     },
@@ -176,6 +178,7 @@ export const Member = Schema.Struct({
         image: null,
         role: "admin",
         banned: false,
+        lastLoginMethod: "email-otp",
         createdAt: new Date("2026-01-01T00:00:00.000Z"),
         updatedAt: new Date("2026-01-01T00:00:00.000Z"),
       },

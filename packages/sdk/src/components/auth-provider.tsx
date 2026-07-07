@@ -4,6 +4,7 @@ import { useRouterState } from "@tanstack/react-router";
 import {
   emailOTPClient,
   genericOAuthClient,
+  lastLoginMethodClient,
   organizationClient,
   twoFactorClient,
 } from "better-auth/client/plugins";
@@ -40,6 +41,7 @@ const createAuthUiClient = (baseUrl?: string | undefined): AuthUiClient =>
     ...(baseUrl ? { baseURL: baseUrl } : {}),
     plugins: [
       emailOTPClient(),
+      lastLoginMethodClient(),
       organizationClient(),
       twoFactorClient(),
       apiKeyClient(),

@@ -3,6 +3,7 @@ import {
   adminClient,
   emailOTPClient,
   genericOAuthClient,
+  lastLoginMethodClient,
   organizationClient,
   twoFactorClient,
 } from "better-auth/client/plugins";
@@ -16,6 +17,7 @@ export const authClient = createAuthClient({
   plugins: [
     adminClient(),
     emailOTPClient(),
+    lastLoginMethodClient(),
     organizationClient(),
     twoFactorClient({
       twoFactorPage: "/2fa",

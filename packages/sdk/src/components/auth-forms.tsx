@@ -225,6 +225,9 @@ const authLinkClassName = cn(
   "h-auto px-0 align-baseline",
 );
 
+const lastLoginMethodToAuthMethod = (method: string | null | undefined) =>
+  method === "email" ? "password" : "emailOtp";
+
 const searchObject = (searchString: string) =>
   Object.fromEntries(new URLSearchParams(searchString));
 
@@ -265,8 +268,8 @@ export function Signin(props: AuthFormProps) {
     signUp: authOptions.signUp ?? true,
   };
   const [emailSubmitted, setEmailSubmitted] = useState(false);
-  const [authMethod, setAuthMethod] = useState<"password" | "emailOtp">(
-    "password",
+  const [authMethod, setAuthMethod] = useState<"password" | "emailOtp">(() =>
+    lastLoginMethodToAuthMethod(authClient.getLastUsedLoginMethod?.()),
   );
   const [otpSentTo, setOtpSentTo] = useState("");
   const [emailOtpResendAvailableAt, setEmailOtpResendAvailableAt] = useState(0);
@@ -500,6 +503,11 @@ export function Signin(props: AuthFormProps) {
                       label={m.field_email}
                       type="email"
                       autoComplete="email"
+                      onKeyDown={(event) => {
+                        if (event.key !== "Enter") return;
+                        event.preventDefault();
+                        form.handleSubmit();
+                      }}
                       required
                     />
                   )}

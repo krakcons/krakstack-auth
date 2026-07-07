@@ -4,6 +4,7 @@ import {
   admin,
   emailOTP,
   jwt,
+  lastLoginMethod,
   openAPI,
   organization,
   twoFactor,
@@ -115,6 +116,13 @@ const createAuth = ({
             otp,
             type,
           });
+        },
+      }),
+      lastLoginMethod({
+        storeInDatabase: true,
+        customResolveMethod: (context) => {
+          if (context.path === "/sign-in/email-otp") return "email-otp";
+          return null;
         },
       }),
       twoFactor({
