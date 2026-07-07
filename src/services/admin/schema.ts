@@ -39,6 +39,25 @@ export const SignupsByDay = Schema.Struct({
   examples: [{ date: "2026-06-26", count: 4 }],
 });
 
+export const ProjectConnections = Schema.Struct({
+  projectId: Schema.String,
+  projectName: Schema.String,
+  users: Schema.Number,
+  organizations: Schema.Number,
+}).annotate({
+  identifier: "ProjectConnections",
+  title: "Project connections",
+  description: "Number of connected users and organizations for a project.",
+  examples: [
+    {
+      projectId: "project-id",
+      projectName: "Dashboard",
+      users: 12,
+      organizations: 3,
+    },
+  ],
+});
+
 export const DashboardStatsResponse = Schema.Struct({
   totalUsers: Schema.Number,
   totalOrganizations: Schema.Number,
@@ -49,6 +68,7 @@ export const DashboardStatsResponse = Schema.Struct({
   dailyActiveUsers: Schema.Number,
   dailyActiveUsersByDay: Schema.Array(DailyActiveUsersByDay),
   signupsByDay: Schema.Array(SignupsByDay),
+  projectConnections: Schema.Array(ProjectConnections),
 }).annotate({
   identifier: "DashboardStatsResponse",
   title: "Dashboard stats response",
@@ -64,6 +84,14 @@ export const DashboardStatsResponse = Schema.Struct({
       dailyActiveUsers: 18,
       dailyActiveUsersByDay: [{ date: "2026-06-26", count: 18 }],
       signupsByDay: [{ date: "2026-06-26", count: 4 }],
+      projectConnections: [
+        {
+          projectId: "project-id",
+          projectName: "Dashboard",
+          users: 12,
+          organizations: 3,
+        },
+      ],
     },
   ],
 });

@@ -1,7 +1,7 @@
 import { Context, Effect, Layer, Schema } from "effect";
 import { eq } from "drizzle-orm";
 
-import { oauthClient, project } from "@/db/auth-schema";
+import { oauthClient, project } from "@/db/schema";
 import { DB } from "@/services/database";
 import { BetterAuthRequest } from "@/services/auth/better-auth-request";
 import { decodeProjectDataOrEmpty } from "@/services/projects";

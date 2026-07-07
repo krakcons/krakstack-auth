@@ -9,7 +9,13 @@ import {
   twoFactorClient,
 } from "better-auth/client/plugins";
 import { createAuthClient } from "better-auth/react";
-import { createContext, type ReactNode, useContext, useMemo } from "react";
+import {
+  createContext,
+  type ReactNode,
+  useContext,
+  useEffect,
+  useMemo,
+} from "react";
 
 import type { AuthUiClient } from "./auth-client";
 import { authApiClient } from "./auth-api-client";
@@ -28,6 +34,7 @@ export type KrakstackAuthProviderProps = {
 export type KrakstackAuthContextValue = {
   locale: KrakstackAuthLocale;
   baseUrl?: string | undefined;
+  projectId?: string | null | undefined;
   authClient: AuthUiClient;
   projectConfig: ExtraProjectPublicConfig | null;
 };
@@ -35,6 +42,20 @@ export type KrakstackAuthContextValue = {
 const KrakstackAuthContext = createContext<KrakstackAuthContextValue | null>(
   null,
 );
+
+const PROJECT_CONTEXT_COOKIE = "krakstack-auth.project_context";
+
+const setProjectContextCookie = (projectId: string | null | undefined) => {
+  if (typeof document === "undefined") return;
+
+  const secure = window.location.protocol === "https:" ? "; Secure" : "";
+  if (!projectId) {
+    document.cookie = `${PROJECT_CONTEXT_COOKIE}=; Path=/; Max-Age=0; SameSite=Lax${secure}`;
+    return;
+  }
+
+  document.cookie = `${PROJECT_CONTEXT_COOKIE}=${encodeURIComponent(projectId)}; Path=/; Max-Age=600; SameSite=Lax${secure}`;
+};
 
 const createAuthUiClient = (baseUrl?: string | undefined): AuthUiClient =>
   createAuthClient({
@@ -120,15 +141,30 @@ export function KrakstackAuthProvider({
   projectId,
   authClient,
 }: KrakstackAuthProviderProps) {
+  const searchString = useRouterState({
+    select: (state) => state.location.searchStr,
+  });
+  const resolvedProjectId =
+    projectId ?? getSearchParam(searchString, "projectId");
   const resolvedAuthClient = useMemo(
     () => authClient ?? createAuthUiClient(baseUrl),
     [authClient, baseUrl],
   );
   const projectConfig = useProjectConfig(baseUrl, projectId);
 
+  useEffect(() => {
+    setProjectContextCookie(resolvedProjectId);
+  }, [resolvedProjectId]);
+
   const value = useMemo(
-    () => ({ authClient: resolvedAuthClient, baseUrl, locale, projectConfig }),
-    [resolvedAuthClient, baseUrl, locale, projectConfig],
+    () => ({
+      authClient: resolvedAuthClient,
+      baseUrl,
+      locale,
+      projectId: resolvedProjectId,
+      projectConfig,
+    }),
+    [resolvedAuthClient, baseUrl, locale, resolvedProjectId, projectConfig],
   );
 
   return (

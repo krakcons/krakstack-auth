@@ -1,4 +1,5 @@
 import { betterAuth } from "better-auth";
+import type { GenericEndpointContext } from "@better-auth/core";
 import { drizzleAdapter } from "better-auth-drizzle-adapter";
 import {
   admin,
@@ -26,6 +27,7 @@ import {
   sendEmailVerificationOtpEmail,
   sendTwoFactorOtpEmail,
 } from "@/services/auth/email.server";
+import { connectProjectSession } from "@/services/projects/connections";
 
 const isDev = process.env.NODE_ENV === "development";
 
@@ -39,6 +41,57 @@ const apiKeyRateLimit = {
 const googleClientId = process.env.GOOGLE_CLIENT_ID;
 const googleClientSecret = process.env.GOOGLE_CLIENT_SECRET;
 const betterAuthUrl = process.env.BETTER_AUTH_URL ?? "http://localhost:3000";
+const projectContextCookie = "krakstack-auth.project_context";
+
+const cookieValue = (headers: Headers | undefined, name: string) => {
+  const cookie = headers?.get("cookie");
+  if (!cookie) return null;
+
+  return (
+    cookie
+      .split(";")
+      .map((part) => part.trim())
+      .find((part) => part.startsWith(`${name}=`))
+      ?.slice(name.length + 1) ?? null
+  );
+};
+
+const decodeCookieValue = (value: string | null) => {
+  if (!value) return null;
+  try {
+    return decodeURIComponent(value);
+  } catch {
+    return null;
+  }
+};
+
+const projectIdFromContext = (context: GenericEndpointContext | null) =>
+  decodeCookieValue(cookieValue(context?.headers, projectContextCookie));
+
+const connectSessionProject = async (
+  session: {
+    userId: string;
+    activeOrganizationId?: unknown;
+  } | null,
+  context: GenericEndpointContext | null,
+) => {
+  const projectId = projectIdFromContext(context);
+  if (!projectId || !session?.userId) return;
+  const activeOrganizationId =
+    typeof session.activeOrganizationId === "string"
+      ? session.activeOrganizationId
+      : null;
+
+  try {
+    await connectProjectSession({
+      projectId,
+      userId: session.userId,
+      activeOrganizationId,
+    });
+  } catch (error) {
+    console.error("Failed to connect auth session to project", error);
+  }
+};
 
 const createAuth = ({
   allowedHosts,
@@ -100,6 +153,16 @@ const createAuth = ({
       cookieCache: {
         enabled: true,
         maxAge: 60 * 5,
+      },
+    },
+    databaseHooks: {
+      session: {
+        create: {
+          after: connectSessionProject,
+        },
+        update: {
+          after: connectSessionProject,
+        },
       },
     },
     plugins: [

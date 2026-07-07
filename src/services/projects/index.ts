@@ -1,7 +1,7 @@
 import { Context, Effect, Layer, Schema } from "effect";
 import { eq } from "drizzle-orm";
 
-import { oauthClient, project } from "@/db/auth-schema";
+import { oauthClient, project } from "@/db/schema";
 import { normalizeAuthHost } from "@/lib/domain-utils";
 import { DB } from "@/services/database";
 import { sanitizeThemeCss } from "@/services/oauth/theme";

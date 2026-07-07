@@ -1,6 +1,14 @@
 import { Link, createFileRoute } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
-import { Area, AreaChart, CartesianGrid, XAxis, YAxis } from "recharts";
+import {
+  Area,
+  AreaChart,
+  Bar,
+  BarChart,
+  CartesianGrid,
+  XAxis,
+  YAxis,
+} from "recharts";
 import {
   Building2,
   FolderKanban,
@@ -49,6 +57,12 @@ type DashboardStats = {
   dailyActiveUsers: number;
   dailyActiveUsersByDay: { date: string; count: number }[];
   signupsByDay: { date: string; count: number }[];
+  projectConnections: {
+    projectId: string;
+    projectName: string;
+    users: number;
+    organizations: number;
+  }[];
 };
 
 const chartRanges = ["7", "14", "30", "90"] as const;
@@ -89,6 +103,17 @@ const signupsChartConfig = {
   count: {
     label: m.admin_signups(),
     color: "var(--chart-1)",
+  },
+} satisfies ChartConfig;
+
+const projectConnectionsChartConfig = {
+  users: {
+    label: m.admin_project_connections_users(),
+    color: "var(--chart-1)",
+  },
+  organizations: {
+    label: m.admin_project_connections_organizations(),
+    color: "oklch(0.78 0.09 72)",
   },
 } satisfies ChartConfig;
 
@@ -314,6 +339,52 @@ function DashboardPage() {
                     strokeWidth={2}
                   />
                 </AreaChart>
+              </ChartContainer>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardHeader>
+              <CardTitle>{m.admin_project_connections_chart_title()}</CardTitle>
+              <CardDescription>
+                {m.admin_project_connections_chart_description()}
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <ChartContainer
+                config={projectConnectionsChartConfig}
+                className="min-h-[300px] w-full"
+              >
+                <BarChart
+                  accessibilityLayer
+                  data={stats?.projectConnections ?? []}
+                  margin={{ left: 0, right: 8 }}
+                >
+                  <CartesianGrid vertical={false} />
+                  <XAxis
+                    dataKey="projectName"
+                    tickLine={false}
+                    tickMargin={10}
+                    axisLine={false}
+                    interval={0}
+                  />
+                  <YAxis
+                    allowDecimals={false}
+                    width={28}
+                    tickLine={false}
+                    axisLine={false}
+                  />
+                  <ChartTooltip content={<ChartTooltipContent />} />
+                  <Bar
+                    dataKey="users"
+                    fill="var(--color-users)"
+                    radius={[4, 4, 0, 0]}
+                  />
+                  <Bar
+                    dataKey="organizations"
+                    fill="var(--color-organizations)"
+                    radius={[4, 4, 0, 0]}
+                  />
+                </BarChart>
               </ChartContainer>
             </CardContent>
           </Card>

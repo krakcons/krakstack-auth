@@ -6,7 +6,7 @@ import {
   organization,
   session as authSession,
   user,
-} from "@/db/auth-schema";
+} from "@/db/schema";
 import type { AuthOrganization } from "@/lib/auth-schema";
 import { db } from "@/services/database";
 import type {

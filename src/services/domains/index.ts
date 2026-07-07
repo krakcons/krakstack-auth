@@ -5,7 +5,7 @@ import { CredentialsFromEnv } from "@distilled.cloud/cloudflare";
 import * as CustomHostnames from "@distilled.cloud/cloudflare/custom-hostnames";
 import * as FetchHttpClient from "effect/unstable/http/FetchHttpClient";
 
-import { domains, organization, project } from "@/db/auth-schema";
+import { domains, organization, project } from "@/db/schema";
 import {
   cookieDomainForAuthDomainContext,
   normalizeAuthHost,

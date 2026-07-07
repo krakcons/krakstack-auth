@@ -5,6 +5,7 @@ import {
   count,
   countDistinct,
   desc,
+  eq,
   gt,
   gte,
   ilike,
@@ -20,9 +21,11 @@ import {
   oauthClient,
   organization,
   project,
+  projectOrganization,
+  projectUser,
   session,
   user,
-} from "@/db/auth-schema";
+} from "@/db/schema";
 import { SortParamsFromString, type QueryType } from "@/lib/query";
 import { Domains } from "@/services/domains";
 import { db } from "@/services/database";
@@ -214,6 +217,28 @@ export const adminApiHandler = HttpApiBuilder.group(
             catch: internalServerError,
           });
 
+          const projectConnections = yield* Effect.tryPromise({
+            try: () =>
+              db
+                .select({
+                  projectId: project.id,
+                  projectName: project.name,
+                  users: countDistinct(projectUser.userId),
+                  organizations: countDistinct(
+                    projectOrganization.organizationId,
+                  ),
+                })
+                .from(project)
+                .leftJoin(projectUser, eq(projectUser.projectId, project.id))
+                .leftJoin(
+                  projectOrganization,
+                  eq(projectOrganization.projectId, project.id),
+                )
+                .groupBy(project.id, project.name)
+                .orderBy(asc(project.name)),
+            catch: internalServerError,
+          });
+
           const totalUsers = Number(userTotals[0]?.count ?? 0);
           const totalOrganizations = Number(organizationTotals[0]?.count ?? 0);
           const totalProjects = Number(projectTotals[0]?.count ?? 0);
@@ -268,6 +293,12 @@ export const adminApiHandler = HttpApiBuilder.group(
             dailyActiveUsers,
             dailyActiveUsersByDay,
             signupsByDay,
+            projectConnections: projectConnections.map((item) => ({
+              projectId: item.projectId,
+              projectName: item.projectName,
+              users: Number(item.users),
+              organizations: Number(item.organizations),
+            })),
           };
         }),
       )
