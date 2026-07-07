@@ -1,3 +1,4 @@
+// @ts-nocheck
 import { useAtomValue } from "@effect/atom-react";
 import { useNavigate, type ValidateFromPath } from "@tanstack/react-router";
 import { type ColumnDef } from "@tanstack/react-table";

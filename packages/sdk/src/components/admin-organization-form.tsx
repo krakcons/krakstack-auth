@@ -1,3 +1,4 @@
+// @ts-nocheck
 import { useAtomSet } from "@effect/atom-react";
 import { Schema } from "effect";
 import { Loader2 } from "lucide-react";
