@@ -78,7 +78,9 @@ export const createAuthUiClient = (
     plugins: [
       adminClient(),
       emailOTPClient(),
-      lastLoginMethodClient(),
+      lastLoginMethodClient({
+        cookieName: "krakstack-auth.last_used_login_method",
+      }),
       organizationClient(),
       twoFactorClient(),
       apiKeyClient(),

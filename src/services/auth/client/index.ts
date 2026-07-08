@@ -17,7 +17,9 @@ export const authClient = createAuthClient({
   plugins: [
     adminClient(),
     emailOTPClient(),
-    lastLoginMethodClient(),
+    lastLoginMethodClient({
+      cookieName: "krakstack-auth.last_used_login_method",
+    }),
     organizationClient(),
     twoFactorClient({
       twoFactorPage: "/2fa",

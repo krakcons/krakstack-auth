@@ -202,6 +202,7 @@ const createAuth = ({
         },
       }),
       lastLoginMethod({
+        cookieName: "krakstack-auth.last_used_login_method",
         storeInDatabase: true,
         customResolveMethod: (context) => {
           if (context.path === "/sign-in/email-otp") return "email-otp";
