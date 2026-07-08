@@ -67,7 +67,7 @@ import {
 
 import type { AuthUiClient } from "./auth-client";
 import { authClientApi } from "./auth-client-api";
-import { useAuthClient } from "./auth-provider";
+import { useKrakstackAuth } from "./auth-provider";
 import { createApiKey } from "./api-key";
 import { useOpenedOnce } from "./hooks";
 import { ExtraUploadedAsset } from "../extra/schema";
@@ -679,8 +679,12 @@ export function OrganizationSwitcher({
   onCreate,
   onDialogChange,
 }: OrganizationSwitcherProps) {
-  const contextAuthClient = useAuthClient();
-  const authClient = providedAuthClient ?? contextAuthClient;
+  const auth = useKrakstackAuth();
+  const authClient = providedAuthClient ?? auth?.authClient;
+
+  if (!authClient) {
+    throw new Error("KrakstackAuthProvider is required to use authClient.");
+  }
 
   const labels = organizationSwitcherMessages(messages);
   const m = organizationMessageFns(labels);

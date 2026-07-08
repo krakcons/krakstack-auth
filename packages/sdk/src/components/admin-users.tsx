@@ -35,6 +35,7 @@ const defaultMessages = {
       "Are you sure you want to ban {name} ({email})? They will not be able to sign in.",
     admin_ban_title: "Ban user",
     admin_column_created: "Created",
+    admin_column_last_signed_in: "Last signed in",
     admin_column_role: "Role",
     admin_column_status: "Status",
     admin_column_unverified: "Unverified",
@@ -60,6 +61,7 @@ const defaultMessages = {
       "Êtes-vous sûr de vouloir bannir {name} ({email}) ? Il ne pourra plus se connecter.",
     admin_ban_title: "Bannir l'utilisateur",
     admin_column_created: "Créé",
+    admin_column_last_signed_in: "Dernière connexion",
     admin_column_role: "Rôle",
     admin_column_status: "Statut",
     admin_column_unverified: "Non vérifié",
@@ -99,6 +101,7 @@ type User = {
   emailVerified: boolean;
   image: string | null;
   createdAt: Date;
+  lastSignedIn: Date | null;
   role: string | null;
   banned: boolean | null;
   banReason: string | null;
@@ -379,6 +382,17 @@ const userColumns = (m: AdminUsersLabels): ColumnDef<User>[] => [
       ) : (
         <Badge variant="outline">{m.admin_status_active}</Badge>
       ),
+  },
+  {
+    accessorKey: "lastSignedIn",
+    header: m.admin_column_last_signed_in,
+    cell: ({ row }) => (
+      <span className="text-muted-foreground text-sm">
+        {row.original.lastSignedIn
+          ? new Date(row.original.lastSignedIn).toLocaleString()
+          : "-"}
+      </span>
+    ),
   },
   {
     accessorKey: "createdAt",

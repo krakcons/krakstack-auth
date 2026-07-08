@@ -9,6 +9,7 @@ import {
   gt,
   gte,
   ilike,
+  max,
   or,
 } from "drizzle-orm";
 import { HttpApiBuilder, HttpApiError } from "effect/unstable/httpapi";
@@ -24,6 +25,7 @@ import {
   domains,
   oauthClient,
   organization,
+  member,
   project,
   projectOrganization,
   projectUser,
@@ -85,6 +87,8 @@ const userOrderBy = (query: AdminListQuery) => {
         return [direction(user.role)];
       case "banned":
         return [direction(user.banned)];
+      case "lastSignedIn":
+        return [direction(max(session.createdAt))];
       case "createdAt":
         return [direction(user.createdAt)];
       default:
@@ -106,8 +110,6 @@ const organizationOrderBy = (query: AdminListQuery) => {
         return [direction(organization.name)];
       case "slug":
         return [direction(organization.slug)];
-      case "logo":
-        return [direction(organization.logo)];
       case "createdAt":
         return [direction(organization.createdAt)];
       default:
@@ -324,6 +326,7 @@ export const adminApiHandler = HttpApiBuilder.group(
                     emailVerified: user.emailVerified,
                     image: user.image,
                     createdAt: user.createdAt,
+                    lastSignedIn: max(session.createdAt),
                     role: user.role,
                     banned: user.banned,
                     banReason: user.banReason,
@@ -331,7 +334,20 @@ export const adminApiHandler = HttpApiBuilder.group(
                   })
                   .from(user)
                   .innerJoin(projectUser, eq(projectUser.userId, user.id))
+                  .leftJoin(session, eq(session.userId, user.id))
                   .where(projectWhere)
+                  .groupBy(
+                    user.id,
+                    user.name,
+                    user.email,
+                    user.emailVerified,
+                    user.image,
+                    user.createdAt,
+                    user.role,
+                    user.banned,
+                    user.banReason,
+                    user.banExpires,
+                  )
                   .orderBy(...(orderBy.length ? orderBy : fallbackOrderBy))
                   .limit(query.pageSize)
                   .offset(offset)
@@ -343,13 +359,27 @@ export const adminApiHandler = HttpApiBuilder.group(
                     emailVerified: user.emailVerified,
                     image: user.image,
                     createdAt: user.createdAt,
+                    lastSignedIn: max(session.createdAt),
                     role: user.role,
                     banned: user.banned,
                     banReason: user.banReason,
                     banExpires: user.banExpires,
                   })
                   .from(user)
+                  .leftJoin(session, eq(session.userId, user.id))
                   .where(projectWhere)
+                  .groupBy(
+                    user.id,
+                    user.name,
+                    user.email,
+                    user.emailVerified,
+                    user.image,
+                    user.createdAt,
+                    user.role,
+                    user.banned,
+                    user.banReason,
+                    user.banExpires,
+                  )
                   .orderBy(...(orderBy.length ? orderBy : fallbackOrderBy))
                   .limit(query.pageSize)
                   .offset(offset)
@@ -403,6 +433,7 @@ export const adminApiHandler = HttpApiBuilder.group(
                     slug: organization.slug,
                     logo: organization.logo,
                     metadata: organization.metadata,
+                    memberCount: count(member.id),
                     createdAt: organization.createdAt,
                   })
                   .from(organization)
@@ -410,7 +441,16 @@ export const adminApiHandler = HttpApiBuilder.group(
                     projectOrganization,
                     eq(projectOrganization.organizationId, organization.id),
                   )
+                  .leftJoin(member, eq(member.organizationId, organization.id))
                   .where(projectWhere)
+                  .groupBy(
+                    organization.id,
+                    organization.name,
+                    organization.slug,
+                    organization.logo,
+                    organization.metadata,
+                    organization.createdAt,
+                  )
                   .orderBy(...(orderBy.length ? orderBy : fallbackOrderBy))
                   .limit(query.pageSize)
                   .offset(offset)
@@ -421,10 +461,20 @@ export const adminApiHandler = HttpApiBuilder.group(
                     slug: organization.slug,
                     logo: organization.logo,
                     metadata: organization.metadata,
+                    memberCount: count(member.id),
                     createdAt: organization.createdAt,
                   })
                   .from(organization)
+                  .leftJoin(member, eq(member.organizationId, organization.id))
                   .where(projectWhere)
+                  .groupBy(
+                    organization.id,
+                    organization.name,
+                    organization.slug,
+                    organization.logo,
+                    organization.metadata,
+                    organization.createdAt,
+                  )
                   .orderBy(...(orderBy.length ? orderBy : fallbackOrderBy))
                   .limit(query.pageSize)
                   .offset(offset)

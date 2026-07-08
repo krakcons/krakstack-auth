@@ -9,7 +9,6 @@ import { useState } from "react";
 import { DataTable, type TableParams } from "@/components/ui/data-table";
 import { ErrorMessage } from "@/components/ui/form";
 import { AppBrand } from "@/components/ui/app-brand";
-import { Badge } from "@/components/ui/badge";
 
 import type { AdminOrganization } from "../admin/schema";
 import { authClientApi } from "./auth-client-api";
@@ -19,19 +18,15 @@ import { assetUrl, organizationBranding } from "./utils";
 const defaultMessages = {
   en: {
     admin_column_created: "Created",
+    admin_column_members: "Members",
     admin_column_organization: "Organization",
-    admin_none: "None",
-    oauth_client_logo_configured: "Configured",
     organization_fetch_error: "Unable to load organizations.",
-    organization_field_logo_url: "Logo",
   },
   fr: {
     admin_column_created: "Créé",
+    admin_column_members: "Membres",
     admin_column_organization: "Organisation",
-    admin_none: "Aucun",
-    oauth_client_logo_configured: "Configuré",
     organization_fetch_error: "Impossible de charger les organisations.",
-    organization_field_logo_url: "Logo",
   },
 } as const;
 
@@ -181,14 +176,13 @@ const organizationColumns = (
     },
   },
   {
-    accessorKey: "logo",
-    header: m.organization_field_logo_url,
-    cell: ({ row }) =>
-      row.original.logo ? (
-        <Badge variant="outline">{m.oauth_client_logo_configured}</Badge>
-      ) : (
-        <span className="text-muted-foreground text-sm">{m.admin_none}</span>
-      ),
+    accessorKey: "memberCount",
+    header: m.admin_column_members,
+    cell: ({ row }) => (
+      <span className="text-muted-foreground text-sm tabular-nums">
+        {(row.original.memberCount ?? 0).toLocaleString()}
+      </span>
+    ),
   },
   {
     accessorKey: "createdAt",

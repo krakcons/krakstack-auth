@@ -70,6 +70,18 @@ export const Route = createFileRoute("/admin")({
   component: Admin,
 });
 
+function Admin() {
+  return (
+    <KrakstackAuthProvider
+      authClient={authClient}
+      baseUrl={authBaseUrl}
+      projectId={import.meta.env.VITE_KRAKSTACK_AUTH_PROJECT_ID}
+    >
+      <AdminContent />
+    </KrakstackAuthProvider>
+  );
+}
+
 const adminNavGroups: NavGroup[] = [
   {
     label: m.sidebar_group_manage,
@@ -110,7 +122,7 @@ const adminNavGroups: NavGroup[] = [
   },
 ];
 
-function Admin() {
+function AdminContent() {
   const session = authClient.useSession();
   const [refreshedSession, setRefreshedSession] = useState<SessionData>(null);
   const [isRefreshingSession, setIsRefreshingSession] = useState(true);
@@ -150,37 +162,23 @@ function Admin() {
   }
 
   if (!user || !isAdmin) {
-    return (
-      <KrakstackAuthProvider
-        authClient={authClient}
-        baseUrl={authBaseUrl}
-        projectId={import.meta.env.VITE_KRAKSTACK_AUTH_PROJECT_ID}
-      >
-        <AdminAccessDenied isSignedIn={!!user} />
-      </KrakstackAuthProvider>
-    );
+    return <AdminAccessDenied isSignedIn={!!user} />;
   }
 
   return (
-    <KrakstackAuthProvider
-      authClient={authClient}
-      baseUrl={authBaseUrl}
-      projectId={import.meta.env.VITE_KRAKSTACK_AUTH_PROJECT_ID}
+    <SidebarLayout
+      sidebarHeader={<AdminOrganizationSwitcher />}
+      headerActions={
+        <>
+          <ThemeToggle />
+          <LocaleSwitcher />
+          <UserButton authClient={authClient} baseUrl={authBaseUrl} />
+        </>
+      }
+      groups={adminNavGroups}
     >
-      <SidebarLayout
-        sidebarHeader={<AdminOrganizationSwitcher />}
-        headerActions={
-          <>
-            <ThemeToggle />
-            <LocaleSwitcher />
-            <UserButton authClient={authClient} baseUrl={authBaseUrl} />
-          </>
-        }
-        groups={adminNavGroups}
-      >
-        <Outlet />
-      </SidebarLayout>
-    </KrakstackAuthProvider>
+      <Outlet />
+    </SidebarLayout>
   );
 }
 
