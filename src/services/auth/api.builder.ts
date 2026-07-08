@@ -37,6 +37,20 @@ const requestAuthSession = (request: HttpServerRequest.HttpServerRequest) =>
     });
   });
 
+const requireMutableUserSession = (
+  request: HttpServerRequest.HttpServerRequest,
+) =>
+  Effect.gen(function* () {
+    const session = yield* requestAuthSession(request);
+
+    if (!session) return yield* new HttpApiError.Unauthorized({});
+    if (session.session.impersonatedByOrganizationId) {
+      return yield* new HttpApiError.Forbidden({});
+    }
+
+    return session;
+  });
+
 export const authApiHandler = HttpApiBuilder.group(
   FrontendApi,
   "authExtra",
@@ -57,6 +71,7 @@ export const authApiHandler = HttpApiBuilder.group(
       )
       .handle("setPassword", ({ payload, request }) =>
         Effect.gen(function* () {
+          yield* requireMutableUserSession(request);
           const client = yield* requestAuth(request, "Could not set password");
           yield* Effect.tryPromise({
             try: () =>
@@ -72,6 +87,7 @@ export const authApiHandler = HttpApiBuilder.group(
       )
       .handle("verifyPassword", ({ payload, request }) =>
         Effect.gen(function* () {
+          yield* requireMutableUserSession(request);
           const client = yield* requestAuth(
             request,
             "Could not verify password",
@@ -94,14 +110,7 @@ export const authApiHandler = HttpApiBuilder.group(
             request,
             "Could not create API key",
           );
-          const session = yield* Effect.tryPromise({
-            try: () => client.api.getSession({ headers: client.headers }),
-            catch: authError("Could not create API key"),
-          });
-
-          if (!session) {
-            return yield* new ExtraBadRequest({ message: "Unauthorized" });
-          }
+          const session = yield* requireMutableUserSession(request);
 
           const permissions = payload.permissions
             ? Object.fromEntries(
@@ -183,9 +192,7 @@ export const authApiHandler = HttpApiBuilder.group(
       )
       .handle("uploadUserImage", ({ payload, request }) =>
         Effect.gen(function* () {
-          const session = yield* requestAuthSession(request);
-
-          if (!session) return yield* new HttpApiError.Unauthorized({});
+          const session = yield* requireMutableUserSession(request);
 
           const url = yield* uploadImageFromMultipart({
             payload,

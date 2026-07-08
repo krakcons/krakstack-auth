@@ -142,6 +142,7 @@ const messages = {
     user_button_admin_users_description: "Review and manage users.",
     user_button_api_keys: "API keys",
     user_button_aria_label: "Open user menu",
+    user_button_impersonating: "Impersonating",
     user_button_logout: "Log out",
     user_button_security: "Security",
     user_button_stop_impersonating: "Stop impersonating",
@@ -250,6 +251,7 @@ const messages = {
     user_button_admin_users_description: "Consultez et gérez les utilisateurs.",
     user_button_api_keys: "Clés API",
     user_button_aria_label: "Ouvrir le menu utilisateur",
+    user_button_impersonating: "Imitation",
     user_button_logout: "Se déconnecter",
     user_button_security: "Sécurité",
     user_button_stop_impersonating: "Arrêter l'imitation",
@@ -544,6 +546,11 @@ export const UserButton = ({
   const displayEmail = session.user.email.trim();
   const displayImage = assetUrl(session.user.image, baseUrl);
   const isImpersonating = Boolean(session.session.impersonatedBy);
+  const isOrganizationImpersonating = Boolean(
+    session.session.impersonatedByOrganizationId,
+  );
+  const canManageUserSettings = !isOrganizationImpersonating;
+  const canUseAdminSettings = !isOrganizationImpersonating;
   const isAdmin = hasAdminRole(session.user);
 
   const signOut = async () => {
@@ -624,6 +631,13 @@ export const UserButton = ({
             sideOffset={4}
           >
             <DropdownMenuGroup>
+              {isImpersonating ? (
+                <div className="px-1 py-0.5">
+                  <Badge variant="secondary" className="text-xs font-normal">
+                    {m.user_button_impersonating()}
+                  </Badge>
+                </div>
+              ) : null}
               <DropdownMenuLabel className="p-0 font-normal">
                 <AppBrand
                   to={null}
@@ -637,25 +651,33 @@ export const UserButton = ({
                 />
               </DropdownMenuLabel>
               <DropdownMenuSeparator />
-              <DropdownMenuItem
-                disabled={isPending}
-                onClick={() => setSettingsDialog("account")}
-              >
-                <UserCircleIcon />
-                {m.user_button_account()}
-              </DropdownMenuItem>
-              <DropdownMenuItem onClick={() => setSettingsDialog("security")}>
-                <ShieldCheck />
-                {m.user_button_security()}
-              </DropdownMenuItem>
-              <DropdownMenuItem onClick={() => setSettingsDialog("apiKeys")}>
-                <KeyRound />
-                {m.user_button_api_keys()}
-              </DropdownMenuItem>
-              <DropdownMenuSeparator />
-              {isAdmin || isImpersonating ? (
+              {canManageUserSettings ? (
                 <>
-                  {isAdmin ? (
+                  <DropdownMenuItem
+                    disabled={isPending}
+                    onClick={() => setSettingsDialog("account")}
+                  >
+                    <UserCircleIcon />
+                    {m.user_button_account()}
+                  </DropdownMenuItem>
+                  <DropdownMenuItem
+                    onClick={() => setSettingsDialog("security")}
+                  >
+                    <ShieldCheck />
+                    {m.user_button_security()}
+                  </DropdownMenuItem>
+                  <DropdownMenuItem
+                    onClick={() => setSettingsDialog("apiKeys")}
+                  >
+                    <KeyRound />
+                    {m.user_button_api_keys()}
+                  </DropdownMenuItem>
+                  <DropdownMenuSeparator />
+                </>
+              ) : null}
+              {(isAdmin && canUseAdminSettings) || isImpersonating ? (
+                <>
+                  {isAdmin && canUseAdminSettings ? (
                     <>
                       <DropdownMenuItem
                         onClick={() => setSettingsDialog("adminUsers")}
@@ -692,7 +714,7 @@ export const UserButton = ({
         </DropdownMenu>
       )}
       <Dialog
-        open={settingsDialog === "account"}
+        open={canManageUserSettings && settingsDialog === "account"}
         onOpenChange={(open) => {
           setSettingsDialog((current) =>
             open ? "account" : current === "account" ? null : current,
@@ -743,7 +765,7 @@ export const UserButton = ({
         </DialogContent>
       </Dialog>
       <Dialog
-        open={settingsDialog === "security"}
+        open={canManageUserSettings && settingsDialog === "security"}
         onOpenChange={(open) => {
           setSettingsDialog((current) =>
             open ? "security" : current === "security" ? null : current,
@@ -775,7 +797,7 @@ export const UserButton = ({
         </DialogContent>
       </Dialog>
       <Dialog
-        open={settingsDialog === "apiKeys"}
+        open={canManageUserSettings && settingsDialog === "apiKeys"}
         onOpenChange={(open) => {
           setSettingsDialog((current) =>
             open ? "apiKeys" : current === "apiKeys" ? null : current,

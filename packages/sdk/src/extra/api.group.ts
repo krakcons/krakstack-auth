@@ -42,7 +42,12 @@ export const ExtraApiGroup = HttpApiGroup.make("authExtra")
     HttpApiEndpoint.post("setPassword", "/auth/set-password", {
       payload: ExtraSetPasswordPayload,
       success: ExtraOkResponse,
-      error: ExtraBadRequest,
+      error: [
+        ExtraBadRequest,
+        HttpApiError.Unauthorized,
+        HttpApiError.Forbidden,
+        HttpApiError.InternalServerError,
+      ],
     }).annotateMerge(
       OpenApi.annotations({
         title: "Set password",
@@ -56,7 +61,12 @@ export const ExtraApiGroup = HttpApiGroup.make("authExtra")
     HttpApiEndpoint.post("verifyPassword", "/auth/verify-password", {
       payload: ExtraVerifyPasswordPayload,
       success: ExtraOkResponse,
-      error: ExtraBadRequest,
+      error: [
+        ExtraBadRequest,
+        HttpApiError.Unauthorized,
+        HttpApiError.Forbidden,
+        HttpApiError.InternalServerError,
+      ],
     }).annotateMerge(
       OpenApi.annotations({
         title: "Verify password",
@@ -70,7 +80,12 @@ export const ExtraApiGroup = HttpApiGroup.make("authExtra")
     HttpApiEndpoint.post("createApiKey", "/auth/create-api-key", {
       payload: ExtraCreateApiKeyPayload,
       success: ExtraCreateApiKeyResponse,
-      error: ExtraBadRequest,
+      error: [
+        ExtraBadRequest,
+        HttpApiError.Unauthorized,
+        HttpApiError.Forbidden,
+        HttpApiError.InternalServerError,
+      ],
     }).annotateMerge(
       OpenApi.annotations({
         title: "Create API key",
@@ -101,6 +116,7 @@ export const ExtraApiGroup = HttpApiGroup.make("authExtra")
       error: [
         ExtraBadRequest,
         HttpApiError.Unauthorized,
+        HttpApiError.Forbidden,
         HttpApiError.InternalServerError,
       ],
     }).annotateMerge(
