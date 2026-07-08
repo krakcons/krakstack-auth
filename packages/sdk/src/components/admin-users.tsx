@@ -219,10 +219,11 @@ export function AdminUsersTable({
   const m = labels(auth?.locale ?? "en");
   const authClient = auth?.authClient;
   const baseUrl = auth?.baseUrl;
-  const { data: session, refetch: refetchSession } = authClient?.useSession() ?? {
-    data: null,
-    refetch: async () => undefined,
-  };
+  const { data: session, refetch: refetchSession } =
+    authClient?.useSession() ?? {
+      data: null,
+      refetch: async () => undefined,
+    };
   const impersonateOrganizationUser = useAtomSet(
     authClientApi(baseUrl).mutation("auth", "organizationImpersonateUser"),
     { mode: "promise" },
