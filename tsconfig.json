@@ -12,6 +12,7 @@
       "@krak-stack/auth/api": ["./packages/sdk/src/api.ts"],
       "@krak-stack/auth/extra": ["./packages/sdk/src/extra/api.group.ts"],
       "@krak-stack/auth/query": ["./packages/sdk/src/query.ts"],
+      "@krak-stack/auth/roles": ["./packages/sdk/src/roles.ts"],
       "@krak-stack/auth/schema": ["./packages/sdk/src/schema.ts"],
       "@krak-stack/auth/better-auth": [
         "./packages/sdk/src/better-auth/api.group.ts"

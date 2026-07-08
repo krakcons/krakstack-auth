@@ -30,6 +30,10 @@
       "types": "./dist/query.d.ts",
       "default": "./dist/query.js"
     },
+    "./roles": {
+      "types": "./dist/roles.d.ts",
+      "default": "./dist/roles.js"
+    },
     "./components": {
       "types": "./dist/components/index.d.ts",
       "default": "./dist/components/index.js"

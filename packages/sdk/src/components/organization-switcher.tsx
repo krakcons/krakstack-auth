@@ -62,6 +62,14 @@ import {
   type OrganizationLocale,
   type OrganizationTranslation,
 } from "@krak-stack/auth/schema";
+import {
+  hasAnyRole,
+  isOrganizationRole,
+  normalizeOrganizationRole,
+  normalizeOrganizationRoles,
+  organizationRoles,
+  type OrganizationRole,
+} from "../roles";
 
 import type { AuthUiClient } from "./auth-client";
 import { authClientApi } from "./auth-client-api";
@@ -134,6 +142,7 @@ const messages = {
     organization_role_admin: "Admin",
     organization_role_member: "Member",
     organization_role_owner: "Owner",
+    organization_role_support: "Support",
     organization_slug: "Organization slug",
     organization_slug_description: "Leave blank to generate one from the name.",
     organization_switcher_empty: "You do not belong to any organizations yet.",
@@ -227,6 +236,7 @@ const messages = {
     organization_role_admin: "Admin",
     organization_role_member: "Membre",
     organization_role_owner: "Propriétaire",
+    organization_role_support: "Support",
     organization_slug: "Slug de l'organisation",
     organization_slug_description:
       "Laissez vide pour en générer un à partir du nom.",
@@ -351,8 +361,6 @@ type OrganizationInvitationSummary = ActiveOrganization["invitations"][number];
 type UserInvitationSummary = OrganizationInvitationSummary & {
   organizationName?: string | null;
 };
-type OrganizationRole = "owner" | "admin" | "member";
-
 type OrganizationMembersData = {
   members: OrganizationMemberSummary[];
   invitations: OrganizationInvitationSummary[];
@@ -604,11 +612,6 @@ const organizationLogoFromForm = async (
   return null;
 };
 
-const organizationRoles: OrganizationRole[] = ["owner", "admin", "member"];
-
-const normalizeOrganizationRole = (role: string): OrganizationRole =>
-  role === "owner" || role === "admin" || role === "member" ? role : "member";
-
 const organizationRoleLabel = (
   role: string,
   m: ReturnType<typeof organizationMessageFns>,
@@ -618,6 +621,8 @@ const organizationRoleLabel = (
       return m.organization_role_owner();
     case "admin":
       return m.organization_role_admin();
+    case "support":
+      return m.organization_role_support();
     case "member":
       return m.organization_role_member();
   }
@@ -1766,17 +1771,26 @@ function OrganizationMembersManager({
   });
   const members = membersData.members;
   const invitations = membersData.invitations;
+  const [memberRoleOverrides, setMemberRoleOverrides] = useState<
+    Record<string, string>
+  >({});
+  const displayedMembers = members.map((member) => ({
+    ...member,
+    role: memberRoleOverrides[member.id] ?? member.role,
+  }));
   const membersError = AsyncResult.match(membersResult, {
     onInitial: () => null,
     onFailure: () => m.organization_members_load_error(),
     onSuccess: () => null,
   });
   const loading = membersResult._tag === "Initial";
-  const currentMemberRole = normalizeOrganizationRole(
-    members.find((member) => member.userId === currentUserId)?.role,
-  );
-  const canChangeMemberRoles =
-    currentMemberRole === "owner" || currentMemberRole === "admin";
+  const currentMemberRole = displayedMembers.find(
+    (member) => member.userId === currentUserId,
+  )?.role;
+  const canChangeMemberRoles = hasAnyRole(currentMemberRole, [
+    "owner",
+    "admin",
+  ]);
   const canRemoveMembers = canChangeMemberRoles;
 
   const inviteForm = useAppForm({
@@ -1806,25 +1820,31 @@ function OrganizationMembersManager({
 
   const updateRole = async (
     member: OrganizationMemberSummary,
-    role: OrganizationRole,
+    role: OrganizationRole | OrganizationRole[],
   ) => {
-    setUpdatingMemberId(member.id);
     setError(null);
+    const nextRole = Array.isArray(role)
+      ? Array.from(new Set(role)).join(",")
+      : normalizeOrganizationRole(role);
+
+    setMemberRoleOverrides((current) => ({
+      ...current,
+      [member.id]: nextRole,
+    }));
 
     const result = await authClient.organization.updateMemberRole({
       memberId: member.id,
-      role,
+      role: Array.isArray(role) ? role : normalizeOrganizationRole(role),
       organizationId: organization.id,
     });
 
-    setUpdatingMemberId(null);
-
     if (result.error) {
+      setMemberRoleOverrides((current) => ({
+        ...current,
+        [member.id]: member.role,
+      }));
       setError(result.error.message ?? m.organization_member_role_error());
-      return;
     }
-
-    refreshMembers();
   };
 
   const removeMember = async (member: OrganizationMemberSummary) => {
@@ -1932,10 +1952,9 @@ function OrganizationMembersManager({
               m,
               baseUrl,
               canChangeRoles: canChangeMemberRoles,
-              updatingMemberId,
               onRoleChange: updateRole,
             })}
-            data={members}
+            data={displayedMembers}
             emptyLabel={
               loading ? m.user_loading() : m.organization_members_empty()
             }
@@ -1988,16 +2007,14 @@ const memberColumns = ({
   m,
   baseUrl,
   canChangeRoles,
-  updatingMemberId,
   onRoleChange,
 }: {
   m: ReturnType<typeof organizationMessageFns>;
   baseUrl?: string | undefined;
   canChangeRoles: boolean;
-  updatingMemberId: string | null;
   onRoleChange: (
     member: OrganizationMemberSummary,
-    role: OrganizationRole,
+    role: OrganizationRole | OrganizationRole[],
   ) => void;
 }): ColumnDef<OrganizationMemberSummary>[] => [
   {
@@ -2023,10 +2040,22 @@ const memberColumns = ({
     header: m.organization_member_role(),
     cell: ({ row }) => {
       const member = row.original;
-      const role = normalizeOrganizationRole(member.role);
+      const roles = normalizeOrganizationRoles(member.role);
+      const roleOptions = roles.map((role) => ({
+        label: organizationRoleLabel(role, m),
+        value: role,
+      }));
 
-      if (!canChangeRoles || updatingMemberId === member.id) {
-        return <Badge variant="secondary">{organizationRoleLabel(role, m)}</Badge>;
+      if (!canChangeRoles) {
+        return (
+          <div className="flex flex-wrap gap-1">
+            {roleOptions.map((role) => (
+              <Badge key={role.value} variant="secondary">
+                {role.label}
+              </Badge>
+            ))}
+          </div>
+        );
       }
 
       return (
@@ -2037,18 +2066,15 @@ const memberColumns = ({
             label: organizationRoleLabel(role, m),
             value: role,
           }))}
-          value={[
-            {
-              label: organizationRoleLabel(role, m),
-              value: role,
-            },
-          ]}
+          value={roleOptions}
           onAdd={(value) => {
-            if (
-              (value === "owner" || value === "admin" || value === "member")
-            ) {
-              onRoleChange(member, value);
-            }
+            if (!isOrganizationRole(value)) return;
+            onRoleChange(member, Array.from(new Set([...roles, value])));
+          }}
+          onRemove={(value) => {
+            if (!isOrganizationRole(value)) return;
+            const nextRoles = roles.filter((role) => role !== value);
+            onRoleChange(member, nextRoles.length > 0 ? nextRoles : ["member"]);
           }}
         />
       );

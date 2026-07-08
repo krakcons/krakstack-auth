@@ -8,6 +8,11 @@ import { defaultKeyHasher } from "@better-auth/api-key";
 import { deleteSessionCookie, setSessionCookie } from "better-auth/cookies";
 import { and, eq } from "drizzle-orm";
 import * as z from "zod";
+import {
+  globalAdminRoles,
+  hasAnyRole,
+  organizationImpersonationRoles,
+} from "@krak-stack/auth/roles";
 
 import { apikey, organization } from "@/db/schema";
 import { db } from "@/services/database";
@@ -30,7 +35,12 @@ const bodySchema = z.object({
   organizationId: z.string().min(1),
   actorUserId: z.string().min(1),
   targetUserId: z.string().min(1),
-  expiresInSeconds: z.number().int().positive().max(60 * 60 * 24).optional(),
+  expiresInSeconds: z
+    .number()
+    .int()
+    .positive()
+    .max(60 * 60 * 24)
+    .optional(),
 });
 
 const bearerToken = (value: string | null) => {
@@ -43,9 +53,25 @@ const serviceApiKeyFromHeaders = (headers: Headers | undefined) =>
   headers?.get("x-api-key") ??
   null;
 
-const hasAdminRole = (role: unknown) =>
-  typeof role === "string" &&
-  role.split(",").some((item) => item.trim() === "admin");
+const hasActorOrganizationImpersonationRole = async ({
+  actorUserId,
+  organizationId,
+  ctx,
+}: {
+  actorUserId: string;
+  organizationId: string;
+  ctx: GenericEndpointContext;
+}) => {
+  const record = await ctx.context.adapter.findOne<{ role: string }>({
+    model: "member",
+    where: [
+      { field: "organizationId", value: organizationId },
+      { field: "userId", value: actorUserId },
+    ],
+  });
+
+  return hasAnyRole(record?.role, organizationImpersonationRoles);
+};
 
 const verifyServiceApiKey = async (headers: Headers | undefined) => {
   const key = serviceApiKeyFromHeaders(headers);
@@ -86,17 +112,26 @@ const verifyServiceApiKey = async (headers: Headers | undefined) => {
 
 const requireServiceApiKeyOrAdmin = async (
   ctx: GenericEndpointContext,
-  actorSession: Awaited<ReturnType<typeof getSessionFromCtx>>,
+  actorSession: NonNullable<Awaited<ReturnType<typeof getSessionFromCtx>>>,
 ) => {
   const isServiceRequest = await verifyServiceApiKey(ctx.headers);
   if (isServiceRequest) return;
 
-  if (!hasAdminRole(actorSession?.user.role)) {
+  const hasOrganizationRole = await hasActorOrganizationImpersonationRole({
+    actorUserId: actorSession.session.userId,
+    organizationId: ctx.body.organizationId,
+    ctx,
+  });
+
+  if (
+    !hasAnyRole(actorSession.user.role, globalAdminRoles) &&
+    !hasOrganizationRole
+  ) {
     throw APIError.from(
       "FORBIDDEN",
       authError(
         "ADMIN_OR_SERVICE_API_KEY_REQUIRED",
-        "Admin session or service API key required",
+        "Admin session, organization owner/admin/support role, or service API key required",
       ),
     );
   }
@@ -154,15 +189,17 @@ export const organizationImpersonation = () =>
           );
           await requireServiceApiKeyOrAdmin(ctx, actorSession);
 
-          const [organizationRecord, actorUser, targetUser] = await Promise.all([
-            db
-              .select({ id: organization.id })
-              .from(organization)
-              .where(eq(organization.id, ctx.body.organizationId))
-              .limit(1),
-            ctx.context.internalAdapter.findUserById(ctx.body.actorUserId),
-            ctx.context.internalAdapter.findUserById(ctx.body.targetUserId),
-          ]);
+          const [organizationRecord, actorUser, targetUser] = await Promise.all(
+            [
+              db
+                .select({ id: organization.id })
+                .from(organization)
+                .where(eq(organization.id, ctx.body.organizationId))
+                .limit(1),
+              ctx.context.internalAdapter.findUserById(ctx.body.actorUserId),
+              ctx.context.internalAdapter.findUserById(ctx.body.targetUserId),
+            ],
+          );
 
           if (!organizationRecord[0]) {
             throw APIError.from(

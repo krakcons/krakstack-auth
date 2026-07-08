@@ -10,9 +10,15 @@ import {
   organization,
   twoFactor,
 } from "better-auth/plugins";
+import {
+  adminAc,
+  memberAc,
+  ownerAc,
+} from "better-auth/plugins/organization/access";
 import { oauthProvider } from "@better-auth/oauth-provider";
 import { apiKey } from "@better-auth/api-key";
 import { Effect } from "effect";
+import { organizationRoles } from "@krak-stack/auth/roles";
 
 import { db } from "../../services/database";
 import { schema } from "../../db/schema";
@@ -40,6 +46,12 @@ const apiKeyRateLimit = {
   timeWindow: 1000 * 60 * 60 * 24,
   maxRequests: 1000,
 };
+const organizationAuthRoles = Object.fromEntries(
+  organizationRoles.map((role) => [
+    role,
+    role === "owner" ? ownerAc : role === "admin" ? adminAc : memberAc,
+  ]),
+);
 
 const googleClientId = process.env.GOOGLE_CLIENT_ID;
 const googleClientSecret = process.env.GOOGLE_CLIENT_SECRET;
@@ -216,6 +228,7 @@ const createAuth = ({
         allowUserToCreateOrganization: true,
         organizationLimit: 10,
         membershipLimit: 100,
+        roles: organizationAuthRoles,
       }),
       organizationImpersonation(),
       apiKey([

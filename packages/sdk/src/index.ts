@@ -1,5 +1,6 @@
 export * from "./schema";
 export * as Query from "./query";
+export * as Roles from "./roles";
 export { AuthClientApi, AuthServiceApi } from "./api";
 export { AuthService, type AuthServiceLayerOptions } from "./service";
 export { AuthClientConfig } from "./config";
