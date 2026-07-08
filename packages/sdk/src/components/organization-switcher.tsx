@@ -323,13 +323,14 @@ const OrganizationMessagesContext = createContext(
 );
 const useOrganizationMessages = () => useContext(OrganizationMessagesContext);
 
-type OrganizationSwitcherProps = {
+export type OrganizationSwitcherProps = {
   authClient?: AuthUiClient;
   baseUrl?: string | undefined;
   side?: ComponentProps<typeof DropdownMenuContent>["side"];
   className?: string;
   defaultDialog?: OrganizationSwitcherDialog | null;
   hideTrigger?: boolean;
+  menuActions?: ReactNode;
   renderUnauthenticated?: () => ReactNode;
   locked?: boolean;
   messages?: OrganizationSwitcherMessages;
@@ -678,6 +679,7 @@ export function OrganizationSwitcher({
   className,
   defaultDialog = null,
   hideTrigger = false,
+  menuActions,
   renderUnauthenticated,
   locked = false,
   messages,
@@ -848,6 +850,12 @@ export function OrganizationSwitcher({
                     : {})}
                 />
               </DropdownMenuLabel>
+              {menuActions ? (
+                <>
+                  <DropdownMenuSeparator />
+                  {menuActions}
+                </>
+              ) : null}
               {hasOrganizationListItems ? <DropdownMenuSeparator /> : null}
               {organizations.isPending ? (
                 <DropdownMenuItem disabled>

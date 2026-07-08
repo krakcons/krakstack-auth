@@ -17,6 +17,9 @@ export type {
   KrakstackAuthLocale,
   KrakstackAuthProviderProps,
 } from "./auth-provider";
-export type { OrganizationSwitcherDialog } from "./organization-switcher";
+export type {
+  OrganizationSwitcherDialog,
+  OrganizationSwitcherProps,
+} from "./organization-switcher";
 export type { UserButtonDialog } from "./user-button";
 export type { AuthUiClient } from "./auth-client";

@@ -66,7 +66,15 @@ The extra subpath also exports `ExtraApiClient` for Atom-based browser state.
 
 ```tsx
 import { OrganizationSwitcher, UserButton } from "@krak-stack/auth";
+import { DropdownMenuItem } from "@/components/ui/dropdown-menu";
 
-<OrganizationSwitcher side="bottom" />
+<OrganizationSwitcher
+  menuActions={
+    <DropdownMenuItem render={<a href="/organization" />}>
+      Dashboard
+    </DropdownMenuItem>
+  }
+  side="bottom"
+/>
 <UserButton signOutRedirect="/" side="bottom" />
 ```
