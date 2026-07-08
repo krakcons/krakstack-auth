@@ -1768,7 +1768,6 @@ function OrganizationMembersManager({
   const membersResult = useAtomValue(membersAtom);
   const refreshMembers = useAtomRefresh(membersAtom);
   const [error, setError] = useState<string | null>(null);
-  const [updatingMemberId, setUpdatingMemberId] = useState<string | null>(null);
   const [cancellingInvitationId, setCancellingInvitationId] = useState<
     string | null
   >(null);
@@ -1856,15 +1855,12 @@ function OrganizationMembersManager({
   };
 
   const removeMember = async (member: OrganizationMemberSummary) => {
-    setUpdatingMemberId(member.id);
     setError(null);
 
     const result = await authClient.organization.removeMember({
       memberIdOrEmail: member.id,
       organizationId: organization.id,
     });
-
-    setUpdatingMemberId(null);
 
     if (result.error) {
       setError(result.error.message ?? m.organization_member_remove_error());
