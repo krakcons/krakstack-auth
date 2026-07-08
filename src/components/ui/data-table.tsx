@@ -1244,6 +1244,7 @@ export function DataTable<TData, TValue>({
       }));
     },
     getCoreRowModel: getCoreRowModel(),
+    getSortedRowModel: getSortedRowModel(),
     onGlobalFilterChange: (updater) => {
       const newGlobalFilter =
         typeof updater === "function" ? updater(globalFilter) : updater;
@@ -1259,12 +1260,7 @@ export function DataTable<TData, TValue>({
         { replace: true },
       );
     },
-    ...(serverPagination
-      ? { manualFiltering: true, manualSorting: true }
-      : {
-          getFilteredRowModel: getFilteredRowModel(),
-          getSortedRowModel: getSortedRowModel(),
-        }),
+    getFilteredRowModel: getFilteredRowModel(),
     ...(serverPagination
       ? { manualPagination: true, rowCount: serverPagination.rowCount }
       : { getPaginationRowModel: getPaginationRowModel() }),
