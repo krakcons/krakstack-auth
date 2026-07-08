@@ -14,7 +14,7 @@ import {
   organizationImpersonationRoles,
 } from "@krak-stack/auth/roles";
 
-import { apikey, organization } from "@/db/schema";
+import { apikey, organization, user as authUser } from "@/db/schema";
 import { db } from "@/services/database";
 
 const authError = (code: string, message: string) => ({ code, message });
@@ -189,8 +189,8 @@ export const organizationImpersonation = () =>
           );
           await requireServiceApiKeyOrAdmin(ctx, actorSession);
 
-          const [organizationRecord, actorUser, targetUser] = await Promise.all(
-            [
+          const [organizationRecord, actorUser, targetUser, targetUserRole] =
+            await Promise.all([
               db
                 .select({ id: organization.id })
                 .from(organization)
@@ -198,8 +198,12 @@ export const organizationImpersonation = () =>
                 .limit(1),
               ctx.context.internalAdapter.findUserById(ctx.body.actorUserId),
               ctx.context.internalAdapter.findUserById(ctx.body.targetUserId),
-            ],
-          );
+              db
+                .select({ role: authUser.role })
+                .from(authUser)
+                .where(eq(authUser.id, ctx.body.targetUserId))
+                .limit(1),
+            ]);
 
           if (!organizationRecord[0]) {
             throw APIError.from(
@@ -217,6 +221,15 @@ export const organizationImpersonation = () =>
             throw APIError.from(
               "NOT_FOUND",
               authError("USER_NOT_FOUND", "User not found"),
+            );
+          }
+          if (hasAnyRole(targetUserRole[0]?.role, globalAdminRoles)) {
+            throw APIError.from(
+              "FORBIDDEN",
+              authError(
+                "TARGET_USER_ADMIN_IMPERSONATION_FORBIDDEN",
+                "Organizations cannot impersonate admin users",
+              ),
             );
           }
 
