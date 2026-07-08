@@ -29,7 +29,10 @@ import {
   useState,
 } from "react";
 
-import { DataTable } from "@/components/ui/data-table";
+import {
+  DataTable,
+  DataTableRelationshipCell,
+} from "@/components/ui/data-table";
 import { EditingLocaleSwitcher } from "@/components/ui/editing-locale-switcher";
 import { AppBrand } from "@/components/ui/app-brand";
 import { useAppForm } from "@/components/ui/form";
@@ -51,13 +54,6 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import { Separator } from "@/components/ui/separator";
 import {
   OrganizationMetadata,
@@ -374,7 +370,9 @@ const userInvitationsAtom = Atom.family((authClient: AuthUiClient) =>
             );
           }
 
-          return result.data ?? [];
+          return (result.data ?? []).filter(
+            (invitation) => invitation.status === "pending",
+          );
         },
         catch: (error) => error,
       }),
@@ -416,7 +414,9 @@ const organizationMembersAtom = Atom.family((authClient: AuthUiClient) =>
 
             return {
               members: membersResult.data?.members ?? [],
-              invitations: invitationsResult.data ?? [],
+              invitations: (invitationsResult.data ?? []).filter(
+                (invitation) => invitation.status === "pending",
+              ),
             };
           },
           catch: (error) => error,
@@ -990,7 +990,7 @@ export function OrganizationSwitcher({
           );
         }}
       >
-        <DialogContent className="max-h-[85vh] overflow-x-hidden overflow-y-auto sm:max-w-4xl">
+        <DialogContent className="max-h-[85vh] overflow-y-auto sm:max-w-4xl">
           <DialogHeader>
             <DialogTitle className="text-2xl">
               {m.organization_members_title()}
@@ -1745,6 +1745,12 @@ function OrganizationMembersManager({
     onSuccess: () => null,
   });
   const loading = membersResult._tag === "Initial";
+  const currentMemberRole = normalizeOrganizationRole(
+    members.find((member) => member.userId === currentUserId)?.role,
+  );
+  const canChangeMemberRoles =
+    currentMemberRole === "owner" || currentMemberRole === "admin";
+  const canRemoveMembers = canChangeMemberRoles;
 
   const inviteForm = useAppForm({
     defaultValues: { email: "", role: "member" },
@@ -1893,11 +1899,12 @@ function OrganizationMembersManager({
             {m.organization_members_description()}
           </p>
         </div>
-        <div className="min-w-0 overflow-x-auto">
+        <div className="-m-1 min-w-0 overflow-x-auto p-1">
           <DataTable
             columns={memberColumns({
               m,
               baseUrl,
+              canChangeRoles: canChangeMemberRoles,
               updatingMemberId,
               onRoleChange: updateRole,
             })}
@@ -1910,6 +1917,7 @@ function OrganizationMembersManager({
             searchState="local"
             rowActions={memberRowActions({
               m,
+              canRemoveMembers,
               currentUserId,
               onRemove: removeMember,
             })}
@@ -1925,7 +1933,7 @@ function OrganizationMembersManager({
             {m.organization_invitations_description()}
           </p>
         </div>
-        <div className="min-w-0 overflow-x-auto">
+        <div className="-m-1 min-w-0 overflow-x-auto p-1">
           <DataTable
             columns={invitationColumns({
               m,
@@ -1952,11 +1960,13 @@ function OrganizationMembersManager({
 const memberColumns = ({
   m,
   baseUrl,
+  canChangeRoles,
   updatingMemberId,
   onRoleChange,
 }: {
   m: ReturnType<typeof organizationMessageFns>;
   baseUrl?: string | undefined;
+  canChangeRoles: boolean;
   updatingMemberId: string | null;
   onRoleChange: (
     member: OrganizationMemberSummary,
@@ -1986,36 +1996,34 @@ const memberColumns = ({
     header: m.organization_member_role(),
     cell: ({ row }) => {
       const member = row.original;
-      const disabled = updatingMemberId === member.id;
+      const role = normalizeOrganizationRole(member.role);
+
+      if (!canChangeRoles || updatingMemberId === member.id) {
+        return <Badge variant="secondary">{organizationRoleLabel(role, m)}</Badge>;
+      }
 
       return (
-        <Select
-          items={organizationRoles.map((role) => ({
+        <DataTableRelationshipCell
+          emptyLabel={m.organization_member_role()}
+          manageLabel={m.organization_member_role()}
+          options={organizationRoles.map((role) => ({
             label: organizationRoleLabel(role, m),
             value: role,
           }))}
-          value={normalizeOrganizationRole(member.role)}
-          onValueChange={(value) => {
-            if (value === "owner" || value === "admin" || value === "member") {
+          value={[
+            {
+              label: organizationRoleLabel(role, m),
+              value: role,
+            },
+          ]}
+          onAdd={(value) => {
+            if (
+              (value === "owner" || value === "admin" || value === "member")
+            ) {
               onRoleChange(member, value);
             }
           }}
-          disabled={disabled}
-        >
-          <SelectTrigger
-            className="w-36"
-            onClick={(event) => event.stopPropagation()}
-          >
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            {organizationRoles.map((role) => (
-              <SelectItem key={role} value={role}>
-                {organizationRoleLabel(role, m)}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+        />
       );
     },
   },
@@ -2032,10 +2040,12 @@ const memberColumns = ({
 
 const memberRowActions = ({
   m,
+  canRemoveMembers,
   currentUserId,
   onRemove,
 }: {
   m: ReturnType<typeof organizationMessageFns>;
+  canRemoveMembers: boolean;
   currentUserId: string;
   onRemove: (member: OrganizationMemberSummary) => void;
 }) => [
@@ -2044,7 +2054,9 @@ const memberRowActions = ({
     icon: <Trash2 />,
     variant: "destructive" as const,
     visible: (member: OrganizationMemberSummary) =>
-      member.userId !== currentUserId,
+      canRemoveMembers &&
+      member.userId !== currentUserId &&
+      normalizeOrganizationRole(member.role) !== "owner",
     onClick: onRemove,
   },
 ];
