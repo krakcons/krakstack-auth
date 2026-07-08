@@ -711,6 +711,13 @@ export function OrganizationSwitcher({
     onSuccess: () => null,
   });
   const loadingUserInvitations = invitationsResult._tag === "Initial";
+  const activeMemberRole = normalizeOrganizationRole(
+    activeOrganization.data?.members.find(
+      (member) => member.userId === session.data?.user.id,
+    )?.role,
+  );
+  const canManageApiKeys =
+    activeMemberRole === "owner" || activeMemberRole === "admin";
 
   const setDialog = (
     next:
@@ -868,26 +875,30 @@ export function OrganizationSwitcher({
                     : m.organization_switcher_empty()}
                 </DropdownMenuItem>
               ) : null}
-              <DropdownMenuSeparator />
               {!locked ? (
-                <DropdownMenuItem onClick={openCreate}>
-                  <Plus />
-                  {m.organization_create_title()}
-                </DropdownMenuItem>
+                <>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem onClick={openCreate}>
+                    <Plus />
+                    {m.organization_create_title()}
+                  </DropdownMenuItem>
+                  <DropdownMenuItem
+                    onClick={() => {
+                      setDialog("invitations");
+                    }}
+                  >
+                    <Mail />
+                    <span className="flex flex-1 items-center justify-between gap-3">
+                      {m.organization_user_invitations_title()}
+                      {userInvitations.length ? (
+                        <Badge variant="secondary">
+                          {userInvitations.length}
+                        </Badge>
+                      ) : null}
+                    </span>
+                  </DropdownMenuItem>
+                </>
               ) : null}
-              <DropdownMenuItem
-                onClick={() => {
-                  setDialog("invitations");
-                }}
-              >
-                <Mail />
-                <span className="flex flex-1 items-center justify-between gap-3">
-                  {m.organization_user_invitations_title()}
-                  {userInvitations.length ? (
-                    <Badge variant="secondary">{userInvitations.length}</Badge>
-                  ) : null}
-                </span>
-              </DropdownMenuItem>
               {activeOrganization.data ? (
                 <>
                   <DropdownMenuSeparator />
@@ -909,10 +920,12 @@ export function OrganizationSwitcher({
                     <Users />
                     {m.organization_members_title()}
                   </DropdownMenuItem>
-                  <DropdownMenuItem onClick={() => setDialog("apiKeys")}>
-                    <KeyRound />
-                    {m.user_button_api_keys()}
-                  </DropdownMenuItem>
+                  {canManageApiKeys ? (
+                    <DropdownMenuItem onClick={() => setDialog("apiKeys")}>
+                      <KeyRound />
+                      {m.user_button_api_keys()}
+                    </DropdownMenuItem>
+                  ) : null}
                 </>
               ) : null}
             </DropdownMenuGroup>
@@ -1012,7 +1025,7 @@ export function OrganizationSwitcher({
         </DialogContent>
       </Dialog>
       <Dialog
-        open={dialog === "apiKeys"}
+        open={dialog === "apiKeys" && canManageApiKeys}
         onOpenChange={(open) => {
           setDialog((current) =>
             open ? "apiKeys" : current === "apiKeys" ? null : current,
@@ -1033,13 +1046,13 @@ export function OrganizationSwitcher({
             <OrganizationApiKeyManager
               authClient={authClient}
               organization={activeOrganization.data}
-              active={dialog === "apiKeys"}
+              active={dialog === "apiKeys" && canManageApiKeys}
             />
           ) : null}
         </DialogContent>
       </Dialog>
       <Dialog
-        open={dialog === "invitations"}
+        open={dialog === "invitations" && !locked}
         onOpenChange={(open) => {
           setDialog((current) =>
             open ? "invitations" : current === "invitations" ? null : current,
