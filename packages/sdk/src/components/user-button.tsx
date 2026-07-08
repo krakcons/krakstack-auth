@@ -142,6 +142,7 @@ const messages = {
     user_button_admin_users_description: "Review and manage users.",
     user_button_api_keys: "API keys",
     user_button_aria_label: "Open user menu",
+    user_button_impersonating: "Impersonating",
     user_button_logout: "Log out",
     user_button_security: "Security",
     user_button_stop_impersonating: "Stop impersonating",
@@ -250,6 +251,7 @@ const messages = {
     user_button_admin_users_description: "Consultez et gérez les utilisateurs.",
     user_button_api_keys: "Clés API",
     user_button_aria_label: "Ouvrir le menu utilisateur",
+    user_button_impersonating: "Imitation",
     user_button_logout: "Se déconnecter",
     user_button_security: "Sécurité",
     user_button_stop_impersonating: "Arrêter l'imitation",
@@ -624,6 +626,13 @@ export const UserButton = ({
             sideOffset={4}
           >
             <DropdownMenuGroup>
+              {isImpersonating ? (
+                <div className="px-1 py-0.5">
+                  <Badge variant="secondary" className="text-xs font-normal">
+                    {m.user_button_impersonating()}
+                  </Badge>
+                </div>
+              ) : null}
               <DropdownMenuLabel className="p-0 font-normal">
                 <AppBrand
                   to={null}
