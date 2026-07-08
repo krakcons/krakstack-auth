@@ -22,14 +22,23 @@ export class AuthMiddleware extends HttpApiMiddleware.Service<
     };
   }
 >()("@krak-stack/auth/AuthMiddleware", {
-  error: HttpApiError.Unauthorized,
+  error: [HttpApiError.Unauthorized, HttpApiError.Forbidden],
   security: {
     apiKey: ApiKeySecurity,
   },
-}) {}
+}) {
+  static readonly layer = (
+    options: AuthenticationLiveOptions | Layer.Layer<AuthService, unknown> = {},
+  ) => makeAuthenticationLive(options);
+}
 
 export type AuthenticationLiveOptions = AuthServiceLayerOptions & {
-  readonly authLayer?: Layer.Layer<AuthService, unknown>;
+  readonly allowedOrganizationImpersonationPaths?: readonly string[];
+  readonly authLayer?: Layer.Layer<
+    AuthService,
+    unknown,
+    HttpServerRequest.HttpServerRequest
+  >;
 };
 
 const isAuthServiceLayer = (
@@ -42,6 +51,9 @@ export const makeAuthenticationLive = (
   const legacyLayer = isAuthServiceLayer(options) ? options : undefined;
   const authOptions = isAuthServiceLayer(options) ? {} : options;
   const authLayer = legacyLayer ?? authOptions.authLayer;
+  const allowedOrganizationImpersonationPaths = new Set(
+    authOptions.allowedOrganizationImpersonationPaths ?? [],
+  );
   return Layer.effect(
     AuthMiddleware,
     Effect.gen(function* () {
@@ -69,12 +81,22 @@ export const makeAuthenticationLive = (
               ),
               Effect.mapError(() => new HttpApiError.Unauthorized({})),
             );
+            if (!allowedOrganizationImpersonationPaths.has(pathnameFromUrl(request.url))) {
+              const session = yield* auth.getSession().pipe(
+                Effect.catchTag("Unauthorized", () => Effect.succeed(null)),
+              );
+
+              if (session?.session.impersonatedByOrganizationId) {
+                return yield* new HttpApiError.Forbidden({});
+              }
+            }
             return yield* httpEffect.pipe(
               Effect.provideService(AuthService, auth),
             );
           }).pipe(
             Effect.mapError((error) =>
-              error instanceof HttpApiError.Unauthorized
+              error instanceof HttpApiError.Unauthorized ||
+              error instanceof HttpApiError.Forbidden
                 ? error
                 : new HttpApiError.Unauthorized({}),
             ),
@@ -83,3 +105,5 @@ export const makeAuthenticationLive = (
     }),
   );
 };
+
+const pathnameFromUrl = (url: string) => new URL(url, "http://localhost").pathname;

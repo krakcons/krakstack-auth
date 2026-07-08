@@ -546,6 +546,11 @@ export const UserButton = ({
   const displayEmail = session.user.email.trim();
   const displayImage = assetUrl(session.user.image, baseUrl);
   const isImpersonating = Boolean(session.session.impersonatedBy);
+  const isOrganizationImpersonating = Boolean(
+    session.session.impersonatedByOrganizationId,
+  );
+  const canManageUserSettings = !isOrganizationImpersonating;
+  const canUseAdminSettings = !isOrganizationImpersonating;
   const isAdmin = hasAdminRole(session.user);
 
   const signOut = async () => {
@@ -646,25 +651,33 @@ export const UserButton = ({
                 />
               </DropdownMenuLabel>
               <DropdownMenuSeparator />
-              <DropdownMenuItem
-                disabled={isPending}
-                onClick={() => setSettingsDialog("account")}
-              >
-                <UserCircleIcon />
-                {m.user_button_account()}
-              </DropdownMenuItem>
-              <DropdownMenuItem onClick={() => setSettingsDialog("security")}>
-                <ShieldCheck />
-                {m.user_button_security()}
-              </DropdownMenuItem>
-              <DropdownMenuItem onClick={() => setSettingsDialog("apiKeys")}>
-                <KeyRound />
-                {m.user_button_api_keys()}
-              </DropdownMenuItem>
-              <DropdownMenuSeparator />
-              {isAdmin || isImpersonating ? (
+              {canManageUserSettings ? (
                 <>
-                  {isAdmin ? (
+                  <DropdownMenuItem
+                    disabled={isPending}
+                    onClick={() => setSettingsDialog("account")}
+                  >
+                    <UserCircleIcon />
+                    {m.user_button_account()}
+                  </DropdownMenuItem>
+                  <DropdownMenuItem
+                    onClick={() => setSettingsDialog("security")}
+                  >
+                    <ShieldCheck />
+                    {m.user_button_security()}
+                  </DropdownMenuItem>
+                  <DropdownMenuItem
+                    onClick={() => setSettingsDialog("apiKeys")}
+                  >
+                    <KeyRound />
+                    {m.user_button_api_keys()}
+                  </DropdownMenuItem>
+                  <DropdownMenuSeparator />
+                </>
+              ) : null}
+              {(isAdmin && canUseAdminSettings) || isImpersonating ? (
+                <>
+                  {isAdmin && canUseAdminSettings ? (
                     <>
                       <DropdownMenuItem
                         onClick={() => setSettingsDialog("adminUsers")}
@@ -701,7 +714,7 @@ export const UserButton = ({
         </DropdownMenu>
       )}
       <Dialog
-        open={settingsDialog === "account"}
+        open={canManageUserSettings && settingsDialog === "account"}
         onOpenChange={(open) => {
           setSettingsDialog((current) =>
             open ? "account" : current === "account" ? null : current,
@@ -752,7 +765,7 @@ export const UserButton = ({
         </DialogContent>
       </Dialog>
       <Dialog
-        open={settingsDialog === "security"}
+        open={canManageUserSettings && settingsDialog === "security"}
         onOpenChange={(open) => {
           setSettingsDialog((current) =>
             open ? "security" : current === "security" ? null : current,
@@ -784,7 +797,7 @@ export const UserButton = ({
         </DialogContent>
       </Dialog>
       <Dialog
-        open={settingsDialog === "apiKeys"}
+        open={canManageUserSettings && settingsDialog === "apiKeys"}
         onOpenChange={(open) => {
           setSettingsDialog((current) =>
             open ? "apiKeys" : current === "apiKeys" ? null : current,

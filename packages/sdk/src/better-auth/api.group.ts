@@ -46,6 +46,7 @@ export const BetterAuthApiGroup = HttpApiGroup.make("auth")
         error: [
           HttpApiError.BadRequest,
           HttpApiError.Unauthorized,
+          HttpApiError.Forbidden,
           HttpApiError.NotFound,
           HttpApiError.InternalServerError,
         ],

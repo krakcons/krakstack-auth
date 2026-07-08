@@ -48,6 +48,9 @@ export const adminAuthMiddlewareLayer = Layer.succeed(
       });
 
       if (!session) return yield* new HttpApiError.Unauthorized({});
+      if (session.session.impersonatedByOrganizationId) {
+        return yield* new HttpApiError.Forbidden({});
+      }
       if (!hasAdminRole(userRole(session.user))) {
         return yield* new HttpApiError.Forbidden({});
       }

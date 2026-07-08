@@ -44,6 +44,15 @@ const authSession = {
   authMethod: { type: "cookie" },
 } satisfies AuthSession;
 
+const organizationImpersonationSession = {
+  ...authSession,
+  session: {
+    ...authSession.session,
+    impersonatedBy: "admin-user-1",
+    impersonatedByOrganizationId: "org-1",
+  },
+} satisfies AuthSession;
+
 const userApiKey = {
   id: "user-key-1",
   configId: "user",
@@ -102,6 +111,15 @@ const authClient = {
   requireUser: () => Effect.succeed(authSession),
   requireOrganization: () => Effect.succeed(authSession),
   requireUserOrganization: () => Effect.succeed(authSession),
+};
+
+const organizationImpersonationAuthClient = {
+  auth: { getSession: () => Effect.succeed(organizationImpersonationSession) },
+  getSession: () => Effect.succeed(organizationImpersonationSession),
+  requireSession: () => Effect.succeed(organizationImpersonationSession),
+  requireUser: () => Effect.succeed(organizationImpersonationSession),
+  requireOrganization: () => Effect.succeed(organizationImpersonationSession),
+  requireUserOrganization: () => Effect.succeed(organizationImpersonationSession),
 };
 
 const rejectedAuthClient = {
@@ -186,6 +204,10 @@ const organizationApiKeyAuthClient = {
 };
 
 const authClientLayer = Layer.succeed(AuthService, authClient as never);
+const organizationImpersonationAuthClientLayer = Layer.succeed(
+  AuthService,
+  organizationImpersonationAuthClient as never,
+);
 const rejectedAuthClientLayer = Layer.succeed(
   AuthService,
   rejectedAuthClient as never,
@@ -368,6 +390,50 @@ describe("AuthenticationLive", () => {
         makeAuthenticationLive({
           authLayer: organizationApiKeyAuthClientLayer,
           apiKeyConfigId: "organization",
+        }),
+      ),
+    ),
+  );
+
+  it.effect("blocks organization impersonation by default", () =>
+    provideRequestContext(
+      Effect.gen(function* () {
+        const middleware = yield* AuthMiddleware;
+        const error = yield* middleware
+          .apiKey(Effect.succeed(HttpServerResponse.text("ok")), {
+            ...middlewareOptions,
+            credential: Redacted.make(""),
+          })
+          .pipe(Effect.flip);
+
+        expect(error).toBeInstanceOf(HttpApiError.Forbidden);
+      }),
+    ).pipe(
+      Effect.provide(
+        AuthMiddleware.layer({ authLayer: organizationImpersonationAuthClientLayer }),
+      ),
+    ),
+  );
+
+  it.effect("allows organization impersonation on explicit paths", () =>
+    provideRequestContext(
+      Effect.gen(function* () {
+        const middleware = yield* AuthMiddleware;
+        const response = yield* middleware.apiKey(
+          Effect.succeed(HttpServerResponse.text("ok")),
+          {
+            ...middlewareOptions,
+            credential: Redacted.make(""),
+          },
+        );
+
+        expect(response.status).toBe(200);
+      }),
+    ).pipe(
+      Effect.provide(
+        AuthMiddleware.layer({
+          allowedOrganizationImpersonationPaths: ["/test"],
+          authLayer: organizationImpersonationAuthClientLayer,
         }),
       ),
     ),

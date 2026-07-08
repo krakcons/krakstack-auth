@@ -1,5 +1,6 @@
-import { Context, Effect, FileSystem, Layer, Path } from "effect";
+import { Context, Effect, FileSystem, Layer, Path, Redacted } from "effect";
 import { CredentialsFromEnv } from "@distilled.cloud/cloudflare";
+import { AuthMiddleware, AuthService } from "@krak-stack/auth/server";
 import * as FetchHttpClient from "effect/unstable/http/FetchHttpClient";
 import {
   Etag,
@@ -7,9 +8,16 @@ import {
   HttpMiddleware,
   HttpPlatform,
   HttpRouter,
+  HttpServerRequest,
   HttpServerResponse,
 } from "effect/unstable/http";
-import { HttpApiBuilder, OpenApi } from "effect/unstable/httpapi";
+import {
+  HttpApiBuilder,
+  HttpApiEndpoint,
+  HttpApiError,
+  HttpApiGroup,
+  OpenApi,
+} from "effect/unstable/httpapi";
 
 import { AdminApi, FrontendApi } from "@/api";
 import { AuthDocsApi } from "@/api.docs";
@@ -57,6 +65,48 @@ const CloudflareLive = Layer.mergeAll(
   CredentialsFromEnv,
 );
 
+const organizationImpersonationAllowedAuthPaths = [
+  "/api/auth/get-session",
+  "/api/auth/project-config",
+  "/api/auth/verify-api-key",
+  "/api/auth/admin/stop-impersonating",
+  "/api/auth/ok",
+  "/api/auth/sign-out",
+] as const;
+const authMiddlewareOptions = {
+  endpoint: HttpApiEndpoint.get("betterAuth", "/api/auth/*", {
+    error: [HttpApiError.Unauthorized, HttpApiError.Forbidden],
+  }),
+  group: HttpApiGroup.make("betterAuth"),
+  credential: Redacted.make(""),
+};
+const localAuthServiceLayer = Layer.effect(
+  AuthService,
+  Effect.gen(function* () {
+    const request = yield* HttpServerRequest.HttpServerRequest;
+    const betterAuth = yield* BetterAuthRequest.pipe(
+      Effect.provide(BetterAuthRequest.make(request)),
+    );
+
+    return {
+      getSession: () =>
+        Effect.tryPromise({
+          try: () => betterAuth.api.getSession({ headers: betterAuth.headers }),
+          catch: () => new HttpApiError.Unauthorized({}),
+        }),
+      requireSession: () => Effect.fail(new HttpApiError.Unauthorized({})),
+      requireUser: () => Effect.fail(new HttpApiError.Unauthorized({})),
+      requireOrganization: () => Effect.fail(new HttpApiError.Unauthorized({})),
+      requireUserOrganization: () =>
+        Effect.fail(new HttpApiError.Unauthorized({})),
+    } as never;
+  }),
+);
+const authMiddlewareLayer = AuthMiddleware.layer({
+  allowedOrganizationImpersonationPaths: organizationImpersonationAllowedAuthPaths,
+  authLayer: localAuthServiceLayer,
+});
+
 export const authWebHandler = async (request: Request) => {
   const authRequest = await Effect.runPromise(
     BetterAuthRequest.pipe(Effect.provide(BetterAuthRequest.make(request))),
@@ -77,6 +127,16 @@ const authHandlerEffect = HttpEffect.fromWebHandler((request) =>
     }),
   ),
 );
+const guardedAuthHandlerEffect = Effect.gen(function* () {
+  const request = yield* HttpServerRequest.HttpServerRequest;
+  const middleware = yield* AuthMiddleware;
+  return yield* middleware.apiKey(
+    authHandlerEffect.pipe(
+      Effect.provideService(HttpServerRequest.HttpServerRequest, request),
+    ),
+    authMiddlewareOptions,
+  );
+}).pipe(Effect.provide(authMiddlewareLayer));
 
 const logoContentType = (path: string) => {
   if (path.endsWith(".svg")) return "image/svg+xml";
@@ -113,7 +173,11 @@ const logoAssetHandlerEffect = HttpEffect.fromWebHandler(async (request) => {
   });
 });
 
-const authRoutesLayer = HttpRouter.add("*", "/api/auth/*", authHandlerEffect);
+const authRoutesLayer = HttpRouter.add(
+  "*",
+  "/api/auth/*",
+  guardedAuthHandlerEffect,
+);
 const logoAssetRoutesLayer = HttpRouter.add(
   "GET",
   "/api/assets/*",
