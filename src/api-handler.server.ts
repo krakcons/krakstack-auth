@@ -66,12 +66,12 @@ const CloudflareLive = Layer.mergeAll(
 );
 
 const organizationImpersonationAllowedAuthPaths = [
-  "/api/auth/get-session",
-  "/api/auth/project-config",
-  "/api/auth/verify-api-key",
-  "/api/auth/admin/stop-impersonating",
-  "/api/auth/ok",
-  "/api/auth/sign-out",
+  { method: "GET", path: "/api/auth/get-session" },
+  { method: "GET", path: "/api/auth/project-config" },
+  { method: "POST", path: "/api/auth/verify-api-key" },
+  { method: "POST", path: "/api/auth/admin/stop-impersonating" },
+  { method: "GET", path: "/api/auth/ok" },
+  { method: "POST", path: "/api/auth/sign-out" },
 ] as const;
 const authMiddlewareOptions = {
   endpoint: HttpApiEndpoint.get("betterAuth", "/api/auth/*", {
@@ -103,7 +103,7 @@ const localAuthServiceLayer = Layer.effect(
   }),
 );
 const authMiddlewareLayer = AuthMiddleware.layer({
-  allowedOrganizationImpersonationPaths: organizationImpersonationAllowedAuthPaths,
+  allowedOrganizationImpersonationRoutes: organizationImpersonationAllowedAuthPaths,
   authLayer: localAuthServiceLayer,
 });
 

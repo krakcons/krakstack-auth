@@ -91,6 +91,9 @@ const middlewareOptions = {
 };
 
 const request = HttpServerRequest.fromWeb(new Request("http://localhost/test"));
+const postRequest = HttpServerRequest.fromWeb(
+  new Request("http://localhost/test", { method: "POST" }),
+);
 
 const routeContext = {
   params: {},
@@ -98,6 +101,12 @@ const routeContext = {
 };
 
 const provideRequestContext = <A, E, R>(effect: Effect.Effect<A, E, R>) =>
+  provideRequestContextWith(request, effect);
+
+const provideRequestContextWith = <A, E, R>(
+  request: HttpServerRequest.HttpServerRequest,
+  effect: Effect.Effect<A, E, R>,
+) =>
   effect.pipe(
     Effect.provideService(HttpServerRequest.HttpServerRequest, request),
     Effect.provideService(HttpServerRequest.ParsedSearchParams, {}),
@@ -432,7 +441,35 @@ describe("AuthenticationLive", () => {
     ).pipe(
       Effect.provide(
         AuthMiddleware.layer({
-          allowedOrganizationImpersonationPaths: ["/test"],
+          allowedOrganizationImpersonationRoutes: [
+            { method: "GET", path: "/test" },
+          ],
+          authLayer: organizationImpersonationAuthClientLayer,
+        }),
+      ),
+    ),
+  );
+
+  it.effect("blocks organization impersonation when only the path matches", () =>
+    provideRequestContextWith(
+      postRequest,
+      Effect.gen(function* () {
+        const middleware = yield* AuthMiddleware;
+        const error = yield* middleware
+          .apiKey(Effect.succeed(HttpServerResponse.text("ok")), {
+            ...middlewareOptions,
+            credential: Redacted.make(""),
+          })
+          .pipe(Effect.flip);
+
+        expect(error).toBeInstanceOf(HttpApiError.Forbidden);
+      }),
+    ).pipe(
+      Effect.provide(
+        AuthMiddleware.layer({
+          allowedOrganizationImpersonationRoutes: [
+            { method: "GET", path: "/test" },
+          ],
           authLayer: organizationImpersonationAuthClientLayer,
         }),
       ),

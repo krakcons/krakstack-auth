@@ -33,7 +33,10 @@ export class AuthMiddleware extends HttpApiMiddleware.Service<
 }
 
 export type AuthenticationLiveOptions = AuthServiceLayerOptions & {
-  readonly allowedOrganizationImpersonationPaths?: readonly string[];
+  readonly allowedOrganizationImpersonationRoutes?: readonly {
+    readonly method: string;
+    readonly path: string;
+  }[];
   readonly authLayer?: Layer.Layer<
     AuthService,
     unknown,
@@ -51,8 +54,10 @@ export const makeAuthenticationLive = (
   const legacyLayer = isAuthServiceLayer(options) ? options : undefined;
   const authOptions = isAuthServiceLayer(options) ? {} : options;
   const authLayer = legacyLayer ?? authOptions.authLayer;
-  const allowedOrganizationImpersonationPaths = new Set(
-    authOptions.allowedOrganizationImpersonationPaths ?? [],
+  const allowedOrganizationImpersonationRoutes = new Set(
+    (authOptions.allowedOrganizationImpersonationRoutes ?? []).map(
+      ({ method, path }) => routeKey(method, path),
+    ),
   );
   return Layer.effect(
     AuthMiddleware,
@@ -81,7 +86,11 @@ export const makeAuthenticationLive = (
               ),
               Effect.mapError(() => new HttpApiError.Unauthorized({})),
             );
-            if (!allowedOrganizationImpersonationPaths.has(pathnameFromUrl(request.url))) {
+            if (
+              !allowedOrganizationImpersonationRoutes.has(
+                routeKey(request.method, pathnameFromUrl(request.url)),
+              )
+            ) {
               const session = yield* auth.getSession().pipe(
                 Effect.catchTag("Unauthorized", () => Effect.succeed(null)),
               );
@@ -107,3 +116,6 @@ export const makeAuthenticationLive = (
 };
 
 const pathnameFromUrl = (url: string) => new URL(url, "http://localhost").pathname;
+
+const routeKey = (method: string, path: string) =>
+  `${method.toUpperCase()} ${path}`;
