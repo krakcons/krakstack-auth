@@ -28,6 +28,7 @@ import {
   sendEmailVerificationOtpEmail,
   sendTwoFactorOtpEmail,
 } from "@/services/auth/email.server";
+import { organizationImpersonation } from "@/services/auth/plugins/organization-impersonation";
 import { DB } from "@/services/database";
 import { connectProjectSession } from "@/services/projects/connections";
 
@@ -216,6 +217,7 @@ const createAuth = ({
         organizationLimit: 10,
         membershipLimit: 100,
       }),
+      organizationImpersonation(),
       apiKey([
         {
           configId: "user",

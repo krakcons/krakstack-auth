@@ -36,5 +36,5 @@ export const AuthClientApi = HttpApi.make("AuthClientApi")
         "Browser-facing API used by KrakStack Auth React components.",
     }),
   )
-  .add(ExtraApiGroup, AdminApiGroup.prefix("/auth"))
+  .add(BetterAuthApiGroup.prefix("/auth"), ExtraApiGroup, AdminApiGroup.prefix("/auth"))
   .prefix("/api");

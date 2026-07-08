@@ -41,6 +41,7 @@ export const Session = Schema.Struct({
   userAgent: Schema.optional(Schema.NullOr(Schema.String)),
   userId: Schema.String,
   impersonatedBy: Schema.optional(Schema.NullOr(Schema.String)),
+  impersonatedByOrganizationId: Schema.optional(Schema.NullOr(Schema.String)),
   activeOrganizationId: Schema.optional(Schema.NullOr(Schema.String)),
 }).annotate({
   identifier: "Session",
@@ -57,6 +58,7 @@ export const Session = Schema.Struct({
       userAgent: "Mozilla/5.0",
       userId: "user_1",
       impersonatedBy: null,
+      impersonatedByOrganizationId: null,
       activeOrganizationId: "org_1",
     },
   ],

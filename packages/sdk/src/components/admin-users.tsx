@@ -1,9 +1,20 @@
 // @ts-nocheck
-import { useAtomValue } from "@effect/atom-react";
-import { useNavigate, type ValidateFromPath } from "@tanstack/react-router";
+import { useAtomSet, useAtomValue } from "@effect/atom-react";
+import {
+  useNavigate,
+  useRouter,
+  type ValidateFromPath,
+} from "@tanstack/react-router";
 import { type ColumnDef } from "@tanstack/react-table";
 import { Atom, AsyncResult } from "effect/unstable/reactivity";
-import { Ban, Loader2, ShieldOff, UserCog, UserIcon } from "lucide-react";
+import {
+  Ban,
+  Building2,
+  Loader2,
+  ShieldOff,
+  UserCog,
+  UserIcon,
+} from "lucide-react";
 import { useState } from "react";
 
 import { DataTable, type TableParams } from "@/components/ui/data-table";
@@ -30,6 +41,7 @@ const defaultMessages = {
   en: {
     admin_action_ban: "Ban",
     admin_action_impersonate: "Impersonate",
+    admin_action_impersonate_organization: "Impersonate as organization",
     admin_action_unban: "Unban",
     admin_ban_description:
       "Are you sure you want to ban {name} ({email})? They will not be able to sign in.",
@@ -44,6 +56,9 @@ const defaultMessages = {
     admin_error_access_required: "Admin access is required.",
     admin_error_ban: "Unable to ban user.",
     admin_error_impersonate: "Unable to impersonate user.",
+    admin_error_impersonate_organization:
+      "Unable to impersonate user as organization.",
+    admin_error_organization_required: "Select an active organization first.",
     admin_error_unban: "Unable to unban user.",
     admin_status_active: "Active",
     admin_status_banned: "Banned",
@@ -56,6 +71,8 @@ const defaultMessages = {
   fr: {
     admin_action_ban: "Bannir",
     admin_action_impersonate: "Emprunter l'identité",
+    admin_action_impersonate_organization:
+      "Emprunter l'identité pour l'organisation",
     admin_action_unban: "Débannir",
     admin_ban_description:
       "Êtes-vous sûr de vouloir bannir {name} ({email}) ? Il ne pourra plus se connecter.",
@@ -71,6 +88,10 @@ const defaultMessages = {
     admin_error_ban: "Impossible de bannir l'utilisateur.",
     admin_error_impersonate:
       "Impossible d'emprunter l'identité de l'utilisateur.",
+    admin_error_impersonate_organization:
+      "Impossible d'emprunter l'identité pour l'organisation.",
+    admin_error_organization_required:
+      "Sélectionnez d'abord une organisation active.",
     admin_error_unban: "Impossible de débannir l'utilisateur.",
     admin_status_active: "Actif",
     admin_status_banned: "Banni",
@@ -178,6 +199,11 @@ const impersonateUser = async (
     throw new Error(result.error.message ?? m.admin_error_impersonate);
 };
 
+const activeOrganizationId = (session: unknown) => {
+  const value = session?.session?.activeOrganizationId;
+  return typeof value === "string" && value ? value : null;
+};
+
 export function AdminUsersTable({
   from,
   reloadKey = 0,
@@ -188,10 +214,19 @@ export function AdminUsersTable({
   search?: TableParams;
 }) {
   const navigate = useNavigate();
+  const router = useRouter();
   const auth = useKrakstackAuth();
   const m = labels(auth?.locale ?? "en");
   const authClient = auth?.authClient;
   const baseUrl = auth?.baseUrl;
+  const { data: session, refetch: refetchSession } = authClient?.useSession() ?? {
+    data: null,
+    refetch: async () => undefined,
+  };
+  const impersonateOrganizationUser = useAtomSet(
+    authClientApi(baseUrl).mutation("auth", "organizationImpersonateUser"),
+    { mode: "promise" },
+  );
   const projectId = auth?.projectId;
   const [impersonatingUserId, setImpersonatingUserId] = useState<string | null>(
     null,
@@ -234,6 +269,13 @@ export function AdminUsersTable({
     onSuccess: () => false,
   });
 
+  const refreshSessionAndNavigate = async () => {
+    auth?.refreshAuth();
+    await refetchSession();
+    await navigate({ to: "/" });
+    await router.invalidate();
+  };
+
   return (
     <>
       {error ? <ErrorMessage text={error} /> : null}
@@ -268,12 +310,51 @@ export function AdminUsersTable({
               try {
                 if (!authClient) throw new Error(m.admin_error_access_required);
                 await impersonateUser(authClient, user.id, m);
-                await navigate({ to: "/" });
+                await refreshSessionAndNavigate();
               } catch (cause) {
                 setImpersonateError(
                   cause instanceof Error
                     ? cause.message
                     : m.admin_error_impersonate,
+                );
+              } finally {
+                setImpersonatingUserId(null);
+              }
+            },
+            visible: (user) => !user.banned,
+          },
+          {
+            name: m.admin_action_impersonate_organization,
+            icon: impersonatingUserId ? (
+              <Loader2 className="size-4 animate-spin" />
+            ) : (
+              <Building2 className="size-4" />
+            ),
+            onClick: async (user) => {
+              setImpersonateError("");
+              setImpersonatingUserId(user.id);
+              try {
+                if (!session?.user?.id) {
+                  throw new Error(m.admin_error_access_required);
+                }
+                const organizationId = activeOrganizationId(session);
+                if (!organizationId) {
+                  throw new Error(m.admin_error_organization_required);
+                }
+
+                await impersonateOrganizationUser({
+                  payload: {
+                    organizationId,
+                    actorUserId: session.user.id,
+                    targetUserId: user.id,
+                  },
+                });
+                await refreshSessionAndNavigate();
+              } catch (cause) {
+                setImpersonateError(
+                  cause instanceof Error
+                    ? cause.message
+                    : m.admin_error_impersonate_organization,
                 );
               } finally {
                 setImpersonatingUserId(null);

@@ -3,9 +3,11 @@ import { useRouterState } from "@tanstack/react-router";
 import {
   createContext,
   type ReactNode,
+  useCallback,
   useContext,
   useEffect,
   useMemo,
+  useState,
 } from "react";
 
 import { createAuthUiClient, type AuthUiClient } from "./auth-client";
@@ -28,6 +30,8 @@ export type KrakstackAuthContextValue = {
   projectId?: string | null | undefined;
   authClient: AuthUiClient;
   projectConfig: ExtraProjectPublicConfig | null;
+  authRefreshVersion: number;
+  refreshAuth: () => void;
 };
 
 const KrakstackAuthContext = createContext<KrakstackAuthContextValue | null>(
@@ -129,6 +133,10 @@ export function KrakstackAuthProvider({
     [authClient, baseUrl],
   );
   const projectConfig = useProjectConfig(baseUrl, projectId);
+  const [authRefreshVersion, setAuthRefreshVersion] = useState(0);
+  const refreshAuth = useCallback(() => {
+    setAuthRefreshVersion((current) => current + 1);
+  }, []);
 
   useEffect(() => {
     setProjectContextCookie(resolvedProjectId);
@@ -141,8 +149,18 @@ export function KrakstackAuthProvider({
       locale,
       projectId: resolvedProjectId,
       projectConfig,
+      authRefreshVersion,
+      refreshAuth,
     }),
-    [resolvedAuthClient, baseUrl, locale, resolvedProjectId, projectConfig],
+    [
+      resolvedAuthClient,
+      baseUrl,
+      locale,
+      resolvedProjectId,
+      projectConfig,
+      authRefreshVersion,
+      refreshAuth,
+    ],
   );
 
   return (

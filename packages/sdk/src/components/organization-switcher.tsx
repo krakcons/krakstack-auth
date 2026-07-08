@@ -26,6 +26,8 @@ import {
   createContext,
   useContext,
   useEffect,
+  useEffectEvent,
+  useRef,
   useState,
 } from "react";
 
@@ -691,6 +693,7 @@ export function OrganizationSwitcher({
   const session = authClient.useSession();
   const organizations = authClient.useListOrganizations();
   const activeOrganization = authClient.useActiveOrganization();
+  const lastAuthRefreshVersion = useRef(auth?.authRefreshVersion ?? 0);
   const [uncontrolledDialog, setUncontrolledDialog] =
     useState<OrganizationSwitcherDialog | null>(defaultDialog);
   const dialog =
@@ -735,6 +738,23 @@ export function OrganizationSwitcher({
   };
   const openCreate = () => setDialog("create");
 
+  const refresh = async () => {
+    await organizations.refetch();
+    await activeOrganization.refetch();
+    await session.refetch();
+  };
+  const refreshOnSessionChanged = useEffectEvent(() => {
+    void refresh();
+  });
+
+  useEffect(() => {
+    const version = auth?.authRefreshVersion ?? 0;
+    if (version === lastAuthRefreshVersion.current) return;
+
+    lastAuthRefreshVersion.current = version;
+    refreshOnSessionChanged();
+  }, [auth?.authRefreshVersion]);
+
   if (!session.data) {
     return <>{renderUnauthenticated?.()}</>;
   }
@@ -748,12 +768,6 @@ export function OrganizationSwitcher({
     : [];
   const hasOrganizationListItems =
     organizations.isPending || Boolean(organizations.error) || !locked;
-
-  const refresh = async () => {
-    await organizations.refetch();
-    await activeOrganization.refetch();
-    await session.refetch();
-  };
 
   const refreshAfterInvitationAction = async (previousActiveId?: string) => {
     refreshUserInvitations();
