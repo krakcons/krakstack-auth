@@ -74,12 +74,6 @@ import { assetPath, assetUrl } from "./utils";
 import { AdminOrganizationsTable } from "./admin-organizations";
 import { AdminUsersTable } from "./admin-users";
 
-const defaultAdminTableSearch = {
-  page: 0,
-  pageSize: 10,
-  globalFilter: "",
-};
-
 const messages = {
   en: {
     api_key_rate_limit_notice:
@@ -495,12 +489,6 @@ export const UserButton = ({
   const currentSiteHref = useRouterState({
     select: (state) => `${import.meta.env.VITE_SITE_URL}${state.location.href}`,
   });
-  const adminTableSearch = useRouterState({
-    select: (state) => ({
-      ...defaultAdminTableSearch,
-      ...state.location.search,
-    }),
-  });
   const { data: session, isPending, refetch } = authClient.useSession();
   const [uncontrolledDialog, setUncontrolledDialog] =
     useState<UserButtonDialog | null>(defaultDialog);
@@ -832,7 +820,7 @@ export const UserButton = ({
               </DialogHeader>
               <Separator />
               <div className="min-h-0 flex-1">
-                <AdminUsersTable search={adminTableSearch} />
+                <AdminUsersTable />
               </div>
             </DialogContent>
           </Dialog>
@@ -859,7 +847,7 @@ export const UserButton = ({
               </DialogHeader>
               <Separator />
               <div className="min-h-0 flex-1">
-                <AdminOrganizationsTable search={adminTableSearch} />
+                <AdminOrganizationsTable />
               </div>
             </DialogContent>
           </Dialog>
@@ -1953,6 +1941,7 @@ function ApiKeyManager({
         emptyLabel={loading ? m.user_loading() : m.table_empty()}
         exportFileName={m.user_api_keys_export_file_name()}
         features={{ gallery: false }}
+        searchState="local"
         rowActions={apiKeyRowActions({ m, onDelete: deleteKey })}
       />
     </div>

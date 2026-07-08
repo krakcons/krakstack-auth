@@ -1147,6 +1147,7 @@ function UserInvitationsManager({
         }
         exportFileName="organization-invitations.csv"
         features={{ gallery: false }}
+        searchState="local"
         rowActions={userInvitationRowActions({
           m,
           actingInvitationId,
@@ -1906,6 +1907,7 @@ function OrganizationMembersManager({
             }
             exportFileName={`${organization.slug}-members.csv`}
             features={{ gallery: false }}
+            searchState="local"
             rowActions={memberRowActions({
               m,
               currentUserId,
@@ -1934,6 +1936,7 @@ function OrganizationMembersManager({
             }
             exportFileName={`${organization.slug}-invitations.csv`}
             features={{ gallery: false }}
+            searchState="local"
             rowActions={invitationRowActions({
               m,
               cancellingInvitationId,
@@ -2226,6 +2229,7 @@ function OrganizationApiKeyManager({
         emptyLabel={loading ? m.user_loading() : m.table_empty()}
         exportFileName={`${organization.slug}-api-keys.csv`}
         features={{ gallery: false }}
+        searchState="local"
         rowActions={apiKeyRowActions({ m, onDelete: deleteKey })}
       />
     </div>

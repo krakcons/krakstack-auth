@@ -185,7 +185,7 @@ export function AdminUsersTable({
 }: {
   from?: ValidateFromPath;
   reloadKey?: number;
-  search: TableParams;
+  search?: TableParams;
 }) {
   const navigate = useNavigate();
   const auth = useKrakstackAuth();
@@ -198,11 +198,15 @@ export function AdminUsersTable({
   );
   const [impersonateError, setImpersonateError] = useState("");
   const [refreshKey, setRefreshKey] = useState(0);
+  const [localSearch, setLocalSearch] = useState<TableParams>({
+    globalFilter: "",
+  });
+  const tableSearch = search ?? localSearch;
   const result = useAtomValue(
     usersAtom({
       baseUrl,
       projectId,
-      search,
+      search: tableSearch,
       reloadKey: reloadKey + refreshKey,
     }),
   );
@@ -240,6 +244,13 @@ export function AdminUsersTable({
         exportFileName="users.csv"
         features={{ gallery: false }}
         {...(from ? { from } : {})}
+        {...(!search
+          ? {
+              search: tableSearch,
+              onSearchChange: setLocalSearch,
+              searchState: "local" as const,
+            }
+          : {})}
         isLoading={isLoading}
         onRefresh={() => setRefreshKey((current) => current + 1)}
         serverPagination={{ rowCount: total }}

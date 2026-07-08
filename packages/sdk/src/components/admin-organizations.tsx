@@ -97,7 +97,7 @@ export function AdminOrganizationsTable({
 }: {
   from?: ValidateFromPath;
   reloadKey?: number;
-  search: TableParams;
+  search?: TableParams;
 }) {
   const auth = useKrakstackAuth();
   const locale = auth?.locale ?? "en";
@@ -105,12 +105,16 @@ export function AdminOrganizationsTable({
   const baseUrl = auth?.baseUrl;
   const projectId = auth?.projectId;
   const [refreshKey, setRefreshKey] = useState(0);
+  const [localSearch, setLocalSearch] = useState<TableParams>({
+    globalFilter: "",
+  });
+  const tableSearch = search ?? localSearch;
   const result = useAtomValue(
     organizationsAtom({
       baseUrl,
       projectId,
       reloadKey: reloadKey + refreshKey,
-      search,
+      search: tableSearch,
     }),
   );
 
@@ -144,6 +148,13 @@ export function AdminOrganizationsTable({
         exportFileName="organizations.csv"
         features={{ gallery: false }}
         {...(from ? { from } : {})}
+        {...(!search
+          ? {
+              search: tableSearch,
+              onSearchChange: setLocalSearch,
+              searchState: "local" as const,
+            }
+          : {})}
         isLoading={isLoading}
         onRefresh={() => setRefreshKey((current) => current + 1)}
         serverPagination={{ rowCount: total }}
