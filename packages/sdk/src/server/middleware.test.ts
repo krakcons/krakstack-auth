@@ -94,6 +94,14 @@ const request = HttpServerRequest.fromWeb(new Request("http://localhost/test"));
 const postRequest = HttpServerRequest.fromWeb(
   new Request("http://localhost/test", { method: "POST" }),
 );
+const dynamicRequest = HttpServerRequest.fromWeb(
+  new Request("http://localhost/api/learner/collections/collection-1/courses"),
+);
+const dynamicPostRequest = HttpServerRequest.fromWeb(
+  new Request("http://localhost/api/learner/collections/collection-1/courses", {
+    method: "POST",
+  }),
+);
 
 const routeContext = {
   params: {},
@@ -450,6 +458,33 @@ describe("AuthenticationLive", () => {
     ),
   );
 
+  it.effect("allows organization impersonation on explicit dynamic paths", () =>
+    provideRequestContextWith(
+      dynamicRequest,
+      Effect.gen(function* () {
+        const middleware = yield* AuthMiddleware;
+        const response = yield* middleware.apiKey(
+          Effect.succeed(HttpServerResponse.text("ok")),
+          {
+            ...middlewareOptions,
+            credential: Redacted.make(""),
+          },
+        );
+
+        expect(response.status).toBe(200);
+      }),
+    ).pipe(
+      Effect.provide(
+        AuthMiddleware.layer({
+          allowedOrganizationImpersonationRoutes: [
+            { method: "GET", path: "/api/learner/collections/:id/courses" },
+          ],
+          authLayer: organizationImpersonationAuthClientLayer,
+        }),
+      ),
+    ),
+  );
+
   it.effect("blocks organization impersonation when only the path matches", () =>
     provideRequestContextWith(
       postRequest,
@@ -474,5 +509,33 @@ describe("AuthenticationLive", () => {
         }),
       ),
     ),
+  );
+
+  it.effect(
+    "blocks organization impersonation on dynamic paths when only the path matches",
+    () =>
+      provideRequestContextWith(
+        dynamicPostRequest,
+        Effect.gen(function* () {
+          const middleware = yield* AuthMiddleware;
+          const error = yield* middleware
+            .apiKey(Effect.succeed(HttpServerResponse.text("ok")), {
+              ...middlewareOptions,
+              credential: Redacted.make(""),
+            })
+            .pipe(Effect.flip);
+
+          expect(error).toBeInstanceOf(HttpApiError.Forbidden);
+        }),
+      ).pipe(
+        Effect.provide(
+          AuthMiddleware.layer({
+            allowedOrganizationImpersonationRoutes: [
+              { method: "GET", path: "/api/learner/collections/:id/courses" },
+            ],
+            authLayer: organizationImpersonationAuthClientLayer,
+          }),
+        ),
+      ),
   );
 });

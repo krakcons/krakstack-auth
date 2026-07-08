@@ -54,11 +54,8 @@ export const makeAuthenticationLive = (
   const legacyLayer = isAuthServiceLayer(options) ? options : undefined;
   const authOptions = isAuthServiceLayer(options) ? {} : options;
   const authLayer = legacyLayer ?? authOptions.authLayer;
-  const allowedOrganizationImpersonationRoutes = new Set(
-    (authOptions.allowedOrganizationImpersonationRoutes ?? []).map(
-      ({ method, path }) => routeKey(method, path),
-    ),
-  );
+  const allowedOrganizationImpersonationRoutes =
+    authOptions.allowedOrganizationImpersonationRoutes ?? [];
   return Layer.effect(
     AuthMiddleware,
     Effect.gen(function* () {
@@ -86,11 +83,7 @@ export const makeAuthenticationLive = (
               ),
               Effect.mapError(() => new HttpApiError.Unauthorized({})),
             );
-            if (
-              !allowedOrganizationImpersonationRoutes.has(
-                routeKey(request.method, pathnameFromUrl(request.url)),
-              )
-            ) {
+            if (!isAllowedRoute(allowedOrganizationImpersonationRoutes, request)) {
               const session = yield* auth.getSession().pipe(
                 Effect.catchTag("Unauthorized", () => Effect.succeed(null)),
               );
@@ -117,5 +110,24 @@ export const makeAuthenticationLive = (
 
 const pathnameFromUrl = (url: string) => new URL(url, "http://localhost").pathname;
 
-const routeKey = (method: string, path: string) =>
-  `${method.toUpperCase()} ${path}`;
+const isAllowedRoute = (
+  routes: readonly { readonly method: string; readonly path: string }[],
+  request: HttpServerRequest.HttpServerRequest,
+) =>
+  routes.some(
+    ({ method, path }) =>
+      method.toUpperCase() === request.method.toUpperCase() &&
+      routePathMatches(path, pathnameFromUrl(request.url)),
+  );
+
+const routePathMatches = (allowedPath: string, requestPath: string) => {
+  if (allowedPath === requestPath) return true;
+
+  const allowedSegments = allowedPath.split("/").filter(Boolean);
+  const requestSegments = requestPath.split("/").filter(Boolean);
+  if (allowedSegments.length !== requestSegments.length) return false;
+
+  return allowedSegments.every(
+    (segment, index) => segment.startsWith(":") || segment === requestSegments[index],
+  );
+};
