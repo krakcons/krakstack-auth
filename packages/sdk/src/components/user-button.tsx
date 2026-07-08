@@ -66,7 +66,7 @@ import { Separator } from "@/components/ui/separator";
 
 import type { AuthUiClient } from "./auth-client";
 import { authClientApi } from "./auth-client-api";
-import { useKrakstackAuthProjectConfig } from "./auth-provider";
+import { useAuthClient, useKrakstackAuth } from "./auth-provider";
 import { createApiKey } from "./api-key";
 import { useOpenedOnce } from "./hooks";
 import { ExtraUploadedAsset } from "../extra/schema";
@@ -448,7 +448,7 @@ const userApiKeysAtom = Atom.family((authClient: AuthUiClient) =>
 const emptyApiKeysAtom = Atom.make(Effect.succeed([] as ApiKeySummary[]));
 
 type UserDropdownProps = {
-  authClient: AuthUiClient;
+  authClient?: AuthUiClient;
   baseUrl?: string | undefined;
   signOutRedirect?: string;
   side?: ComponentProps<typeof DropdownMenuContent>["side"];
@@ -469,7 +469,7 @@ export type UserButtonDialog =
   | "adminOrganizations";
 
 export const UserButton = ({
-  authClient,
+  authClient: providedAuthClient,
   baseUrl,
   signOutRedirect = "/",
   side = "bottom",
@@ -481,9 +481,13 @@ export const UserButton = ({
   dialog: controlledDialog,
   onDialogChange,
 }: UserDropdownProps) => {
+  const auth = useKrakstackAuth();
+  const contextAuthClient = useAuthClient();
+  const authClient = providedAuthClient ?? contextAuthClient;
+
   const labels = userButtonMessages(messages);
   const m = userButtonMessageFns(labels);
-  const projectConfig = useKrakstackAuthProjectConfig();
+  const projectConfig = auth?.projectConfig ?? null;
   const navigate = useNavigate();
   const currentSiteHref = useRouterState({
     select: (state) => `${import.meta.env.VITE_SITE_URL}${state.location.href}`,

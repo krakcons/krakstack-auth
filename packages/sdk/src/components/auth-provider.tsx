@@ -1,15 +1,5 @@
-import { apiKeyClient } from "@better-auth/api-key/client";
 import { useAtomSuspense } from "@effect/atom-react";
 import { useRouterState } from "@tanstack/react-router";
-import {
-  adminClient,
-  emailOTPClient,
-  genericOAuthClient,
-  lastLoginMethodClient,
-  organizationClient,
-  twoFactorClient,
-} from "better-auth/client/plugins";
-import { createAuthClient } from "better-auth/react";
 import {
   createContext,
   type ReactNode,
@@ -18,7 +8,7 @@ import {
   useMemo,
 } from "react";
 
-import type { AuthUiClient } from "./auth-client";
+import { createAuthUiClient, type AuthUiClient } from "./auth-client";
 import { authClientApi } from "./auth-client-api";
 import type { ExtraProjectPublicConfig } from "../extra/schema";
 
@@ -57,20 +47,6 @@ const setProjectContextCookie = (projectId: string | null | undefined) => {
 
   document.cookie = `${PROJECT_CONTEXT_COOKIE}=${encodeURIComponent(projectId)}; Path=/; Max-Age=600; SameSite=Lax${secure}`;
 };
-
-const createAuthUiClient = (baseUrl?: string | undefined): AuthUiClient =>
-  createAuthClient({
-    ...(baseUrl ? { baseURL: baseUrl } : {}),
-    plugins: [
-      adminClient(),
-      emailOTPClient(),
-      lastLoginMethodClient(),
-      organizationClient(),
-      twoFactorClient(),
-      apiKeyClient(),
-      genericOAuthClient(),
-    ],
-  });
 
 const getSearchParam = (searchString: string, key: string) => {
   if (!searchString) return null;
@@ -177,6 +153,16 @@ export function KrakstackAuthProvider({
 }
 
 export const useKrakstackAuth = () => useContext(KrakstackAuthContext);
+
+export const useAuthClient = (): AuthUiClient => {
+  const auth = useKrakstackAuth();
+
+  if (!auth?.authClient) {
+    throw new Error("KrakstackAuthProvider is required to use authClient.");
+  }
+
+  return auth.authClient;
+};
 
 export const useKrakstackAuthProjectConfig = () =>
   useKrakstackAuth()?.projectConfig ?? null;

@@ -15,12 +15,15 @@ export {
   AdminOrganizationsTable,
   AdminUsersTable,
   UserButton,
+  assetUrl,
+  createAuthUiClient,
   type AuthUiClient,
   type KrakstackAuthContextValue,
   type KrakstackAuthLocale,
   type KrakstackAuthProviderProps,
   type OrganizationSwitcherDialog,
   type UserButtonDialog,
+  useAuthClient,
   useAdminUsersTotal,
 } from "./components";
 export * as BetterAuth from "./better-auth/api.group";

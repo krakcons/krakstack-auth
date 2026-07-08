@@ -67,6 +67,7 @@ import {
 
 import type { AuthUiClient } from "./auth-client";
 import { authClientApi } from "./auth-client-api";
+import { useAuthClient } from "./auth-provider";
 import { createApiKey } from "./api-key";
 import { useOpenedOnce } from "./hooks";
 import { ExtraUploadedAsset } from "../extra/schema";
@@ -315,7 +316,7 @@ const OrganizationMessagesContext = createContext(
 const useOrganizationMessages = () => useContext(OrganizationMessagesContext);
 
 type OrganizationSwitcherProps = {
-  authClient: AuthUiClient;
+  authClient?: AuthUiClient;
   baseUrl?: string | undefined;
   side?: ComponentProps<typeof DropdownMenuContent>["side"];
   className?: string;
@@ -664,7 +665,7 @@ const organizationMetadataFromForm = async (
 };
 
 export function OrganizationSwitcher({
-  authClient,
+  authClient: providedAuthClient,
   baseUrl,
   side = "bottom",
   className,
@@ -678,6 +679,9 @@ export function OrganizationSwitcher({
   onCreate,
   onDialogChange,
 }: OrganizationSwitcherProps) {
+  const contextAuthClient = useAuthClient();
+  const authClient = providedAuthClient ?? contextAuthClient;
+
   const labels = organizationSwitcherMessages(messages);
   const m = organizationMessageFns(labels);
   const session = authClient.useSession();
