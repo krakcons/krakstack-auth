@@ -1,8 +1,4 @@
-import {
-  Outlet,
-  createFileRoute,
-  redirect,
-} from "@tanstack/react-router";
+import { Outlet, createFileRoute, redirect } from "@tanstack/react-router";
 import {
   KeyRound,
   KeySquare,
@@ -20,10 +16,7 @@ import { LocaleSwitcher } from "@/components/ui/locale-switcher";
 import { Loading } from "@/components/ui/loading";
 import { useSidebar } from "@/components/ui/sidebar";
 import { SidebarLayout, type NavGroup } from "@/components/ui/sidebar-layout";
-import {
-  authBaseUrl,
-  authClient,
-} from "@/services/auth/client";
+import { authBaseUrl, authClient } from "@/services/auth/client";
 import {
   AdminRequired,
   KrakstackAuthProvider,
@@ -106,13 +99,16 @@ function AdminContent() {
     throw new Error("VITE_KRAKSTACK_AUTH_ORGANIZATION_ID is required.");
   }
 
-  if (session.isPending) {
+  if (session.isPending && !session.data) {
     return <AdminAccessLoading />;
   }
 
   return (
     <Suspense fallback={<AdminAccessLoading />}>
-      <AdminRequired authClient={authClient} organizationId={krakOrganizationId}>
+      <AdminRequired
+        authClient={authClient}
+        organizationId={krakOrganizationId}
+      >
         <SidebarLayout
           sidebarHeader={<AdminOrganizationSwitcher />}
           headerActions={
@@ -132,11 +128,7 @@ function AdminContent() {
 }
 
 function AdminAccessLoading() {
-  return (
-    <main className="grid min-h-screen place-items-center px-6 py-10">
-      <Loading label={m.admin_checking_access()} />
-    </main>
-  );
+  return <Loading label={m.admin_checking_access()} variant="centered" />;
 }
 
 function AdminOrganizationSwitcher() {

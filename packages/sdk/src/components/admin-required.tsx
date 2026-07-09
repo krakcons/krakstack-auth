@@ -1,11 +1,12 @@
 // @ts-nocheck
 import { useAtomSuspense } from "@effect/atom-react";
-import { Effect, Schema } from "effect";
+import { Effect } from "effect";
 import { Atom } from "effect/unstable/reactivity";
 import { Check, Loader2, Mail, ShieldAlert } from "lucide-react";
-import { type ReactNode, useState } from "react";
+import { type ReactNode, useEffect, useState } from "react";
 
 import { Button } from "@/components/ui/button";
+import { CopyButton } from "@/components/ui/copy-button";
 import {
   Card,
   CardContent,
@@ -14,7 +15,6 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { OrganizationMetadata } from "@krak-stack/auth/schema";
 
 import type { AuthUiClient } from "./auth-client";
 import { type KrakstackAuthLocale, useKrakstackAuth } from "./auth-provider";
@@ -36,6 +36,8 @@ const defaultMessages = {
     admin_required_contact: "Contact organization",
     admin_required_contact_description:
       "If you expected access, contact the organization administrator.",
+    admin_required_copy_email: "Copy email",
+    admin_required_copied_email: "Copied email",
   },
   fr: {
     admin_required_title: "Accès administrateur requis",
@@ -53,6 +55,8 @@ const defaultMessages = {
     admin_required_contact: "Contacter l'organisation",
     admin_required_contact_description:
       "Si vous pensiez avoir accès, contactez l'administrateur de l'organisation.",
+    admin_required_copy_email: "Copier l'e-mail",
+    admin_required_copied_email: "E-mail copié",
   },
 } as const;
 
@@ -66,7 +70,6 @@ export type AdminRequiredProps = {
   contactEmail?: string | undefined;
   children?: ReactNode;
   messages?: AdminRequiredMessages | undefined;
-  onAccessResolved?: (() => void | Promise<void>) | undefined;
 };
 
 type Invitation = Awaited<
@@ -98,66 +101,24 @@ const labels = (
   ...overrides,
 });
 
-const parseOrganizationMetadata = (metadata: unknown) => {
-  try {
-    const value =
-      typeof metadata === "string" ? JSON.parse(metadata) : metadata;
-
-    return Schema.decodeUnknownSync(OrganizationMetadata)(value);
-  } catch {
-    return { translations: [] };
-  }
-};
-
-const invitationMatches = (invitation: Invitation, organizationId: string) => {
-  if (invitation.status !== "pending") return false;
-  if (organizationId && invitation.organizationId === organizationId) return true;
-  return false;
-};
+const invitationMatches = (invitation: Invitation, organizationId: string) =>
+  invitation.status === "pending" && invitation.organizationId === organizationId;
 
 const organizationContactEmail = (
-  invitation: Invitation | null,
   organization: FullOrganization | null,
-  locale: KrakstackAuthLocale | undefined,
   fallback: string | undefined,
-) => {
-  if (organization?.contactEmail) return organization.contactEmail;
-
-  const translations = parseOrganizationMetadata(
-    invitation?.organization?.metadata,
-  ).translations;
-  const translation =
-    translations.find((item) => item.locale === locale) ??
-    translations.find((item) => item.locale === "en") ??
-    translations[0];
-
-  return translation?.contactEmail ?? fallback ?? null;
-};
+) => organization?.contactEmail ?? fallback ?? null;
 
 const organizationDisplayName = (
   invitation: Invitation | null,
   organization: FullOrganization | null,
-  locale: KrakstackAuthLocale | undefined,
   fallback: string,
-) => {
-  if (organization?.displayName) return organization.displayName;
-
-  const translations = parseOrganizationMetadata(
-    invitation?.organization?.metadata,
-  ).translations;
-  const translation =
-    translations.find((item) => item.locale === locale) ??
-    translations.find((item) => item.locale === "en") ??
-    translations[0];
-
-  return (
-    translation?.name ??
-    organization?.name ??
-    invitation?.organization?.name ??
-    invitation?.organizationName ??
-    fallback
-  );
-};
+) =>
+  organization?.displayName ??
+  organization?.name ??
+  invitation?.organization?.name ??
+  invitation?.organizationName ??
+  fallback;
 
 const organizationProfileUrl = (
   baseUrl: string | undefined,
@@ -200,39 +161,37 @@ const accessAtom = Atom.family((authClient: AuthUiClient) =>
       userId?: string | undefined;
     };
 
-    return (
-      Atom.keepAlive(
-        Atom.make(
-          Effect.tryPromise({
-            try: async (): Promise<AccessResult> => {
-              if (isAdmin) {
-                const activeResult = await authClient.organization.setActive({
-                  organizationId,
-                });
+    return Atom.keepAlive(
+      Atom.make(
+        Effect.tryPromise({
+          try: async (): Promise<AccessResult> => {
+            if (isAdmin) {
+              const activeResult = await authClient.organization.setActive({
+                organizationId,
+              });
 
-                if (!activeResult.error) return { allowed: true };
-              }
+              if (!activeResult.error) return { allowed: true };
+            }
 
-              const [organization, invitationsResult] = await Promise.all([
-                getOrganizationPublicProfile(baseUrl, organizationId).catch(
-                  () => null,
-                ),
-                authClient.organization.listUserInvitations({}),
-              ]);
+            const [organization, invitationsResult] = await Promise.all([
+              getOrganizationPublicProfile(baseUrl, organizationId).catch(
+                () => null,
+              ),
+              authClient.organization.listUserInvitations({}),
+            ]);
 
-              return {
-                allowed: false,
-                organization,
-                invitation:
-                  invitationsResult.data?.find((item) =>
-                    invitationMatches(item, organizationId),
-                  ) ?? null,
-              };
-            },
-            catch: (error) => error,
-          }),
-        ),
-      )
+            return {
+              allowed: false,
+              organization,
+              invitation:
+                invitationsResult.data?.find((item) =>
+                  invitationMatches(item, organizationId),
+                ) ?? null,
+            };
+          },
+          catch: (error) => error,
+        }),
+      ),
     );
   }),
 );
@@ -255,7 +214,6 @@ export function AdminRequired({
   contactEmail,
   children,
   messages,
-  onAccessResolved,
 }: AdminRequiredProps) {
   const auth = useKrakstackAuth();
   const authClient = providedAuthClient ?? auth?.authClient;
@@ -274,34 +232,81 @@ export function AdminRequired({
   const isAdmin =
     typeof role === "string" &&
     role.split(",").some((item) => item.trim() === "admin");
-  const [accessAllowed, setAccessAllowed] = useState(false);
-  const accessResult = useAtomSuspense(
-    accessAtom(authClient)(
-      accessAtomKey({ baseUrl, isAdmin, organizationId, userId }),
-    ),
-    { suspendOnWaiting: true },
+  const currentAccessKey = accessAtomKey({
+    baseUrl,
+    isAdmin,
+    organizationId,
+    userId,
+  });
+  const [allowedAccessKey, setAllowedAccessKey] = useState<string | null>(null);
+
+  if (allowedAccessKey === currentAccessKey) return <>{children}</>;
+
+  return (
+    <AdminRequiredGate
+      accessKey={currentAccessKey}
+      authClient={authClient}
+      contactEmail={contactEmail}
+      isAdmin={isAdmin}
+      locale={locale}
+      messages={messages}
+      onAccessAllowed={() => setAllowedAccessKey(currentAccessKey)}
+      organizationId={organizationId}
+      refreshAuth={refreshAuth}
+    >
+      {children}
+    </AdminRequiredGate>
   );
+}
+
+function AdminRequiredGate({
+  accessKey,
+  authClient,
+  contactEmail,
+  children,
+  isAdmin,
+  locale,
+  messages,
+  onAccessAllowed,
+  organizationId,
+  refreshAuth,
+}: {
+  accessKey: string;
+  authClient: AuthUiClient;
+  contactEmail?: string | undefined;
+  children?: ReactNode;
+  isAdmin: boolean;
+  locale?: KrakstackAuthLocale | undefined;
+  messages?: AdminRequiredMessages | undefined;
+  onAccessAllowed: () => void;
+  organizationId: string;
+  refreshAuth?: (() => void) | undefined;
+}) {
+  const m = labels(locale, messages);
+  const accessResult = useAtomSuspense(accessAtom(authClient)(accessKey), {
+    suspendOnWaiting: true,
+  });
   const [accepting, setAccepting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const access = accessResult.value;
 
-  if (accessAllowed || access.allowed) return <>{children}</>;
+  useEffect(() => {
+    if (!access.allowed) return;
+
+    onAccessAllowed();
+  }, [access.allowed, onAccessAllowed]);
+
+  if (access.allowed) return <>{children}</>;
 
   const { invitation, organization } = access;
 
   const displayName = organizationDisplayName(
     invitation,
     organization,
-    locale,
     organizationId,
   );
-  const resolvedContactEmail = organizationContactEmail(
-    invitation,
-    organization,
-    locale,
-    contactEmail,
-  );
+  const resolvedContactEmail = organizationContactEmail(organization, contactEmail);
 
   const acceptInvitation = async () => {
     if (!invitation) return;
@@ -322,64 +327,72 @@ export function AdminRequired({
       organizationId: invitation.organizationId,
     });
     refreshAuth?.();
-    await onAccessResolved?.();
-    setAccessAllowed(true);
+    onAccessAllowed();
     setAccepting(false);
   };
 
   return (
     <main className="relative grid min-h-screen place-items-center px-6 py-10">
       <Card className="w-full max-w-md">
-      <CardHeader>
-        <div className="bg-destructive/10 text-destructive mb-2 flex size-10 items-center justify-center rounded-md">
-          <ShieldAlert />
-        </div>
-        <CardTitle>{m.admin_required_title}</CardTitle>
-        <CardDescription>
-          {isAdmin
-            ? interpolate(m.admin_required_org_description, {
+        <CardHeader>
+          <div className="bg-destructive/10 text-destructive mb-2 flex size-10 items-center justify-center rounded-md">
+            <ShieldAlert />
+          </div>
+          <CardTitle>{m.admin_required_title}</CardTitle>
+          <CardDescription>
+            {isAdmin
+              ? interpolate(m.admin_required_org_description, {
+                  organization: displayName,
+                })
+              : m.admin_required_no_permission}
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          {invitation ? (
+            <p className="text-muted-foreground text-sm">
+              {interpolate(m.admin_required_invite_found, {
                 organization: displayName,
-              })
-            : m.admin_required_no_permission}
-        </CardDescription>
-      </CardHeader>
-      <CardContent className="space-y-3">
-        {invitation ? (
-          <p className="text-muted-foreground text-sm">
-            {interpolate(m.admin_required_invite_found, {
-              organization: displayName,
-            })}
-          </p>
-        ) : (
-          <p className="text-muted-foreground text-sm">
-            {m.admin_required_contact_description}
-          </p>
-        )}
-        {error ? <p className="text-destructive text-sm">{error}</p> : null}
-      </CardContent>
-      <CardFooter className="flex flex-wrap gap-2">
-        {invitation ? (
-          <Button onClick={acceptInvitation} disabled={accepting}>
-            {accepting ? (
-              <Loader2 className="size-4 animate-spin" />
-            ) : (
-              <Check className="size-4" />
-            )}
-            {accepting
-              ? m.admin_required_accepting_invite
-              : m.admin_required_accept_invite}
-          </Button>
-        ) : null}
-        {resolvedContactEmail ? (
-          <Button
-            variant="outline"
-            render={<a href={`mailto:${resolvedContactEmail}`} />}
-          >
-            <Mail className="size-4" />
-            {m.admin_required_contact}
-          </Button>
-        ) : null}
-      </CardFooter>
+              })}
+            </p>
+          ) : (
+            <p className="text-muted-foreground text-sm">
+              {m.admin_required_contact_description}
+            </p>
+          )}
+          {resolvedContactEmail ? (
+            <div className="bg-muted/50 flex items-center justify-between gap-3 rounded-md border px-3 py-2 text-sm">
+              <span className="flex min-w-0 items-center gap-2 font-medium">
+                <Mail className="text-muted-foreground size-4 shrink-0" />
+                <span className="truncate">{resolvedContactEmail}</span>
+              </span>
+              <CopyButton
+                value={resolvedContactEmail}
+                valueDescription={resolvedContactEmail}
+                variant="ghost"
+                className="shrink-0"
+                messages={{
+                  copy: m.admin_required_copy_email,
+                  copied: m.admin_required_copied_email,
+                }}
+              />
+            </div>
+          ) : null}
+          {error ? <p className="text-destructive text-sm">{error}</p> : null}
+        </CardContent>
+        <CardFooter className="flex flex-wrap gap-2">
+          {invitation ? (
+            <Button onClick={acceptInvitation} disabled={accepting}>
+              {accepting ? (
+                <Loader2 className="size-4 animate-spin" />
+              ) : (
+                <Check className="size-4" />
+              )}
+              {accepting
+                ? m.admin_required_accepting_invite
+                : m.admin_required_accept_invite}
+            </Button>
+          ) : null}
+        </CardFooter>
       </Card>
     </main>
   );
