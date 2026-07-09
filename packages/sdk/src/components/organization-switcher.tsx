@@ -11,6 +11,7 @@ import {
   ChevronsUpDown,
   Copy,
   KeyRound,
+  LogOut,
   Mail,
   PencilIcon,
   Plus,
@@ -127,6 +128,8 @@ const messages = {
     organization_logo_upload_error: "Could not upload the organization logo.",
     organization_member_email: "Email",
     organization_member_joined: "Joined",
+    organization_member_leave: "Leave organization",
+    organization_member_leave_error: "Could not leave the organization.",
     organization_member_remove: "Remove member",
     organization_member_remove_error: "Could not remove the member.",
     organization_member_role: "Role",
@@ -220,6 +223,8 @@ const messages = {
       "Impossible de téléverser le logo de l'organisation.",
     organization_member_email: "Courriel",
     organization_member_joined: "Arrivée",
+    organization_member_leave: "Quitter l'organisation",
+    organization_member_leave_error: "Impossible de quitter l'organisation.",
     organization_member_remove: "Retirer le membre",
     organization_member_remove_error: "Impossible de retirer le membre.",
     organization_member_role: "Rôle",
@@ -728,6 +733,7 @@ export function OrganizationSwitcher({
   );
   const canManageApiKeys =
     activeMemberRole === "owner" || activeMemberRole === "admin";
+  const canUpdateOrganization = canManageApiKeys;
 
   const setDialog = (
     next:
@@ -939,10 +945,12 @@ export function OrganizationSwitcher({
                     <Copy />
                     {m.organization_copy_id()}
                   </DropdownMenuItem>
-                  <DropdownMenuItem onClick={() => setDialog("manage")}>
-                    <PencilIcon />
-                    {m.organization_switcher_manage()}
-                  </DropdownMenuItem>
+                  {canUpdateOrganization ? (
+                    <DropdownMenuItem onClick={() => setDialog("manage")}>
+                      <PencilIcon />
+                      {m.organization_switcher_manage()}
+                    </DropdownMenuItem>
+                  ) : null}
                   <DropdownMenuItem onClick={() => setDialog("members")}>
                     <Users />
                     {m.organization_members_title()}
@@ -995,7 +1003,7 @@ export function OrganizationSwitcher({
         </DialogContent>
       </Dialog>
       <Dialog
-        open={dialog === "manage"}
+        open={dialog === "manage" && canUpdateOrganization}
         onOpenChange={(open) => {
           setDialog((current) =>
             open ? "manage" : current === "manage" ? null : current,
@@ -1012,7 +1020,7 @@ export function OrganizationSwitcher({
             </DialogDescription>
           </DialogHeader>
           <Separator />
-          {activeOrganization.data ? (
+          {activeOrganization.data && canUpdateOrganization ? (
             <EditOrganizationSection
               authClient={authClient}
               baseUrl={baseUrl}
@@ -1047,6 +1055,12 @@ export function OrganizationSwitcher({
               organization={activeOrganization.data}
               currentUserId={session.data.user.id}
               active={dialog === "members"}
+              onLeft={async () => {
+                setDialog(null);
+                auth?.refreshAuth();
+                await refresh();
+                onChange?.(null);
+              }}
             />
           ) : null}
         </DialogContent>
@@ -1753,12 +1767,14 @@ function OrganizationMembersManager({
   organization,
   currentUserId,
   active,
+  onLeft,
 }: {
   authClient: AuthUiClient;
   baseUrl?: string | undefined;
   organization: OrganizationSummary;
   currentUserId: string;
   active: boolean;
+  onLeft: () => Promise<void>;
 }) {
   const m = useOrganizationMessages();
   const hasOpened = useOpenedOnce(active);
@@ -1771,6 +1787,7 @@ function OrganizationMembersManager({
   const [cancellingInvitationId, setCancellingInvitationId] = useState<
     string | null
   >(null);
+  const [leavingOrganization, setLeavingOrganization] = useState(false);
   const membersData = AsyncResult.match(membersResult, {
     onInitial: () => ({ members: [], invitations: [] }),
     onFailure: () => ({ members: [], invitations: [] }),
@@ -1798,6 +1815,7 @@ function OrganizationMembersManager({
     "owner",
     "admin",
   ]);
+  const canInviteMembers = canChangeMemberRoles;
   const canRemoveMembers = canChangeMemberRoles;
 
   const inviteForm = useAppForm({
@@ -1870,6 +1888,24 @@ function OrganizationMembersManager({
     refreshMembers();
   };
 
+  const leaveOrganization = async () => {
+    setLeavingOrganization(true);
+    setError(null);
+
+    const result = await authClient.organization.leave({
+      organizationId: organization.id,
+    });
+
+    setLeavingOrganization(false);
+
+    if (result.error) {
+      setError(result.error.message ?? m.organization_member_leave_error());
+      return;
+    }
+
+    await onLeft();
+  };
+
   const cancelInvitation = async (
     invitation: OrganizationInvitationSummary,
   ) => {
@@ -1894,51 +1930,53 @@ function OrganizationMembersManager({
 
   return (
     <div className="flex min-w-0 flex-col gap-5">
-      <inviteForm.AppForm>
-        <form
-          className="grid gap-4 rounded-lg border p-4 sm:grid-cols-[minmax(0,1fr)_12rem_auto] sm:items-end"
-          onSubmit={(event) => {
-            event.preventDefault();
-            event.stopPropagation();
-            inviteForm.handleSubmit();
-          }}
-        >
-          <div className="sm:col-span-3">
-            <div className="flex items-center gap-2 font-medium">
-              <UserPlus className="size-4" />
-              {m.organization_invite_member_title()}
+      {canInviteMembers ? (
+        <inviteForm.AppForm>
+          <form
+            className="grid gap-4 rounded-lg border p-4 sm:grid-cols-[minmax(0,1fr)_12rem_auto] sm:items-end"
+            onSubmit={(event) => {
+              event.preventDefault();
+              event.stopPropagation();
+              inviteForm.handleSubmit();
+            }}
+          >
+            <div className="sm:col-span-3">
+              <div className="flex items-center gap-2 font-medium">
+                <UserPlus className="size-4" />
+                {m.organization_invite_member_title()}
+              </div>
+              <p className="text-muted-foreground text-sm">
+                {m.organization_invite_member_description()}
+              </p>
             </div>
-            <p className="text-muted-foreground text-sm">
-              {m.organization_invite_member_description()}
-            </p>
-          </div>
-          <inviteForm.AppField name="email">
-            {(field) => (
-              <field.TextField
-                label={m.organization_member_email()}
-                placeholder="teammate@example.com"
-                type="email"
-                required
-              />
-            )}
-          </inviteForm.AppField>
-          <inviteForm.AppField name="role">
-            {(field) => (
-              <field.SelectField
-                label={m.organization_member_role()}
-                options={organizationRoles.map((role) => ({
-                  label: organizationRoleLabel(role, m),
-                  value: role,
-                }))}
-              />
-            )}
-          </inviteForm.AppField>
-          <div className="self-end">
-            <inviteForm.SubmitButton />
-          </div>
-          <inviteForm.FormError />
-        </form>
-      </inviteForm.AppForm>
+            <inviteForm.AppField name="email">
+              {(field) => (
+                <field.TextField
+                  label={m.organization_member_email()}
+                  placeholder="teammate@example.com"
+                  type="email"
+                  required
+                />
+              )}
+            </inviteForm.AppField>
+            <inviteForm.AppField name="role">
+              {(field) => (
+                <field.SelectField
+                  label={m.organization_member_role()}
+                  options={organizationRoles.map((role) => ({
+                    label: organizationRoleLabel(role, m),
+                    value: role,
+                  }))}
+                />
+              )}
+            </inviteForm.AppField>
+            <div className="self-end">
+              <inviteForm.SubmitButton />
+            </div>
+            <inviteForm.FormError />
+          </form>
+        </inviteForm.AppForm>
+      ) : null}
       {membersError ? (
         <p className="text-destructive text-sm">{membersError}</p>
       ) : null}
@@ -1969,6 +2007,8 @@ function OrganizationMembersManager({
               m,
               canRemoveMembers,
               currentUserId,
+              leavingOrganization,
+              onLeave: leaveOrganization,
               onRemove: removeMember,
             })}
           />
@@ -2099,13 +2139,25 @@ const memberRowActions = ({
   m,
   canRemoveMembers,
   currentUserId,
+  leavingOrganization,
+  onLeave,
   onRemove,
 }: {
   m: ReturnType<typeof organizationMessageFns>;
   canRemoveMembers: boolean;
   currentUserId: string;
+  leavingOrganization: boolean;
+  onLeave: (member: OrganizationMemberSummary) => void;
   onRemove: (member: OrganizationMemberSummary) => void;
 }) => [
+  {
+    name: m.organization_member_leave(),
+    icon: <LogOut />,
+    variant: "destructive" as const,
+    visible: (member: OrganizationMemberSummary) =>
+      member.userId === currentUserId && !leavingOrganization,
+    onClick: onLeave,
+  },
   {
     name: m.organization_member_remove(),
     icon: <Trash2 />,
