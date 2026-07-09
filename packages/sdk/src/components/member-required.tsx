@@ -20,55 +20,55 @@ import { type KrakstackAuthLocale, useKrakstackAuth } from "./auth-provider";
 
 const defaultMessages = {
   en: {
-    admin_required_title: "Admin access required",
-    admin_required_description:
-      "You need administrator access to continue.",
-    admin_required_org_description:
+    member_required_title: "Organization access required",
+    member_required_description:
+      "You need organization access to continue.",
+    member_required_org_description:
       "You need access to {organization} before opening the admin area.",
-    admin_required_no_permission:
-      "Your account is signed in, but it does not have the required admin access.",
-    admin_required_invite_found:
+    member_required_no_permission:
+      "Your account is signed in, but it does not have access to this organization.",
+    member_required_invite_found:
       "You have a pending invitation to {organization}. Accept it to continue.",
-    admin_required_accept_invite: "Accept invitation",
-    admin_required_accepting_invite: "Accepting...",
-    admin_required_accept_error: "Could not accept the invitation.",
-    admin_required_contact: "Contact organization",
-    admin_required_contact_description:
+    member_required_accept_invite: "Accept invitation",
+    member_required_accepting_invite: "Accepting...",
+    member_required_accept_error: "Could not accept the invitation.",
+    member_required_contact: "Contact organization",
+    member_required_contact_description:
       "If you expected access, contact the organization administrator.",
-    admin_required_copy_email: "Copy email",
-    admin_required_copied_email: "Copied email",
+    member_required_copy_email: "Copy email",
+    member_required_copied_email: "Copied email",
   },
   fr: {
-    admin_required_title: "Accès administrateur requis",
-    admin_required_description:
-      "Vous devez disposer d'un accès administrateur pour continuer.",
-    admin_required_org_description:
+    member_required_title: "Accès à l'organisation requis",
+    member_required_description:
+      "Vous devez disposer d'un accès à l'organisation pour continuer.",
+    member_required_org_description:
       "Vous devez avoir accès à {organization} avant d'ouvrir l'administration.",
-    admin_required_no_permission:
-      "Votre compte est connecté, mais il ne dispose pas de l'accès administrateur requis.",
-    admin_required_invite_found:
+    member_required_no_permission:
+      "Votre compte est connecté, mais il ne dispose pas d'un accès à cette organisation.",
+    member_required_invite_found:
       "Vous avez une invitation en attente pour {organization}. Acceptez-la pour continuer.",
-    admin_required_accept_invite: "Accepter l'invitation",
-    admin_required_accepting_invite: "Acceptation...",
-    admin_required_accept_error: "Impossible d'accepter l'invitation.",
-    admin_required_contact: "Contacter l'organisation",
-    admin_required_contact_description:
+    member_required_accept_invite: "Accepter l'invitation",
+    member_required_accepting_invite: "Acceptation...",
+    member_required_accept_error: "Impossible d'accepter l'invitation.",
+    member_required_contact: "Contacter l'organisation",
+    member_required_contact_description:
       "Si vous pensiez avoir accès, contactez l'administrateur de l'organisation.",
-    admin_required_copy_email: "Copier l'e-mail",
-    admin_required_copied_email: "E-mail copié",
+    member_required_copy_email: "Copier l'e-mail",
+    member_required_copied_email: "E-mail copié",
   },
 } as const;
 
-type AdminRequiredLabels = (typeof defaultMessages)["en"];
+type MemberRequiredLabels = (typeof defaultMessages)["en"];
 
-export type AdminRequiredMessages = Partial<AdminRequiredLabels>;
+export type MemberRequiredMessages = Partial<MemberRequiredLabels>;
 
-export type AdminRequiredProps = {
+export type MemberRequiredProps = {
   authClient?: AuthUiClient | undefined;
   organizationId: string;
   contactEmail?: string | undefined;
   children?: ReactNode;
-  messages?: AdminRequiredMessages | undefined;
+  messages?: MemberRequiredMessages | undefined;
 };
 
 type Invitation = {
@@ -108,7 +108,7 @@ const interpolate = (value: string, params?: Record<string, string>) =>
 
 const labels = (
   locale: KrakstackAuthLocale | undefined,
-  overrides: AdminRequiredMessages | undefined,
+  overrides: MemberRequiredMessages | undefined,
 ) => ({
   ...(locale === "fr" ? defaultMessages.fr : defaultMessages.en),
   ...overrides,
@@ -168,9 +168,8 @@ type AccessResult =
 
 const accessAtom = Atom.family((authClient: AuthUiClient) =>
   Atom.family((key: string) => {
-    const { baseUrl, isAdmin, organizationId } = JSON.parse(key) as {
+    const { baseUrl, organizationId } = JSON.parse(key) as {
       baseUrl?: string | undefined;
-      isAdmin: boolean;
       organizationId: string;
       userId?: string | undefined;
     };
@@ -179,13 +178,11 @@ const accessAtom = Atom.family((authClient: AuthUiClient) =>
       Atom.make(
         Effect.tryPromise({
           try: async (): Promise<AccessResult> => {
-            if (isAdmin) {
-              const activeResult = await authClient.organization.setActive({
-                organizationId,
-              });
+            const activeResult = await authClient.organization.setActive({
+              organizationId,
+            });
 
-              if (!activeResult.error) return { allowed: true };
-            }
+            if (!activeResult.error) return { allowed: true };
 
             const [organization, invitationsResult] = await Promise.all([
               getOrganizationPublicProfile(baseUrl, organizationId).catch(
@@ -212,23 +209,21 @@ const accessAtom = Atom.family((authClient: AuthUiClient) =>
 
 const accessAtomKey = ({
   baseUrl,
-  isAdmin,
   organizationId,
   userId,
 }: {
   baseUrl?: string | undefined;
-  isAdmin: boolean;
   organizationId: string;
   userId?: string | undefined;
-}) => JSON.stringify({ baseUrl, isAdmin, organizationId, userId });
+}) => JSON.stringify({ baseUrl, organizationId, userId });
 
-export function AdminRequired({
+export function MemberRequired({
   authClient: providedAuthClient,
   organizationId,
   contactEmail,
   children,
   messages,
-}: AdminRequiredProps) {
+}: MemberRequiredProps) {
   const auth = useKrakstackAuth();
   const authClient = providedAuthClient ?? auth?.authClient;
   const baseUrl = auth?.baseUrl;
@@ -240,13 +235,8 @@ export function AdminRequired({
 
   const session = authClient.useSession();
   const userId = session.data?.user.id;
-  const role = session.data?.user.role;
-  const isAdmin =
-    typeof role === "string" &&
-    role.split(",").some((item) => item.trim() === "admin");
   const currentAccessKey = accessAtomKey({
     baseUrl,
-    isAdmin,
     organizationId,
     userId,
   });
@@ -255,11 +245,10 @@ export function AdminRequired({
   if (allowedAccessKey === currentAccessKey) return <>{children}</>;
 
   return (
-    <AdminRequiredGate
+    <MemberRequiredGate
       accessKey={currentAccessKey}
       authClient={authClient}
       contactEmail={contactEmail}
-      isAdmin={isAdmin}
       locale={locale}
       messages={messages}
       onAccessAllowed={() => setAllowedAccessKey(currentAccessKey)}
@@ -267,16 +256,15 @@ export function AdminRequired({
       refreshAuth={refreshAuth}
     >
       {children}
-    </AdminRequiredGate>
+    </MemberRequiredGate>
   );
 }
 
-function AdminRequiredGate({
+function MemberRequiredGate({
   accessKey,
   authClient,
   contactEmail,
   children,
-  isAdmin,
   locale,
   messages,
   onAccessAllowed,
@@ -287,9 +275,8 @@ function AdminRequiredGate({
   authClient: AuthUiClient;
   contactEmail?: string | undefined;
   children?: ReactNode;
-  isAdmin: boolean;
   locale?: KrakstackAuthLocale | undefined;
-  messages?: AdminRequiredMessages | undefined;
+  messages?: MemberRequiredMessages | undefined;
   onAccessAllowed: () => void;
   organizationId: string;
   refreshAuth?: (() => void) | undefined;
@@ -331,7 +318,7 @@ function AdminRequiredGate({
 
     if (result.error) {
       setAccepting(false);
-      setError(result.error.message ?? m.admin_required_accept_error);
+      setError(result.error.message ?? m.member_required_accept_error);
       return;
     }
 
@@ -350,25 +337,23 @@ function AdminRequiredGate({
           <div className="bg-destructive/10 text-destructive mb-2 flex size-10 items-center justify-center rounded-md">
             <ShieldAlert />
           </div>
-          <CardTitle>{m.admin_required_title}</CardTitle>
+          <CardTitle>{m.member_required_title}</CardTitle>
           <CardDescription>
-            {isAdmin
-              ? interpolate(m.admin_required_org_description, {
-                  organization: displayName,
-                })
-              : m.admin_required_no_permission}
+            {interpolate(m.member_required_org_description, {
+              organization: displayName,
+            })}
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-3">
           {invitation ? (
             <p className="text-muted-foreground text-sm">
-              {interpolate(m.admin_required_invite_found, {
+              {interpolate(m.member_required_invite_found, {
                 organization: displayName,
               })}
             </p>
           ) : (
             <p className="text-muted-foreground text-sm">
-              {m.admin_required_contact_description}
+              {m.member_required_contact_description}
             </p>
           )}
           {resolvedContactEmail ? (
@@ -383,8 +368,8 @@ function AdminRequiredGate({
                 variant="ghost"
                 className="shrink-0"
                 messages={{
-                  copy: m.admin_required_copy_email,
-                  copied: m.admin_required_copied_email,
+                  copy: m.member_required_copy_email,
+                  copied: m.member_required_copied_email,
                 }}
               />
             </div>
@@ -400,8 +385,8 @@ function AdminRequiredGate({
                 <Check className="size-4" />
               )}
               {accepting
-                ? m.admin_required_accepting_invite
-                : m.admin_required_accept_invite}
+                ? m.member_required_accepting_invite
+                : m.member_required_accept_invite}
             </Button>
           ) : null}
         </CardFooter>

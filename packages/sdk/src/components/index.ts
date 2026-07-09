@@ -6,7 +6,7 @@ export {
 } from "./auth-provider";
 export { createAuthUiClient } from "./auth-client";
 export { OrganizationSwitcher } from "./organization-switcher";
-export { AdminRequired } from "./admin-required";
+export { MemberRequired } from "./member-required";
 export { ResetPassword, Signin, Signup, TwoFactor } from "./auth-forms";
 export { UserButton } from "./user-button";
 export { AdminOrganizationsTable } from "./admin-organizations";
@@ -24,4 +24,4 @@ export type {
 } from "./organization-switcher";
 export type { UserButtonDialog } from "./user-button";
 export type { AuthUiClient } from "./auth-client";
-export type { AdminRequiredMessages, AdminRequiredProps } from "./admin-required";
+export type { MemberRequiredMessages, MemberRequiredProps } from "./member-required";

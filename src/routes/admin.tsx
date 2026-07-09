@@ -18,7 +18,7 @@ import { useSidebar } from "@/components/ui/sidebar";
 import { SidebarLayout, type NavGroup } from "@/components/ui/sidebar-layout";
 import { authBaseUrl, authClient } from "@/services/auth/client";
 import {
-  AdminRequired,
+  MemberRequired,
   KrakstackAuthProvider,
   OrganizationSwitcher,
   UserButton,
@@ -105,7 +105,7 @@ function AdminContent() {
 
   return (
     <Suspense fallback={<AdminAccessLoading />}>
-      <AdminRequired
+      <MemberRequired
         authClient={authClient}
         organizationId={krakOrganizationId}
       >
@@ -122,7 +122,7 @@ function AdminContent() {
         >
           <Outlet />
         </SidebarLayout>
-      </AdminRequired>
+      </MemberRequired>
     </Suspense>
   );
 }
