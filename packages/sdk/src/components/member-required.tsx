@@ -208,14 +208,16 @@ const accessAtom = Atom.family((authClient: AuthUiClient) =>
 );
 
 const accessAtomKey = ({
+  authRefreshVersion,
   baseUrl,
   organizationId,
   userId,
 }: {
+  authRefreshVersion: number;
   baseUrl?: string | undefined;
   organizationId: string;
   userId?: string | undefined;
-}) => JSON.stringify({ baseUrl, organizationId, userId });
+}) => JSON.stringify({ authRefreshVersion, baseUrl, organizationId, userId });
 
 export function MemberRequired({
   authClient: providedAuthClient,
@@ -227,6 +229,7 @@ export function MemberRequired({
   const auth = useKrakstackAuth();
   const authClient = providedAuthClient ?? auth?.authClient;
   const baseUrl = auth?.baseUrl;
+  const authRefreshVersion = auth?.authRefreshVersion ?? 0;
   const locale = auth?.locale;
   const refreshAuth = auth?.refreshAuth;
   if (!authClient) {
@@ -236,6 +239,7 @@ export function MemberRequired({
   const session = authClient.useSession();
   const userId = session.data?.user.id;
   const currentAccessKey = accessAtomKey({
+    authRefreshVersion,
     baseUrl,
     organizationId,
     userId,

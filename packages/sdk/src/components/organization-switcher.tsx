@@ -63,7 +63,6 @@ import {
   type OrganizationTranslation,
 } from "@krak-stack/auth/schema";
 import {
-  hasAnyRole,
   isOrganizationRole,
   normalizeOrganizationRole,
   normalizeOrganizationRoles,
@@ -106,6 +105,10 @@ const messages = {
     organization_invitation_reject_error: "Could not decline the invitation.",
     organization_invitation_rejected: "Invitation declined.",
     organization_invitation_status: "Status",
+    organization_invitation_status_accepted: "Accepted",
+    organization_invitation_status_canceled: "Canceled",
+    organization_invitation_status_pending: "Pending",
+    organization_invitation_status_rejected: "Rejected",
     organization_invitations_description:
       "Track invitations that have not been accepted yet.",
     organization_invitations_empty: "No pending invitations.",
@@ -199,6 +202,10 @@ const messages = {
     organization_invitation_reject_error: "Impossible de refuser l'invitation.",
     organization_invitation_rejected: "Invitation refusée.",
     organization_invitation_status: "Statut",
+    organization_invitation_status_accepted: "Acceptée",
+    organization_invitation_status_canceled: "Annulée",
+    organization_invitation_status_pending: "En attente",
+    organization_invitation_status_rejected: "Refusée",
     organization_invitations_description:
       "Suivez les invitations qui n'ont pas encore été acceptées.",
     organization_invitations_empty: "Aucune invitation en attente.",
@@ -644,6 +651,24 @@ const organizationRoleLabel = (
   }
 };
 
+const invitationStatusLabel = (
+  status: string,
+  m: ReturnType<typeof organizationMessageFns>,
+) => {
+  switch (status) {
+    case "accepted":
+      return m.organization_invitation_status_accepted();
+    case "canceled":
+      return m.organization_invitation_status_canceled();
+    case "pending":
+      return m.organization_invitation_status_pending();
+    case "rejected":
+      return m.organization_invitation_status_rejected();
+    default:
+      return status;
+  }
+};
+
 const formatOrganizationDate = (date: Date | string) =>
   new Intl.DateTimeFormat(getLocale(), { dateStyle: "medium" }).format(
     new Date(date),
@@ -1066,6 +1091,7 @@ export function OrganizationSwitcher({
             <OrganizationMembersManager
               authClient={authClient}
               baseUrl={baseUrl}
+              canManageMembers={canManageApiKeys}
               organization={activeOrganization.data}
               currentUserId={session.data.user.id}
               active={dialog === "members"}
@@ -1260,7 +1286,9 @@ const userInvitationColumns = ({
   {
     accessorKey: "status",
     header: m.organization_invitation_status(),
-    cell: ({ row }) => <Badge>{row.original.status}</Badge>,
+    cell: ({ row }) => (
+      <Badge>{invitationStatusLabel(row.original.status, m)}</Badge>
+    ),
   },
   {
     accessorKey: "expiresAt",
@@ -1770,6 +1798,7 @@ function OrganizationTranslationHeader({
 function OrganizationMembersManager({
   authClient,
   baseUrl,
+  canManageMembers,
   organization,
   currentUserId,
   active,
@@ -1777,6 +1806,7 @@ function OrganizationMembersManager({
 }: {
   authClient: AuthUiClient;
   baseUrl?: string | undefined;
+  canManageMembers: boolean;
   organization: OrganizationSummary;
   currentUserId: string;
   active: boolean;
@@ -1794,11 +1824,17 @@ function OrganizationMembersManager({
     string | null
   >(null);
   const [leavingOrganization, setLeavingOrganization] = useState(false);
-  const membersData = AsyncResult.match(membersResult, {
-    onInitial: () => ({ members: [], invitations: [] }),
-    onFailure: () => ({ members: [], invitations: [] }),
+  const [lastMembersData, setLastMembersData] =
+    useState<OrganizationMembersData | null>(null);
+  const currentMembersData = AsyncResult.match(membersResult, {
+    onInitial: () => null,
+    onFailure: () => null,
     onSuccess: ({ value }) => value,
   });
+  const membersData = currentMembersData ?? lastMembersData ?? {
+    members: [],
+    invitations: [],
+  };
   const members = membersData.members;
   const invitations = membersData.invitations;
   const [memberRoleOverrides, setMemberRoleOverrides] = useState<
@@ -1813,16 +1849,15 @@ function OrganizationMembersManager({
     onFailure: () => m.organization_members_load_error(),
     onSuccess: () => null,
   });
-  const loading = membersResult._tag === "Initial";
-  const currentMemberRole = displayedMembers.find(
-    (member) => member.userId === currentUserId,
-  )?.role;
-  const canChangeMemberRoles = hasAnyRole(currentMemberRole, [
-    "owner",
-    "admin",
-  ]);
-  const canInviteMembers = canChangeMemberRoles;
-  const canRemoveMembers = canChangeMemberRoles;
+  const loading = !lastMembersData && membersResult._tag === "Initial";
+  const canInviteMembers = canManageMembers;
+  const canRemoveMembers = canManageMembers;
+
+  useEffect(() => {
+    if (!currentMembersData) return;
+
+    setLastMembersData(currentMembersData);
+  }, [currentMembersData]);
 
   const inviteForm = useAppForm({
     defaultValues: { email: "", role: "member" },
@@ -1937,51 +1972,53 @@ function OrganizationMembersManager({
   return (
     <div className="flex min-w-0 flex-col gap-5">
       {canInviteMembers ? (
-        <inviteForm.AppForm>
-          <form
-            className="grid gap-4 rounded-lg border p-4 sm:grid-cols-[minmax(0,1fr)_12rem_auto] sm:items-end"
-            onSubmit={(event) => {
-              event.preventDefault();
-              event.stopPropagation();
-              inviteForm.handleSubmit();
-            }}
-          >
-            <div className="sm:col-span-3">
-              <div className="flex items-center gap-2 font-medium">
-                <UserPlus className="size-4" />
-                {m.organization_invite_member_title()}
+        <div className="min-h-40 rounded-lg border p-4">
+          <inviteForm.AppForm>
+            <form
+              className="grid gap-4 sm:grid-cols-[minmax(0,1fr)_12rem_auto] sm:items-end"
+              onSubmit={(event) => {
+                event.preventDefault();
+                event.stopPropagation();
+                inviteForm.handleSubmit();
+              }}
+            >
+              <div className="sm:col-span-3">
+                <div className="flex items-center gap-2 font-medium">
+                  <UserPlus className="size-4" />
+                  {m.organization_invite_member_title()}
+                </div>
+                <p className="text-muted-foreground text-sm">
+                  {m.organization_invite_member_description()}
+                </p>
               </div>
-              <p className="text-muted-foreground text-sm">
-                {m.organization_invite_member_description()}
-              </p>
-            </div>
-            <inviteForm.AppField name="email">
-              {(field) => (
-                <field.TextField
-                  label={m.organization_member_email()}
-                  placeholder="teammate@example.com"
-                  type="email"
-                  required
-                />
-              )}
-            </inviteForm.AppField>
-            <inviteForm.AppField name="role">
-              {(field) => (
-                <field.SelectField
-                  label={m.organization_member_role()}
-                  options={organizationRoles.map((role) => ({
-                    label: organizationRoleLabel(role, m),
-                    value: role,
-                  }))}
-                />
-              )}
-            </inviteForm.AppField>
-            <div className="self-end">
-              <inviteForm.SubmitButton />
-            </div>
-            <inviteForm.FormError />
-          </form>
-        </inviteForm.AppForm>
+              <inviteForm.AppField name="email">
+                {(field) => (
+                  <field.TextField
+                    label={m.organization_member_email()}
+                    placeholder="teammate@example.com"
+                    type="email"
+                    required
+                  />
+                )}
+              </inviteForm.AppField>
+              <inviteForm.AppField name="role">
+                {(field) => (
+                  <field.SelectField
+                    label={m.organization_member_role()}
+                    options={organizationRoles.map((role) => ({
+                      label: organizationRoleLabel(role, m),
+                      value: role,
+                    }))}
+                  />
+                )}
+              </inviteForm.AppField>
+              <div className="self-end">
+                <inviteForm.SubmitButton />
+              </div>
+              <inviteForm.FormError />
+            </form>
+          </inviteForm.AppForm>
+        </div>
       ) : null}
       {membersError ? (
         <p className="text-destructive text-sm">{membersError}</p>
@@ -1999,15 +2036,14 @@ function OrganizationMembersManager({
             columns={memberColumns({
               m,
               baseUrl,
-              canChangeRoles: canChangeMemberRoles,
+              canChangeRoles: canManageMembers,
               onRoleChange: updateRole,
             })}
             data={displayedMembers}
-            emptyLabel={
-              loading ? m.user_loading() : m.organization_members_empty()
-            }
+            emptyLabel={m.organization_members_empty()}
             exportFileName={`${organization.slug}-members.csv`}
             features={{ gallery: false }}
+            isLoading={loading}
             searchState="local"
             rowActions={memberRowActions({
               m,
@@ -2035,11 +2071,10 @@ function OrganizationMembersManager({
               m,
             })}
             data={invitations}
-            emptyLabel={
-              loading ? m.user_loading() : m.organization_invitations_empty()
-            }
+            emptyLabel={m.organization_invitations_empty()}
             exportFileName={`${organization.slug}-invitations.csv`}
             features={{ gallery: false }}
+            isLoading={loading}
             searchState="local"
             rowActions={invitationRowActions({
               m,
@@ -2201,7 +2236,9 @@ const invitationColumns = ({
   {
     accessorKey: "status",
     header: m.organization_invitation_status(),
-    cell: ({ row }) => <Badge>{row.original.status}</Badge>,
+    cell: ({ row }) => (
+      <Badge>{invitationStatusLabel(row.original.status, m)}</Badge>
+    ),
   },
   {
     accessorKey: "expiresAt",
