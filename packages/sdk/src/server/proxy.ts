@@ -13,22 +13,8 @@ const blockedRequestHeaders = [
   "cdn-loop",
 ] as const;
 
-const parseUrl = (value: string | null) => {
-  if (!value) return null;
-
-  try {
-    return new URL(value);
-  } catch {
-    return null;
-  }
-};
-
 const forwardedUrl = (request: Request) => {
-  return (
-    parseUrl(request.headers.get("origin")) ??
-    parseUrl(request.headers.get("referer")) ??
-    new URL(request.url)
-  );
+  return new URL(request.url);
 };
 
 const proxyHeaders = (request: Request) => {
