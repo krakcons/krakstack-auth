@@ -7,6 +7,7 @@ export { AuthClientConfig } from "./config";
 export { proxyAuthRequest } from "./server/proxy";
 export {
   OrganizationSwitcher,
+  AdminRequired,
   KrakstackAuthProvider,
   ResetPassword,
   Signin,
@@ -19,6 +20,8 @@ export {
   assetUrl,
   createAuthUiClient,
   type AuthUiClient,
+  type AdminRequiredMessages,
+  type AdminRequiredProps,
   type KrakstackAuthContextValue,
   type KrakstackAuthLocale,
   type KrakstackAuthProviderProps,

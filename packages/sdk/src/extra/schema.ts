@@ -232,6 +232,42 @@ export const ExtraProjectPublicConfig = Schema.Struct({
   ],
 });
 
+export const ExtraOrganizationPublicProfileQuery = Schema.Struct({
+  organizationId: Schema.String,
+}).annotate({
+  identifier: "ExtraOrganizationPublicProfileQuery",
+  title: "Extra organization public profile query",
+  description:
+    "Organization ID used to resolve public organization display metadata.",
+  examples: [{ organizationId: "org_1" }],
+});
+
+export const ExtraOrganizationPublicProfile = Schema.Struct({
+  id: Schema.String,
+  name: Schema.String,
+  slug: Schema.String,
+  displayName: Schema.String,
+  contactEmail: Schema.NullOr(Schema.String),
+  logo: Schema.NullOr(Schema.String),
+  icon: Schema.NullOr(Schema.String),
+}).annotate({
+  identifier: "ExtraOrganizationPublicProfile",
+  title: "Extra organization public profile",
+  description:
+    "Public organization display metadata used for access and invitation screens.",
+  examples: [
+    {
+      id: "org_1",
+      name: "Krak",
+      slug: "krak",
+      displayName: "Krak",
+      contactEmail: null,
+      logo: null,
+      icon: null,
+    },
+  ],
+});
+
 export const ExtraOkResponse = Schema.Struct({
   ok: Schema.Boolean,
 }).annotate({
@@ -280,4 +316,8 @@ export type ExtraVerifyApiKeyResponse = typeof ExtraVerifyApiKeyResponse.Type;
 export type ExtraProjectPublicConfigQuery =
   typeof ExtraProjectPublicConfigQuery.Type;
 export type ExtraProjectPublicConfig = typeof ExtraProjectPublicConfig.Type;
+export type ExtraOrganizationPublicProfileQuery =
+  typeof ExtraOrganizationPublicProfileQuery.Type;
+export type ExtraOrganizationPublicProfile =
+  typeof ExtraOrganizationPublicProfile.Type;
 export type ExtraOkResponse = typeof ExtraOkResponse.Type;

@@ -11,6 +11,8 @@ import {
   ExtraCreateApiKeyResponse,
   ExtraImageUploadMultipartPayload,
   ExtraOkResponse,
+  ExtraOrganizationPublicProfile,
+  ExtraOrganizationPublicProfileQuery,
   ExtraProjectPublicConfig,
   ExtraProjectPublicConfigQuery,
   ExtraSetPasswordPayload,
@@ -35,6 +37,24 @@ export const ExtraApiGroup = HttpApiGroup.make("authExtra")
         summary: "Get host-aware project white-label config",
         description:
           "Returns resolved public branding and authentication options through the proxied auth API.",
+      }),
+    ),
+  )
+  .add(
+    HttpApiEndpoint.get(
+      "getOrganizationPublicProfile",
+      "/auth/organization-profile",
+      {
+        query: ExtraOrganizationPublicProfileQuery,
+        success: ExtraOrganizationPublicProfile,
+        error: [HttpApiError.NotFound, HttpApiError.InternalServerError],
+      },
+    ).annotateMerge(
+      OpenApi.annotations({
+        title: "Get organization public profile",
+        summary: "Get public organization display metadata",
+        description:
+          "Returns public organization metadata used by access and invitation screens.",
       }),
     ),
   )

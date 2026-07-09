@@ -1,10 +1,14 @@
 import { ExtraBadRequest } from "@krak-stack/auth/extra";
-import { Effect } from "effect";
+import { Effect, Schema } from "effect";
 import { HttpServerRequest } from "effect/unstable/http";
 import { HttpApiBuilder, HttpApiError } from "effect/unstable/httpapi";
+import { eq } from "drizzle-orm";
 
 import { FrontendApi } from "@/api";
+import { organization } from "@/db/schema";
 import { BetterAuthRequest } from "@/services/auth/better-auth-request";
+import { db } from "@/services/database";
+import { OrganizationMetadata } from "@krak-stack/auth/schema";
 import { Projects } from "@/services/projects";
 import { uploadImageFromMultipart } from "@/services/s3/upload";
 
@@ -25,6 +29,40 @@ const userRole = (value: unknown) => {
 const hasAdminRole = (role: unknown) =>
   typeof role === "string" &&
   role.split(",").some((item) => item.trim() === "admin");
+
+const organizationPublicProfile = (record: {
+  id: string;
+  name: string;
+  slug: string;
+  metadata: unknown;
+}) => {
+  let metadata: OrganizationMetadata | null = null;
+
+  try {
+    metadata = Schema.decodeUnknownSync(OrganizationMetadata)(
+      typeof record.metadata === "string"
+        ? JSON.parse(record.metadata)
+        : record.metadata,
+    );
+  } catch {
+    metadata = null;
+  }
+
+  const translation =
+    metadata?.translations.find((item) => item.locale === "en") ??
+    metadata?.translations[0] ??
+    null;
+
+  return {
+    id: record.id,
+    name: record.name,
+    slug: record.slug,
+    displayName: translation?.name ?? record.name,
+    contactEmail: translation?.contactEmail ?? null,
+    logo: translation?.logo ?? null,
+    icon: translation?.icon ?? null,
+  };
+};
 
 const requestAuth = (
   request: HttpServerRequest.HttpServerRequest,
@@ -78,6 +116,28 @@ export const authApiHandler = HttpApiBuilder.group(
               rootHost: query.rootHost,
             })
             .pipe(Effect.mapError(internalServerError));
+        }),
+      )
+      .handle("getOrganizationPublicProfile", ({ query }) =>
+        Effect.gen(function* () {
+          const [record] = yield* Effect.tryPromise({
+            try: () =>
+              db
+                .select({
+                  id: organization.id,
+                  name: organization.name,
+                  slug: organization.slug,
+                  metadata: organization.metadata,
+                })
+                .from(organization)
+                .where(eq(organization.id, query.organizationId))
+                .limit(1),
+            catch: internalServerError,
+          });
+
+          if (!record) return yield* new HttpApiError.NotFound({});
+
+          return organizationPublicProfile(record);
         }),
       )
       .handle("setPassword", ({ payload, request }) =>
