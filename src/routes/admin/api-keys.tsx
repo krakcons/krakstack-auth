@@ -1,9 +1,19 @@
-import type { ApiKey } from "@better-auth/api-key/client";
-import { useAtomSet } from "@effect/atom-react";
+import { useAtomSet, useAtomValue } from "@effect/atom-react";
+import type { AdminApiKey } from "@krak-stack/auth/admin";
 import { type ColumnDef } from "@tanstack/react-table";
 import { createFileRoute } from "@tanstack/react-router";
-import { Check, Copy, Plus, Trash2 } from "lucide-react";
-import { useEffect, useState } from "react";
+import { Atom, AsyncResult } from "effect/unstable/reactivity";
+import {
+  Check,
+  Copy,
+  Pencil,
+  Plus,
+  RotateCcw,
+  ShieldCheck,
+  ShieldOff,
+  Trash2,
+} from "lucide-react";
+import { useState } from "react";
 import { toast } from "sonner";
 
 import {
@@ -22,8 +32,8 @@ import {
 } from "@/components/ui/dialog";
 import { useAppForm } from "@/components/ui/form";
 import { Separator } from "@/components/ui/separator";
+import { AdminApiClient } from "@/lib/admin-api-client";
 import { ApiClient } from "@/lib/api-client";
-import { authClient } from "@/services/auth/client";
 import { m } from "@/paraglide/messages";
 
 export const Route = createFileRoute("/admin/api-keys")({
@@ -31,72 +41,63 @@ export const Route = createFileRoute("/admin/api-keys")({
   component: ApiKeysPage,
 });
 
-type ApiKeySummary = Omit<ApiKey, "key"> & { key?: string };
+type ApiKeySummary = AdminApiKey;
 
 const createApiKeyAtom = ApiClient.mutation("authExtra", "createApiKey");
+const updateApiKeyAtom = AdminApiClient.mutation("admin", "updateApiKey");
+const deleteApiKeyAtom = AdminApiClient.mutation("admin", "deleteApiKey");
+const resetApiKeyRateLimitAtom = AdminApiClient.mutation(
+  "admin",
+  "resetApiKeyRateLimit",
+);
+const enableApiKeyRateLimitAtom = AdminApiClient.mutation(
+  "admin",
+  "enableApiKeyRateLimit",
+);
+const disableApiKeyRateLimitAtom = AdminApiClient.mutation(
+  "admin",
+  "disableApiKeyRateLimit",
+);
+const apiKeysAtom = Atom.family((reloadKey: number) =>
+  AdminApiClient.query("admin", "listApiKeys", {
+    timeToLive: "1 minute",
+    reactivityKeys: ["api-keys"],
+    serializationKey: `api-keys:${reloadKey}`,
+  }),
+);
 
 function ApiKeysPage() {
-  const createApiKey = useAtomSet(createApiKeyAtom, { mode: "promise" });
-  const [keys, setKeys] = useState<ApiKeySummary[]>([]);
+  const deleteApiKey = useAtomSet(deleteApiKeyAtom, { mode: "promise" });
+  const resetApiKeyRateLimit = useAtomSet(resetApiKeyRateLimitAtom, {
+    mode: "promise",
+  });
+  const enableApiKeyRateLimit = useAtomSet(enableApiKeyRateLimitAtom, {
+    mode: "promise",
+  });
+  const disableApiKeyRateLimit = useAtomSet(disableApiKeyRateLimitAtom, {
+    mode: "promise",
+  });
+  const [reloadKey, setReloadKey] = useState(0);
+  const result = useAtomValue(apiKeysAtom(reloadKey));
   const [creating, setCreating] = useState(false);
+  const [editingKey, setEditingKey] = useState<ApiKeySummary | null>(null);
   const [createdKey, setCreatedKey] = useState<string | null>(null);
   const [copiedKey, setCopiedKey] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [loading, setLoading] = useState(true);
-
-  const loadKeys = async () => {
-    setLoading(true);
-    setError(null);
-    const result = await authClient.apiKey.list({
-      query: { configId: "service" },
-    });
-
-    if (result.error) {
-      setError(result.error.message ?? m.admin_api_keys_load_error());
-      setLoading(false);
-      return;
-    }
-
-    setKeys(result.data?.apiKeys ?? []);
-    setLoading(false);
-  };
-
-  useEffect(() => {
-    void loadKeys();
-  }, []);
-
-  const createForm = useAppForm({
-    defaultValues: { name: "" },
-    onSubmit: async ({ value, formApi }) => {
-      formApi.setErrorMap({ onSubmit: undefined });
-      setCreatedKey(null);
-      setCopiedKey(false);
-
-      try {
-        const created = await createApiKey({
-          payload: {
-            configId: "service",
-            name: value.name.trim(),
-          },
-        });
-
-        setCreatedKey(created.key);
-        createForm.reset();
-        setCreating(true);
-        toast.success(m.admin_api_key_created_toast());
-        await loadKeys();
-      } catch (cause) {
-        formApi.setErrorMap({
-          onSubmit: {
-            form:
-              cause instanceof Error
-                ? cause.message
-                : m.admin_api_key_create_error(),
-            fields: {},
-          },
-        });
-      }
-    },
+  const keys = AsyncResult.match(result, {
+    onInitial: () => [],
+    onFailure: () => [],
+    onSuccess: ({ value }) => Array.from(value),
+  });
+  const loading = AsyncResult.match(result, {
+    onInitial: () => true,
+    onFailure: () => false,
+    onSuccess: () => false,
+  });
+  const loadError = AsyncResult.match(result, {
+    onInitial: () => null,
+    onFailure: () => m.admin_api_keys_load_error(),
+    onSuccess: () => null,
   });
 
   const copyCreatedKey = async () => {
@@ -109,18 +110,54 @@ function ApiKeysPage() {
   };
 
   const deleteKey = async (key: ApiKeySummary) => {
-    const result = await authClient.apiKey.delete({
-      configId: "service",
-      keyId: key.id,
-    });
-
-    if (result.error) {
-      setError(result.error.message ?? m.admin_api_key_delete_error());
-      return;
+    try {
+      setError(null);
+      await deleteApiKey({ params: { id: key.id } });
+      toast.success(m.admin_api_key_deleted_toast());
+      setReloadKey((value) => value + 1);
+    } catch (cause) {
+      setError(
+        cause instanceof Error ? cause.message : m.admin_api_key_delete_error(),
+      );
     }
+  };
 
-    toast.success(m.admin_api_key_deleted_toast());
-    await loadKeys();
+  const resetRateLimit = async (key: ApiKeySummary) => {
+    try {
+      setError(null);
+      await resetApiKeyRateLimit({ params: { id: key.id } });
+      toast.success(m.admin_api_key_rate_limit_reset_toast());
+      setReloadKey((value) => value + 1);
+    } catch (cause) {
+      setError(
+        cause instanceof Error
+          ? cause.message
+          : m.admin_api_key_rate_limit_reset_error(),
+      );
+    }
+  };
+
+  const setRateLimitEnabled = async (key: ApiKeySummary, enabled: boolean) => {
+    try {
+      setError(null);
+      if (enabled) {
+        await enableApiKeyRateLimit({ params: { id: key.id } });
+      } else {
+        await disableApiKeyRateLimit({ params: { id: key.id } });
+      }
+      toast.success(
+        enabled
+          ? m.admin_api_key_rate_limit_enabled_toast()
+          : m.admin_api_key_rate_limit_disabled_toast(),
+      );
+      setReloadKey((value) => value + 1);
+    } catch (cause) {
+      setError(
+        cause instanceof Error
+          ? cause.message
+          : m.admin_api_key_rate_limit_toggle_error(),
+      );
+    }
   };
 
   return (
@@ -143,14 +180,42 @@ function ApiKeysPage() {
         }
       />
       <div className="min-w-0 space-y-4">
-        {error ? <p className="text-destructive text-sm">{error}</p> : null}
+        {(error ?? loadError) ? (
+          <p className="text-destructive text-sm">{error ?? loadError}</p>
+        ) : null}
         <DataTable
           columns={apiKeyColumns()}
           data={keys}
           {...(loading ? { emptyLabel: m.admin_api_keys_loading() } : {})}
-          exportFileName="service-api-keys.csv"
+          exportFileName="api-keys.csv"
           features={{ gallery: false }}
           rowActions={[
+            {
+              name: m.admin_action_edit(),
+              icon: <Pencil />,
+              onClick: (key) => {
+                setCreatedKey(null);
+                setCopiedKey(false);
+                setEditingKey(key);
+              },
+            },
+            {
+              name: m.admin_api_key_rate_limit_reset(),
+              icon: <RotateCcw />,
+              onClick: resetRateLimit,
+            },
+            {
+              name: m.admin_api_key_rate_limit_disable(),
+              icon: <ShieldOff />,
+              visible: (key) => key.rateLimitEnabled,
+              onClick: (key) => setRateLimitEnabled(key, false),
+            },
+            {
+              name: m.admin_api_key_rate_limit_enable(),
+              icon: <ShieldCheck />,
+              visible: (key) => !key.rateLimitEnabled,
+              onClick: (key) => setRateLimitEnabled(key, true),
+            },
             {
               name: m.admin_api_key_delete(),
               icon: <Trash2 />,
@@ -161,44 +226,43 @@ function ApiKeysPage() {
         />
       </div>
       <Dialog
-        open={creating}
+        open={creating || Boolean(editingKey)}
         onOpenChange={(open) => {
-          setCreating(open);
           if (!open) {
+            setCreating(false);
+            setEditingKey(null);
             setCreatedKey(null);
             setCopiedKey(false);
-            createForm.reset();
           }
         }}
       >
         <DialogContent className="max-w-lg overflow-hidden sm:max-w-xl">
           <DialogHeader>
-            <DialogTitle>{m.admin_create_api_key()}</DialogTitle>
+            <DialogTitle>
+              {editingKey
+                ? m.admin_api_key_edit_title()
+                : m.admin_create_api_key()}
+            </DialogTitle>
             <DialogDescription>
-              {m.admin_api_key_create_description()}
+              {editingKey
+                ? m.admin_api_key_edit_description()
+                : m.admin_api_key_create_description()}
             </DialogDescription>
           </DialogHeader>
-          <createForm.AppForm>
-            <form
-              className="flex flex-col gap-4"
-              onSubmit={(event) => {
-                event.preventDefault();
-                event.stopPropagation();
-                createForm.handleSubmit();
-              }}
-            >
-              <p className="text-muted-foreground text-sm">
-                {m.admin_api_key_warning()}
-              </p>
-              <createForm.AppField name="name">
-                {(field) => (
-                  <field.TextField label={m.admin_api_key_name()} required />
-                )}
-              </createForm.AppField>
-              <createForm.FormError />
-              <createForm.SubmitButton />
-            </form>
-          </createForm.AppForm>
+          <ApiKeyForm
+            key={editingKey?.id ?? "create"}
+            apiKey={editingKey}
+            onCreated={(key) => {
+              setCreatedKey(key);
+              setCopiedKey(false);
+              setCreating(true);
+              setReloadKey((value) => value + 1);
+            }}
+            onSaved={() => {
+              setEditingKey(null);
+              setReloadKey((value) => value + 1);
+            }}
+          />
           {createdKey ? (
             <>
               <Separator />
@@ -234,6 +298,167 @@ function ApiKeysPage() {
   );
 }
 
+type ApiKeyFormValues = {
+  name: string;
+  enabled: boolean;
+  rateLimitEnabled: boolean;
+  rateLimitMax: string;
+  rateLimitTimeWindowMinutes: string;
+};
+
+const apiKeyFormDefaults = (apiKey: ApiKeySummary | null): ApiKeyFormValues =>
+  apiKey
+    ? {
+        name: apiKey.name ?? "",
+        enabled: apiKey.enabled,
+        rateLimitEnabled: apiKey.rateLimitEnabled,
+        rateLimitMax: apiKey.rateLimitMax?.toString() ?? "",
+        rateLimitTimeWindowMinutes: apiKey.rateLimitTimeWindow
+          ? Math.round(apiKey.rateLimitTimeWindow / 60000).toString()
+          : "",
+      }
+    : {
+        name: "",
+        enabled: true,
+        rateLimitEnabled: true,
+        rateLimitMax: "10000",
+        rateLimitTimeWindowMinutes: "1440",
+      };
+
+const optionalNumber = (value: string, label: string) => {
+  const trimmed = value.trim();
+  if (!trimmed) return null;
+
+  const number = Number(trimmed);
+  if (!Number.isFinite(number) || number <= 0) {
+    throw new Error(m.admin_api_key_number_error({ field: label }));
+  }
+
+  return number;
+};
+
+function ApiKeyForm({
+  apiKey,
+  onCreated,
+  onSaved,
+}: {
+  apiKey: ApiKeySummary | null;
+  onCreated: (key: string) => void;
+  onSaved: () => void;
+}) {
+  const createApiKey = useAtomSet(createApiKeyAtom, { mode: "promise" });
+  const updateApiKey = useAtomSet(updateApiKeyAtom, { mode: "promise" });
+  const form = useAppForm({
+    defaultValues: apiKeyFormDefaults(apiKey),
+    onSubmit: async ({ value, formApi }) => {
+      formApi.setErrorMap({ onSubmit: undefined });
+
+      try {
+        const name = value.name.trim();
+        const rateLimitMax = optionalNumber(
+          value.rateLimitMax,
+          m.admin_api_key_max_requests(),
+        );
+        const rateLimitTimeWindowMinutes = optionalNumber(
+          value.rateLimitTimeWindowMinutes,
+          m.admin_api_key_window_minutes_label(),
+        );
+        const payload = {
+          name: name || null,
+          enabled: value.enabled,
+          rateLimitEnabled: value.rateLimitEnabled,
+          rateLimitMax,
+          rateLimitTimeWindow: rateLimitTimeWindowMinutes
+            ? rateLimitTimeWindowMinutes * 60 * 1000
+            : null,
+        };
+
+        if (apiKey) {
+          await updateApiKey({ params: { id: apiKey.id }, payload });
+          toast.success(m.admin_api_key_updated_toast());
+          onSaved();
+          return;
+        }
+
+        const created = await createApiKey({
+          payload: {
+            configId: "service",
+            ...(name ? { name } : {}),
+          },
+        });
+        await updateApiKey({ params: { id: created.id }, payload });
+        toast.success(m.admin_api_key_created_toast());
+        form.reset();
+        onCreated(created.key);
+      } catch (cause) {
+        formApi.setErrorMap({
+          onSubmit: {
+            form:
+              cause instanceof Error
+                ? cause.message
+                : apiKey
+                  ? m.admin_api_key_update_error()
+                  : m.admin_api_key_create_error(),
+            fields: {},
+          },
+        });
+      }
+    },
+  });
+
+  return (
+    <form.AppForm>
+      <form
+        className="flex flex-col gap-4"
+        onSubmit={(event) => {
+          event.preventDefault();
+          event.stopPropagation();
+          form.handleSubmit();
+        }}
+      >
+        {!apiKey ? (
+          <p className="text-muted-foreground text-sm">
+            {m.admin_api_key_warning()}
+          </p>
+        ) : null}
+        <form.AppField name="name">
+          {(field) => <field.TextField label={m.admin_api_key_name()} />}
+        </form.AppField>
+        <form.AppField name="enabled">
+          {(field) => <field.CheckboxField label={m.admin_api_key_enabled()} />}
+        </form.AppField>
+        <form.AppField name="rateLimitEnabled">
+          {(field) => (
+            <field.CheckboxField label={m.admin_api_key_rate_limit_enabled()} />
+          )}
+        </form.AppField>
+        <div className="grid gap-4 sm:grid-cols-2">
+          <form.AppField name="rateLimitMax">
+            {(field) => (
+              <field.TextField
+                label={m.admin_api_key_max_requests()}
+                min={0}
+                type="number"
+              />
+            )}
+          </form.AppField>
+          <form.AppField name="rateLimitTimeWindowMinutes">
+            {(field) => (
+              <field.TextField
+                label={m.admin_api_key_window_minutes_label()}
+                min={0}
+                type="number"
+              />
+            )}
+          </form.AppField>
+        </div>
+        <form.FormError />
+        <form.SubmitButton />
+      </form>
+    </form.AppForm>
+  );
+}
+
 const apiKeyColumns = (): ColumnDef<ApiKeySummary>[] => [
   {
     accessorKey: "name",
@@ -252,6 +477,15 @@ const apiKeyColumns = (): ColumnDef<ApiKeySummary>[] => [
     ),
   },
   {
+    accessorKey: "configId",
+    header: m.admin_api_key_type(),
+    cell: ({ row }) => (
+      <Badge variant="secondary">
+        {apiKeyTypeLabel(row.original.configId)}
+      </Badge>
+    ),
+  },
+  {
     accessorKey: "enabled",
     header: m.admin_api_key_status(),
     cell: ({ row }) => (
@@ -263,6 +497,17 @@ const apiKeyColumns = (): ColumnDef<ApiKeySummary>[] => [
     ),
   },
   {
+    id: "rateLimit",
+    accessorFn: (keyData) => usagePercent(keyData),
+    header: m.admin_api_key_rate_limit(),
+    cell: ({ row }) => <ApiKeyRateLimit keyData={row.original} />,
+  },
+  {
+    accessorKey: "lastRequest",
+    header: m.admin_api_key_last_used(),
+    cell: ({ row }) => formatDateTime(row.original.lastRequest),
+  },
+  {
     accessorKey: "createdAt",
     header: m.admin_api_key_created(),
     cell: ({ row }) => (
@@ -272,3 +517,89 @@ const apiKeyColumns = (): ColumnDef<ApiKeySummary>[] => [
     ),
   },
 ];
+
+const ApiKeyRateLimit = ({ keyData }: { keyData: ApiKeySummary }) => {
+  if (!keyData.rateLimitEnabled) {
+    return <Badge variant="secondary">{m.admin_api_key_disabled()}</Badge>;
+  }
+
+  if (!keyData.rateLimitMax) {
+    return (
+      <span className="text-muted-foreground text-sm">
+        {m.admin_api_key_unlimited()}
+      </span>
+    );
+  }
+
+  const percent = usagePercent(keyData);
+
+  return (
+    <div className="min-w-28 space-y-1">
+      <div className="text-muted-foreground flex justify-between gap-2 text-xs">
+        <span>
+          {keyData.requestCount}/{keyData.rateLimitMax}
+        </span>
+        <span>{percent}%</span>
+      </div>
+      <div
+        aria-label={m.admin_api_key_usage()}
+        aria-valuemax={100}
+        aria-valuemin={0}
+        aria-valuenow={percent}
+        className="bg-muted h-2 overflow-hidden rounded-full"
+        role="progressbar"
+      >
+        <div
+          className="bg-primary h-full rounded-full transition-[width]"
+          style={{ width: `${percent}%` }}
+        />
+      </div>
+      <p className="text-muted-foreground text-xs">
+        {formatWindow(keyData.rateLimitTimeWindow)}
+      </p>
+    </div>
+  );
+};
+
+const usagePercent = (keyData: ApiKeySummary) => {
+  if (!keyData.rateLimitMax) return 0;
+  return Math.min(
+    100,
+    Math.round((keyData.requestCount / keyData.rateLimitMax) * 100),
+  );
+};
+
+const apiKeyTypeLabel = (configId: string) => {
+  switch (configId) {
+    case "default":
+      return m.admin_api_key_type_default();
+    case "service":
+      return m.admin_api_key_type_service();
+    case "organization":
+      return m.admin_api_key_type_organization();
+    case "user":
+      return m.admin_api_key_type_user();
+    default:
+      return configId;
+  }
+};
+
+const formatDateTime = (value: Date | null) =>
+  value ? new Date(value).toLocaleString() : m.admin_api_key_never();
+
+const formatWindow = (value: number | null) => {
+  if (!value) return m.admin_api_key_none();
+
+  const seconds = Math.round(value / 1000);
+  if (seconds % 86400 === 0) {
+    return m.admin_api_key_window_days({ count: seconds / 86400 });
+  }
+  if (seconds % 3600 === 0) {
+    return m.admin_api_key_window_hours({ count: seconds / 3600 });
+  }
+  if (seconds % 60 === 0) {
+    return m.admin_api_key_window_minutes({ count: seconds / 60 });
+  }
+
+  return m.admin_api_key_window_seconds({ count: seconds });
+};

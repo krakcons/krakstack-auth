@@ -88,6 +88,80 @@ export const AdminOrganizationIdParams = Schema.Struct({
   examples: [{ id: "organization-id" }],
 });
 
+export const AdminApiKeyIdParams = Schema.Struct({
+  id: Schema.String,
+}).annotate({
+  identifier: "AdminApiKeyIdParams",
+  title: "Admin API key ID params",
+  description: "Path parameters used to identify an API key.",
+  examples: [{ id: "api-key-id" }],
+});
+
+export const AdminApiKey = Schema.Struct({
+  id: Schema.String,
+  configId: Schema.String,
+  name: Schema.NullOr(Schema.String),
+  start: Schema.NullOr(Schema.String),
+  referenceId: Schema.String,
+  prefix: Schema.NullOr(Schema.String),
+  enabled: Schema.Boolean,
+  rateLimitEnabled: Schema.Boolean,
+  rateLimitTimeWindow: Schema.NullOr(Schema.Number),
+  rateLimitMax: Schema.NullOr(Schema.Number),
+  requestCount: Schema.Number,
+  remaining: Schema.NullOr(Schema.Number),
+  lastRequest: Schema.NullOr(Schema.Date),
+  expiresAt: Schema.NullOr(Schema.Date),
+  createdAt: Schema.Date,
+  updatedAt: Schema.Date,
+}).annotate({
+  identifier: "AdminApiKey",
+  title: "Admin API key",
+  description: "API key metadata returned to administrators.",
+  examples: [
+    {
+      id: "api-key-id",
+      configId: "service",
+      name: "Production service",
+      start: "svc_1234",
+      referenceId: "user-id",
+      prefix: "svc_",
+      enabled: true,
+      rateLimitEnabled: true,
+      rateLimitTimeWindow: 86400000,
+      rateLimitMax: 10000,
+      requestCount: 0,
+      remaining: null,
+      lastRequest: null,
+      expiresAt: null,
+      createdAt: new Date("2026-01-01T00:00:00.000Z"),
+      updatedAt: new Date("2026-01-01T00:00:00.000Z"),
+    },
+  ],
+});
+
+export const AdminUpdateApiKeyPayload = Schema.Struct({
+  name: Schema.optional(Schema.NullOr(Schema.String)),
+  enabled: Schema.optional(Schema.Boolean),
+  rateLimitEnabled: Schema.optional(Schema.Boolean),
+  rateLimitMax: Schema.optional(Schema.NullOr(Schema.Number)),
+  rateLimitTimeWindow: Schema.optional(Schema.NullOr(Schema.Number)),
+}).annotate({
+  identifier: "AdminUpdateApiKeyPayload",
+  title: "Update API key payload",
+  description:
+    "Payload used by administrators to update API key metadata and rate limits.",
+  examples: [
+    {
+      name: "Production service",
+      enabled: true,
+      rateLimitEnabled: true,
+      rateLimitMax: 10000,
+      rateLimitTimeWindow: 86400000,
+    },
+  ],
+});
+
 export const AdminCreateOrganizationPayload = Schema.Struct({
   name: Schema.NonEmptyString,
   slug: Schema.NonEmptyString,
@@ -220,6 +294,8 @@ export const PaginatedAdminOrganizations = PaginatedResponse(
 export type AdminListQuery = typeof AdminListQuery.Type;
 export type AdminUser = typeof AdminUser.Type;
 export type AdminOrganization = typeof AdminOrganization.Type;
+export type AdminApiKey = typeof AdminApiKey.Type;
+export type AdminUpdateApiKeyPayload = typeof AdminUpdateApiKeyPayload.Type;
 export type AdminCreateOrganizationPayload =
   typeof AdminCreateOrganizationPayload.Type;
 export type AdminUpdateOrganizationPayload =

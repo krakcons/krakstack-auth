@@ -142,6 +142,25 @@ const organizationFilter = (globalFilter: string | undefined) => {
   );
 };
 
+const serviceApiKeyRow = (value: typeof apikey.$inferSelect) => ({
+  id: value.id,
+  configId: value.configId,
+  name: value.name,
+  start: value.start,
+  referenceId: value.referenceId,
+  prefix: value.prefix,
+  enabled: value.enabled ?? false,
+  rateLimitEnabled: value.rateLimitEnabled ?? false,
+  rateLimitTimeWindow: value.rateLimitTimeWindow,
+  rateLimitMax: value.rateLimitMax,
+  requestCount: value.requestCount ?? 0,
+  remaining: value.remaining,
+  lastRequest: value.lastRequest,
+  expiresAt: value.expiresAt,
+  createdAt: value.createdAt,
+  updatedAt: value.updatedAt,
+});
+
 export const adminApiHandler = HttpApiBuilder.group(
   AdminApi,
   "admin",
@@ -293,6 +312,103 @@ export const adminApiHandler = HttpApiBuilder.group(
               organizations: Number(item.organizations),
             })),
           };
+        }),
+      )
+      .handle("listApiKeys", () =>
+        Effect.gen(function* () {
+          const db = yield* DB;
+          const keys = yield* db
+            .select()
+            .from(apikey)
+            .orderBy(desc(apikey.createdAt))
+            .pipe(Effect.mapError(internalServerError));
+
+          return keys.map(serviceApiKeyRow);
+        }),
+      )
+      .handle("deleteApiKey", ({ params }) =>
+        Effect.gen(function* () {
+          const db = yield* DB;
+          const [key] = yield* db
+            .delete(apikey)
+            .where(eq(apikey.id, params.id))
+            .returning()
+            .pipe(Effect.mapError(internalServerError));
+
+          if (!key) return yield* new HttpApiError.NotFound({});
+          return serviceApiKeyRow(key);
+        }),
+      )
+      .handle("updateApiKey", ({ params, payload }) =>
+        Effect.gen(function* () {
+          const db = yield* DB;
+          const name = payload.name?.trim() || null;
+          const [key] = yield* db
+            .update(apikey)
+            .set({
+              ...(payload.name !== undefined ? { name } : {}),
+              ...(payload.enabled !== undefined
+                ? { enabled: payload.enabled }
+                : {}),
+              ...(payload.rateLimitEnabled !== undefined
+                ? { rateLimitEnabled: payload.rateLimitEnabled }
+                : {}),
+              ...(payload.rateLimitMax !== undefined
+                ? { rateLimitMax: payload.rateLimitMax }
+                : {}),
+              ...(payload.rateLimitTimeWindow !== undefined
+                ? { rateLimitTimeWindow: payload.rateLimitTimeWindow }
+                : {}),
+              updatedAt: new Date(),
+            })
+            .where(eq(apikey.id, params.id))
+            .returning()
+            .pipe(Effect.mapError(internalServerError));
+
+          if (!key) return yield* new HttpApiError.NotFound({});
+          return serviceApiKeyRow(key);
+        }),
+      )
+      .handle("resetApiKeyRateLimit", ({ params }) =>
+        Effect.gen(function* () {
+          const db = yield* DB;
+          const [key] = yield* db
+            .update(apikey)
+            .set({ requestCount: 0, lastRequest: null, updatedAt: new Date() })
+            .where(eq(apikey.id, params.id))
+            .returning()
+            .pipe(Effect.mapError(internalServerError));
+
+          if (!key) return yield* new HttpApiError.NotFound({});
+          return serviceApiKeyRow(key);
+        }),
+      )
+      .handle("enableApiKeyRateLimit", ({ params }) =>
+        Effect.gen(function* () {
+          const db = yield* DB;
+          const [key] = yield* db
+            .update(apikey)
+            .set({ rateLimitEnabled: true, updatedAt: new Date() })
+            .where(eq(apikey.id, params.id))
+            .returning()
+            .pipe(Effect.mapError(internalServerError));
+
+          if (!key) return yield* new HttpApiError.NotFound({});
+          return serviceApiKeyRow(key);
+        }),
+      )
+      .handle("disableApiKeyRateLimit", ({ params }) =>
+        Effect.gen(function* () {
+          const db = yield* DB;
+          const [key] = yield* db
+            .update(apikey)
+            .set({ rateLimitEnabled: false, updatedAt: new Date() })
+            .where(eq(apikey.id, params.id))
+            .returning()
+            .pipe(Effect.mapError(internalServerError));
+
+          if (!key) return yield* new HttpApiError.NotFound({});
+          return serviceApiKeyRow(key);
         }),
       )
       .handle("listUsers", ({ query }) =>

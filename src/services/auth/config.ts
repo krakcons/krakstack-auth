@@ -227,7 +227,6 @@ const createAuth = ({
       }),
       organization({
         allowUserToCreateOrganization: true,
-        organizationLimit: 10,
         membershipLimit: 100,
         roles: organizationAuthRoles,
       }),

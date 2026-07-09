@@ -15,6 +15,17 @@ const authError = (fallback: string) => (error: unknown) =>
 
 const internalServerError = () => new HttpApiError.InternalServerError({});
 
+const userRole = (value: unknown) => {
+  if (typeof value !== "object" || value === null || !("role" in value)) {
+    return undefined;
+  }
+  return Reflect.get(value, "role");
+};
+
+const hasAdminRole = (role: unknown) =>
+  typeof role === "string" &&
+  role.split(",").some((item) => item.trim() === "admin");
+
 const requestAuth = (
   request: HttpServerRequest.HttpServerRequest,
   fallback: string,
@@ -111,6 +122,13 @@ export const authApiHandler = HttpApiBuilder.group(
             "Could not create API key",
           );
           const session = yield* requireMutableUserSession(request);
+
+          if (
+            payload.configId === "service" &&
+            !hasAdminRole(userRole(session.user))
+          ) {
+            return yield* new HttpApiError.Forbidden({});
+          }
 
           const permissions = payload.permissions
             ? Object.fromEntries(

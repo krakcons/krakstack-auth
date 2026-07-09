@@ -8,9 +8,12 @@ import { Schema } from "effect";
 
 import {
   AdminCreateOrganizationPayload,
+  AdminApiKey,
+  AdminApiKeyIdParams,
   AdminListQuery,
   AdminOrganization,
   AdminOrganizationIdParams,
+  AdminUpdateApiKeyPayload,
   AdminUpdateOrganizationPayload,
   DashboardStatsQuery,
   DashboardStatsResponse,
@@ -41,6 +44,128 @@ export const AdminApiGroup = HttpApiGroup.make("admin")
         summary: "Get dashboard statistics",
         description:
           "Returns user, organization, and daily active user counts for authenticated administrators.",
+      }),
+    ),
+  )
+  .add(
+    HttpApiEndpoint.get("listApiKeys", "/admin/api-keys", {
+      success: Schema.Array(AdminApiKey),
+      error: [
+        HttpApiError.Unauthorized,
+        HttpApiError.Forbidden,
+        HttpApiError.InternalServerError,
+      ],
+    }).annotateMerge(
+      OpenApi.annotations({
+        title: "List API keys",
+        summary: "List API keys for administrators",
+        description:
+          "Returns all API key metadata for authenticated administrators.",
+      }),
+    ),
+  )
+  .add(
+    HttpApiEndpoint.delete("deleteApiKey", "/admin/api-keys/:id", {
+      params: AdminApiKeyIdParams,
+      success: AdminApiKey,
+      error: [
+        HttpApiError.Unauthorized,
+        HttpApiError.Forbidden,
+        HttpApiError.NotFound,
+        HttpApiError.InternalServerError,
+      ],
+    }).annotateMerge(
+      OpenApi.annotations({
+        title: "Delete API key",
+        summary: "Delete an API key",
+        description: "Deletes an API key for authenticated administrators.",
+      }),
+    ),
+  )
+  .add(
+    HttpApiEndpoint.patch("updateApiKey", "/admin/api-keys/:id", {
+      params: AdminApiKeyIdParams,
+      payload: AdminUpdateApiKeyPayload,
+      success: AdminApiKey,
+      error: [
+        HttpApiError.Unauthorized,
+        HttpApiError.Forbidden,
+        HttpApiError.NotFound,
+        HttpApiError.InternalServerError,
+      ],
+    }).annotateMerge(
+      OpenApi.annotations({
+        title: "Update API key",
+        summary: "Update an API key",
+        description:
+          "Updates API key metadata and rate-limit settings for authenticated administrators.",
+      }),
+    ),
+  )
+  .add(
+    HttpApiEndpoint.post(
+      "resetApiKeyRateLimit",
+      "/admin/api-keys/:id/reset-rate-limit",
+      {
+        params: AdminApiKeyIdParams,
+        success: AdminApiKey,
+        error: [
+          HttpApiError.Unauthorized,
+          HttpApiError.Forbidden,
+          HttpApiError.NotFound,
+          HttpApiError.InternalServerError,
+        ],
+      },
+    ).annotateMerge(
+      OpenApi.annotations({
+        title: "Reset API key rate limit",
+        summary: "Reset an API key rate-limit window",
+        description:
+          "Resets request count and last-used window state for an API key.",
+      }),
+    ),
+  )
+  .add(
+    HttpApiEndpoint.post(
+      "enableApiKeyRateLimit",
+      "/admin/api-keys/:id/enable-rate-limit",
+      {
+        params: AdminApiKeyIdParams,
+        success: AdminApiKey,
+        error: [
+          HttpApiError.Unauthorized,
+          HttpApiError.Forbidden,
+          HttpApiError.NotFound,
+          HttpApiError.InternalServerError,
+        ],
+      },
+    ).annotateMerge(
+      OpenApi.annotations({
+        title: "Enable API key rate limit",
+        summary: "Enable API key rate limiting",
+        description: "Enables rate-limit enforcement for an API key.",
+      }),
+    ),
+  )
+  .add(
+    HttpApiEndpoint.post(
+      "disableApiKeyRateLimit",
+      "/admin/api-keys/:id/disable-rate-limit",
+      {
+        params: AdminApiKeyIdParams,
+        success: AdminApiKey,
+        error: [
+          HttpApiError.Unauthorized,
+          HttpApiError.Forbidden,
+          HttpApiError.NotFound,
+          HttpApiError.InternalServerError,
+        ],
+      },
+    ).annotateMerge(
+      OpenApi.annotations({
+        title: "Disable API key rate limit",
+        summary: "Disable API key rate limiting",
+        description: "Disables rate-limit enforcement for an API key.",
       }),
     ),
   )
