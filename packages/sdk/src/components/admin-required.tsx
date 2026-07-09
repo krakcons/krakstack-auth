@@ -1,4 +1,3 @@
-// @ts-nocheck
 import { useAtomSuspense } from "@effect/atom-react";
 import { Effect } from "effect";
 import { Atom } from "effect/unstable/reactivity";
@@ -72,11 +71,13 @@ export type AdminRequiredProps = {
   messages?: AdminRequiredMessages | undefined;
 };
 
-type Invitation = Awaited<
-  ReturnType<AuthUiClient["organization"]["listUserInvitations"]>
->["data"] extends Array<infer Item>
-  ? Item
-  : never;
+type Invitation = {
+  id: string;
+  status: string;
+  organizationId: string;
+  organization?: { name?: string | null } | null;
+  organizationName?: string | null;
+};
 type FullOrganization = {
   id: string;
   name: string;
@@ -85,6 +86,18 @@ type FullOrganization = {
   contactEmail: string | null;
   logo: string | null;
   icon: string | null;
+};
+
+const isFullOrganization = (value: unknown): value is FullOrganization => {
+  if (typeof value !== "object" || value === null) return false;
+  if (!("id" in value) || typeof value.id !== "string") return false;
+  if (!("name" in value) || typeof value.name !== "string") return false;
+  if (!("slug" in value) || typeof value.slug !== "string") return false;
+  if (!("displayName" in value) || typeof value.displayName !== "string") {
+    return false;
+  }
+
+  return true;
 };
 
 const interpolate = (value: string, params?: Record<string, string>) =>
@@ -141,7 +154,8 @@ const getOrganizationPublicProfile = async (
   });
 
   if (!response.ok) return null;
-  return (await response.json()) as FullOrganization;
+  const body: unknown = await response.json();
+  return isFullOrganization(body) ? body : null;
 };
 
 type AccessResult =
@@ -220,8 +234,6 @@ export function AdminRequired({
   const baseUrl = auth?.baseUrl;
   const locale = auth?.locale;
   const refreshAuth = auth?.refreshAuth;
-  const m = labels(locale, messages);
-
   if (!authClient) {
     throw new Error("KrakstackAuthProvider is required to use authClient.");
   }

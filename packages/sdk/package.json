@@ -60,8 +60,8 @@
     "access": "public"
   },
   "scripts": {
-    "build": "rm -rf dist && tsc -p tsconfig.json",
-    "build:watch": "rm -rf dist && tsc -p tsconfig.json --watch --preserveWatchOutput",
+    "build": "rm -rf dist && tsc -p tsconfig.build.json",
+    "build:watch": "rm -rf dist && tsc -p tsconfig.build.json --watch --preserveWatchOutput",
     "dev": "bun run build:watch",
     "prepack": "bun run build",
     "type:check": "tsc -p tsconfig.json --noEmit"

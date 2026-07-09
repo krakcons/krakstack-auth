@@ -1,4 +1,3 @@
-// @ts-nocheck
 import type { ApiKey } from "@better-auth/api-key/client";
 import { useAtomRefresh, useAtomSet, useAtomValue } from "@effect/atom-react";
 import { useStore } from "@tanstack/react-form";
@@ -371,6 +370,14 @@ type OrganizationMembersData = {
   members: OrganizationMemberSummary[];
   invitations: OrganizationInvitationSummary[];
 };
+type OrganizationMemberRow = Omit<OrganizationMemberSummary, "role"> & {
+  role: string;
+};
+
+const normalizeInvitationRole = (role: string) => {
+  const normalized = normalizeOrganizationRole(role);
+  return normalized === "support" ? "member" : normalized;
+};
 
 const userInvitationsAtom = Atom.family((authClient: AuthUiClient) =>
   Atom.keepAlive(
@@ -397,7 +404,10 @@ const userInvitationsAtom = Atom.family((authClient: AuthUiClient) =>
 );
 
 const emptyUserInvitationsAtom = Atom.make(
-  Effect.succeed([] as UserInvitationSummary[]),
+  Effect.try({
+    try: (): UserInvitationSummary[] => [],
+    catch: (error) => error,
+  }),
 );
 
 const organizationMembersAtom = Atom.family((authClient: AuthUiClient) =>
@@ -451,7 +461,7 @@ const organizationApiKeysAtom = Atom.family((authClient: AuthUiClient) =>
     Atom.keepAlive(
       Atom.make(
         Effect.tryPromise({
-          try: async () => {
+          try: async (): Promise<ApiKeySummary[]> => {
             const result = await authClient.apiKey.list({
               query: { configId: "organization", organizationId },
             });
@@ -935,16 +945,20 @@ export function OrganizationSwitcher({
               {activeOrganization.data ? (
                 <>
                   <DropdownMenuSeparator />
+                  {(() => {
+                    const organizationId = activeOrganization.data.id;
+
+                    return (
                   <DropdownMenuItem
                     onClick={() => {
-                      void navigator.clipboard.writeText(
-                        activeOrganization.data.id,
-                      );
+                      void navigator.clipboard.writeText(organizationId);
                     }}
                   >
                     <Copy />
                     {m.organization_copy_id()}
                   </DropdownMenuItem>
+                    );
+                  })()}
                   {canUpdateOrganization ? (
                     <DropdownMenuItem onClick={() => setDialog("manage")}>
                       <PencilIcon />
@@ -1115,7 +1129,9 @@ export function OrganizationSwitcher({
             invitations={userInvitations}
             loading={loadingUserInvitations}
             error={userInvitationsError}
-            activeOrganizationId={activeOrganization.data?.id}
+            {...(activeOrganization.data
+              ? { activeOrganizationId: activeOrganization.data.id }
+              : {})}
             onActionComplete={refreshAfterInvitationAction}
           />
         </DialogContent>
@@ -1488,26 +1504,6 @@ function EditOrganizationSection({
   );
 }
 
-function CreateOrganizationSlugAutoFill({
-  form,
-}: {
-  form: ReturnType<typeof useAppForm>;
-}) {
-  const name = useStore(form.store, (state) => state.values.name);
-  const slugIsDirty = useStore(
-    form.store,
-    (state) => state.fieldMeta.slug?.isDirty ?? false,
-  );
-
-  useEffect(() => {
-    if (!slugIsDirty) {
-      form.setFieldValue("slug", slugify(name), { dontUpdateMeta: true });
-    }
-  }, [form, name, slugIsDirty]);
-
-  return null;
-}
-
 function CreateOrganizationSection({
   authClient,
   baseUrl,
@@ -1585,6 +1581,17 @@ function CreateOrganizationSection({
       }
     },
   });
+  const name = useStore(form.store, (state) => state.values.name);
+  const slugIsDirty = useStore(
+    form.store,
+    (state) => state.fieldMeta.slug?.isDirty ?? false,
+  );
+
+  useEffect(() => {
+    if (!slugIsDirty) {
+      form.setFieldValue("slug", slugify(name), { dontUpdateMeta: true });
+    }
+  }, [form, name, slugIsDirty]);
 
   return (
     <section className="flex flex-col gap-4">
@@ -1610,7 +1617,6 @@ function CreateOrganizationSection({
               />
             )}
           </form.AppField>
-          <CreateOrganizationSlugAutoFill form={form} />
           <Separator className="my-2" />
           {editingLocale === "en" ? (
             <>
@@ -1798,7 +1804,7 @@ function OrganizationMembersManager({
   const [memberRoleOverrides, setMemberRoleOverrides] = useState<
     Record<string, string>
   >({});
-  const displayedMembers = members.map((member) => ({
+  const displayedMembers: OrganizationMemberRow[] = members.map((member) => ({
     ...member,
     role: memberRoleOverrides[member.id] ?? member.role,
   }));
@@ -1824,7 +1830,7 @@ function OrganizationMembersManager({
       formApi.setErrorMap({ onSubmit: undefined });
       const result = await authClient.organization.inviteMember({
         email: value.email.trim(),
-        role: normalizeOrganizationRole(value.role),
+        role: normalizeInvitationRole(value.role),
         organizationId: organization.id,
       });
 
@@ -1844,7 +1850,7 @@ function OrganizationMembersManager({
   });
 
   const updateRole = async (
-    member: OrganizationMemberSummary,
+    member: OrganizationMemberRow,
     role: OrganizationRole | OrganizationRole[],
   ) => {
     setError(null);
@@ -1872,7 +1878,7 @@ function OrganizationMembersManager({
     }
   };
 
-  const removeMember = async (member: OrganizationMemberSummary) => {
+  const removeMember = async (member: OrganizationMemberRow) => {
     setError(null);
 
     const result = await authClient.organization.removeMember({
@@ -2057,10 +2063,10 @@ const memberColumns = ({
   baseUrl?: string | undefined;
   canChangeRoles: boolean;
   onRoleChange: (
-    member: OrganizationMemberSummary,
+    member: OrganizationMemberRow,
     role: OrganizationRole | OrganizationRole[],
   ) => void;
-}): ColumnDef<OrganizationMemberSummary>[] => [
+}): ColumnDef<OrganizationMemberRow>[] => [
   {
     id: "user",
     header: m.organization_member_user(),
@@ -2111,6 +2117,7 @@ const memberColumns = ({
             value: role,
           }))}
           value={roleOptions}
+          from="/"
           onAdd={(value) => {
             if (!isOrganizationRole(value)) return;
             onRoleChange(member, Array.from(new Set([...roles, value])));
@@ -2147,14 +2154,14 @@ const memberRowActions = ({
   canRemoveMembers: boolean;
   currentUserId: string;
   leavingOrganization: boolean;
-  onLeave: (member: OrganizationMemberSummary) => void;
-  onRemove: (member: OrganizationMemberSummary) => void;
+  onLeave: (member: OrganizationMemberRow) => void;
+  onRemove: (member: OrganizationMemberRow) => void;
 }) => [
   {
     name: m.organization_member_leave(),
     icon: <LogOut />,
     variant: "destructive" as const,
-    visible: (member: OrganizationMemberSummary) =>
+    visible: (member: OrganizationMemberRow) =>
       member.userId === currentUserId && !leavingOrganization,
     onClick: onLeave,
   },
@@ -2162,7 +2169,7 @@ const memberRowActions = ({
     name: m.organization_member_remove(),
     icon: <Trash2 />,
     variant: "destructive" as const,
-    visible: (member: OrganizationMemberSummary) =>
+    visible: (member: OrganizationMemberRow) =>
       canRemoveMembers &&
       member.userId !== currentUserId &&
       normalizeOrganizationRole(member.role) !== "owner",

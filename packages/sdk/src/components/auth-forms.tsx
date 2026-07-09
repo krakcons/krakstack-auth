@@ -1,6 +1,6 @@
-// @ts-nocheck
 import { useAtomSuspense } from "@effect/atom-react";
 import { Link, useNavigate, useRouterState } from "@tanstack/react-router";
+import { Schema } from "effect";
 import { Atom, AsyncResult } from "effect/unstable/reactivity";
 import { REGEXP_ONLY_DIGITS } from "input-otp";
 import { KeyRound, Mail } from "lucide-react";
@@ -27,7 +27,10 @@ import type { AuthUiClient } from "./auth-client";
 import { authClientApi } from "./auth-client-api";
 import { type KrakstackAuthLocale, useKrakstackAuth } from "./auth-provider";
 import { cn } from "./utils";
-import type { ExtraProjectPublicConfig } from "../extra/schema";
+import {
+  ExtraProjectPublicConfig as ExtraProjectPublicConfigSchema,
+  type ExtraProjectPublicConfig,
+} from "../extra/schema";
 
 const EMAIL_OTP_RESEND_COOLDOWN_SECONDS = 60;
 
@@ -183,7 +186,7 @@ const useAuthProjectConfig = (
   baseUrl: string | undefined,
   searchString: string,
   projectConfig: ExtraProjectPublicConfig | null | undefined,
-) => {
+): ExtraProjectPublicConfig | null => {
   const projectId = getSearchParam(searchString, "projectId");
   const clientId = getSearchParam(searchString, "client_id");
   const host = getBrowserAuthHost();
@@ -211,7 +214,9 @@ const useAuthProjectConfig = (
         );
   const result = useAtomSuspense(atom, { suspendOnWaiting: true });
 
-  return result.value;
+  return result.value === null
+    ? null
+    : Schema.decodeUnknownSync(ExtraProjectPublicConfigSchema)(result.value);
 };
 
 const text = (value: string, params?: Record<string, string>) =>
@@ -258,14 +263,14 @@ export function Signin(props: AuthFormProps) {
     projectConfig?.rootDomain,
   );
   const oauthQuery = getOAuthQuery(searchString);
-  const authOptions = projectConfig?.authOptions ?? {};
+  const authOptions = projectConfig?.authOptions;
   const onNavigate = (target: string) => navigateTarget(target, navigate);
   const onTwoFactorRedirect = (href: string) => navigate({ href });
   const options = {
-    emailPassword: authOptions.emailPassword ?? true,
-    emailOtp: authOptions.emailOtp ?? true,
-    google: authOptions.google ?? true,
-    signUp: authOptions.signUp ?? true,
+    emailPassword: authOptions?.emailPassword ?? true,
+    emailOtp: authOptions?.emailOtp ?? true,
+    google: authOptions?.google ?? true,
+    signUp: authOptions?.signUp ?? true,
   };
   const [emailSubmitted, setEmailSubmitted] = useState(false);
   const [authMethod, setAuthMethod] = useState<"password" | "emailOtp">(() =>
@@ -659,14 +664,14 @@ export function Signup(props: AuthFormProps) {
     projectConfig?.authDomain,
     projectConfig?.rootDomain,
   );
-  const authOptions = projectConfig?.authOptions ?? {};
+  const authOptions = projectConfig?.authOptions;
   const onNavigate = (target: string) => navigate({ href: target });
   const onVerifyEmail = (email: string) =>
     navigate({ to: "/verify-email", search: { email } });
   const options = {
-    google: authOptions.google ?? true,
-    signUp: authOptions.signUp ?? true,
-    signUpName: authOptions.signUpName ?? true,
+    google: authOptions?.google ?? true,
+    signUp: authOptions?.signUp ?? true,
+    signUpName: authOptions?.signUpName ?? true,
   };
   const form = useAppForm({
     defaultValues: { name: "", email: "", password: "" },
@@ -1052,7 +1057,15 @@ export function TwoFactor(props: AuthFormProps) {
   );
 }
 
-const OtpInput = ({ field, label }: { field: unknown; label: string }) => {
+type OtpField = {
+  name: string;
+  state: { value?: string; meta: { isValid: boolean } };
+  handleChange: (value: string) => void;
+  handleBlur: () => void;
+  getMeta: () => { errors?: Parameters<typeof FieldError>[0]["errors"] };
+};
+
+const OtpInput = ({ field, label }: { field: OtpField; label: string }) => {
   const invalid = !field.state.meta.isValid;
   return (
     <Field data-invalid={invalid}>
@@ -1081,7 +1094,7 @@ const OtpInput = ({ field, label }: { field: unknown; label: string }) => {
           <InputOTPSlot index={5} aria-invalid={invalid} />
         </InputOTPGroup>
       </InputOTP>
-      <FieldError errors={field.getMeta().errors} />
+      <FieldError errors={field.getMeta().errors ?? []} />
     </Field>
   );
 };

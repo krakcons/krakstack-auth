@@ -1,4 +1,3 @@
-// @ts-nocheck
 import { useAtomSet, useAtomValue } from "@effect/atom-react";
 import {
   useNavigate,
@@ -199,7 +198,11 @@ const impersonateUser = async (
     throw new Error(result.error.message ?? m.admin_error_impersonate);
 };
 
-const activeOrganizationId = (session: unknown) => {
+type SessionWithActiveOrganization = {
+  session?: { activeOrganizationId?: unknown };
+};
+
+const activeOrganizationId = (session: SessionWithActiveOrganization | null) => {
   const value = session?.session?.activeOrganizationId;
   return typeof value === "string" && value ? value : null;
 };

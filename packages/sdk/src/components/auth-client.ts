@@ -20,36 +20,23 @@ const additionalFields = {
   },
 } as const;
 
-export type AuthUiClient = ReturnType<
-  typeof createAuthClient<{
-    plugins: [
-      ReturnType<typeof inferAdditionalFields<never, typeof additionalFields>>,
-      ReturnType<typeof adminClient>,
-      ReturnType<typeof emailOTPClient>,
-      ReturnType<typeof lastLoginMethodClient>,
-      ReturnType<typeof organizationClient>,
-      ReturnType<typeof twoFactorClient>,
-      ReturnType<typeof apiKeyClient>,
-      ReturnType<typeof genericOAuthClient>,
-    ];
-  }>
->;
+const authUiClientPlugins = [
+  inferAdditionalFields<never, typeof additionalFields>(additionalFields),
+  adminClient(),
+  emailOTPClient(),
+  lastLoginMethodClient({
+    cookieName: "krakstack-auth.last_used_login_method",
+  }),
+  organizationClient(),
+  twoFactorClient(),
+  apiKeyClient(),
+  genericOAuthClient(),
+];
 
-export const createAuthUiClient = (
-  baseUrl?: string | undefined,
-): AuthUiClient =>
+export type AuthUiClient = ReturnType<typeof createAuthUiClient>;
+
+export const createAuthUiClient = (baseUrl?: string | undefined) =>
   createAuthClient({
     ...(baseUrl ? { baseURL: baseUrl } : {}),
-    plugins: [
-      inferAdditionalFields<never, typeof additionalFields>(additionalFields),
-      adminClient(),
-      emailOTPClient(),
-      lastLoginMethodClient({
-        cookieName: "krakstack-auth.last_used_login_method",
-      }),
-      organizationClient(),
-      twoFactorClient(),
-      apiKeyClient(),
-      genericOAuthClient(),
-    ],
+    plugins: authUiClientPlugins,
   });

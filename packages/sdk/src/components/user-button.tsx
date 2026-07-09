@@ -1,4 +1,3 @@
-// @ts-nocheck
 import type { ApiKey } from "@better-auth/api-key/client";
 import { useAtomRefresh, useAtomSet, useAtomValue } from "@effect/atom-react";
 import { type ColumnDef } from "@tanstack/react-table";
@@ -403,7 +402,7 @@ const userAccountsAtom = Atom.family((authClient: AuthUiClient) =>
   Atom.keepAlive(
     Atom.make(
       Effect.tryPromise({
-        try: async () => {
+        try: async (): Promise<LinkedAccount[]> => {
           const result = await authClient.listAccounts();
 
           if (result.error) {
@@ -424,7 +423,7 @@ const userApiKeysAtom = Atom.family((authClient: AuthUiClient) =>
   Atom.keepAlive(
     Atom.make(
       Effect.tryPromise({
-        try: async () => {
+        try: async (): Promise<ApiKeySummary[]> => {
           const result = await authClient.apiKey.list({
             query: { configId: "user" },
           });
@@ -1418,7 +1417,7 @@ function RevokeAccountForm({
 
 const providerName = (
   providerId: string,
-  m: ReturnType<typeof userButtonMessages>,
+  m: ReturnType<typeof userButtonMessageFns>,
 ) => {
   if (providerId === "google") return m.user_account_google_title();
   if (providerId === "credential") return m.user_account_password_title();
@@ -1973,7 +1972,7 @@ function ApiKeyManager({
 const apiKeyColumns = ({
   m,
 }: {
-  m: ReturnType<typeof userButtonMessages>;
+  m: ReturnType<typeof userButtonMessageFns>;
 }): ColumnDef<ApiKeySummary>[] => [
   {
     accessorKey: "name",
@@ -2028,7 +2027,7 @@ const apiKeyRowActions = ({
   m,
   onDelete,
 }: {
-  m: ReturnType<typeof userButtonMessages>;
+  m: ReturnType<typeof userButtonMessageFns>;
   onDelete: (key: ApiKeySummary) => void;
 }) => [
   {
