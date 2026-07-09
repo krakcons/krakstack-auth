@@ -8,7 +8,7 @@ import {
   organizationClient,
   twoFactorClient,
 } from "better-auth/client/plugins";
-import { createAuthClient } from "better-auth/react";
+import { createAuthClient, type ReactAuthClient } from "better-auth/react";
 
 const additionalFields = {
   session: {
@@ -20,7 +20,18 @@ const additionalFields = {
   },
 } as const;
 
-const authUiClientPlugins = [
+type AuthUiClientPlugins = [
+  ReturnType<typeof inferAdditionalFields<never, typeof additionalFields>>,
+  ReturnType<typeof adminClient<{}>>,
+  ReturnType<typeof emailOTPClient>,
+  ReturnType<typeof lastLoginMethodClient>,
+  ReturnType<typeof organizationClient<{}>>,
+  ReturnType<typeof twoFactorClient>,
+  ReturnType<typeof apiKeyClient>,
+  ReturnType<typeof genericOAuthClient>,
+];
+
+const authUiClientPlugins: AuthUiClientPlugins = [
   inferAdditionalFields<never, typeof additionalFields>(additionalFields),
   adminClient(),
   emailOTPClient(),
@@ -33,10 +44,15 @@ const authUiClientPlugins = [
   genericOAuthClient(),
 ];
 
-export type AuthUiClient = ReturnType<typeof createAuthUiClient>;
+type AuthUiClientOptions = {
+  baseURL?: string | undefined;
+  plugins: AuthUiClientPlugins;
+};
+
+export type AuthUiClient = ReactAuthClient<AuthUiClientOptions>;
 
 export const createAuthUiClient = (baseUrl?: string | undefined) =>
-  createAuthClient({
+  createAuthClient<AuthUiClientOptions>({
     ...(baseUrl ? { baseURL: baseUrl } : {}),
     plugins: authUiClientPlugins,
   });
