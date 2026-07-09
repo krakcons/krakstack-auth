@@ -3,35 +3,27 @@ import {
   adminClient,
   emailOTPClient,
   genericOAuthClient,
+  inferAdditionalFields,
   lastLoginMethodClient,
   organizationClient,
   twoFactorClient,
 } from "better-auth/client/plugins";
 import { createAuthClient } from "better-auth/react";
 
-type Session = {
+const additionalFields = {
   session: {
-    activeOrganizationId?: string | null | undefined;
-    impersonatedBy?: string | null | undefined;
-  };
-  user: {
-    id: string;
-    name: string;
-    email: string;
-    image?: string | null | undefined;
-    role?: string | null | undefined;
-  };
-};
+    impersonatedByOrganizationId: {
+      type: "string",
+      required: false,
+      input: false,
+    },
+  },
+} as const;
 
-type Query<T> = {
-  data: T | null | undefined;
-  isPending: boolean;
-  refetch: () => Promise<unknown>;
-};
-
-type BaseAuthUiClient = ReturnType<
+export type AuthUiClient = ReturnType<
   typeof createAuthClient<{
     plugins: [
+      ReturnType<typeof inferAdditionalFields<never, typeof additionalFields>>,
       ReturnType<typeof adminClient>,
       ReturnType<typeof emailOTPClient>,
       ReturnType<typeof lastLoginMethodClient>,
@@ -43,39 +35,13 @@ type BaseAuthUiClient = ReturnType<
   }>
 >;
 
-export type AuthUiClient = Omit<
-  BaseAuthUiClient,
-  | "getSession"
-  | "organization"
-  | "useSession"
-  | "useActiveOrganization"
-  | "useActiveMemberRole"
-> & {
-  getSession: () => Promise<{ data: Session | null; error: unknown }>;
-  organization: {
-    setActive: (input: { organizationId: string }) => Promise<{
-      data: unknown;
-      error: unknown;
-    }>;
-  };
-  useSession: () => Query<Session>;
-  useActiveOrganization: () => Query<{
-    id: string;
-    name: string;
-    slug: string;
-    createdAt: Date | string;
-    members: unknown[];
-    invitations: unknown[];
-  }>;
-  useActiveMemberRole: () => Query<{ role: string }>;
-};
-
 export const createAuthUiClient = (
   baseUrl?: string | undefined,
 ): AuthUiClient =>
   createAuthClient({
     ...(baseUrl ? { baseURL: baseUrl } : {}),
     plugins: [
+      inferAdditionalFields<never, typeof additionalFields>(additionalFields),
       adminClient(),
       emailOTPClient(),
       lastLoginMethodClient({
