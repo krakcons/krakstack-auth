@@ -17,18 +17,23 @@ import {
 
 import type { AuthUiClient } from "./auth-client";
 import { type KrakstackAuthLocale, useKrakstackAuth } from "./auth-provider";
+import {
+  isInvitationExpired,
+  useInvitationExpirationClock,
+} from "./invitation-expiration";
 
 const defaultMessages = {
   en: {
     member_required_title: "Organization access required",
-    member_required_description:
-      "You need organization access to continue.",
+    member_required_description: "You need organization access to continue.",
     member_required_org_description:
       "You need access to {organization} before opening the admin area.",
     member_required_no_permission:
       "Your account is signed in, but it does not have access to this organization.",
     member_required_invite_found:
       "You have a pending invitation to {organization}. Accept it to continue.",
+    member_required_invite_expired:
+      "Your invitation to {organization} has expired. Contact the organization administrator for a new invitation.",
     member_required_accept_invite: "Accept invitation",
     member_required_accepting_invite: "Accepting...",
     member_required_accept_error: "Could not accept the invitation.",
@@ -48,6 +53,8 @@ const defaultMessages = {
       "Votre compte est connecté, mais il ne dispose pas d'un accès à cette organisation.",
     member_required_invite_found:
       "Vous avez une invitation en attente pour {organization}. Acceptez-la pour continuer.",
+    member_required_invite_expired:
+      "Votre invitation pour {organization} a expiré. Contactez l'administrateur de l'organisation pour obtenir une nouvelle invitation.",
     member_required_accept_invite: "Accepter l'invitation",
     member_required_accepting_invite: "Acceptation...",
     member_required_accept_error: "Impossible d'accepter l'invitation.",
@@ -74,6 +81,7 @@ export type MemberRequiredProps = {
 type Invitation = {
   id: string;
   status: string;
+  expiresAt: Date | string;
   organizationId: string;
   organization?: { name?: string | null } | null;
   organizationName?: string | null;
@@ -115,7 +123,8 @@ const labels = (
 });
 
 const invitationMatches = (invitation: Invitation, organizationId: string) =>
-  invitation.status === "pending" && invitation.organizationId === organizationId;
+  invitation.status === "pending" &&
+  invitation.organizationId === organizationId;
 
 const organizationContactEmail = (
   organization: FullOrganization | null,
@@ -149,9 +158,12 @@ const getOrganizationPublicProfile = async (
   baseUrl: string | undefined,
   organizationId: string,
 ): Promise<FullOrganization | null> => {
-  const response = await fetch(organizationProfileUrl(baseUrl, organizationId), {
-    credentials: "include",
-  });
+  const response = await fetch(
+    organizationProfileUrl(baseUrl, organizationId),
+    {
+      credentials: "include",
+    },
+  );
 
   if (!response.ok) return null;
   const body: unknown = await response.json();
@@ -293,6 +305,9 @@ function MemberRequiredGate({
   const [error, setError] = useState<string | null>(null);
 
   const access = accessResult.value;
+  const invitationNow = useInvitationExpirationClock(
+    access.allowed || !access.invitation ? [] : [access.invitation],
+  );
 
   useEffect(() => {
     if (!access.allowed) return;
@@ -303,16 +318,22 @@ function MemberRequiredGate({
   if (access.allowed) return <>{children}</>;
 
   const { invitation, organization } = access;
+  const invitationExpired = invitation
+    ? isInvitationExpired(invitation, invitationNow)
+    : false;
 
   const displayName = organizationDisplayName(
     invitation,
     organization,
     organizationId,
   );
-  const resolvedContactEmail = organizationContactEmail(organization, contactEmail);
+  const resolvedContactEmail = organizationContactEmail(
+    organization,
+    contactEmail,
+  );
 
   const acceptInvitation = async () => {
-    if (!invitation) return;
+    if (!invitation || isInvitationExpired(invitation)) return;
     setAccepting(true);
     setError(null);
 
@@ -351,9 +372,12 @@ function MemberRequiredGate({
         <CardContent className="space-y-3">
           {invitation ? (
             <p className="text-muted-foreground text-sm">
-              {interpolate(m.member_required_invite_found, {
-                organization: displayName,
-              })}
+              {interpolate(
+                invitationExpired
+                  ? m.member_required_invite_expired
+                  : m.member_required_invite_found,
+                { organization: displayName },
+              )}
             </p>
           ) : (
             <p className="text-muted-foreground text-sm">
@@ -381,7 +405,7 @@ function MemberRequiredGate({
           {error ? <p className="text-destructive text-sm">{error}</p> : null}
         </CardContent>
         <CardFooter className="flex flex-wrap gap-2">
-          {invitation ? (
+          {invitation && !invitationExpired ? (
             <Button onClick={acceptInvitation} disabled={accepting}>
               {accepting ? (
                 <Loader2 className="size-4 animate-spin" />

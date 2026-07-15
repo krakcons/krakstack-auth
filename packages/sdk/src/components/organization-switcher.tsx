@@ -75,6 +75,11 @@ import { authClientApi } from "./auth-client-api";
 import { useKrakstackAuth } from "./auth-provider";
 import { createApiKey } from "./api-key";
 import { useOpenedOnce } from "./hooks";
+import {
+  invitationDisplayStatus,
+  isInvitationExpired,
+  useInvitationExpirationClock,
+} from "./invitation-expiration";
 import { ExtraUploadedAsset } from "../extra/schema";
 import { assetPath, assetUrl, cn } from "./utils";
 
@@ -107,12 +112,13 @@ const messages = {
     organization_invitation_status: "Status",
     organization_invitation_status_accepted: "Accepted",
     organization_invitation_status_canceled: "Canceled",
+    organization_invitation_status_expired: "Expired",
     organization_invitation_status_pending: "Pending",
     organization_invitation_status_rejected: "Rejected",
     organization_invitations_description:
-      "Track invitations that have not been accepted yet.",
-    organization_invitations_empty: "No pending invitations.",
-    organization_invitations_heading: "Pending invitations",
+      "Track pending and expired invitations.",
+    organization_invitations_empty: "No invitations.",
+    organization_invitations_heading: "Invitations",
     organization_invitations_load_error:
       "Could not load organization invitations.",
     organization_user_invitations_description:
@@ -204,12 +210,13 @@ const messages = {
     organization_invitation_status: "Statut",
     organization_invitation_status_accepted: "Acceptée",
     organization_invitation_status_canceled: "Annulée",
+    organization_invitation_status_expired: "Expirée",
     organization_invitation_status_pending: "En attente",
     organization_invitation_status_rejected: "Refusée",
     organization_invitations_description:
-      "Suivez les invitations qui n'ont pas encore été acceptées.",
-    organization_invitations_empty: "Aucune invitation en attente.",
-    organization_invitations_heading: "Invitations en attente",
+      "Suivez les invitations en attente et expirées.",
+    organization_invitations_empty: "Aucune invitation.",
+    organization_invitations_heading: "Invitations",
     organization_invitations_load_error:
       "Impossible de charger les invitations de l'organisation.",
     organization_user_invitations_description:
@@ -660,6 +667,8 @@ const invitationStatusLabel = (
       return m.organization_invitation_status_accepted();
     case "canceled":
       return m.organization_invitation_status_canceled();
+    case "expired":
+      return m.organization_invitation_status_expired();
     case "pending":
       return m.organization_invitation_status_pending();
     case "rejected":
@@ -1186,8 +1195,11 @@ function UserInvitationsManager({
     null,
   );
   const [actionError, setActionError] = useState<string | null>(null);
+  const invitationNow = useInvitationExpirationClock(invitations);
 
   const acceptInvitation = async (invitation: UserInvitationSummary) => {
+    if (isInvitationExpired(invitation)) return;
+
     setActingInvitationId(invitation.id);
     setActionError(null);
 
@@ -1236,6 +1248,7 @@ function UserInvitationsManager({
       <DataTable
         columns={userInvitationColumns({
           m,
+          now: invitationNow,
         })}
         data={invitations}
         features={{
@@ -1245,6 +1258,7 @@ function UserInvitationsManager({
             items: userInvitationRowActions({
               m,
               actingInvitationId,
+              now: invitationNow,
               onAccept: acceptInvitation,
               onReject: rejectInvitation,
             }),
@@ -1264,8 +1278,10 @@ function UserInvitationsManager({
 
 const userInvitationColumns = ({
   m,
+  now,
 }: {
   m: ReturnType<typeof organizationMessageFns>;
+  now: number;
 }): ColumnDef<UserInvitationSummary>[] => [
   {
     accessorKey: "organizationName",
@@ -1294,7 +1310,13 @@ const userInvitationColumns = ({
     accessorKey: "status",
     header: m.organization_invitation_status(),
     cell: ({ row }) => (
-      <Badge>{invitationStatusLabel(row.original.status, m)}</Badge>
+      <Badge
+        variant={
+          isInvitationExpired(row.original, now) ? "destructive" : "default"
+        }
+      >
+        {invitationStatusLabel(invitationDisplayStatus(row.original, now), m)}
+      </Badge>
     ),
   },
   {
@@ -1311,11 +1333,13 @@ const userInvitationColumns = ({
 const userInvitationRowActions = ({
   m,
   actingInvitationId,
+  now,
   onAccept,
   onReject,
 }: {
   m: ReturnType<typeof organizationMessageFns>;
   actingInvitationId: string | null;
+  now: number;
   onAccept: (invitation: UserInvitationSummary) => void;
   onReject: (invitation: UserInvitationSummary) => void;
 }) => [
@@ -1323,7 +1347,8 @@ const userInvitationRowActions = ({
     name: m.organization_invitation_accept(),
     icon: <Check />,
     visible: (invitation: UserInvitationSummary) =>
-      actingInvitationId !== invitation.id,
+      actingInvitationId !== invitation.id &&
+      !isInvitationExpired(invitation, now),
     onClick: onAccept,
   },
   {
@@ -1845,6 +1870,7 @@ function OrganizationMembersManager({
     };
   const members = membersData.members;
   const invitations = membersData.invitations;
+  const invitationNow = useInvitationExpirationClock(invitations);
   const [memberRoleOverrides, setMemberRoleOverrides] = useState<
     Record<string, string>
   >({});
@@ -2080,6 +2106,7 @@ function OrganizationMembersManager({
           <DataTable
             columns={invitationColumns({
               m,
+              now: invitationNow,
             })}
             data={invitations}
             features={{
@@ -2227,8 +2254,10 @@ const memberRowActions = ({
 
 const invitationColumns = ({
   m,
+  now,
 }: {
   m: ReturnType<typeof organizationMessageFns>;
+  now: number;
 }): ColumnDef<OrganizationInvitationSummary>[] => [
   {
     accessorKey: "email",
@@ -2250,7 +2279,13 @@ const invitationColumns = ({
     accessorKey: "status",
     header: m.organization_invitation_status(),
     cell: ({ row }) => (
-      <Badge>{invitationStatusLabel(row.original.status, m)}</Badge>
+      <Badge
+        variant={
+          isInvitationExpired(row.original, now) ? "destructive" : "default"
+        }
+      >
+        {invitationStatusLabel(invitationDisplayStatus(row.original, now), m)}
+      </Badge>
     ),
   },
   {

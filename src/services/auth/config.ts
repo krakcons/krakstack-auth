@@ -227,6 +227,7 @@ const createAuth = ({
       }),
       organization({
         allowUserToCreateOrganization: true,
+        invitationExpiresIn: 14 * 24 * 60 * 60,
         membershipLimit: 100,
         roles: organizationAuthRoles,
       }),
