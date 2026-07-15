@@ -417,6 +417,21 @@ const userInvitationsAtom = Atom.family((authClient: AuthUiClient) =>
   ),
 );
 
+const invitationOrganizationProfileAtom = Atom.family(
+  ({
+    baseUrl,
+    organizationId,
+  }: {
+    baseUrl?: string | undefined;
+    organizationId: string;
+  }) =>
+    authClientApi(baseUrl).query("authExtra", "getOrganizationPublicProfile", {
+      query: { organizationId },
+      timeToLive: "5 minutes",
+      serializationKey: `invitation-organization:${organizationId}`,
+    }),
+);
+
 const emptyUserInvitationsAtom = Atom.make(
   Effect.try({
     try: (): UserInvitationSummary[] => [],
@@ -1161,6 +1176,7 @@ export function OrganizationSwitcher({
           <Separator />
           <UserInvitationsManager
             authClient={authClient}
+            baseUrl={baseUrl}
             invitations={userInvitations}
             loading={loadingUserInvitations}
             error={userInvitationsError}
@@ -1177,6 +1193,7 @@ export function OrganizationSwitcher({
 
 function UserInvitationsManager({
   authClient,
+  baseUrl,
   invitations,
   loading,
   error,
@@ -1184,6 +1201,7 @@ function UserInvitationsManager({
   onActionComplete,
 }: {
   authClient: AuthUiClient;
+  baseUrl?: string | undefined;
   invitations: UserInvitationSummary[];
   loading: boolean;
   error: string | null;
@@ -1247,6 +1265,7 @@ function UserInvitationsManager({
       ) : null}
       <DataTable
         columns={userInvitationColumns({
+          baseUrl,
           m,
           now: invitationNow,
         })}
@@ -1277,9 +1296,11 @@ function UserInvitationsManager({
 }
 
 const userInvitationColumns = ({
+  baseUrl,
   m,
   now,
 }: {
+  baseUrl?: string | undefined;
   m: ReturnType<typeof organizationMessageFns>;
   now: number;
 }): ColumnDef<UserInvitationSummary>[] => [
@@ -1287,14 +1308,10 @@ const userInvitationColumns = ({
     accessorKey: "organizationName",
     header: m.organization_invitation_organization(),
     cell: ({ row }) => (
-      <div className="flex min-w-48 flex-col gap-1">
-        <span className="truncate font-medium">
-          {row.original.organizationName ?? row.original.organizationId}
-        </span>
-        <code className="text-muted-foreground truncate text-xs">
-          {row.original.organizationId}
-        </code>
-      </div>
+      <InvitationOrganizationBrand
+        baseUrl={baseUrl}
+        invitation={row.original}
+      />
     ),
   },
   {
@@ -1329,6 +1346,42 @@ const userInvitationColumns = ({
     ),
   },
 ];
+
+function InvitationOrganizationBrand({
+  baseUrl,
+  invitation,
+}: {
+  baseUrl?: string | undefined;
+  invitation: UserInvitationSummary;
+}) {
+  const profileResult = useAtomValue(
+    invitationOrganizationProfileAtom({
+      baseUrl,
+      organizationId: invitation.organizationId,
+    }),
+  );
+  const profile = AsyncResult.match(profileResult, {
+    onInitial: () => null,
+    onFailure: () => null,
+    onSuccess: ({ value }) => value,
+  });
+  const image = assetUrl(profile?.icon ?? profile?.logo ?? null, baseUrl);
+
+  return (
+    <AppBrand
+      to={null}
+      label={
+        profile?.displayName ??
+        invitation.organizationName ??
+        invitation.organizationId
+      }
+      subtitle={invitation.organizationId}
+      icon={Building2}
+      className="min-w-48"
+      {...(image ? { imageSrc: image } : {})}
+    />
+  );
+}
 
 const userInvitationRowActions = ({
   m,
