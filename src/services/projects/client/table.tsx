@@ -62,33 +62,37 @@ export function ProjectsTable({ reloadKey = 0 }: { reloadKey?: number }) {
       <DataTable
         columns={projectColumns()}
         data={rows}
-        exportFileName="projects.csv"
-        features={{ gallery: false }}
-        from="/admin/projects"
-        rowActions={[
-          {
-            name: m.admin_action_preview(),
-            icon: <Eye className="size-4" />,
-            onClick: (project) => {
-              window.open(
-                `/sign-in?projectId=${encodeURIComponent(project.id)}`,
-                "_blank",
-                "noopener,noreferrer",
-              );
-            },
+        features={{
+          export: { baseName: "projects" },
+          gallery: false,
+          rowActions: {
+            items: [
+              {
+                name: m.admin_action_preview(),
+                icon: <Eye className="size-4" />,
+                onClick: (project) => {
+                  window.open(
+                    `/sign-in?projectId=${encodeURIComponent(project.id)}`,
+                    "_blank",
+                    "noopener,noreferrer",
+                  );
+                },
+              },
+              {
+                name: m.admin_action_edit(),
+                icon: <Pencil className="size-4" />,
+                onClick: setEditingProject,
+              },
+              {
+                name: m.actions_delete(),
+                icon: <Trash2 className="size-4" />,
+                variant: "destructive",
+                onClick: setDeletingProject,
+              },
+            ],
           },
-          {
-            name: m.admin_action_edit(),
-            icon: <Pencil className="size-4" />,
-            onClick: setEditingProject,
-          },
-          {
-            name: m.actions_delete(),
-            icon: <Trash2 className="size-4" />,
-            variant: "destructive",
-            onClick: setDeletingProject,
-          },
-        ]}
+        }}
+        routeFrom="/admin/projects"
       />
       {editingProject ? (
         <ProjectForm

@@ -186,43 +186,49 @@ function ApiKeysPage() {
         <DataTable
           columns={apiKeyColumns()}
           data={keys}
-          {...(loading ? { emptyLabel: m.admin_api_keys_loading() } : {})}
-          exportFileName="api-keys.csv"
-          features={{ gallery: false }}
-          rowActions={[
-            {
-              name: m.admin_action_edit(),
-              icon: <Pencil />,
-              onClick: (key) => {
-                setCreatedKey(null);
-                setCopiedKey(false);
-                setEditingKey(key);
-              },
+          features={{
+            export: { baseName: "api-keys" },
+            gallery: false,
+            rowActions: {
+              items: [
+                {
+                  name: m.admin_action_edit(),
+                  icon: <Pencil />,
+                  onClick: (key) => {
+                    setCreatedKey(null);
+                    setCopiedKey(false);
+                    setEditingKey(key);
+                  },
+                },
+                {
+                  name: m.admin_api_key_rate_limit_reset(),
+                  icon: <RotateCcw />,
+                  onClick: resetRateLimit,
+                },
+                {
+                  name: m.admin_api_key_rate_limit_disable(),
+                  icon: <ShieldOff />,
+                  visible: (key) => key.rateLimitEnabled,
+                  onClick: (key) => setRateLimitEnabled(key, false),
+                },
+                {
+                  name: m.admin_api_key_rate_limit_enable(),
+                  icon: <ShieldCheck />,
+                  visible: (key) => !key.rateLimitEnabled,
+                  onClick: (key) => setRateLimitEnabled(key, true),
+                },
+                {
+                  name: m.admin_api_key_delete(),
+                  icon: <Trash2 />,
+                  variant: "destructive",
+                  onClick: deleteKey,
+                },
+              ],
             },
-            {
-              name: m.admin_api_key_rate_limit_reset(),
-              icon: <RotateCcw />,
-              onClick: resetRateLimit,
-            },
-            {
-              name: m.admin_api_key_rate_limit_disable(),
-              icon: <ShieldOff />,
-              visible: (key) => key.rateLimitEnabled,
-              onClick: (key) => setRateLimitEnabled(key, false),
-            },
-            {
-              name: m.admin_api_key_rate_limit_enable(),
-              icon: <ShieldCheck />,
-              visible: (key) => !key.rateLimitEnabled,
-              onClick: (key) => setRateLimitEnabled(key, true),
-            },
-            {
-              name: m.admin_api_key_delete(),
-              icon: <Trash2 />,
-              variant: "destructive",
-              onClick: deleteKey,
-            },
-          ]}
+          }}
+          {...(loading
+            ? { state: { empty: m.admin_api_keys_loading(), loading: true } }
+            : {})}
         />
       </div>
       <Dialog

@@ -1959,11 +1959,18 @@ function ApiKeyManager({
       <DataTable
         columns={apiKeyColumns({ m })}
         data={keys}
-        emptyLabel={loading ? m.user_loading() : m.table_empty()}
-        exportFileName={m.user_api_keys_export_file_name()}
-        features={{ gallery: false }}
+        features={{
+          export: { baseName: m.user_api_keys_export_file_name() },
+          gallery: false,
+          rowActions: {
+            items: apiKeyRowActions({ m, onDelete: deleteKey }),
+          },
+        }}
         searchState="local"
-        rowActions={apiKeyRowActions({ m, onDelete: deleteKey })}
+        state={{
+          empty: loading ? m.user_loading() : m.table_empty(),
+          loading,
+        }}
       />
     </div>
   );

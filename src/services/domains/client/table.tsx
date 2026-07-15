@@ -86,22 +86,26 @@ export function DomainsTable({
       <DataTable
         columns={domainColumns()}
         data={rows}
-        exportFileName="domains.csv"
-        features={{ gallery: false }}
-        from="/admin/domains"
-        rowActions={[
-          {
-            name: m.admin_action_edit(),
-            icon: <Pencil className="size-4" />,
-            onClick: setEditingDomain,
+        features={{
+          export: { baseName: "domains" },
+          gallery: false,
+          rowActions: {
+            items: [
+              {
+                name: m.admin_action_edit(),
+                icon: <Pencil className="size-4" />,
+                onClick: setEditingDomain,
+              },
+              {
+                name: m.actions_delete(),
+                icon: <Trash2 className="size-4" />,
+                variant: "destructive",
+                onClick: setDeletingDomain,
+              },
+            ],
           },
-          {
-            name: m.actions_delete(),
-            icon: <Trash2 className="size-4" />,
-            variant: "destructive",
-            onClick: setDeletingDomain,
-          },
-        ]}
+        }}
+        routeFrom="/admin/domains"
       />
       {deletingDomain ? (
         <DeleteDomainDialog

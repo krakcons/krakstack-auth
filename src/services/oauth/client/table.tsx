@@ -70,22 +70,26 @@ export function OAuthClientsTable({ reloadKey = 0 }: { reloadKey?: number }) {
       <DataTable
         columns={clientColumns()}
         data={rows}
-        exportFileName="oauth-clients.csv"
-        features={{ gallery: false }}
-        from="/admin/oauth/clients"
-        rowActions={[
-          {
-            name: m.admin_action_edit(),
-            icon: <Pencil className="size-4" />,
-            onClick: setEditingClient,
+        features={{
+          export: { baseName: "oauth-clients" },
+          gallery: false,
+          rowActions: {
+            items: [
+              {
+                name: m.admin_action_edit(),
+                icon: <Pencil className="size-4" />,
+                onClick: setEditingClient,
+              },
+              {
+                name: m.actions_delete(),
+                icon: <Trash2 className="size-4" />,
+                variant: "destructive",
+                onClick: setDeletingClient,
+              },
+            ],
           },
-          {
-            name: m.actions_delete(),
-            icon: <Trash2 className="size-4" />,
-            variant: "destructive",
-            onClick: setDeletingClient,
-          },
-        ]}
+        }}
+        routeFrom="/admin/oauth/clients"
       />
       {editingClient ? (
         <OAuthClientForm

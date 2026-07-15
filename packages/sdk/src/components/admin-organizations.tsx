@@ -144,9 +144,12 @@ export function AdminOrganizationsTable({
       <DataTable
         columns={organizationColumns(m, locale, baseUrl)}
         data={organizations}
-        exportFileName="organizations.csv"
-        features={{ gallery: false }}
-        {...(from ? { from } : {})}
+        features={{
+          export: { baseName: "organizations" },
+          gallery: false,
+          pagination: { mode: "server", rowCount: total },
+        }}
+        {...(from ? { routeFrom: from } : {})}
         {...(!search
           ? {
               search: tableSearch,
@@ -154,9 +157,8 @@ export function AdminOrganizationsTable({
               searchState: "local" as const,
             }
           : {})}
-        isLoading={isLoading}
         onRefresh={() => setRefreshKey((current) => current + 1)}
-        serverPagination={{ rowCount: total }}
+        state={{ loading: isLoading }}
       />
     </div>
   );

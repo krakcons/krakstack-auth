@@ -202,7 +202,9 @@ type SessionWithActiveOrganization = {
   session?: { activeOrganizationId?: unknown };
 };
 
-const activeOrganizationId = (session: SessionWithActiveOrganization | null) => {
+const activeOrganizationId = (
+  session: SessionWithActiveOrganization | null,
+) => {
   const value = session?.session?.activeOrganizationId;
   return typeof value === "string" && value ? value : null;
 };
@@ -287,9 +289,95 @@ export function AdminUsersTable({
       <DataTable
         columns={userColumns(m)}
         data={users}
-        exportFileName="users.csv"
-        features={{ gallery: false }}
-        {...(from ? { from } : {})}
+        features={{
+          export: { baseName: "users" },
+          gallery: false,
+          pagination: { mode: "server", rowCount: total },
+          rowActions: {
+            items: [
+              {
+                name: m.admin_action_impersonate,
+                icon: impersonatingUserId ? (
+                  <Loader2 className="size-4 animate-spin" />
+                ) : (
+                  <UserCog className="size-4" />
+                ),
+                onClick: async (user) => {
+                  setImpersonateError("");
+                  setImpersonatingUserId(user.id);
+                  try {
+                    if (!authClient)
+                      throw new Error(m.admin_error_access_required);
+                    await impersonateUser(authClient, user.id, m);
+                    await refreshSessionAndNavigate();
+                  } catch (cause) {
+                    setImpersonateError(
+                      cause instanceof Error
+                        ? cause.message
+                        : m.admin_error_impersonate,
+                    );
+                  } finally {
+                    setImpersonatingUserId(null);
+                  }
+                },
+                visible: (user) => !user.banned,
+              },
+              {
+                name: m.admin_action_impersonate_organization,
+                icon: impersonatingUserId ? (
+                  <Loader2 className="size-4 animate-spin" />
+                ) : (
+                  <Building2 className="size-4" />
+                ),
+                onClick: async (user) => {
+                  setImpersonateError("");
+                  setImpersonatingUserId(user.id);
+                  try {
+                    if (!session?.user?.id) {
+                      throw new Error(m.admin_error_access_required);
+                    }
+                    const organizationId = activeOrganizationId(session);
+                    if (!organizationId) {
+                      throw new Error(m.admin_error_organization_required);
+                    }
+
+                    await impersonateOrganizationUser({
+                      payload: {
+                        organizationId,
+                        actorUserId: session.user.id,
+                        targetUserId: user.id,
+                      },
+                    });
+                    await refreshSessionAndNavigate();
+                  } catch (cause) {
+                    setImpersonateError(
+                      cause instanceof Error
+                        ? cause.message
+                        : m.admin_error_impersonate_organization,
+                    );
+                  } finally {
+                    setImpersonatingUserId(null);
+                  }
+                },
+                visible: (user) => !user.banned,
+              },
+              {
+                name: m.admin_action_ban,
+                icon: <Ban className="size-4" />,
+                variant: "destructive",
+                onClick: (user) => setBanningUser(user),
+                visible: (user) => !user.banned,
+              },
+              {
+                name: m.admin_action_unban,
+                icon: <ShieldOff className="size-4" />,
+                onClick: (user) => setUnbanningUser(user),
+                visible: (user) => !!user.banned,
+              },
+            ],
+          },
+        }}
+        {...(from ? { routeFrom: from } : {})}
         {...(!search
           ? {
               search: tableSearch,
@@ -297,89 +385,8 @@ export function AdminUsersTable({
               searchState: "local" as const,
             }
           : {})}
-        isLoading={isLoading}
         onRefresh={() => setRefreshKey((current) => current + 1)}
-        serverPagination={{ rowCount: total }}
-        rowActions={[
-          {
-            name: m.admin_action_impersonate,
-            icon: impersonatingUserId ? (
-              <Loader2 className="size-4 animate-spin" />
-            ) : (
-              <UserCog className="size-4" />
-            ),
-            onClick: async (user) => {
-              setImpersonateError("");
-              setImpersonatingUserId(user.id);
-              try {
-                if (!authClient) throw new Error(m.admin_error_access_required);
-                await impersonateUser(authClient, user.id, m);
-                await refreshSessionAndNavigate();
-              } catch (cause) {
-                setImpersonateError(
-                  cause instanceof Error
-                    ? cause.message
-                    : m.admin_error_impersonate,
-                );
-              } finally {
-                setImpersonatingUserId(null);
-              }
-            },
-            visible: (user) => !user.banned,
-          },
-          {
-            name: m.admin_action_impersonate_organization,
-            icon: impersonatingUserId ? (
-              <Loader2 className="size-4 animate-spin" />
-            ) : (
-              <Building2 className="size-4" />
-            ),
-            onClick: async (user) => {
-              setImpersonateError("");
-              setImpersonatingUserId(user.id);
-              try {
-                if (!session?.user?.id) {
-                  throw new Error(m.admin_error_access_required);
-                }
-                const organizationId = activeOrganizationId(session);
-                if (!organizationId) {
-                  throw new Error(m.admin_error_organization_required);
-                }
-
-                await impersonateOrganizationUser({
-                  payload: {
-                    organizationId,
-                    actorUserId: session.user.id,
-                    targetUserId: user.id,
-                  },
-                });
-                await refreshSessionAndNavigate();
-              } catch (cause) {
-                setImpersonateError(
-                  cause instanceof Error
-                    ? cause.message
-                    : m.admin_error_impersonate_organization,
-                );
-              } finally {
-                setImpersonatingUserId(null);
-              }
-            },
-            visible: (user) => !user.banned,
-          },
-          {
-            name: m.admin_action_ban,
-            icon: <Ban className="size-4" />,
-            variant: "destructive",
-            onClick: (user) => setBanningUser(user),
-            visible: (user) => !user.banned,
-          },
-          {
-            name: m.admin_action_unban,
-            icon: <ShieldOff className="size-4" />,
-            onClick: (user) => setUnbanningUser(user),
-            visible: (user) => !!user.banned,
-          },
-        ]}
+        state={{ loading: isLoading }}
       />
       {banningUser ? (
         <BanUserDialog

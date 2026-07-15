@@ -205,8 +205,9 @@ export function OAuthClientForm({
             </form.AppField>
             <form.AppField name="scope">
               {(field) => (
-                <field.MultiSelectField
+                <field.SelectField
                   label={m.admin_column_scopes()}
+                  multiple
                   options={scopeOptions}
                   placeholder={m.oauth_client_scopes_placeholder()}
                   description={m.oauth_client_scopes_description()}

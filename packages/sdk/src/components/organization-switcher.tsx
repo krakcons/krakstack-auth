@@ -974,14 +974,14 @@ export function OrganizationSwitcher({
                     const organizationId = activeOrganization.data.id;
 
                     return (
-                  <DropdownMenuItem
-                    onClick={() => {
-                      void navigator.clipboard.writeText(organizationId);
-                    }}
-                  >
-                    <Copy />
-                    {m.organization_copy_id()}
-                  </DropdownMenuItem>
+                      <DropdownMenuItem
+                        onClick={() => {
+                          void navigator.clipboard.writeText(organizationId);
+                        }}
+                      >
+                        <Copy />
+                        {m.organization_copy_id()}
+                      </DropdownMenuItem>
                     );
                   })()}
                   {canUpdateOrganization ? (
@@ -1238,18 +1238,25 @@ function UserInvitationsManager({
           m,
         })}
         data={invitations}
-        emptyLabel={
-          loading ? m.user_loading() : m.organization_user_invitations_empty()
-        }
-        exportFileName="organization-invitations.csv"
-        features={{ gallery: false }}
+        features={{
+          export: { baseName: "organization-invitations" },
+          gallery: false,
+          rowActions: {
+            items: userInvitationRowActions({
+              m,
+              actingInvitationId,
+              onAccept: acceptInvitation,
+              onReject: rejectInvitation,
+            }),
+          },
+        }}
         searchState="local"
-        rowActions={userInvitationRowActions({
-          m,
-          actingInvitationId,
-          onAccept: acceptInvitation,
-          onReject: rejectInvitation,
-        })}
+        state={{
+          empty: loading
+            ? m.user_loading()
+            : m.organization_user_invitations_empty(),
+          loading,
+        }}
       />
     </section>
   );
@@ -1831,10 +1838,11 @@ function OrganizationMembersManager({
     onFailure: () => null,
     onSuccess: ({ value }) => value,
   });
-  const membersData = currentMembersData ?? lastMembersData ?? {
-    members: [],
-    invitations: [],
-  };
+  const membersData = currentMembersData ??
+    lastMembersData ?? {
+      members: [],
+      invitations: [],
+    };
   const members = membersData.members;
   const invitations = membersData.invitations;
   const [memberRoleOverrides, setMemberRoleOverrides] = useState<
@@ -2040,19 +2048,22 @@ function OrganizationMembersManager({
               onRoleChange: updateRole,
             })}
             data={displayedMembers}
-            emptyLabel={m.organization_members_empty()}
-            exportFileName={`${organization.slug}-members.csv`}
-            features={{ gallery: false }}
-            isLoading={loading}
+            features={{
+              export: { baseName: `${organization.slug}-members` },
+              gallery: false,
+              rowActions: {
+                items: memberRowActions({
+                  m,
+                  canRemoveMembers,
+                  currentUserId,
+                  leavingOrganization,
+                  onLeave: leaveOrganization,
+                  onRemove: removeMember,
+                }),
+              },
+            }}
             searchState="local"
-            rowActions={memberRowActions({
-              m,
-              canRemoveMembers,
-              currentUserId,
-              leavingOrganization,
-              onLeave: leaveOrganization,
-              onRemove: removeMember,
-            })}
+            state={{ empty: m.organization_members_empty(), loading }}
           />
         </div>
       </section>
@@ -2071,16 +2082,19 @@ function OrganizationMembersManager({
               m,
             })}
             data={invitations}
-            emptyLabel={m.organization_invitations_empty()}
-            exportFileName={`${organization.slug}-invitations.csv`}
-            features={{ gallery: false }}
-            isLoading={loading}
+            features={{
+              export: { baseName: `${organization.slug}-invitations` },
+              gallery: false,
+              rowActions: {
+                items: invitationRowActions({
+                  m,
+                  cancellingInvitationId,
+                  onCancel: cancelInvitation,
+                }),
+              },
+            }}
             searchState="local"
-            rowActions={invitationRowActions({
-              m,
-              cancellingInvitationId,
-              onCancel: cancelInvitation,
-            })}
+            state={{ empty: m.organization_invitations_empty(), loading }}
           />
         </div>
       </section>
@@ -2152,7 +2166,6 @@ const memberColumns = ({
             value: role,
           }))}
           value={roleOptions}
-          from="/"
           onAdd={(value) => {
             if (!isOrganizationRole(value)) return;
             onRoleChange(member, Array.from(new Set([...roles, value])));
@@ -2391,11 +2404,18 @@ function OrganizationApiKeyManager({
       <DataTable
         columns={apiKeyColumns({ m })}
         data={keys}
-        emptyLabel={loading ? m.user_loading() : m.table_empty()}
-        exportFileName={`${organization.slug}-api-keys.csv`}
-        features={{ gallery: false }}
+        features={{
+          export: { baseName: `${organization.slug}-api-keys` },
+          gallery: false,
+          rowActions: {
+            items: apiKeyRowActions({ m, onDelete: deleteKey }),
+          },
+        }}
         searchState="local"
-        rowActions={apiKeyRowActions({ m, onDelete: deleteKey })}
+        state={{
+          empty: loading ? m.user_loading() : m.table_empty(),
+          loading,
+        }}
       />
     </div>
   );
