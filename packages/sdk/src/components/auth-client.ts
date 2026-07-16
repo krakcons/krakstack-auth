@@ -1,6 +1,7 @@
 import { apiKeyClient } from "@better-auth/api-key/client";
 import {
   adminClient,
+  anonymousClient,
   emailOTPClient,
   genericOAuthClient,
   inferAdditionalFields,
@@ -23,6 +24,7 @@ const additionalFields = {
 type AuthUiClientPlugins = [
   ReturnType<typeof inferAdditionalFields<never, typeof additionalFields>>,
   ReturnType<typeof adminClient<{}>>,
+  ReturnType<typeof anonymousClient>,
   ReturnType<typeof emailOTPClient>,
   ReturnType<typeof lastLoginMethodClient>,
   ReturnType<typeof organizationClient<{}>>,
@@ -34,6 +36,7 @@ type AuthUiClientPlugins = [
 const authUiClientPlugins: AuthUiClientPlugins = [
   inferAdditionalFields<never, typeof additionalFields>(additionalFields),
   adminClient(),
+  anonymousClient(),
   emailOTPClient(),
   lastLoginMethodClient({
     cookieName: "krakstack-auth.last_used_login_method",

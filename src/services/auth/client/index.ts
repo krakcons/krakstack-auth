@@ -1,6 +1,7 @@
 import { createAuthClient } from "better-auth/react";
 import {
   adminClient,
+  anonymousClient,
   emailOTPClient,
   genericOAuthClient,
   lastLoginMethodClient,
@@ -17,6 +18,7 @@ export const authBaseUrl =
 export const authClient = createAuthClient({
   plugins: [
     adminClient(),
+    anonymousClient(),
     emailOTPClient(),
     lastLoginMethodClient({
       cookieName: "krakstack-auth.last_used_login_method",

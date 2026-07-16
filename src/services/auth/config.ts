@@ -3,6 +3,7 @@ import type { GenericEndpointContext } from "@better-auth/core";
 import { drizzleAdapter } from "better-auth-drizzle-adapter";
 import {
   admin,
+  anonymous,
   emailOTP,
   jwt,
   lastLoginMethod,
@@ -185,6 +186,7 @@ const createAuth = ({
     plugins: [
       openAPI(),
       admin(),
+      anonymous(),
       jwt(),
       emailOTP({
         overrideDefaultEmailVerification: true,

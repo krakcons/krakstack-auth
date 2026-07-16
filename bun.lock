@@ -86,7 +86,7 @@
     },
     "packages/sdk": {
       "name": "@krak-stack/auth",
-      "version": "0.1.50",
+      "version": "0.1.51",
       "dependencies": {
         "react-qr-code": "^2.2.0",
       },

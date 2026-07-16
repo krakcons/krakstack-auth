@@ -27,6 +27,7 @@ export const user = pgTable("user", {
   banExpires: timestamp("ban_expires"),
   twoFactorEnabled: boolean("two_factor_enabled").default(false),
   lastLoginMethod: text("last_login_method"),
+  isAnonymous: boolean("is_anonymous").default(false),
 });
 
 export const session = pgTable(

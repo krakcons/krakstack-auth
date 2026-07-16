@@ -1,6 +1,6 @@
 {
   "name": "@krak-stack/auth",
-  "version": "0.1.50",
+  "version": "0.1.51",
   "description": "Effect HttpApi clients and schemas for KrakStack Auth.",
   "license": "MIT",
   "files": [
