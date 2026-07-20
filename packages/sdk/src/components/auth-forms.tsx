@@ -1251,9 +1251,7 @@ const navigateTarget = (
 const shouldUseDocumentRedirect = (target: string) => {
   if (target.startsWith("/api/")) return true;
   if (target.startsWith("/")) return false;
-  if (target.startsWith(window.location.origin)) {
-    return target.slice(window.location.origin.length).startsWith("/api/");
-  }
+  if (target.startsWith(window.location.origin)) return true;
   return target.startsWith("http://") || target.startsWith("https://");
 };
 
