@@ -37,6 +37,7 @@ import {
 } from "@/components/ui/data-table";
 import { EditingLocaleSwitcher } from "@/components/ui/editing-locale-switcher";
 import { AppBrand } from "@/components/ui/app-brand";
+import { FieldSet } from "@/components/ui/field";
 import { useAppForm } from "@/components/ui/form";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -98,7 +99,7 @@ const messages = {
       "That organization slug is already in use. Choose a different slug.",
     organization_create_title: "Create organization",
     organization_edit_description:
-      "Update the active organization's canonical details and localized profile.",
+      "Update the active organization's localized profile.",
     organization_invitation_cancel: "Cancel invitation",
     organization_invitation_cancel_error: "Could not cancel the invitation.",
     organization_invitation_accept: "Accept invitation",
@@ -149,7 +150,7 @@ const messages = {
     organization_members_heading: "Organization members",
     organization_members_load_error: "Could not load organization members.",
     organization_members_title: "Members",
-    organization_name: "Organization name",
+    organization_name_required: "Enter a name in at least one language.",
     organization_role_admin: "Admin",
     organization_role_member: "Member",
     organization_role_owner: "Owner",
@@ -164,7 +165,7 @@ const messages = {
       "Localized organization details stored in metadata.",
     organization_translation_english: "English profile",
     organization_translation_french: "French profile",
-    organization_translation_name: "Localized name",
+    organization_translation_name: "Name",
     organization_update_error: "Could not update the organization.",
     table_empty: "No results.",
     user_api_key_create_error: "Could not create the API key.",
@@ -196,7 +197,7 @@ const messages = {
       "Ce slug d'organisation est déjà utilisé. Choisissez un autre slug.",
     organization_create_title: "Créer une organisation",
     organization_edit_description:
-      "Mettez à jour les détails canoniques et le profil localisé de l'organisation active.",
+      "Mettez à jour le profil localisé de l'organisation active.",
     organization_invitation_cancel: "Annuler l'invitation",
     organization_invitation_cancel_error: "Impossible d'annuler l'invitation.",
     organization_invitation_accept: "Accepter l'invitation",
@@ -250,7 +251,7 @@ const messages = {
     organization_members_load_error:
       "Impossible de charger les membres de l'organisation.",
     organization_members_title: "Membres",
-    organization_name: "Nom de l'organisation",
+    organization_name_required: "Saisissez un nom dans au moins une langue.",
     organization_role_admin: "Admin",
     organization_role_member: "Membre",
     organization_role_owner: "Propriétaire",
@@ -267,7 +268,7 @@ const messages = {
       "Détails localisés de l'organisation stockés dans les métadonnées.",
     organization_translation_english: "Profil anglais",
     organization_translation_french: "Profil français",
-    organization_translation_name: "Nom localisé",
+    organization_translation_name: "Nom",
     organization_update_error: "Impossible de mettre à jour l'organisation.",
     table_empty: "Aucun résultat.",
     user_api_key_create_error: "Impossible de créer la clé API.",
@@ -515,7 +516,6 @@ const emptyOrganizationApiKeysAtom = Atom.make(
 );
 
 type OrganizationFormValues = {
-  name: string;
   slug: string;
   enName: string;
   enLogo: File | string | null;
@@ -631,7 +631,6 @@ const organizationFormDefaults = (
   const fr = translations.find((translation) => translation.locale === "fr");
 
   return {
-    name: organization?.name ?? "",
     slug: organization?.slug ?? "",
     enName: en?.name || organization?.name || "",
     enLogo: assetUrl(en?.logo, baseUrl) || null,
@@ -655,6 +654,16 @@ const organizationLogoFromForm = async (
     return await uploadImageAsset(value, m, uploadImage);
   if (typeof value === "string") return assetPath(value);
   return null;
+};
+
+const organizationNameFromForm = (
+  value: OrganizationFormValues,
+  locale: OrganizationLocale,
+) => {
+  const preferredName = locale === "fr" ? value.frName : value.enName;
+  const fallbackName = locale === "fr" ? value.enName : value.frName;
+
+  return preferredName.trim() || fallbackName.trim();
 };
 
 const organizationRoleLabel = (
@@ -704,7 +713,7 @@ const organizationMetadataFromForm = async (
   uploadImage: (input: { payload: FormData }) => Promise<unknown>,
 ): Promise<OrganizationMetadata> => {
   const translations: OrganizationTranslation[] = [];
-  const enName = value.enName.trim() || value.name.trim();
+  const enName = value.enName.trim();
   const frName = value.frName.trim();
   const enLogo = await organizationLogoFromForm(value.enLogo, m, uploadImage);
   const enIcon = await organizationLogoFromForm(value.enIcon, m, uploadImage);
@@ -1430,16 +1439,25 @@ function EditOrganizationSection({
     authClientApi(baseUrl).mutation("authExtra", "uploadUserImage"),
     { mode: "promise" },
   );
-  const [editingLocale, setEditingLocale] = useState<OrganizationLocale>(
-    currentOrganizationLocale(),
-  );
+  const [defaultLocale] = useState(currentOrganizationLocale);
+  const [editingLocale, setEditingLocale] =
+    useState<OrganizationLocale>(defaultLocale);
   const defaultValues = organizationFormDefaults(organization, baseUrl);
   const form = useAppForm({
     defaultValues,
     onSubmit: async ({ value, formApi }) => {
       formApi.setErrorMap({ onSubmit: undefined });
       try {
-        const name = value.name.trim();
+        const name = organizationNameFromForm(value, defaultLocale);
+        if (!name) {
+          formApi.setErrorMap({
+            onSubmit: {
+              form: m.organization_name_required(),
+              fields: {},
+            },
+          });
+          return;
+        }
         const slug = value.slug.trim().toLowerCase();
         const metadata = await organizationMetadataFromForm(
           value,
@@ -1488,127 +1506,113 @@ function EditOrganizationSection({
             form.handleSubmit();
           }}
         >
-          <form.AppField name="name">
-            {(field) => (
-              <field.TextField label={m.organization_name()} required />
-            )}
-          </form.AppField>
           <form.AppField name="slug">
             {(field) => (
               <field.TextField label={m.organization_slug()} required />
             )}
           </form.AppField>
           <Separator className="my-2" />
-          {editingLocale === "en" ? (
-            <>
-              <OrganizationTranslationHeader
-                locale="en"
-                editingLocale={editingLocale}
-                onEditingLocaleChange={setEditingLocale}
-              />
-              <form.AppField name="enName">
-                {(field) => (
-                  <field.TextField
-                    label={m.organization_translation_name()}
-                    required
-                  />
-                )}
-              </form.AppField>
-              <form.AppField name="enLogo">
-                {(field) => (
-                  <field.ImageField
-                    label={m.organization_logo()}
-                    size={{
-                      width: 175,
-                      height: 50,
-                      suggestedWidth: 350,
-                      suggestedHeight: 100,
-                    }}
-                  />
-                )}
-              </form.AppField>
-              <form.AppField name="enIcon">
-                {(field) => (
-                  <field.ImageField
-                    label={m.organization_icon()}
-                    size={{
-                      width: 96,
-                      height: 96,
-                      suggestedWidth: 512,
-                      suggestedHeight: 512,
-                    }}
-                  />
-                )}
-              </form.AppField>
-              <form.AppField name="enContactEmail">
-                {(field) => (
-                  <field.TextField
-                    label={m.organization_contact_email()}
-                    placeholder="team@example.com"
-                    type="email"
-                  />
-                )}
-              </form.AppField>
-              <form.AppField name="enLocation">
-                {(field) => (
-                  <field.TextField label={m.organization_location()} />
-                )}
-              </form.AppField>
-            </>
-          ) : (
-            <>
-              <OrganizationTranslationHeader
-                locale="fr"
-                editingLocale={editingLocale}
-                onEditingLocaleChange={setEditingLocale}
-              />
-              <form.AppField name="frName">
-                {(field) => (
-                  <field.TextField label={m.organization_translation_name()} />
-                )}
-              </form.AppField>
-              <form.AppField name="frLogo">
-                {(field) => (
-                  <field.ImageField
-                    label={m.organization_logo()}
-                    size={{
-                      width: 175,
-                      height: 50,
-                      suggestedWidth: 350,
-                      suggestedHeight: 100,
-                    }}
-                  />
-                )}
-              </form.AppField>
-              <form.AppField name="frIcon">
-                {(field) => (
-                  <field.ImageField
-                    label={m.organization_icon()}
-                    size={{
-                      width: 96,
-                      height: 96,
-                      suggestedWidth: 512,
-                      suggestedHeight: 512,
-                    }}
-                  />
-                )}
-              </form.AppField>
-              <form.AppField name="frContactEmail">
-                {(field) => (
-                  <field.TextField
-                    label={m.organization_contact_email()}
-                    placeholder="team@example.com"
-                    type="email"
-                  />
-                )}
-              </form.AppField>
-              <form.AppField name="frLocation">
-                {(field) => (
-                  <field.TextField label={m.organization_location()} />
-                )}
-              </form.AppField>
-            </>
-          )}
+          <OrganizationTranslationHeader
+            locale={editingLocale}
+            editingLocale={editingLocale}
+            onEditingLocaleChange={setEditingLocale}
+          />
+          <FieldSet
+            disabled={editingLocale !== "en"}
+            className={editingLocale === "en" ? "contents" : "hidden"}
+          >
+            <form.AppField name="enName">
+              {(field) => (
+                <field.TextField label={m.organization_translation_name()} />
+              )}
+            </form.AppField>
+            <form.AppField name="enLogo">
+              {(field) => (
+                <field.ImageField
+                  label={m.organization_logo()}
+                  size={{
+                    width: 175,
+                    height: 50,
+                    suggestedWidth: 350,
+                    suggestedHeight: 100,
+                  }}
+                />
+              )}
+            </form.AppField>
+            <form.AppField name="enIcon">
+              {(field) => (
+                <field.ImageField
+                  label={m.organization_icon()}
+                  size={{
+                    width: 96,
+                    height: 96,
+                    suggestedWidth: 512,
+                    suggestedHeight: 512,
+                  }}
+                />
+              )}
+            </form.AppField>
+            <form.AppField name="enContactEmail">
+              {(field) => (
+                <field.TextField
+                  label={m.organization_contact_email()}
+                  placeholder="team@example.com"
+                  type="email"
+                />
+              )}
+            </form.AppField>
+            <form.AppField name="enLocation">
+              {(field) => <field.TextField label={m.organization_location()} />}
+            </form.AppField>
+          </FieldSet>
+          <FieldSet
+            disabled={editingLocale !== "fr"}
+            className={editingLocale === "fr" ? "contents" : "hidden"}
+          >
+            <form.AppField name="frName">
+              {(field) => (
+                <field.TextField label={m.organization_translation_name()} />
+              )}
+            </form.AppField>
+            <form.AppField name="frLogo">
+              {(field) => (
+                <field.ImageField
+                  label={m.organization_logo()}
+                  size={{
+                    width: 175,
+                    height: 50,
+                    suggestedWidth: 350,
+                    suggestedHeight: 100,
+                  }}
+                />
+              )}
+            </form.AppField>
+            <form.AppField name="frIcon">
+              {(field) => (
+                <field.ImageField
+                  label={m.organization_icon()}
+                  size={{
+                    width: 96,
+                    height: 96,
+                    suggestedWidth: 512,
+                    suggestedHeight: 512,
+                  }}
+                />
+              )}
+            </form.AppField>
+            <form.AppField name="frContactEmail">
+              {(field) => (
+                <field.TextField
+                  label={m.organization_contact_email()}
+                  placeholder="team@example.com"
+                  type="email"
+                />
+              )}
+            </form.AppField>
+            <form.AppField name="frLocation">
+              {(field) => <field.TextField label={m.organization_location()} />}
+            </form.AppField>
+          </FieldSet>
           <form.FormError />
           <form.SubmitButton />
         </form>
@@ -1631,21 +1635,29 @@ function CreateOrganizationSection({
     authClientApi(baseUrl).mutation("authExtra", "uploadUserImage"),
     { mode: "promise" },
   );
-  const [editingLocale, setEditingLocale] = useState<OrganizationLocale>(
-    currentOrganizationLocale(),
-  );
+  const [defaultLocale] = useState(currentOrganizationLocale);
+  const [editingLocale, setEditingLocale] =
+    useState<OrganizationLocale>(defaultLocale);
   const defaultValues = organizationFormDefaults(undefined, baseUrl);
   const form = useAppForm({
     defaultValues,
     onSubmit: async ({ value, formApi }) => {
       formApi.setErrorMap({ onSubmit: undefined });
       try {
-        const name = value.name.trim();
+        const name = organizationNameFromForm(value, defaultLocale);
+        if (!name) {
+          formApi.setErrorMap({
+            onSubmit: {
+              form: m.organization_name_required(),
+              fields: {},
+            },
+          });
+          return;
+        }
         const slug = (value.slug.trim() || slugify(name)).toLowerCase();
         const metadata = await organizationMetadataFromForm(
           {
             ...value,
-            name,
             slug,
           },
           m,
@@ -1694,7 +1706,9 @@ function CreateOrganizationSection({
       }
     },
   });
-  const name = useStore(form.store, (state) => state.values.name);
+  const name = useStore(form.store, (state) =>
+    organizationNameFromForm(state.values, defaultLocale),
+  );
   const slugIsDirty = useStore(
     form.store,
     (state) => state.fieldMeta.slug?.isDirty ?? false,
@@ -1717,11 +1731,6 @@ function CreateOrganizationSection({
             form.handleSubmit();
           }}
         >
-          <form.AppField name="name">
-            {(field) => (
-              <field.TextField label={m.organization_name()} required />
-            )}
-          </form.AppField>
           <form.AppField name="slug">
             {(field) => (
               <field.TextField
@@ -1731,116 +1740,107 @@ function CreateOrganizationSection({
             )}
           </form.AppField>
           <Separator className="my-2" />
-          {editingLocale === "en" ? (
-            <>
-              <OrganizationTranslationHeader
-                locale="en"
-                editingLocale={editingLocale}
-                onEditingLocaleChange={setEditingLocale}
-              />
-              <form.AppField name="enName">
-                {(field) => (
-                  <field.TextField
-                    label={m.organization_translation_name()}
-                    required
-                  />
-                )}
-              </form.AppField>
-              <form.AppField name="enLogo">
-                {(field) => (
-                  <field.ImageField
-                    label={m.organization_logo()}
-                    size={{
-                      width: 175,
-                      height: 50,
-                      suggestedWidth: 350,
-                      suggestedHeight: 100,
-                    }}
-                  />
-                )}
-              </form.AppField>
-              <form.AppField name="enIcon">
-                {(field) => (
-                  <field.ImageField
-                    label={m.organization_icon()}
-                    size={{
-                      width: 96,
-                      height: 96,
-                      suggestedWidth: 512,
-                      suggestedHeight: 512,
-                    }}
-                  />
-                )}
-              </form.AppField>
-              <form.AppField name="enContactEmail">
-                {(field) => (
-                  <field.TextField
-                    label={m.organization_contact_email()}
-                    placeholder="team@example.com"
-                    type="email"
-                  />
-                )}
-              </form.AppField>
-              <form.AppField name="enLocation">
-                {(field) => (
-                  <field.TextField label={m.organization_location()} />
-                )}
-              </form.AppField>
-            </>
-          ) : (
-            <>
-              <OrganizationTranslationHeader
-                locale="fr"
-                editingLocale={editingLocale}
-                onEditingLocaleChange={setEditingLocale}
-              />
-              <form.AppField name="frName">
-                {(field) => (
-                  <field.TextField label={m.organization_translation_name()} />
-                )}
-              </form.AppField>
-              <form.AppField name="frLogo">
-                {(field) => (
-                  <field.ImageField
-                    label={m.organization_logo()}
-                    size={{
-                      width: 175,
-                      height: 50,
-                      suggestedWidth: 350,
-                      suggestedHeight: 100,
-                    }}
-                  />
-                )}
-              </form.AppField>
-              <form.AppField name="frIcon">
-                {(field) => (
-                  <field.ImageField
-                    label={m.organization_icon()}
-                    size={{
-                      width: 96,
-                      height: 96,
-                      suggestedWidth: 512,
-                      suggestedHeight: 512,
-                    }}
-                  />
-                )}
-              </form.AppField>
-              <form.AppField name="frContactEmail">
-                {(field) => (
-                  <field.TextField
-                    label={m.organization_contact_email()}
-                    placeholder="team@example.com"
-                    type="email"
-                  />
-                )}
-              </form.AppField>
-              <form.AppField name="frLocation">
-                {(field) => (
-                  <field.TextField label={m.organization_location()} />
-                )}
-              </form.AppField>
-            </>
-          )}
+          <OrganizationTranslationHeader
+            locale={editingLocale}
+            editingLocale={editingLocale}
+            onEditingLocaleChange={setEditingLocale}
+          />
+          <FieldSet
+            disabled={editingLocale !== "en"}
+            className={editingLocale === "en" ? "contents" : "hidden"}
+          >
+            <form.AppField name="enName">
+              {(field) => (
+                <field.TextField label={m.organization_translation_name()} />
+              )}
+            </form.AppField>
+            <form.AppField name="enLogo">
+              {(field) => (
+                <field.ImageField
+                  label={m.organization_logo()}
+                  size={{
+                    width: 175,
+                    height: 50,
+                    suggestedWidth: 350,
+                    suggestedHeight: 100,
+                  }}
+                />
+              )}
+            </form.AppField>
+            <form.AppField name="enIcon">
+              {(field) => (
+                <field.ImageField
+                  label={m.organization_icon()}
+                  size={{
+                    width: 96,
+                    height: 96,
+                    suggestedWidth: 512,
+                    suggestedHeight: 512,
+                  }}
+                />
+              )}
+            </form.AppField>
+            <form.AppField name="enContactEmail">
+              {(field) => (
+                <field.TextField
+                  label={m.organization_contact_email()}
+                  placeholder="team@example.com"
+                  type="email"
+                />
+              )}
+            </form.AppField>
+            <form.AppField name="enLocation">
+              {(field) => <field.TextField label={m.organization_location()} />}
+            </form.AppField>
+          </FieldSet>
+          <FieldSet
+            disabled={editingLocale !== "fr"}
+            className={editingLocale === "fr" ? "contents" : "hidden"}
+          >
+            <form.AppField name="frName">
+              {(field) => (
+                <field.TextField label={m.organization_translation_name()} />
+              )}
+            </form.AppField>
+            <form.AppField name="frLogo">
+              {(field) => (
+                <field.ImageField
+                  label={m.organization_logo()}
+                  size={{
+                    width: 175,
+                    height: 50,
+                    suggestedWidth: 350,
+                    suggestedHeight: 100,
+                  }}
+                />
+              )}
+            </form.AppField>
+            <form.AppField name="frIcon">
+              {(field) => (
+                <field.ImageField
+                  label={m.organization_icon()}
+                  size={{
+                    width: 96,
+                    height: 96,
+                    suggestedWidth: 512,
+                    suggestedHeight: 512,
+                  }}
+                />
+              )}
+            </form.AppField>
+            <form.AppField name="frContactEmail">
+              {(field) => (
+                <field.TextField
+                  label={m.organization_contact_email()}
+                  placeholder="team@example.com"
+                  type="email"
+                />
+              )}
+            </form.AppField>
+            <form.AppField name="frLocation">
+              {(field) => <field.TextField label={m.organization_location()} />}
+            </form.AppField>
+          </FieldSet>
           <form.FormError />
           <form.SubmitButton />
         </form>
