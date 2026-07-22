@@ -74,10 +74,11 @@ type PersonalOrganizationUser = {
   name: string;
 };
 
+const personalOrganizationName = (user: PersonalOrganizationUser) =>
+  user.name.trim() || user.email.split("@")[0]?.trim() || user.id;
+
 const personalOrganizationSlugPart = (user: PersonalOrganizationUser) =>
-  organizationSlugPart(user.name) ||
-  organizationSlugPart(user.email.split("@")[0] ?? "") ||
-  "user";
+  organizationSlugPart(personalOrganizationName(user)) || "user";
 
 const cookieValue = (headers: Headers | undefined, name: string) => {
   const cookie = headers?.get("cookie");
@@ -449,7 +450,7 @@ const createAuth = ({
   createPersonalOrganization = (user, slug) =>
     auth.api.createOrganization({
       body: {
-        name: user.name,
+        name: personalOrganizationName(user),
         slug,
         userId: user.id,
       },
