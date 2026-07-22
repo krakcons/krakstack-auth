@@ -644,13 +644,12 @@ export function Signin(props: AuthFormProps) {
         ) : null}
         {options.signUp ? (
           <p className="text-muted-foreground mt-6 text-center text-sm">
-            {m.sign_in_need_account}{" "}
             <Link
               className={authLinkClassName}
               to="/sign-up"
               search={searchObject(searchString)}
             >
-              {m.auth_sign_up}
+              {m.sign_in_need_account} {m.auth_sign_up}
             </Link>
           </p>
         ) : null}
@@ -683,7 +682,10 @@ export function Signup(props: AuthFormProps) {
   const authOptions = projectConfig?.authOptions;
   const onNavigate = (target: string) => navigate({ href: target });
   const onVerifyEmail = (email: string) =>
-    navigate({ to: "/verify-email", search: { email } });
+    navigate({
+      to: "/verify-email",
+      search: { ...searchObject(searchString), email },
+    });
   const options = {
     google: authOptions?.google ?? true,
     signUp: authOptions?.signUp ?? true,
@@ -756,13 +758,12 @@ export function Signup(props: AuthFormProps) {
         </CardHeader>
         <CardContent>
           <p className="text-muted-foreground text-center text-sm">
-            {m.sign_up_have_account}{" "}
             <Link
               className={authLinkClassName}
               to="/sign-in"
               search={searchObject(searchString)}
             >
-              {m.auth_sign_in}
+              {m.sign_up_have_account} {m.auth_sign_in}
             </Link>
           </p>
         </CardContent>
@@ -837,13 +838,12 @@ export function Signup(props: AuthFormProps) {
           </div>
         ) : null}
         <p className="text-muted-foreground mt-6 text-center text-sm">
-          {m.sign_up_have_account}{" "}
           <Link
             className={authLinkClassName}
             to="/sign-in"
             search={searchObject(searchString)}
           >
-            {m.auth_sign_in}
+            {m.sign_up_have_account} {m.auth_sign_in}
           </Link>
         </p>
       </CardContent>
@@ -852,11 +852,27 @@ export function Signup(props: AuthFormProps) {
 }
 
 export function VerifyEmail(props: AuthFormProps) {
-  const { authClient, labels: m } = useAuthFormOptions(props);
+  const {
+    authClient,
+    baseUrl,
+    labels: m,
+    projectConfig: providedProjectConfig,
+  } = useAuthFormOptions(props);
   const navigate = useNavigate();
   const searchString = useRouterState({
     select: (state) => state.location.searchStr,
   });
+  const projectConfig = useAuthProjectConfig(
+    baseUrl,
+    searchString,
+    providedProjectConfig,
+  );
+  const redirectTarget = getRedirectTarget(
+    searchString,
+    projectConfig?.authDomain,
+    projectConfig?.rootDomain,
+  );
+  const onNavigate = (target: string) => navigateTarget(target, navigate);
   const [resent, setResent] = useState(false);
   const form = useAppForm({
     defaultValues: {
@@ -881,7 +897,7 @@ export function VerifyEmail(props: AuthFormProps) {
         return;
       }
 
-      navigate({ to: "/sign-in" });
+      onNavigate(redirectTarget);
     },
   });
 

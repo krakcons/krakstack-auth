@@ -219,6 +219,9 @@ const createAuth = ({
         await sendResetPasswordEmail({ request, to: user.email, url });
       },
     },
+    emailVerification: {
+      autoSignInAfterVerification: true,
+    },
     ...(googleClientId && googleClientSecret
       ? {
           socialProviders: {

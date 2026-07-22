@@ -5,7 +5,6 @@ import {
   emailOTPClient,
   genericOAuthClient,
   inferAdditionalFields,
-  inferOrgAdditionalFields,
   lastLoginMethodClient,
   organizationClient,
   twoFactorClient,
@@ -33,17 +32,13 @@ const organizationSchema = {
   },
 } as const;
 
-const organizationClientPlugin = organizationClient({
-  schema: inferOrgAdditionalFields(organizationSchema),
-});
-
 type AuthUiClientPlugins = [
   ReturnType<typeof inferAdditionalFields<never, typeof additionalFields>>,
   ReturnType<typeof adminClient<{}>>,
   ReturnType<typeof anonymousClient>,
   ReturnType<typeof emailOTPClient>,
   ReturnType<typeof lastLoginMethodClient>,
-  typeof organizationClientPlugin,
+  ReturnType<typeof organizationClient<{ schema: typeof organizationSchema }>>,
   ReturnType<typeof twoFactorClient>,
   ReturnType<typeof apiKeyClient>,
   ReturnType<typeof genericOAuthClient>,
@@ -57,7 +52,7 @@ const authUiClientPlugins: AuthUiClientPlugins = [
   lastLoginMethodClient({
     cookieName: "krakstack-auth.last_used_login_method",
   }),
-  organizationClientPlugin,
+  organizationClient({ schema: organizationSchema }),
   twoFactorClient(),
   apiKeyClient(),
   genericOAuthClient(),

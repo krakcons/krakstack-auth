@@ -12,8 +12,8 @@ import { db } from "@/services/database";
 import { hostFromRequest } from "@/services/domains";
 import { m } from "@/paraglide/messages";
 import { NotificationService } from "@/services/notification";
+import { localNotificationServiceLayer } from "@/services/notification/channels/local";
 import { sesNotificationServiceLayer } from "@/services/notification/channels/ses";
-import { testNotificationServiceLayer } from "@/services/notification/channels/test";
 import { organizationBranding } from "@/services/organizations/branding";
 import type { SesEmailNotification } from "@/services/notification/channels/ses/schema";
 
@@ -21,7 +21,7 @@ const notificationLayer =
   process.env.NODE_ENV === "test"
     ? NotificationService.noopLayer
     : process.env.NODE_ENV === "development"
-      ? testNotificationServiceLayer
+      ? localNotificationServiceLayer
       : sesNotificationServiceLayer;
 
 const fallbackAppName = process.env.AUTH_EMAIL_NAME ?? "Krakstack Auth";
