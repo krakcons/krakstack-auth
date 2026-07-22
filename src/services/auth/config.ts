@@ -18,6 +18,7 @@ import {
 } from "better-auth/plugins/organization/access";
 import { oauthProvider } from "@better-auth/oauth-provider";
 import { apiKey } from "@better-auth/api-key";
+import { APIError } from "@better-auth/core/error";
 import { Effect } from "effect";
 import { organizationRoles } from "@krak-stack/auth/roles";
 
@@ -58,6 +59,25 @@ const googleClientId = process.env.GOOGLE_CLIENT_ID;
 const googleClientSecret = process.env.GOOGLE_CLIENT_SECRET;
 const betterAuthUrl = process.env.BETTER_AUTH_URL ?? "http://localhost:3000";
 const projectContextCookie = "krakstack-auth.project_context";
+
+const organizationSlugPart = (value: string) =>
+  value
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+
+type PersonalOrganizationUser = {
+  email: string;
+  id: string;
+  name: string;
+};
+
+const personalOrganizationSlugPart = (user: PersonalOrganizationUser) =>
+  organizationSlugPart(user.name) ||
+  organizationSlugPart(user.email.split("@")[0] ?? "") ||
+  "user";
 
 const cookieValue = (headers: Headers | undefined, name: string) => {
   const cookie = headers?.get("cookie");
@@ -117,8 +137,56 @@ const createAuth = ({
 }: {
   allowedHosts: readonly string[];
   cookieDomain?: string | undefined;
-}) =>
-  betterAuth({
+}) => {
+  let createPersonalOrganization:
+    | ((
+        user: PersonalOrganizationUser,
+        slug: string,
+      ) => Promise<{ id: string }>)
+    | undefined;
+  const provisionPersonalOrganization = Effect.fn(
+    "Auth.provisionPersonalOrganization",
+  )(function* (user: PersonalOrganizationUser) {
+    const database = yield* DB;
+    const current = yield* database.query.organization.findFirst({
+      where: { userId: user.id },
+      columns: { id: true },
+    });
+    if (current) return current.id;
+
+    const slugPart = personalOrganizationSlugPart(user);
+    const preferredSlug = `${slugPart}-org`;
+    const existing = yield* database.query.organization.findFirst({
+      where: { slug: preferredSlug },
+      columns: { id: true },
+    });
+    const slug = existing
+      ? `${slugPart}-${organizationSlugPart(user.id)}-org`
+      : preferredSlug;
+    const createOrganization = createPersonalOrganization;
+    if (!createOrganization) {
+      return yield* Effect.die("Auth is not initialized");
+    }
+    return yield* Effect.tryPromise({
+      try: () => createOrganization(user, slug),
+      catch: (cause) => cause,
+    }).pipe(
+      Effect.map((created) => created.id),
+      Effect.catch((cause) =>
+        Effect.gen(function* () {
+          const concurrentlyCreated =
+            yield* database.query.organization.findFirst({
+              where: { userId: user.id },
+              columns: { id: true },
+            });
+          if (concurrentlyCreated) return concurrentlyCreated.id;
+          return yield* Effect.fail(cause);
+        }),
+      ),
+    );
+  });
+
+  const auth = betterAuth({
     appName: "Krakstack Auth",
     baseURL: {
       allowedHosts: Array.from(allowedHosts),
@@ -174,8 +242,48 @@ const createAuth = ({
       },
     },
     databaseHooks: {
+      user: {
+        create: {
+          after: async (user) => {
+            if (user.isAnonymous === true) return;
+            await Effect.runPromise(
+              provisionPersonalOrganization(user).pipe(
+                Effect.provide(DB.layer),
+              ),
+            );
+          },
+        },
+      },
       session: {
         create: {
+          before: async (session) => {
+            return await Effect.runPromise(
+              Effect.gen(function* () {
+                const database = yield* DB;
+                const sessionUser = yield* database.query.user.findFirst({
+                  where: { id: session.userId },
+                  columns: {
+                    email: true,
+                    id: true,
+                    isAnonymous: true,
+                    name: true,
+                  },
+                });
+                if (!sessionUser || sessionUser.isAnonymous === true) return;
+
+                const organizationId =
+                  yield* provisionPersonalOrganization(sessionUser);
+                if (session.activeOrganizationId) return;
+
+                return {
+                  data: {
+                    ...session,
+                    activeOrganizationId: organizationId,
+                  },
+                };
+              }).pipe(Effect.provide(DB.layer)),
+            );
+          },
           after: connectSessionProject,
         },
         update: {
@@ -232,6 +340,59 @@ const createAuth = ({
         invitationExpiresIn: 14 * 24 * 60 * 60,
         membershipLimit: 100,
         roles: organizationAuthRoles,
+        schema: {
+          organization: {
+            additionalFields: {
+              userId: {
+                type: "string",
+                required: false,
+              },
+            },
+          },
+        },
+        organizationHooks: {
+          beforeCreateOrganization: async ({ organization, user }) => {
+            const slugPart = personalOrganizationSlugPart(user);
+            const personalSlugs = [
+              `${slugPart}-org`,
+              `${slugPart}-${organizationSlugPart(user.id)}-org`,
+            ];
+
+            return {
+              data: {
+                ...organization,
+                userId: personalSlugs.includes(organization.slug ?? "")
+                  ? user.id
+                  : null,
+              },
+            };
+          },
+          beforeUpdateOrganization: async ({ organization, member }) => {
+            return await Effect.runPromise(
+              Effect.gen(function* () {
+                const database = yield* DB;
+                const current = yield* database.query.organization.findFirst({
+                  where: { id: member.organizationId },
+                  columns: { userId: true },
+                });
+
+                return {
+                  data: {
+                    ...organization,
+                    userId: current?.userId ?? null,
+                  },
+                };
+              }).pipe(Effect.provide(DB.layer)),
+            );
+          },
+          beforeDeleteOrganization: async ({ organization }) => {
+            if (!organization.userId) return;
+
+            throw new APIError("FORBIDDEN", {
+              message: "Personal organizations cannot be deleted",
+            });
+          },
+        },
       }),
       organizationImpersonation(),
       apiKey([
@@ -281,6 +442,18 @@ const createAuth = ({
       }),
     ],
   });
+
+  createPersonalOrganization = (user, slug) =>
+    auth.api.createOrganization({
+      body: {
+        name: user.name,
+        slug,
+        userId: user.id,
+      },
+    });
+
+  return auth;
+};
 
 const authByRequestScope = new Map<string, ReturnType<typeof createAuth>>();
 

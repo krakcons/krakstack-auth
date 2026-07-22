@@ -161,6 +161,7 @@ const messages = {
     organization_switcher_label: "Organization",
     organization_switcher_manage: "Manage organization",
     organization_switcher_no_other_organizations: "No other organizations.",
+    organization_switcher_personal: "Personal",
     organization_translation_description:
       "Localized organization details stored in metadata.",
     organization_translation_english: "English profile",
@@ -264,6 +265,7 @@ const messages = {
     organization_switcher_label: "Organisation",
     organization_switcher_manage: "Gérer l'organisation",
     organization_switcher_no_other_organizations: "Aucune autre organisation.",
+    organization_switcher_personal: "Personnel",
     organization_translation_description:
       "Détails localisés de l'organisation stockés dans les métadonnées.",
     organization_translation_english: "Profil anglais",
@@ -364,6 +366,7 @@ type OrganizationSummary = {
   name: string;
   slug: string;
   metadata?: unknown;
+  userId?: string | null;
 };
 
 export type OrganizationSwitcherDialog =
@@ -620,6 +623,15 @@ const organizationDisplay = (
   };
 };
 
+const organizationSwitcherSubtitle = (
+  organization: OrganizationSummary | null,
+  subtitle: string,
+  m: ReturnType<typeof organizationMessageFns>,
+) =>
+  organization?.userId
+    ? `${m.organization_switcher_personal()} · ${subtitle}`
+    : subtitle;
+
 const organizationFormDefaults = (
   organization?: OrganizationSummary,
   baseUrl?: string,
@@ -871,6 +883,11 @@ export function OrganizationSwitcher({
   };
 
   const activeDisplay = organizationDisplay(active ?? null, m, baseUrl);
+  const activeSubtitle = organizationSwitcherSubtitle(
+    active ?? null,
+    activeDisplay.subtitle,
+    m,
+  );
 
   return (
     <OrganizationMessagesContext.Provider value={m}>
@@ -892,7 +909,7 @@ export function OrganizationSwitcher({
                       ? activeDisplay.name
                       : m.organization_switcher_label()
                   }
-                  subtitle={activeDisplay.subtitle}
+                  subtitle={activeSubtitle}
                   icon={Building2}
                   variant="sidebar"
                   className="min-w-0 flex-1 !p-0 text-left group-data-[collapsible=icon]:flex-none group-data-[collapsible=icon]:justify-start"
@@ -915,7 +932,7 @@ export function OrganizationSwitcher({
                 <AppBrand
                   to={null}
                   label={activeDisplay.name}
-                  subtitle={activeDisplay.subtitle}
+                  subtitle={activeSubtitle}
                   icon={Building2}
                   variant="sidebar"
                   className="px-1 py-1.5 text-left text-sm"
@@ -961,7 +978,11 @@ export function OrganizationSwitcher({
                       <AppBrand
                         to={null}
                         label={display.name}
-                        subtitle={display.subtitle}
+                        subtitle={organizationSwitcherSubtitle(
+                          organization,
+                          display.subtitle,
+                          m,
+                        )}
                         icon={Building2}
                         className="w-full text-left [&>div:first-child]:size-7"
                         {...(display.image ? { imageSrc: display.image } : {})}

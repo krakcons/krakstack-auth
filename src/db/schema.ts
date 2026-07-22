@@ -126,8 +126,14 @@ export const organization = pgTable(
     logo: text("logo"),
     createdAt: timestamp("created_at").notNull(),
     metadata: text("metadata"),
+    userId: text("user_id").references(() => user.id, {
+      onDelete: "cascade",
+    }),
   },
-  (table) => [uniqueIndex("organization_slug_uidx").on(table.slug)],
+  (table) => [
+    uniqueIndex("organization_slug_uidx").on(table.slug),
+    uniqueIndex("organization_userId_uidx").on(table.userId),
+  ],
 );
 
 export const member = pgTable(
