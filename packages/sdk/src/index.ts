@@ -13,6 +13,7 @@ export {
   Signin,
   Signup,
   TwoFactor,
+  VerifyEmail,
   AdminOrganizationForm,
   AdminOrganizationsTable,
   AdminUsersTable,

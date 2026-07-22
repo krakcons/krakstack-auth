@@ -91,6 +91,14 @@ const defaultMessages = {
     two_factor_verify_email_description:
       "Enter the verification code sent to your email to continue.",
     two_factor_verify_error: "Could not verify the code.",
+    verify_email_code: "Verification code",
+    verify_email_description:
+      "Enter the one-time code sent to your email address.",
+    verify_email_error: "Unable to verify email.",
+    verify_email_resend: "Resend code",
+    verify_email_resend_error: "Unable to send verification code.",
+    verify_email_resent: "A new verification code has been sent.",
+    verify_email_title: "Verify your email",
   },
   fr: {
     auth_continue_with_google: "Continuer avec Google",
@@ -151,6 +159,14 @@ const defaultMessages = {
     two_factor_verify_email_description:
       "Saisissez le code de vérification envoyé à votre courriel pour continuer.",
     two_factor_verify_error: "Impossible de vérifier le code.",
+    verify_email_code: "Code de vérification",
+    verify_email_description:
+      "Saisissez le code à usage unique envoyé à votre adresse courriel.",
+    verify_email_error: "Impossible de vérifier le courriel.",
+    verify_email_resend: "Renvoyer le code",
+    verify_email_resend_error: "Impossible d'envoyer le code de vérification.",
+    verify_email_resent: "Un nouveau code de vérification a été envoyé.",
+    verify_email_title: "Vérifier votre courriel",
   },
 } as const;
 
@@ -828,6 +844,147 @@ export function Signup(props: AuthFormProps) {
             search={searchObject(searchString)}
           >
             {m.auth_sign_in}
+          </Link>
+        </p>
+      </CardContent>
+    </Card>
+  );
+}
+
+export function VerifyEmail(props: AuthFormProps) {
+  const { authClient, labels: m } = useAuthFormOptions(props);
+  const navigate = useNavigate();
+  const searchString = useRouterState({
+    select: (state) => state.location.searchStr,
+  });
+  const [resent, setResent] = useState(false);
+  const form = useAppForm({
+    defaultValues: {
+      email: getSearchParam(searchString, "email") ?? "",
+      otp: "",
+    },
+    onSubmit: async ({ value, formApi }) => {
+      formApi.setErrorMap({ onSubmit: undefined });
+
+      const result = await authClient.emailOtp.verifyEmail({
+        email: value.email.trim(),
+        otp: value.otp.trim(),
+      });
+
+      if (result.error) {
+        formApi.setErrorMap({
+          onSubmit: {
+            form: result.error.message ?? m.verify_email_error,
+            fields: {},
+          },
+        });
+        return;
+      }
+
+      navigate({ to: "/sign-in" });
+    },
+  });
+
+  const resendCode = async () => {
+    form.setErrorMap({ onSubmit: undefined });
+    const result = await authClient.emailOtp.sendVerificationOtp({
+      email: form.state.values.email.trim(),
+      type: "email-verification",
+    });
+
+    if (result.error) {
+      form.setErrorMap({
+        onSubmit: {
+          form: result.error.message ?? m.verify_email_resend_error,
+          fields: {},
+        },
+      });
+      return;
+    }
+
+    setResent(true);
+  };
+
+  return (
+    <Card className="w-full max-w-md">
+      <CardHeader>
+        <CardTitle className="text-3xl">{m.verify_email_title}</CardTitle>
+        <CardDescription>{m.verify_email_description}</CardDescription>
+      </CardHeader>
+      <CardContent>
+        <form.AppForm>
+          <form
+            className="flex flex-col gap-4"
+            onSubmit={(event) => {
+              event.preventDefault();
+              event.stopPropagation();
+              form.handleSubmit();
+            }}
+          >
+            <form.AppField name="email">
+              {(field) => (
+                <field.TextField
+                  label={m.field_email}
+                  type="email"
+                  autoComplete="email"
+                  required
+                />
+              )}
+            </form.AppField>
+            <form.AppField name="otp">
+              {(field) => {
+                const invalid = !field.state.meta.isValid;
+                return (
+                  <Field data-invalid={invalid}>
+                    <FieldLabel htmlFor={field.name}>
+                      {m.verify_email_code}
+                    </FieldLabel>
+                    <InputOTP
+                      id={field.name}
+                      name={field.name}
+                      maxLength={6}
+                      value={field.state.value ?? ""}
+                      onChange={(value) => field.handleChange(value)}
+                      onBlur={field.handleBlur}
+                      autoComplete="one-time-code"
+                      inputMode="numeric"
+                      pattern={REGEXP_ONLY_DIGITS}
+                      required
+                    >
+                      <InputOTPGroup>
+                        <InputOTPSlot index={0} aria-invalid={invalid} />
+                        <InputOTPSlot index={1} aria-invalid={invalid} />
+                        <InputOTPSlot index={2} aria-invalid={invalid} />
+                      </InputOTPGroup>
+                      <InputOTPSeparator />
+                      <InputOTPGroup>
+                        <InputOTPSlot index={3} aria-invalid={invalid} />
+                        <InputOTPSlot index={4} aria-invalid={invalid} />
+                        <InputOTPSlot index={5} aria-invalid={invalid} />
+                      </InputOTPGroup>
+                    </InputOTP>
+                    <FieldError errors={field.getMeta().errors} />
+                  </Field>
+                );
+              }}
+            </form.AppField>
+            <form.FormError />
+            {resent ? (
+              <p className="text-muted-foreground text-sm">
+                {m.verify_email_resent}
+              </p>
+            ) : null}
+            <div className="flex flex-wrap items-center gap-3">
+              <form.SubmitButton />
+              <Button type="button" variant="ghost" onClick={resendCode}>
+                {m.verify_email_resend}
+              </Button>
+            </div>
+          </form>
+        </form.AppForm>
+        <p className="text-muted-foreground mt-6 text-center text-sm">
+          <Link className={authLinkClassName} to="/sign-in">
+            {m.forgot_password_back_to_sign_in}
           </Link>
         </p>
       </CardContent>

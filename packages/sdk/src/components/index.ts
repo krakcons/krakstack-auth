@@ -7,7 +7,13 @@ export {
 export { createAuthUiClient } from "./auth-client";
 export { OrganizationSwitcher } from "./organization-switcher";
 export { MemberRequired } from "./member-required";
-export { ResetPassword, Signin, Signup, TwoFactor } from "./auth-forms";
+export {
+  ResetPassword,
+  Signin,
+  Signup,
+  TwoFactor,
+  VerifyEmail,
+} from "./auth-forms";
 export { UserButton } from "./user-button";
 export { AdminOrganizationsTable } from "./admin-organizations";
 export { AdminOrganizationForm } from "./admin-organization-form";
