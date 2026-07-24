@@ -1,0 +1,44 @@
+---
+slug: oauth
+path: /docs/oauth
+title: OAuth et OIDC
+description: Intégrez le flux par code, PKCE, la découverte standard, les portées et une gestion sûre des jetons.
+icon: key
+order: 4
+locale: fr
+---
+
+# OAuth et OIDC
+
+Krakstack Auth publie les métadonnées OpenID Connect et OAuth et prend en charge le flux par code d'autorisation. Utilisez une bibliothèque OAuth/OIDC maintenue plutôt que d'implémenter manuellement les requêtes et la validation.
+
+## Enregistrer un client
+
+Dans **Administration > Clients**, configurez :
+
+- Un nom d'affichage reconnaissable
+- Des URI de redirection exactes, incluant protocole, hôte, chemin et port
+- Les portées minimales : `openid`, `profile`, `email` et éventuellement `offline_access`
+- Un projet lié pour la marque et les options de connexion
+- Un comportement de consentement adapté au statut interne ou tiers du client
+
+Copiez immédiatement l'identifiant et le secret. Le secret n'est affiché qu'une fois et doit rester dans un coffre de secrets serveur. Les clients publics utilisent PKCE et ne distribuent jamais de secret.
+
+## Découverte
+
+```text
+Émetteur : https://auth.example.com
+Découverte : https://auth.example.com/.well-known/openid-configuration
+Métadonnées OAuth : https://auth.example.com/.well-known/oauth-authorization-server/api/auth
+```
+
+## Flux d'autorisation
+
+1. Générez des valeurs aléatoires `state`, `nonce` et un vérificateur PKCE.
+2. Stockez-les dans une session HttpOnly sûre et de courte durée.
+3. Redirigez vers le point d'autorisation découvert avec `response_type=code`.
+4. Comparez `state` au retour avant l'échange du code.
+5. Échangez le code côté serveur et validez l'émetteur, l'audience, la signature, le nonce et l'expiration.
+6. Créez ou renouvelez la session de l'application.
+
+Les URI de production doivent utiliser HTTPS et une correspondance exacte. Conservez les jetons hors de `localStorage`; préférez une session serveur chiffrée ou des témoins HttpOnly.

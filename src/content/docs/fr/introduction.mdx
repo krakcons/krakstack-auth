@@ -1,0 +1,47 @@
+---
+slug: introduction
+path: /docs
+title: Introduction
+description: Authentification centrale, organisations et infrastructure d'identité pour toutes les applications de votre pile.
+icon: book
+order: 1
+locale: fr
+---
+
+# Introduction
+
+Krakstack Auth est un service d'identité central basé sur Better Auth. Il gère les identifiants, les sessions, les clients OAuth, les organisations, les clés API, l'authentification à deux facteurs et les métadonnées OpenID Connect. Vos applications consomment une identité commune plutôt que d'implémenter chacune leur propre système.
+
+## Fonctionnalités
+
+- Mot de passe, code par courriel, connexion Google et authentification TOTP
+- Utilisateurs et organisations partagés entre plusieurs applications
+- Flux OAuth 2.1 par code d'autorisation et découverte OpenID Connect
+- Formulaires React, contrôles de compte, sélection d'organisation et gardes d'accès
+- Marque, thèmes CSS, logos et méthodes de connexion propres à chaque projet
+- Domaines d'authentification associés à des projets ou organisations
+- Clients Effect HttpApi typés pour les communications serveur à serveur
+
+## Choisir une intégration
+
+| Méthode                | Idéale pour                                        | Emplacement de session    | Complexité |
+| ---------------------- | -------------------------------------------------- | ------------------------- | ---------- |
+| **Proxy (recommandé)** | Applications Web internes                          | Origine de l'application  | Faible     |
+| **OAuth / OIDC**       | Applications indépendantes et intégrations tierces | Définie par l'application | Moyenne    |
+| **Sous-domaine auth**  | Connexion centrale avec marque personnalisée       | Hôte auth dédié           | Moyenne    |
+
+Commencez par le [guide de configuration](/docs/setup). Le proxy fournit au navigateur un point `/api/auth/*` de même origine tout en conservant Krakstack Auth comme source de vérité.
+
+## Principes d'architecture
+
+Le navigateur utilise l'origine de l'application cliente. Le trafic d'authentification est relayé, redirigé par OAuth ou envoyé à un hôte enregistré. Les opérations backend privilégiées utilisent `@krak-stack/auth` avec une clé API de service.
+
+N'exposez jamais `KRAKSTACK_AUTH_SERVICE_API_KEY` dans une variable `VITE_*` ou dans le code navigateur.
+
+## Étapes suivantes
+
+1. Créez un projet dans l'administration et notez son identifiant.
+2. Choisissez l'une des trois méthodes de configuration.
+3. Ajoutez le fournisseur React et la source CSS si vous utilisez les composants.
+4. Enregistrez les origines, URI de redirection ou domaines de production.
+5. Consultez les listes de contrôle de sécurité et de déploiement.

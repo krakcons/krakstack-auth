@@ -1,0 +1,47 @@
+---
+slug: introduction
+path: /docs
+title: Introduction
+description: Central authentication, organization membership, and identity infrastructure for every application in your stack.
+icon: book
+order: 1
+locale: en
+---
+
+# Introduction
+
+Krakstack Auth is a central identity service built on Better Auth. It owns credentials, sessions, OAuth clients, organizations, API keys, two-factor authentication, and OpenID Connect metadata. Your applications consume identity instead of each implementing a separate authentication system.
+
+## What it provides
+
+- Email and password, email codes, Google sign-in, and TOTP two-factor authentication
+- Shared users and organizations across multiple applications
+- OAuth 2.1 authorization code flow and OpenID Connect discovery
+- Reusable React forms, account controls, organization switching, and access guards
+- Project-specific branding, CSS themes, logos, and enabled sign-in methods
+- Custom authentication domains linked to projects or organizations
+- Typed Effect HttpApi clients for trusted server-to-server work
+
+## Choose an integration
+
+| Method                  | Best for                                                         | Session location        | Complexity |
+| ----------------------- | ---------------------------------------------------------------- | ----------------------- | ---------- |
+| **Proxy (recommended)** | First-party web applications                                     | Your application origin | Low        |
+| **OAuth / OIDC**        | Independent apps, third parties, and standard identity libraries | Application-defined     | Medium     |
+| **Auth subdomain**      | Branded central sign-in across several apps                      | Dedicated auth hostname | Medium     |
+
+Start with the [setup guide](/docs/setup). The proxy method gives browsers a same-origin `/api/auth/*` endpoint while Krakstack Auth remains the source of truth. Choose OAuth when protocol portability matters, or a subdomain when a branded central login hostname is the primary requirement.
+
+## Architecture
+
+The browser uses the consumer application's origin. Auth API traffic is either proxied to Krakstack Auth, redirected through OAuth, or sent to a registered authentication hostname. Trusted backend operations use `@krak-stack/auth` with a service API key.
+
+Never expose `KRAKSTACK_AUTH_SERVICE_API_KEY` in a `VITE_*` variable or browser bundle. Browser sessions and service credentials have different trust boundaries.
+
+## Next steps
+
+1. Create a project in the admin area and record its project ID.
+2. Choose one of the three setup methods.
+3. Add the React provider and CSS source when using packaged components.
+4. Register production origins, redirect URIs, or domains before launch.
+5. Review the security and deployment checklists.

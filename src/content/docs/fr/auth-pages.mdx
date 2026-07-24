@@ -1,0 +1,133 @@
+---
+slug: auth-pages
+path: /docs/auth-pages
+title: Pages d'authentification
+description: Ajoutez les routes de connexion, inscription, vérification, réinitialisation et deuxième facteur autour des formulaires fournis.
+icon: boxes
+order: 7
+locale: fr
+---
+
+# Pages d'authentification
+
+Le SDK fournit les formulaires, mais votre application possède les routes, la mise en page, les métadonnées et la navigation. L'expérience reste cohérente avec votre produit tandis que Krakstack Auth gère les identifiants et sessions.
+
+## Fournisseur requis
+
+Placez `KrakstackAuthProvider` au-dessus de toutes les pages auth. Avec le proxy recommandé, omettez `baseUrl` afin que le client navigateur utilise l'origine de l'application.
+
+```tsx
+import { Outlet, createRootRoute } from "@tanstack/react-router";
+import { KrakstackAuthProvider } from "@krak-stack/auth";
+
+export const Route = createRootRoute({
+  component: () => (
+    <KrakstackAuthProvider
+      locale="fr"
+      projectId={import.meta.env.VITE_KRAKSTACK_AUTH_PROJECT_ID}
+    >
+      <Outlet />
+    </KrakstackAuthProvider>
+  ),
+});
+```
+
+Le fournisseur charge la marque et les méthodes activées pour le projet. Transmettez la langue Paraglide active sous forme `en` ou `fr`.
+
+## Mise en page auth
+
+Créez une disposition sans chemin `_auth` pour le cadre commun et la redirection des utilisateurs déjà connectés. Validez et conservez le paramètre `redirect`.
+
+```tsx
+import { Outlet, createFileRoute, redirect } from "@tanstack/react-router";
+import { Schema } from "effect";
+
+import { authClient } from "@/services/auth/client";
+
+const AuthSearch = Schema.toStandardSchemaV1(
+  Schema.Struct({
+    redirect: Schema.optional(Schema.String),
+  }).annotate({ identifier: "AuthSearch" }),
+);
+
+export const Route = createFileRoute("/_auth")({
+  validateSearch: AuthSearch,
+  beforeLoad: async ({ search }) => {
+    const session = await authClient.getSession();
+    if (session.data) {
+      throw redirect({ href: search.redirect ?? "/", reloadDocument: true });
+    }
+  },
+  component: () => (
+    <main className="mx-auto flex min-h-screen max-w-md items-center px-4">
+      <Outlet />
+    </main>
+  ),
+});
+```
+
+## Ajouter les routes
+
+Créez les chemins publics suivants. Les composants utilisent ces noms pour leurs liens et redirections :
+
+| Route             | Composant       | Fonction                                         |
+| ----------------- | --------------- | ------------------------------------------------ |
+| `/sign-in`        | `Signin`        | Mot de passe, code courriel et connexion sociale |
+| `/sign-up`        | `Signup`        | Création de compte                               |
+| `/verify-email`   | `VerifyEmail`   | Code de vérification du courriel                 |
+| `/reset-password` | `ResetPassword` | Finalisation d'un lien de réinitialisation       |
+| `/2fa`            | `TwoFactor`     | Défi TOTP, courriel ou code de secours           |
+
+Chaque route TanStack suit le même modèle :
+
+```tsx
+import { Signin } from "@krak-stack/auth";
+import { createFileRoute } from "@tanstack/react-router";
+
+export const Route = createFileRoute("/_auth/sign-in")({
+  component: () => <Signin />,
+});
+```
+
+Répétez avec `Signup`, `VerifyEmail`, `ResetPassword` et `TwoFactor`. Conservez les chemins publics exacts sauf si vous personnalisez aussi tous les liens et rappels.
+
+## Mot de passe oublié
+
+`Signin` pointe vers `/forgot-password`. Ajoutez une page applicative qui collecte le courriel et appelle la demande de réinitialisation Better Auth avec `/reset-password` comme destination. La réponse doit rester générique afin de ne pas révéler l'existence d'un compte.
+
+Sans formulaire personnalisé, redirigez `/forgot-password` vers la page du service central en conservant la destination de retour.
+
+## Routes protégées
+
+Utilisez une route parente pour l'expérience de navigation :
+
+```tsx
+export const Route = createFileRoute("/_protected")({
+  beforeLoad: async ({ location }) => {
+    const session = await authClient.getSession();
+    if (!session.data?.user) {
+      throw redirect({
+        to: "/sign-in",
+        search: { redirect: location.href },
+      });
+    }
+  },
+});
+```
+
+Cette garde ne remplace pas l'autorisation backend. Chaque opération protégée doit aussi appeler `AuthService.requireUser()`, `requireOrganization()` ou `requireUserOrganization()`.
+
+## Accès à l'organisation
+
+`MemberRequired` peut expliquer l'absence d'accès et permettre l'acceptation d'une invitation :
+
+```tsx
+<MemberRequired
+  organizationId={organizationId}
+  contactEmail="support@example.com"
+>
+  <OrganizationDashboard />
+</MemberRequired>
+```
+
+Il s'agit uniquement d'une frontière d'interface. Répétez les vérifications d'adhésion et de rôle dans les services backend.

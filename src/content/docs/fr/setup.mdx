@@ -1,0 +1,59 @@
+---
+slug: setup
+path: /docs/setup
+title: Méthodes de configuration
+description: Comparez les intégrations par proxy, OAuth et sous-domaine pour choisir la bonne frontière applicative.
+icon: network
+order: 2
+locale: fr
+---
+
+# Méthodes de configuration
+
+Installez le SDK dans l'application cliente :
+
+```bash
+bun add @krak-stack/auth effect
+```
+
+Créez d'abord un projet dans **Administration > Projets**. Le projet contrôle la marque, les méthodes de connexion et l'expérience partagée par les clients OAuth ou domaines.
+
+## 1. Proxy (recommandé)
+
+Relayez `/api/auth/*` de votre application vers Krakstack Auth. Les témoins du navigateur restent liés à l'origine de l'application et le client Better Auth utilise un point de même origine. Kokobi emploie cette architecture.
+
+```env
+KRAKSTACK_AUTH_URL=https://auth.example.com
+VITE_KRAKSTACK_AUTH_URL=https://auth.example.com
+VITE_KRAKSTACK_AUTH_PROJECT_ID=project_id
+KRAKSTACK_AUTH_SERVICE_API_KEY=secret_serveur
+```
+
+`KRAKSTACK_AUTH_URL` et la clé de service sont réservés au serveur. L'URL `VITE_*` et l'identifiant de projet sont des paramètres publics.
+
+Consultez le [guide du proxy](/docs/proxy).
+
+## 2. OAuth / OpenID Connect
+
+Enregistrez un client OAuth et utilisez le flux par code d'autorisation avec PKCE. Cette méthode fonctionne avec les bibliothèques OAuth et OIDC standard, sans dépendre du client Better Auth dans le navigateur.
+
+Utilisez OAuth pour les intégrations tierces, les applications exploitées séparément, les clients natifs ou les systèmes déjà compatibles OIDC.
+
+```text
+https://auth.example.com/.well-known/openid-configuration
+```
+
+Consultez le [guide OAuth](/docs/oauth).
+
+## 3. Sous-domaine auth dédié
+
+Enregistrez un hôte comme `auth.client.example.com` et associez-le à un projet ou à une organisation. Les utilisateurs visitent une origine d'authentification personnalisée tandis que l'application reste à `client.example.com`.
+
+Consultez le [guide des sous-domaines](/docs/subdomain) et [l'enregistrement des domaines](/docs/domains).
+
+## Aide au choix
+
+- Choisissez **proxy** pour la configuration interne la plus courte et la plus sûre.
+- Choisissez **OAuth** pour la portabilité et l'autorisation déléguée standard.
+- Choisissez **sous-domaine** pour un hôte central personnalisé.
+- Combinez OAuth et domaine personnalisé si vous avez besoin d'un protocole standard et d'une URL d'émetteur personnalisée.

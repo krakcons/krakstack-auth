@@ -1,0 +1,51 @@
+---
+slug: domains
+path: /docs/domains
+title: Enregistrer des domaines
+description: Enregistrez les hôtes auth et racine approuvés, configurez le DNS et automatisez leur cycle de vie.
+icon: globe
+order: 9
+locale: fr
+---
+
+# Enregistrer des domaines
+
+Un domaine relie un hôte d'authentification public à l'hôte racine autorisé à lancer des rappels. Il peut aussi sélectionner la marque d'un projet ou d'une organisation.
+
+## Enregistrement administratif
+
+Dans **Administration > Domaines > Créer un domaine**, saisissez :
+
+- **Hôte auth :** hôte visité par les utilisateurs, par exemple `auth.institut.example.com`
+- **Hôte racine :** application autorisée, par exemple `institut.example.com`
+- **Projet :** marque et méthodes d'authentification facultatives
+- **Organisation :** marque d'organisation facultative
+- **Géré :** provisionnement de l'hôte personnalisé par Krakstack Auth dans Cloudflare
+
+Saisissez uniquement des noms d'hôte, sans `https://`, chemin, port ou barre finale.
+
+## Enregistrement par API serveur
+
+```http
+POST /api/server/domains
+x-api-key: SERVICE_API_KEY
+content-type: application/json
+
+{
+  "hostname": "auth.institut.example.com",
+  "rootHostname": "institut.example.com",
+  "projectId": "project_id",
+  "organizationId": "organization_id",
+  "managed": true
+}
+```
+
+L'API permet aussi la recherche par identifiant ou hôte, la récupération des enregistrements DNS, la mise à jour et la suppression. Gardez la clé de service dans un coffre serveur.
+
+## DNS et activation
+
+Pour un domaine géré, publiez les enregistrements demandés auprès du fournisseur DNS. Le service actualise le statut Cloudflare. Le contexte du domaine n'est résolu que lorsque l'enregistrement unique est actif.
+
+Pour un domaine non géré, routez vous-même l'hôte vers le service et préservez correctement l'hôte et le protocole d'origine au niveau du proxy TLS.
+
+La suppression d'un domaine géré retire aussi l'hôte Cloudflare. Retirez d'abord les références et rappels OAuth, puis les enregistrements DNS après la fin du trafic.

@@ -1,0 +1,115 @@
+---
+slug: self-hosting
+path: /docs/self-hosting
+title: Auto-hébergement
+description: Exécutez l'image GHCR publiée avec PostgreSQL, une configuration sûre, les migrations automatiques et une exploitation durable.
+icon: server
+order: 10
+locale: fr
+---
+
+# Auto-hébergement
+
+Krakstack Auth publie une image OCI prête à l'emploi dans GitHub Container Registry. Utilisez cette image pour l'auto-hébergement plutôt que de cloner le dépôt ou de maintenir votre propre chaîne de compilation.
+
+## Image publiée
+
+```bash
+docker pull ghcr.io/krakcons/krakstack-auth:latest
+```
+
+Le déploiement publie deux étiquettes après chaque compilation réussie de `main` :
+
+- `latest` suit la dernière compilation réussie.
+- Le SHA Git complet identifie une version immuable, par exemple `ghcr.io/krakcons/krakstack-auth:COMMIT_SHA`.
+
+Utilisez `latest` pour évaluer les mises à jour. En production, fixez le SHA complet afin qu'un redémarrage ne modifie pas silencieusement la version. Les étiquettes et condensats sont disponibles dans le [paquet GitHub](https://github.com/krakcons/krakstack-auth/pkgs/container/krakstack-auth). Le workflow actuel publie des images `linux/amd64`.
+
+## Docker Compose
+
+L'application écoute sur le port `3000`. Sa commande de démarrage applique les migrations Drizzle avant de lancer le serveur.
+
+```yaml
+services:
+  auth:
+    image: ghcr.io/krakcons/krakstack-auth:latest
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    environment:
+      DATABASE_URL: postgres://krakstack:${POSTGRES_PASSWORD}@postgres:5432/krakstack_auth
+      BETTER_AUTH_SECRET: ${BETTER_AUTH_SECRET}
+      BETTER_AUTH_URL: https://auth.example.com
+      VITE_SITE_URL: https://auth.example.com
+      BETTER_AUTH_TRUSTED_ORIGINS: https://auth.example.com,https://app.example.com
+      BETTER_AUTH_VALID_AUDIENCES: https://auth.example.com,https://app.example.com
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  postgres:
+    image: postgres:17
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: krakstack_auth
+      POSTGRES_USER: krakstack
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U krakstack -d krakstack_auth"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+volumes:
+  postgres-data:
+```
+
+Placez `POSTGRES_PASSWORD` et `BETTER_AUTH_SECRET` dans le coffre de secrets de votre plateforme ou dans un fichier Compose `.env` exclu du contrôle de version. Générez le secret avec `openssl rand -base64 32`.
+
+## Environnement requis
+
+```env
+DATABASE_URL=postgres://user:password@db/krakstack_auth
+BETTER_AUTH_SECRET=long_secret_aleatoire
+BETTER_AUTH_URL=https://auth.example.com
+VITE_SITE_URL=https://auth.example.com
+BETTER_AUTH_TRUSTED_ORIGINS=https://auth.example.com,https://app.example.com
+BETTER_AUTH_VALID_AUDIENCES=https://auth.example.com,https://app.example.com
+```
+
+Ne réutilisez pas les secrets de base, OAuth ou clés API. `BETTER_AUTH_URL` représente l'émetteur HTTPS public stable et non l'adresse interne du conteneur.
+
+## Services facultatifs
+
+- `GOOGLE_CLIENT_ID` et `GOOGLE_CLIENT_SECRET` activent Google.
+- Les identifiants SES et `AUTH_EMAIL_FROM` servent à la vérification, la réinitialisation et le deuxième facteur.
+- `AUTH_CLOUDFLARE_ZONE_ID`, les identifiants Cloudflare et `AUTH_DOMAIN_CNAME_TARGET` activent les domaines gérés.
+- `BETTER_AUTH_ADDITIONAL_HOSTS` déclare des hôtes publics fixes supplémentaires.
+
+## Démarrer et mettre à jour
+
+```bash
+docker compose up -d
+docker compose logs -f auth
+```
+
+Pour mettre à jour, choisissez un SHA testé dans le fichier Compose, téléchargez-le et recréez le service :
+
+```bash
+docker compose pull auth
+docker compose up -d auth
+```
+
+Le conteneur applique les migrations au démarrage. Évitez de démarrer plusieurs nouveaux réplicas simultanément pendant une mise à jour; démarrez d'abord une seule instance pour terminer les migrations.
+
+## Production
+
+- Forcez HTTPS et sauvegardez PostgreSQL avec des tests de restauration.
+- Gardez l'origine auth stable, car les clients dépendent de l'émetteur.
+- Limitez l'administration et renouvelez les clés de service.
+- Configurez la délivrabilité des courriels.
+- Surveillez `/api/auth/ok` et la latence de la base.
+- Révisez les origines et URI OAuth après chaque changement de déploiement.
+- Notez le SHA déployé et conservez un SHA de retour arrière.

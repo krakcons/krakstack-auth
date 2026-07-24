@@ -1,0 +1,78 @@
+---
+slug: proxy
+path: /docs/proxy
+title: Proxy setup
+description: Run the recommended same-origin integration with a hardened server proxy and packaged React client.
+icon: network
+order: 3
+locale: en
+---
+
+# Proxy setup
+
+The proxy method exposes `/api/auth/*` on your application and forwards those requests to the central service. `proxyAuthRequest` removes hop-by-hop, Cloudflare, and forwarded headers, then supplies trusted `x-forwarded-host` and `x-forwarded-proto` values.
+
+## Add the catch-all route
+
+For TanStack Start, create `src/routes/api/auth.$.tsx`:
+
+```tsx
+import { proxyAuthRequest } from "@krak-stack/auth/server";
+import { createFileRoute } from "@tanstack/react-router";
+
+const proxyAuth = (request: Request) =>
+  proxyAuthRequest(request, process.env.KRAKSTACK_AUTH_URL!);
+
+export const Route = createFileRoute("/api/auth/$")({
+  server: {
+    handlers: {
+      GET: ({ request }) => proxyAuth(request),
+      POST: ({ request }) => proxyAuth(request),
+      PUT: ({ request }) => proxyAuth(request),
+      PATCH: ({ request }) => proxyAuth(request),
+      DELETE: ({ request }) => proxyAuth(request),
+    },
+  },
+});
+```
+
+Keep the wildcard path unchanged so every Better Auth endpoint is forwarded. Do not implement a generic open proxy; the target must come from trusted server configuration.
+
+## Create the browser client
+
+Point the client to the application origin, not the upstream auth origin:
+
+```ts
+import { createAuthUiClient } from "@krak-stack/auth";
+
+const appOrigin =
+  typeof window === "undefined"
+    ? process.env.VITE_SITE_URL
+    : window.location.origin;
+
+export const authClient = createAuthUiClient(appOrigin);
+```
+
+## Add the provider
+
+```tsx
+import { KrakstackAuthProvider } from "@krak-stack/auth";
+
+<KrakstackAuthProvider
+  locale="en"
+  projectId={import.meta.env.VITE_KRAKSTACK_AUTH_PROJECT_ID}
+>
+  <App />
+</KrakstackAuthProvider>;
+```
+
+## Configure central auth
+
+Add every application origin to `BETTER_AUTH_TRUSTED_ORIGINS` and `BETTER_AUTH_VALID_AUDIENCES` on the auth server. Use exact production origins and HTTPS. Register the project's root hostname when using dynamic domain resolution.
+
+## Verify
+
+1. Open `https://app.example.com/api/auth/ok` and confirm a successful response.
+2. Sign in and inspect cookies; they should belong to `app.example.com`.
+3. Refresh a protected page and confirm the server can resolve the session.
+4. Test sign-out, email verification, password reset, and two-factor redirects.

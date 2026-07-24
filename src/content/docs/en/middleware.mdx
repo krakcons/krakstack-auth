@@ -1,0 +1,108 @@
+---
+slug: middleware
+path: /docs/middleware
+title: API middleware
+description: Authenticate Effect HttpApi requests, access typed session context, and enforce user and organization requirements on the backend.
+icon: shield
+order: 8
+locale: en
+---
+
+# API middleware
+
+`AuthMiddleware` connects an Effect HttpApi application to Krakstack Auth. It forwards safe request context to the auth service, supports browser cookies and `x-api-key` credentials, and provides an `AuthService` to handlers.
+
+## Add middleware to the API
+
+Apply the middleware to the root API when most groups need identity context:
+
+```ts
+import { AuthMiddleware } from "@krak-stack/auth/server";
+import { HttpApi } from "effect/unstable/httpapi";
+
+import { CoursesApiGroup } from "@/services/courses/api.group";
+
+export const AppApi = HttpApi.make("AppApi")
+  .add(CoursesApiGroup)
+  .prefix("/api")
+  .middleware(AuthMiddleware);
+```
+
+Adding middleware makes `AuthService` available; it does not automatically require a signed-in user on every endpoint. Public handlers can call `getSession()`, while protected handlers must call one of the `require*` methods.
+
+## Provide the live layer
+
+```ts
+import { AuthMiddleware } from "@krak-stack/auth/server";
+import { Layer } from "effect";
+import { FetchHttpClient } from "effect/unstable/http";
+import { HttpApiBuilder } from "effect/unstable/httpapi";
+
+const AuthLive = AuthMiddleware.layer();
+
+export const ApiLive = HttpApiBuilder.layer(AppApi).pipe(
+  Layer.provide(AuthLive),
+  Layer.provide(FetchHttpClient.layer),
+);
+```
+
+The layer reads `KRAKSTACK_AUTH_URL` and `KRAKSTACK_AUTH_SERVICE_API_KEY`. The URL identifies the central service; the key authorizes trusted service lookups and must remain server-only.
+
+## Require identity in handlers
+
+```ts
+import { AuthService } from "@krak-stack/auth/server";
+import { Effect } from "effect";
+
+const program = Effect.gen(function* () {
+  const auth = yield* AuthService;
+  const session = yield* auth.requireUserOrganization();
+
+  return {
+    userId: session.user.id,
+    organizationId: session.session.activeOrganizationId,
+  };
+});
+```
+
+Choose the narrowest requirement:
+
+| Method                      | Requirement                  | Result                                       |
+| --------------------------- | ---------------------------- | -------------------------------------------- |
+| `getSession()`              | None                         | Session or `null`                            |
+| `requireSession()`          | Cookie or valid API key      | Authenticated session                        |
+| `requireUser()`             | Session with a user          | Session with non-null user                   |
+| `requireOrganization()`     | Active organization          | Session with organization ID                 |
+| `requireUserOrganization()` | User and active organization | Fully narrowed user and organization session |
+
+The `require*` methods fail with typed `HttpApiError.Unauthorized`, allowing the HttpApi runtime to return the correct response without broad exception handling.
+
+## Cookie and API-key requests
+
+Browser requests should include credentials so the middleware can forward the session cookie. Trusted machine clients send `x-api-key`. The middleware validates API keys with Krakstack Auth and builds the same typed session boundary, including the referenced user or organization when applicable.
+
+Do not accept user IDs, organization IDs, or roles from headers as proof of access. Derive them from `AuthService` and scope database queries with the resulting identity.
+
+## Organization impersonation
+
+Organization impersonation is denied by default. If an application supports a deliberately restricted preview mode, allow only explicit method-and-path pairs:
+
+```ts
+const AuthLive = AuthMiddleware.layer({
+  allowedOrganizationImpersonationRoutes: [
+    { method: "GET", path: "/api/preview/courses" },
+    { method: "POST", path: "/api/auth/sign-out" },
+  ],
+});
+```
+
+Keep this list read-only wherever possible. Dynamic path segments use `:param` syntax and must match the request segment count. Never allow broad write routes for impersonated sessions.
+
+## Authorization after authentication
+
+Middleware establishes identity but does not decide whether that identity may access a domain resource. Service methods must still:
+
+1. Read the user and organization from `AuthService`.
+2. Verify required membership or role when the operation is privileged.
+3. Include the organization or user ID in every relevant database predicate.
+4. Return `Forbidden` when identity is known but lacks permission, and `Unauthorized` when authentication is missing.

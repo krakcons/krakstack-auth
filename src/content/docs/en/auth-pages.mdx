@@ -1,0 +1,139 @@
+---
+slug: auth-pages
+path: /docs/auth-pages
+title: Auth pages
+description: Add application-owned sign-in, sign-up, verification, password reset, and two-factor routes around the packaged forms.
+icon: boxes
+order: 7
+locale: en
+---
+
+# Auth pages
+
+The SDK provides the auth forms, but your application owns their routes, layout, metadata, and navigation. This keeps the experience consistent with the rest of your product while Krakstack Auth owns credentials and sessions.
+
+## Required provider
+
+Mount `KrakstackAuthProvider` above every auth page. For the recommended proxy setup, omit `baseUrl` so the browser client uses the application's own origin.
+
+```tsx
+import { Outlet, createRootRoute } from "@tanstack/react-router";
+import { KrakstackAuthProvider } from "@krak-stack/auth";
+
+export const Route = createRootRoute({
+  component: () => (
+    <KrakstackAuthProvider
+      locale="en"
+      projectId={import.meta.env.VITE_KRAKSTACK_AUTH_PROJECT_ID}
+    >
+      <Outlet />
+    </KrakstackAuthProvider>
+  ),
+});
+```
+
+The provider loads project branding and enabled authentication methods. Pass the active Paraglide locale as `en` or `fr` and keep the project ID public in `VITE_KRAKSTACK_AUTH_PROJECT_ID`.
+
+## Auth layout
+
+Create a pathless `_auth` layout for shared page chrome and to redirect users who are already signed in. Preserve a validated `redirect` query parameter so users return to their original destination.
+
+```tsx
+import { Outlet, createFileRoute, redirect } from "@tanstack/react-router";
+import { Schema } from "effect";
+
+import { authClient } from "@/services/auth/client";
+
+const AuthSearch = Schema.toStandardSchemaV1(
+  Schema.Struct({
+    redirect: Schema.optional(Schema.String),
+  }).annotate({ identifier: "AuthSearch" }),
+);
+
+export const Route = createFileRoute("/_auth")({
+  validateSearch: AuthSearch,
+  beforeLoad: async ({ search }) => {
+    const session = await authClient.getSession();
+    if (session.data) {
+      throw redirect({ href: search.redirect ?? "/", reloadDocument: true });
+    }
+  },
+  component: () => (
+    <main className="mx-auto flex min-h-screen max-w-md items-center px-4">
+      <Outlet />
+    </main>
+  ),
+});
+```
+
+## Add the form routes
+
+Create these public paths. The components link and redirect to one another using these names:
+
+| Route             | Component       | Purpose                                    |
+| ----------------- | --------------- | ------------------------------------------ |
+| `/sign-in`        | `Signin`        | Password, email-code, and social sign-in   |
+| `/sign-up`        | `Signup`        | Account registration                       |
+| `/verify-email`   | `VerifyEmail`   | Email verification code                    |
+| `/reset-password` | `ResetPassword` | Complete a password-reset link             |
+| `/2fa`            | `TwoFactor`     | TOTP, email-code, or backup-code challenge |
+
+A minimal TanStack Router page follows the same pattern for each component:
+
+```tsx
+import { Signin } from "@krak-stack/auth";
+import { createFileRoute } from "@tanstack/react-router";
+
+export const Route = createFileRoute("/_auth/sign-in")({
+  component: () => <Signin />,
+});
+```
+
+Repeat this route with `Signup`, `VerifyEmail`, `ResetPassword`, and `TwoFactor`. Use the exact public paths above unless you also customize every link and callback that refers to them.
+
+## Forgot-password entry
+
+`Signin` links to `/forgot-password`. Add an application-owned page at that path that collects an email address and calls the Better Auth password-reset request method, using `/reset-password` as the callback destination. Keep the response generic so it does not disclose whether an account exists.
+
+If your application does not provide a custom forgot-password form, redirect `/forgot-password` to the central auth service's page while preserving the return destination.
+
+## Protected application routes
+
+Use a parent route guard to redirect unauthenticated visitors for navigation and user experience:
+
+```tsx
+import { createFileRoute, redirect } from "@tanstack/react-router";
+
+import { authClient } from "@/services/auth/client";
+
+export const Route = createFileRoute("/_protected")({
+  beforeLoad: async ({ location }) => {
+    const session = await authClient.getSession();
+    if (!session.data?.user) {
+      throw redirect({
+        to: "/sign-in",
+        search: { redirect: location.href },
+      });
+    }
+  },
+});
+```
+
+Route guards are not authorization. A user can call backend endpoints without visiting the page, so every protected API operation must also use `AuthService.requireUser()`, `requireOrganization()`, or `requireUserOrganization()`.
+
+## Organization access
+
+Use `MemberRequired` when a page should explain missing organization access and allow a pending invitation to be accepted:
+
+```tsx
+import { MemberRequired } from "@krak-stack/auth";
+
+<MemberRequired
+  organizationId={organizationId}
+  contactEmail="support@example.com"
+>
+  <OrganizationDashboard />
+</MemberRequired>;
+```
+
+This is a UI boundary only. Repeat membership and role checks in backend services.

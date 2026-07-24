@@ -1,0 +1,64 @@
+---
+slug: components
+path: /docs/components
+title: React components and CSS
+description: Install the provider, forms, account controls, access guards, and Tailwind source required by the component package.
+icon: paintbrush
+order: 6
+locale: en
+---
+
+# React components and CSS
+
+The package exports pre-wired Better Auth components while leaving layout and application navigation under your control.
+
+## Tailwind CSS setup
+
+Import the package source in your global CSS so Tailwind can detect classes used in the compiled package:
+
+```css
+@import "tailwindcss";
+@import "@krak-stack/auth/tailwind.css";
+```
+
+The components use shadcn design tokens such as `--background`, `--foreground`, `--primary`, `--border`, and `--radius`. Define those variables in `:root` and `.dark`, normally through your existing shadcn theme.
+
+## Provider
+
+Wrap component consumers once near the application root:
+
+```tsx
+import { KrakstackAuthProvider } from "@krak-stack/auth";
+
+<KrakstackAuthProvider
+  locale="en"
+  projectId={import.meta.env.VITE_KRAKSTACK_AUTH_PROJECT_ID}
+>
+  {children}
+</KrakstackAuthProvider>;
+```
+
+Pass `baseUrl` or a custom `authClient` when the default same-origin client is not appropriate.
+
+## Account controls
+
+```tsx
+import { OrganizationSwitcher, UserButton } from "@krak-stack/auth";
+
+<OrganizationSwitcher side="bottom" />
+<UserButton signOutRedirect="/" side="bottom" />
+```
+
+`OrganizationSwitcher` supports custom menu actions for links into your application's workspace settings. `UserButton` provides account actions and sign-out behavior.
+
+## Forms
+
+The package exports `Signin`, `Signup`, `VerifyEmail`, `ResetPassword`, and `TwoFactor`. Render them in application-owned routes so URLs, page chrome, and error boundaries remain under your control.
+
+## Authorization guard
+
+`MemberRequired` gates UI on organization membership. Treat it as a presentation guard, not the only authorization layer. Every protected backend endpoint must independently validate the session, organization, and role.
+
+## Hooks and client
+
+Use `useAuthClient`, `useKrakstackAuth`, and `useKrakstackAuthProjectConfig` inside the provider. `createAuthUiClient` is available when you need to construct the Better Auth client explicitly.

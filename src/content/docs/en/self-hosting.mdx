@@ -1,0 +1,116 @@
+---
+slug: self-hosting
+path: /docs/self-hosting
+title: Self-hosting
+description: Run the published GHCR image with PostgreSQL, secure runtime configuration, automatic migrations, and durable operations.
+icon: server
+order: 10
+locale: en
+---
+
+# Self-hosting
+
+Krakstack Auth publishes a ready-to-run OCI image to GitHub Container Registry. Self-host the published image rather than cloning the repository or maintaining a custom build pipeline.
+
+## Published image
+
+```bash
+docker pull ghcr.io/krakcons/krakstack-auth:latest
+```
+
+The deployment workflow publishes two tags on every successful `main` build:
+
+- `latest` tracks the newest successful build.
+- A full Git commit SHA identifies an immutable release, for example `ghcr.io/krakcons/krakstack-auth:COMMIT_SHA`.
+
+Use `latest` to evaluate updates. Pin the full SHA in production so restarts cannot silently change the running version. Available tags and digests are listed in the [GitHub package](https://github.com/krakcons/krakstack-auth/pkgs/container/krakstack-auth). The current workflow publishes `linux/amd64` images.
+
+## Docker Compose
+
+The application listens on port `3000`. Its start command applies Drizzle migrations before starting the server.
+
+```yaml
+services:
+  auth:
+    image: ghcr.io/krakcons/krakstack-auth:latest
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    environment:
+      DATABASE_URL: postgres://krakstack:${POSTGRES_PASSWORD}@postgres:5432/krakstack_auth
+      BETTER_AUTH_SECRET: ${BETTER_AUTH_SECRET}
+      BETTER_AUTH_URL: https://auth.example.com
+      VITE_SITE_URL: https://auth.example.com
+      BETTER_AUTH_TRUSTED_ORIGINS: https://auth.example.com,https://app.example.com
+      BETTER_AUTH_VALID_AUDIENCES: https://auth.example.com,https://app.example.com
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  postgres:
+    image: postgres:17
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: krakstack_auth
+      POSTGRES_USER: krakstack
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U krakstack -d krakstack_auth"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+volumes:
+  postgres-data:
+```
+
+Place `POSTGRES_PASSWORD` and `BETTER_AUTH_SECRET` in the deployment platform's secret store or a Compose `.env` file that is excluded from version control. Generate the auth secret with `openssl rand -base64 32`.
+
+## Required environment
+
+```env
+DATABASE_URL=postgres://user:password@db/krakstack_auth
+BETTER_AUTH_SECRET=long_random_secret
+BETTER_AUTH_URL=https://auth.example.com
+VITE_SITE_URL=https://auth.example.com
+BETTER_AUTH_TRUSTED_ORIGINS=https://auth.example.com,https://app.example.com
+BETTER_AUTH_VALID_AUDIENCES=https://auth.example.com,https://app.example.com
+```
+
+Do not reuse database, OAuth, or API-key secrets. `BETTER_AUTH_URL` is the stable public HTTPS issuer, not the container's internal address.
+
+## Optional services
+
+- Set `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET` to enable Google sign-in.
+- Configure SES credentials and `AUTH_EMAIL_FROM` for verification, password reset, and two-factor email.
+- Configure `AUTH_CLOUDFLARE_ZONE_ID`, Cloudflare credentials, and `AUTH_DOMAIN_CNAME_TARGET` for managed custom hostnames.
+- Add `BETTER_AUTH_ADDITIONAL_HOSTS` when the deployment has fixed additional public hosts.
+
+## Start and update
+
+```bash
+docker compose up -d
+docker compose logs -f auth
+```
+
+To update, select a tested commit SHA in the Compose file, pull it, and recreate the service:
+
+```bash
+docker compose pull auth
+docker compose up -d auth
+```
+
+The container applies migrations at startup. Avoid starting several new replicas simultaneously during an upgrade; run one updated instance first so migrations complete once.
+
+## Production checklist
+
+- Terminate TLS and redirect HTTP to HTTPS.
+- Back up PostgreSQL and test restores.
+- Keep the auth origin stable; changing issuer URLs invalidates consumer assumptions.
+- Restrict admin access and rotate service API keys.
+- Configure email deliverability records and monitor bounces.
+- Add health checks for `/api/auth/ok` and monitor database latency.
+- Review trusted origins and OAuth redirect URIs after every deployment change.
+- Record the deployed image SHA and keep a rollback SHA available.

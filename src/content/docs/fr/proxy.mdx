@@ -1,0 +1,74 @@
+---
+slug: proxy
+path: /docs/proxy
+title: Configuration du proxy
+description: Intégrez la méthode recommandée de même origine avec un proxy serveur renforcé et le client React fourni.
+icon: network
+order: 3
+locale: fr
+---
+
+# Configuration du proxy
+
+La méthode proxy expose `/api/auth/*` sur votre application et transmet ces requêtes au service central. `proxyAuthRequest` retire les en-têtes de connexion, Cloudflare et de transfert non fiables, puis fournit `x-forwarded-host` et `x-forwarded-proto`.
+
+## Ajouter la route générique
+
+Avec TanStack Start, créez `src/routes/api/auth.$.tsx` :
+
+```tsx
+import { proxyAuthRequest } from "@krak-stack/auth/server";
+import { createFileRoute } from "@tanstack/react-router";
+
+const proxyAuth = (request: Request) =>
+  proxyAuthRequest(request, process.env.KRAKSTACK_AUTH_URL!);
+
+export const Route = createFileRoute("/api/auth/$")({
+  server: {
+    handlers: {
+      GET: ({ request }) => proxyAuth(request),
+      POST: ({ request }) => proxyAuth(request),
+      PUT: ({ request }) => proxyAuth(request),
+      PATCH: ({ request }) => proxyAuth(request),
+      DELETE: ({ request }) => proxyAuth(request),
+    },
+  },
+});
+```
+
+Gardez le chemin générique afin que tous les points Better Auth soient transmis. La cible doit provenir d'une configuration serveur de confiance.
+
+## Créer le client navigateur
+
+Pointez le client vers l'origine de l'application et non vers le serveur en amont :
+
+```ts
+import { createAuthUiClient } from "@krak-stack/auth";
+
+const appOrigin =
+  typeof window === "undefined"
+    ? process.env.VITE_SITE_URL
+    : window.location.origin;
+
+export const authClient = createAuthUiClient(appOrigin);
+```
+
+## Ajouter le fournisseur
+
+```tsx
+<KrakstackAuthProvider
+  locale="fr"
+  projectId={import.meta.env.VITE_KRAKSTACK_AUTH_PROJECT_ID}
+>
+  <App />
+</KrakstackAuthProvider>
+```
+
+Ajoutez chaque origine d'application à `BETTER_AUTH_TRUSTED_ORIGINS` et `BETTER_AUTH_VALID_AUDIENCES`. Utilisez des origines HTTPS exactes en production.
+
+## Vérifier
+
+1. Ouvrez `/api/auth/ok` sur l'application.
+2. Connectez-vous et confirmez que les témoins appartiennent au domaine applicatif.
+3. Rechargez une page protégée et vérifiez la session côté serveur.
+4. Testez la déconnexion, la vérification du courriel, la réinitialisation et le deuxième facteur.

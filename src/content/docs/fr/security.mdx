@@ -1,0 +1,42 @@
+---
+slug: security
+path: /docs/security
+title: Sécurité et exploitation
+description: Renforcez les origines, témoins, secrets, rappels OAuth, autorisations, alertes et interventions.
+icon: shield
+order: 11
+locale: fr
+---
+
+# Sécurité et exploitation
+
+Une authentification centrale réduit le code de sécurité dupliqué, mais augmente l'importance de protéger ce service partagé. Appliquez plusieurs couches de défense au navigateur, à l'application, au service, à la base et au déploiement.
+
+## Secrets
+
+- Placez les secrets OAuth, clés API, identifiants de base et `BETTER_AUTH_SECRET` dans un coffre.
+- N'exposez aucun secret serveur par `VITE_*`, les sources maps, journaux navigateur ou erreurs.
+- Utilisez des secrets distincts par environnement et service.
+- Renouvelez-les après un changement de personnel, fournisseur ou frontière de déploiement.
+
+## Origines et rappels
+
+Limitez précisément `BETTER_AUTH_TRUSTED_ORIGINS`, les audiences, URI OAuth et domaines enregistrés. Exigez des origines HTTPS exactes et retirez rapidement les URL de prévisualisation obsolètes.
+
+## Autorisation
+
+L'authentification prouve l'identité, pas l'accès à une ressource. À chaque requête backend, vérifiez l'utilisateur, l'organisation active, son adhésion et le rôle requis. Ne faites jamais confiance à un identifiant d'organisation fourni par le navigateur sans vérifier l'adhésion.
+
+Les API de service utilisent `x-api-key`. Ces clés privilégiées restent sur des backends de confiance, idéalement avec contrôles réseau et limites de débit.
+
+## Navigateur et surveillance
+
+Préférez les témoins HttpOnly, Secure et SameSite à `localStorage`. Protégez les changements contre CSRF et appliquez une politique CSP restrictive. Alertez sur les échecs de connexion, réinitialisations, deuxièmes facteurs, refus de clés et activités administratives inhabituelles. Ne journalisez jamais mots de passe, codes, témoins, jetons ou secrets complets.
+
+## Intervention
+
+1. Révoquez les sessions, clés ou clients affectés.
+2. Renouvelez les secrets divulgués et redéployez les consommateurs.
+3. Examinez les changements administratifs, DNS, URI et événements récents.
+4. Informez les utilisateurs lorsque nécessaire.
+5. Documentez la cause et ajoutez un contrôle ou test préventif.

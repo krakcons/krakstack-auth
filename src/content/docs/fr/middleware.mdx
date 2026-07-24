@@ -1,0 +1,102 @@
+---
+slug: middleware
+path: /docs/middleware
+title: Middleware API
+description: Authentifiez les requêtes Effect HttpApi, obtenez une session typée et imposez les exigences utilisateur et organisation côté serveur.
+icon: shield
+order: 8
+locale: fr
+---
+
+# Middleware API
+
+`AuthMiddleware` relie une application Effect HttpApi à Krakstack Auth. Il transmet le contexte sûr de la requête, accepte les témoins navigateur et les clés `x-api-key`, puis fournit `AuthService` aux gestionnaires.
+
+## Ajouter le middleware à l'API
+
+```ts
+import { AuthMiddleware } from "@krak-stack/auth/server";
+import { HttpApi } from "effect/unstable/httpapi";
+
+export const AppApi = HttpApi.make("AppApi")
+  .add(CoursesApiGroup)
+  .prefix("/api")
+  .middleware(AuthMiddleware);
+```
+
+Le middleware rend `AuthService` disponible; il n'exige pas automatiquement un utilisateur sur chaque endpoint. Un gestionnaire public peut appeler `getSession()`, tandis qu'un gestionnaire protégé doit appeler une méthode `require*`.
+
+## Fournir la couche
+
+```ts
+import { AuthMiddleware } from "@krak-stack/auth/server";
+import { Layer } from "effect";
+import { FetchHttpClient } from "effect/unstable/http";
+import { HttpApiBuilder } from "effect/unstable/httpapi";
+
+const AuthLive = AuthMiddleware.layer();
+
+export const ApiLive = HttpApiBuilder.layer(AppApi).pipe(
+  Layer.provide(AuthLive),
+  Layer.provide(FetchHttpClient.layer),
+);
+```
+
+La couche lit `KRAKSTACK_AUTH_URL` et `KRAKSTACK_AUTH_SERVICE_API_KEY`. La clé autorise les consultations serveur de confiance et ne doit jamais atteindre le navigateur.
+
+## Exiger une identité
+
+```ts
+import { AuthService } from "@krak-stack/auth/server";
+import { Effect } from "effect";
+
+const program = Effect.gen(function* () {
+  const auth = yield* AuthService;
+  const session = yield* auth.requireUserOrganization();
+
+  return {
+    userId: session.user.id,
+    organizationId: session.session.activeOrganizationId,
+  };
+});
+```
+
+| Méthode                     | Exigence                    | Résultat                        |
+| --------------------------- | --------------------------- | ------------------------------- |
+| `getSession()`              | Aucune                      | Session ou `null`               |
+| `requireSession()`          | Témoin ou clé API valide    | Session authentifiée            |
+| `requireUser()`             | Session avec utilisateur    | Utilisateur non nul             |
+| `requireOrganization()`     | Organisation active         | Identifiant d'organisation typé |
+| `requireUserOrganization()` | Utilisateur et organisation | Session entièrement précisée    |
+
+Les méthodes `require*` échouent avec `HttpApiError.Unauthorized`, ce qui permet à HttpApi de produire la bonne réponse sans gestion générale d'exceptions.
+
+## Témoins et clés API
+
+Les requêtes navigateur incluent leurs identifiants afin que le middleware transmette le témoin de session. Les clients machine de confiance envoient `x-api-key`. Le middleware valide la clé et construit la même frontière de session typée.
+
+N'acceptez jamais un identifiant utilisateur, organisation ou rôle fourni par un en-tête comme preuve d'accès. Utilisez les valeurs de `AuthService` dans les filtres de base de données.
+
+## Usurpation d'organisation
+
+L'usurpation est refusée par défaut. Pour un mode d'aperçu volontairement limité, autorisez uniquement des couples méthode-chemin explicites :
+
+```ts
+const AuthLive = AuthMiddleware.layer({
+  allowedOrganizationImpersonationRoutes: [
+    { method: "GET", path: "/api/preview/courses" },
+    { method: "POST", path: "/api/auth/sign-out" },
+  ],
+});
+```
+
+Gardez cette liste en lecture seule autant que possible. Les segments dynamiques utilisent `:param` et doivent avoir le même nombre de segments que la requête.
+
+## Autorisation métier
+
+Le middleware établit l'identité, mais les services doivent encore :
+
+1. Lire l'utilisateur et l'organisation depuis `AuthService`.
+2. Vérifier l'adhésion ou le rôle requis.
+3. Inclure l'utilisateur ou l'organisation dans chaque filtre de données pertinent.
+4. Retourner `Forbidden` si l'identité est connue mais insuffisante, et `Unauthorized` si elle manque.

@@ -1,0 +1,40 @@
+---
+slug: subdomain
+path: /docs/subdomain
+title: Sous-domaine auth
+description: Servez une connexion centrale personnalisée depuis un hôte dédié lié à une application ou organisation.
+icon: globe
+order: 5
+locale: fr
+---
+
+# Sous-domaine auth
+
+Un hôte comme `auth.acme.example` présente Krakstack Auth sous le domaine de votre produit ou client. Associez-le à un projet pour les méthodes de connexion et le thème, ou à une organisation pour sa marque.
+
+## Prérequis
+
+- Contrôle du DNS de l'hôte
+- HTTPS avec un certificat valide
+- Hôte auth et hôte racine applicatif enregistrés
+- Routage de l'hôte vers le déploiement Krakstack Auth
+
+## Hôtes gérés
+
+Si la gestion Cloudflare est configurée, activez **Gérer le nom d'hôte Cloudflare**. Krakstack Auth crée l'hôte personnalisé et présente les enregistrements de validation DNS. Publiez-les auprès du fournisseur DNS et attendez le statut actif.
+
+## Hôtes non gérés
+
+Désactivez cette option si votre infrastructure termine déjà TLS et route l'hôte. L'enregistrement reste obligatoire : un en-tête d'hôte non enregistré est refusé et ne reçoit aucun contexte de projet ou d'organisation.
+
+## Témoins et origines
+
+Le service calcule les origines approuvées et la portée des témoins à partir de l'hôte auth et de l'hôte racine. Placez-les sous le même domaine enregistrable si des témoins parents sont nécessaires. Les politiques de confidentialité peuvent toutefois restreindre les témoins intersites; le proxy reste donc la méthode recommandée.
+
+## Mise en ligne
+
+1. Enregistrez le domaine et la bonne association.
+2. Ajoutez les enregistrements DNS de validation et de routage.
+3. Attendez le statut actif.
+4. Vérifiez l'émetteur HTTPS dans la découverte OIDC.
+5. Testez connexion, rappel, déconnexion et réinitialisation depuis l'hôte final.

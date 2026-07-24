@@ -1,0 +1,65 @@
+---
+slug: setup
+path: /docs/setup
+title: Setup methods
+description: Compare proxy, OAuth, and auth-subdomain integrations and choose the right boundary for your application.
+icon: network
+order: 2
+locale: en
+---
+
+# Setup methods
+
+Install the SDK in consumer applications:
+
+```bash
+bun add @krak-stack/auth effect
+```
+
+Create a project in **Admin > Projects** first. A project controls branding, enabled sign-in methods, and the auth experience shared by one or more OAuth clients or domains.
+
+## 1. Proxy (recommended)
+
+Proxy `/api/auth/*` from your application to Krakstack Auth. Browser cookies remain first-party to the application origin and the Better Auth client calls a same-origin endpoint. This is the pattern used by Kokobi.
+
+Use this for first-party TanStack Start applications unless you need a standards-only integration.
+
+```env
+KRAKSTACK_AUTH_URL=https://auth.example.com
+VITE_KRAKSTACK_AUTH_URL=https://auth.example.com
+VITE_KRAKSTACK_AUTH_PROJECT_ID=project_id
+KRAKSTACK_AUTH_SERVICE_API_KEY=server_only_secret
+```
+
+`KRAKSTACK_AUTH_URL` and the service key are server-only. `VITE_KRAKSTACK_AUTH_URL` and the project ID are public configuration.
+
+Continue with the complete [proxy guide](/docs/proxy).
+
+## 2. OAuth / OpenID Connect
+
+Register an OAuth client and use authorization code flow with PKCE. This method works with standard OAuth and OIDC libraries and keeps the consumer independent of Better Auth's browser client.
+
+Use OAuth for third-party integrations, separately operated applications, native clients, or systems that already support OIDC.
+
+Discovery is available at:
+
+```text
+https://auth.example.com/.well-known/openid-configuration
+```
+
+Continue with the [OAuth guide](/docs/oauth).
+
+## 3. Dedicated auth subdomain
+
+Register a hostname such as `auth.customer.example.com` and link it to a project or organization. Users visit a branded auth origin while the application remains at `customer.example.com`.
+
+Use this when customers require branded authentication domains, several applications share one login surface, or the auth service must be clearly separated from application routes.
+
+Continue with the [subdomain guide](/docs/subdomain) and [domain registration](/docs/domains).
+
+## Decision checklist
+
+- Choose **proxy** for the shortest, safest first-party setup.
+- Choose **OAuth** for standards-based portability and delegated authorization.
+- Choose **subdomain** for a branded central auth hostname and shared parent-domain cookies where supported.
+- Combine OAuth with a custom auth domain when both standard protocol support and branded issuer URLs are required.

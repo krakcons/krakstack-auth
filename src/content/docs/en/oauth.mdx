@@ -1,0 +1,52 @@
+---
+slug: oauth
+path: /docs/oauth
+title: OAuth and OIDC
+description: Integrate through authorization code flow, PKCE, standard discovery, scopes, and secure token handling.
+icon: key
+order: 4
+locale: en
+---
+
+# OAuth and OIDC
+
+Krakstack Auth publishes OpenID Connect and OAuth authorization-server metadata and supports authorization code flow. Use a maintained OAuth/OIDC library in the consumer rather than assembling authorization requests and token validation manually.
+
+## Register a client
+
+In **Admin > Clients**, create a client and configure:
+
+- A recognizable display name
+- Exact redirect URIs, including scheme, hostname, path, and port
+- The minimum scopes required: `openid`, `profile`, `email`, and optionally `offline_access`
+- A linked project for branding and enabled authentication options
+- Consent behavior appropriate to whether the client is first-party
+
+Copy the client ID and secret immediately. The secret is shown once and belongs only in server-side secret storage. Public clients must use PKCE and must not ship a client secret.
+
+## Discovery
+
+Configure your OIDC library with the issuer URL and let it discover endpoints:
+
+```text
+Issuer: https://auth.example.com
+Discovery: https://auth.example.com/.well-known/openid-configuration
+OAuth metadata: https://auth.example.com/.well-known/oauth-authorization-server/api/auth
+```
+
+## Authorization flow
+
+1. Generate a cryptographically random `state`, `nonce`, and PKCE verifier.
+2. Store them in a short-lived, secure, HttpOnly session.
+3. Redirect to the discovered authorization endpoint with `response_type=code`.
+4. On callback, compare `state` before exchanging the code.
+5. Exchange the code server-side and validate issuer, audience, signature, nonce, and expiry.
+6. Create or rotate the application's own session.
+
+## Redirect URI rules
+
+Production redirect URIs should use HTTPS and exact matching. Do not use wildcard callback hosts. Register localhost callbacks separately for development and remove unused callbacks as deployments change.
+
+## Tokens
+
+Keep access and refresh tokens out of local storage. Prefer server-side encrypted session storage or secure HttpOnly cookies. Request `offline_access` only when background access is required, rotate refresh tokens, and revoke credentials when users disconnect the application.

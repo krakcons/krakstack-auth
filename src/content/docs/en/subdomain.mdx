@@ -1,0 +1,40 @@
+---
+slug: subdomain
+path: /docs/subdomain
+title: Auth subdomain
+description: Serve a branded central sign-in experience from a dedicated hostname linked to an application or organization.
+icon: globe
+order: 5
+locale: en
+---
+
+# Auth subdomain
+
+A dedicated auth hostname such as `auth.acme.example` presents Krakstack Auth under your product or customer's domain. Link the hostname to a project for sign-in options and theme, or to an organization for organization-specific branding.
+
+## Requirements
+
+- Control of the hostname's DNS
+- HTTPS with a valid certificate
+- A registered auth hostname and trusted root application hostname
+- A route from the hostname to the Krakstack Auth deployment
+
+## Managed hostnames
+
+When Cloudflare custom hostname management is configured, select **Manage Cloudflare hostname** during registration. Krakstack Auth creates the custom hostname and reports the DNS validation records. Add those records at the authoritative DNS provider and wait for the status to become active.
+
+## Unmanaged hostnames
+
+Disable Cloudflare management when your infrastructure already terminates TLS and routes the hostname. Registration still matters: unregistered host headers are rejected and do not receive project or organization context.
+
+## Cookies and origins
+
+The service derives trusted origins and cookie scope from the registered auth hostname and root hostname. Keep them within the same registrable domain when shared parent-domain cookie behavior is required. Browser privacy policies can still restrict cross-site cookies, which is why same-origin proxying remains the recommended default.
+
+## Launch checklist
+
+1. Register the domain and associate the correct project or organization.
+2. Add DNS validation and routing records.
+3. Wait for the domain to report active.
+4. Confirm `/.well-known/openid-configuration` uses the expected HTTPS issuer.
+5. Test sign-in, callback validation, sign-out, and password reset from the production hostname.

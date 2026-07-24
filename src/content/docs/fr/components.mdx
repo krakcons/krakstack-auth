@@ -1,0 +1,54 @@
+---
+slug: components
+path: /docs/components
+title: Composants React et CSS
+description: Installez le fournisseur, les formulaires, contrôles de compte, gardes d'accès et la source Tailwind du paquet.
+icon: paintbrush
+order: 6
+locale: fr
+---
+
+# Composants React et CSS
+
+Le paquet fournit des composants Better Auth prêts à l'emploi tout en laissant la mise en page et la navigation sous le contrôle de l'application.
+
+## Configuration Tailwind CSS
+
+Importez la source du paquet dans le CSS global afin que Tailwind détecte les classes compilées :
+
+```css
+@import "tailwindcss";
+@import "@krak-stack/auth/tailwind.css";
+```
+
+Les composants utilisent les variables shadcn comme `--background`, `--foreground`, `--primary`, `--border` et `--radius`. Définissez-les dans `:root` et `.dark`, normalement via votre thème shadcn existant.
+
+## Fournisseur
+
+```tsx
+import { KrakstackAuthProvider } from "@krak-stack/auth";
+
+<KrakstackAuthProvider
+  locale="fr"
+  projectId={import.meta.env.VITE_KRAKSTACK_AUTH_PROJECT_ID}
+>
+  {children}
+</KrakstackAuthProvider>;
+```
+
+Fournissez `baseUrl` ou un `authClient` personnalisé si le client de même origine par défaut ne convient pas.
+
+## Contrôles de compte
+
+```tsx
+import { OrganizationSwitcher, UserButton } from "@krak-stack/auth";
+
+<OrganizationSwitcher side="bottom" />
+<UserButton signOutRedirect="/" side="bottom" />
+```
+
+## Formulaires et accès
+
+Le paquet exporte `Signin`, `Signup`, `VerifyEmail`, `ResetPassword` et `TwoFactor`. Affichez-les dans vos propres routes. `MemberRequired` protège l'interface selon l'adhésion à une organisation, mais chaque endpoint backend doit aussi vérifier indépendamment la session, l'organisation et le rôle.
+
+Les hooks `useAuthClient`, `useKrakstackAuth` et `useKrakstackAuthProjectConfig` sont disponibles à l'intérieur du fournisseur.

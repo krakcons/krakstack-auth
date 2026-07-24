@@ -1,0 +1,46 @@
+---
+slug: security
+path: /docs/security
+title: Security and operations
+description: Harden origins, cookies, credentials, OAuth callbacks, authorization, monitoring, and incident response.
+icon: shield
+order: 11
+locale: en
+---
+
+# Security and operations
+
+Central authentication reduces duplicated security code but increases the importance of protecting one shared service. Apply defense in depth at the browser, application, service, database, and deployment boundaries.
+
+## Credentials
+
+- Store OAuth client secrets, service API keys, database credentials, and `BETTER_AUTH_SECRET` in a secret manager.
+- Never expose server credentials through `VITE_*`, source maps, browser logs, or error responses.
+- Use separate credentials per environment and consumer service.
+- Rotate keys after personnel, vendor, or deployment-boundary changes.
+
+## Origins and callbacks
+
+Keep `BETTER_AUTH_TRUSTED_ORIGINS`, audiences, OAuth redirect URIs, and registered domains as narrow as possible. Require exact HTTPS origins in production. Remove preview and retired deployment URLs promptly.
+
+## Authorization
+
+Authentication proves identity; it does not grant resource access. On every backend request, validate the current user, active organization, membership, and required role. Never trust an organization ID supplied by the browser without checking membership.
+
+Service APIs use `x-api-key`. Service keys are highly privileged and should be scoped operationally to trusted backends, protected by network controls where possible, and rate-limited.
+
+## Browser security
+
+Prefer HttpOnly, Secure, SameSite cookies over local storage for session or token material. Protect state-changing routes against CSRF, use a restrictive Content Security Policy, and avoid rendering untrusted HTML in auth screens.
+
+## Monitoring
+
+Alert on elevated failed sign-ins, password resets, two-factor failures, API-key rejections, callback errors, and unusual admin activity. Retain enough structured audit context to investigate incidents without logging passwords, codes, cookies, tokens, or full secrets.
+
+## Incident response
+
+1. Revoke affected sessions, API keys, or OAuth clients.
+2. Rotate leaked credentials and redeploy consumers.
+3. Review admin changes, domain records, redirect URIs, and recent authentication events.
+4. Notify affected users when required.
+5. Record the root cause and add a preventative control or test.
