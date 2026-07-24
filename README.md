@@ -1,8 +1,8 @@
 # Krakstack Auth
 
-Central identity infrastructure built with Better Auth, Effect, and TanStack Start. Krakstack Auth owns credentials, sessions, users, organizations, OAuth clients, API keys, two-factor authentication, project branding, and custom auth domains so applications do not have to rebuild them.
+Self-hosted identity infrastructure built with Better Auth, PostgreSQL, Effect, and TanStack Start. Krakstack Auth packages credentials, sessions, users, organizations, OAuth clients, API keys, two-factor authentication, project branding, and custom auth domains into one service so applications do not have to assemble them independently.
 
-Use the hosted service at [auth.krakstack.net](https://auth.krakstack.net), or self-host the published container from `ghcr.io/krakcons/krakstack-auth`.
+Krakstack Auth is currently **self-hosted software only**. There is no managed cloud service or public customer admin. This repository publishes a ready-to-run image at `ghcr.io/krakcons/krakstack-auth`; [auth.krakstack.net](https://auth.krakstack.net) hosts the project documentation and the maintainer's own instance.
 
 ## Documentation
 

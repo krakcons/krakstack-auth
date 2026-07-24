@@ -23,13 +23,10 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
-  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { LocaleSwitcher } from "@/components/ui/locale-switcher";
 import { m } from "@/paraglide/messages";
-import { authBaseUrl, authClient } from "@/services/auth/client";
-import { OrganizationSwitcher, UserButton } from "@krak-stack/auth";
 
 export const Route = createFileRoute("/")({
   component: Home,
@@ -111,14 +108,8 @@ function Home() {
               {m.home_github()}
             </a>
             <MobileHeaderMenu />
-            <OrganizationSwitcher
-              authClient={authClient}
-              baseUrl={authBaseUrl}
-              className="hidden w-40 min-w-0 xl:flex"
-            />
             <ThemeToggle />
             <LocaleSwitcher />
-            <UserButton authClient={authClient} baseUrl={authBaseUrl} />
           </div>
         </nav>
       </header>
@@ -148,12 +139,14 @@ function Home() {
                   {m.home_view_docs()}
                   <ArrowRight className="size-4" />
                 </Link>
-                <Link
+                <a
                   className={buttonVariants({ size: "lg", variant: "outline" })}
-                  to="/admin"
+                  href="https://github.com/krakcons/krakstack-auth"
+                  target="_blank"
+                  rel="noreferrer"
                 >
-                  {m.home_open_admin()}
-                </Link>
+                  {m.home_github()}
+                </a>
               </div>
             </div>
 
@@ -254,7 +247,7 @@ function Home() {
             <Link
               className={`${buttonVariants({ size: "lg" })} relative mt-8 lg:mt-0`}
               to="/docs/{-$slug}"
-              params={{ slug: "setup" }}
+              params={{ slug: "self-hosting" }}
             >
               {m.home_get_started()}
               <ArrowRight className="size-4" />
@@ -419,15 +412,6 @@ function MobileHeaderMenu() {
                 {m.home_github()}
               </a>
             }
-          />
-        </div>
-        <DropdownMenuSeparator className="xl:hidden" />
-        <div className="p-1 xl:hidden">
-          <OrganizationSwitcher
-            authClient={authClient}
-            baseUrl={authBaseUrl}
-            side="bottom"
-            className="w-full min-w-0"
           />
         </div>
       </DropdownMenuContent>
