@@ -69,6 +69,12 @@ import { OrganizationSwitcher, UserButton } from "@krak-stack/auth";
 import { DropdownMenuItem } from "@/components/ui/dropdown-menu";
 
 <OrganizationSwitcher
+  allowedOrganizationIds={["organization-id"]}
+  features={{
+    organizationCreation: false,
+    organizationSwitching: false,
+    userInvitations: false,
+  }}
   menuActions={
     <DropdownMenuItem render={<a href="/organization" />}>
       Dashboard

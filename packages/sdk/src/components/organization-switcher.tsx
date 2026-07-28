@@ -358,17 +358,23 @@ const OrganizationMessagesContext = createContext(
 );
 const useOrganizationMessages = () => useContext(OrganizationMessagesContext);
 
+export type OrganizationSwitcherFeatures = {
+  organizationSwitching?: boolean;
+  organizationCreation?: boolean;
+  userInvitations?: boolean;
+};
+
 export type OrganizationSwitcherProps = {
   authClient?: AuthUiClient;
   baseUrl?: string | undefined;
   side?: ComponentProps<typeof DropdownMenuContent>["side"];
   className?: string;
   defaultDialog?: OrganizationSwitcherDialog | null;
+  features?: OrganizationSwitcherFeatures;
   hideTrigger?: boolean;
   menuActions?: ReactNode;
   renderUnauthenticated?: () => ReactNode;
-  locked?: boolean;
-  organizationWhitelist?: readonly string[];
+  allowedOrganizationIds?: readonly string[];
   messages?: OrganizationSwitcherMessages;
   dialog?: OrganizationSwitcherDialog | null;
   onChange?: (organization: OrganizationSummary | null) => void;
@@ -835,11 +841,11 @@ export function OrganizationSwitcher({
   side = "bottom",
   className,
   defaultDialog = null,
+  features,
   hideTrigger = false,
   menuActions,
   renderUnauthenticated,
-  locked = false,
-  organizationWhitelist,
+  allowedOrganizationIds,
   messages,
   dialog: controlledDialog,
   onChange,
@@ -887,6 +893,9 @@ export function OrganizationSwitcher({
   const canManageApiKeys =
     activeMemberRole === "owner" || activeMemberRole === "admin";
   const canUpdateOrganization = canManageApiKeys;
+  const canSwitchOrganizations = features?.organizationSwitching ?? true;
+  const canCreateOrganization = features?.organizationCreation ?? true;
+  const canViewOrganizationInvitations = features?.userInvitations ?? true;
 
   const setDialog = (
     next:
@@ -930,22 +939,24 @@ export function OrganizationSwitcher({
   const visibleOrganizations =
     organizations.data?.filter(
       (organization) =>
-        !organizationWhitelist ||
-        organizationWhitelist.includes(organization.id),
+        !allowedOrganizationIds ||
+        allowedOrganizationIds.includes(organization.id),
     ) ?? [];
-  const selectableOrganizations = !locked
+  const selectableOrganizations = canSwitchOrganizations
     ? visibleOrganizations.filter(
         (organization) => organization.id !== active?.id,
       )
     : [];
   const hasOrganizationListItems =
-    organizations.isPending || Boolean(organizations.error) || !locked;
+    organizations.isPending ||
+    Boolean(organizations.error) ||
+    canSwitchOrganizations;
 
   const refreshAfterInvitationAction = async (previousActiveId?: string) => {
     refreshUserInvitations();
     await refresh();
 
-    if (locked && previousActiveId) {
+    if (!canSwitchOrganizations && previousActiveId) {
       const result = await authClient.organization.setActive({
         organizationId: previousActiveId,
       });
@@ -1037,7 +1048,7 @@ export function OrganizationSwitcher({
                   {organizations.error.message}
                 </DropdownMenuItem>
               ) : null}
-              {!locked && selectableOrganizations.length ? (
+              {canSwitchOrganizations && selectableOrganizations.length ? (
                 selectableOrganizations.map((organization) => {
                   const display = organizationDisplay(organization, m, baseUrl);
 
@@ -1069,35 +1080,42 @@ export function OrganizationSwitcher({
                     </DropdownMenuItem>
                   );
                 })
-              ) : !locked && !organizations.isPending ? (
+              ) : canSwitchOrganizations && !organizations.isPending ? (
                 <DropdownMenuItem disabled>
                   {active
                     ? m.organization_switcher_no_other_organizations()
                     : m.organization_switcher_empty()}
                 </DropdownMenuItem>
               ) : null}
-              {!locked ? (
+              {canCreateOrganization || canViewOrganizationInvitations ? (
                 <>
                   <DropdownMenuSeparator />
-                  <DropdownMenuItem onClick={openCreate}>
-                    <Plus />
-                    {m.organization_create_title()}
-                  </DropdownMenuItem>
-                  <DropdownMenuItem
-                    onClick={() => {
-                      setDialog("invitations");
-                    }}
-                  >
-                    <Mail />
-                    <span className="flex flex-1 items-center justify-between gap-3">
-                      {m.organization_user_invitations_title()}
-                      {userInvitations.length ? (
-                        <Badge variant="secondary">
-                          {userInvitations.length}
-                        </Badge>
-                      ) : null}
-                    </span>
-                  </DropdownMenuItem>
+                  {canCreateOrganization ? (
+                    <DropdownMenuItem onClick={openCreate}>
+                      <Plus />
+                      {m.organization_create_title()}
+                    </DropdownMenuItem>
+                  ) : null}
+                  {canViewOrganizationInvitations ? (
+                    <DropdownMenuItem
+                      onClick={() => {
+                        setDialog("invitations");
+                      }}
+                    >
+                      <Mail />
+                      <span className="flex flex-1 items-center justify-between gap-3">
+                        {m.organization_user_invitations_title()}
+                        {userInvitations.length ? (
+                          <Badge
+                            variant="secondary"
+                            className="bg-secondary! text-secondary-foreground!"
+                          >
+                            {userInvitations.length}
+                          </Badge>
+                        ) : null}
+                      </span>
+                    </DropdownMenuItem>
+                  ) : null}
                 </>
               ) : null}
               {activeOrganization.data ? (
@@ -1140,7 +1158,7 @@ export function OrganizationSwitcher({
         </DropdownMenu>
       )}
       <Dialog
-        open={dialog === "create"}
+        open={dialog === "create" && canCreateOrganization}
         onOpenChange={(open) => {
           setDialog((current) =>
             open ? "create" : current === "create" ? null : current,
@@ -1267,7 +1285,7 @@ export function OrganizationSwitcher({
         </DialogContent>
       </Dialog>
       <Dialog
-        open={dialog === "invitations" && !locked}
+        open={dialog === "invitations" && canViewOrganizationInvitations}
         onOpenChange={(open) => {
           setDialog((current) =>
             open ? "invitations" : current === "invitations" ? null : current,

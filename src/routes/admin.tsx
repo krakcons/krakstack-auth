@@ -138,7 +138,11 @@ function AdminOrganizationSwitcher() {
     <OrganizationSwitcher
       authClient={authClient}
       baseUrl={authBaseUrl}
-      locked
+      features={{
+        organizationCreation: false,
+        organizationSwitching: false,
+        userInvitations: false,
+      }}
       side={isMobile ? "bottom" : "right"}
     />
   );

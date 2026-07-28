@@ -26,8 +26,12 @@ export type {
 } from "./auth-provider";
 export type {
   OrganizationSwitcherDialog,
+  OrganizationSwitcherFeatures,
   OrganizationSwitcherProps,
 } from "./organization-switcher";
 export type { UserButtonDialog } from "./user-button";
 export type { AuthUiClient } from "./auth-client";
-export type { MemberRequiredMessages, MemberRequiredProps } from "./member-required";
+export type {
+  MemberRequiredMessages,
+  MemberRequiredProps,
+} from "./member-required";

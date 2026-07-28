@@ -27,6 +27,7 @@ export {
   type KrakstackAuthLocale,
   type KrakstackAuthProviderProps,
   type OrganizationSwitcherDialog,
+  type OrganizationSwitcherFeatures,
   type OrganizationSwitcherProps,
   type UserButtonDialog,
   useAuthClient,
