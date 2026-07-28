@@ -21,6 +21,28 @@ export const AdminListQuery = Schema.Struct({
   examples: [{ page: 0, pageSize: 10, projectId: "project-id" }],
 });
 
+export const AdminProjectPreview = Schema.Struct({
+  id: Schema.String,
+  name: Schema.String,
+  logo: Schema.NullOr(Schema.String),
+}).annotate({
+  identifier: "AdminProjectPreview",
+  title: "Admin project preview",
+  description:
+    "Project summary displayed in administrative relationship lists.",
+});
+
+export const AdminOrganizationPreview = Schema.Struct({
+  id: Schema.String,
+  name: Schema.String,
+  logo: Schema.NullOr(Schema.String),
+}).annotate({
+  identifier: "AdminOrganizationPreview",
+  title: "Admin organization preview",
+  description:
+    "Organization summary displayed in administrative relationship lists.",
+});
+
 export const AdminUser = Schema.Struct({
   id: Schema.String,
   name: Schema.String,
@@ -33,6 +55,8 @@ export const AdminUser = Schema.Struct({
   banned: Schema.NullOr(Schema.Boolean),
   banReason: Schema.NullOr(Schema.String),
   banExpires: Schema.NullOr(Schema.Date),
+  organizations: Schema.Array(AdminOrganizationPreview),
+  projects: Schema.Array(AdminProjectPreview),
 }).annotate({
   identifier: "AdminUser",
   title: "Admin user",
@@ -50,8 +74,20 @@ export const AdminUser = Schema.Struct({
       banned: false,
       banReason: null,
       banExpires: null,
+      organizations: [{ id: "organization-id", name: "KrakStack", logo: null }],
+      projects: [{ id: "project-id", name: "Portal", logo: null }],
     },
   ],
+});
+
+export const AdminOrganizationMember = Schema.Struct({
+  id: Schema.String,
+  name: Schema.String,
+  image: Schema.NullOr(Schema.String),
+}).annotate({
+  identifier: "AdminOrganizationMember",
+  title: "Admin organization member",
+  description: "Member summary displayed in administrative organization lists.",
 });
 
 export const AdminOrganization = Schema.Struct({
@@ -63,6 +99,8 @@ export const AdminOrganization = Schema.Struct({
   userId: Schema.optional(Schema.NullOr(Schema.String)),
   parentId: Schema.optional(Schema.NullOr(Schema.String)),
   memberCount: Schema.optional(Schema.Number),
+  memberPreviews: Schema.optional(Schema.Array(AdminOrganizationMember)),
+  projects: Schema.optional(Schema.Array(AdminProjectPreview)),
   createdAt: Schema.Date,
 }).annotate({
   identifier: "AdminOrganization",
@@ -78,6 +116,8 @@ export const AdminOrganization = Schema.Struct({
       userId: null,
       parentId: null,
       memberCount: 12,
+      memberPreviews: [{ id: "user-id", name: "Ada Lovelace", image: null }],
+      projects: [{ id: "project-id", name: "Portal", logo: null }],
       createdAt: new Date("2026-01-01T00:00:00.000Z"),
     },
   ],
@@ -299,7 +339,10 @@ export const PaginatedAdminOrganizations = PaginatedResponse(
 
 export type AdminListQuery = typeof AdminListQuery.Type;
 export type AdminUser = typeof AdminUser.Type;
+export type AdminOrganizationPreview = typeof AdminOrganizationPreview.Type;
+export type AdminProjectPreview = typeof AdminProjectPreview.Type;
 export type AdminOrganization = typeof AdminOrganization.Type;
+export type AdminOrganizationMember = typeof AdminOrganizationMember.Type;
 export type AdminApiKey = typeof AdminApiKey.Type;
 export type AdminUpdateApiKeyPayload = typeof AdminUpdateApiKeyPayload.Type;
 export type AdminCreateOrganizationPayload =

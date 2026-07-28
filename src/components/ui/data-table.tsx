@@ -16,15 +16,17 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { ScrollArea, ScrollBar } from "@/components/ui/scroll-area";
 import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
+  Pagination,
+  paginationMessages,
+  type PaginationMessages,
+} from "@/components/ui/pagination";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
+import { ScrollArea, ScrollBar } from "@/components/ui/scroll-area";
 import {
   Table,
   TableBody,
@@ -33,6 +35,12 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 import { Query, SortParamsFromString } from "@/lib/query";
 import { cn } from "@/lib/utils";
 import {
@@ -68,18 +76,22 @@ import {
   getSortedRowModel,
   type Header,
   type Row,
+  type RowData,
   type SortingState,
   type Table as TanstackTable,
   useReactTable,
 } from "@tanstack/react-table";
+
+declare module "@tanstack/react-table" {
+  interface ColumnMeta<TData extends RowData, TValue> {
+    truncate?: boolean;
+  }
+}
 import {
   ArrowDown,
   ArrowUp,
   ChevronDown,
-  ChevronLeft,
   ChevronRight,
-  ChevronsLeft,
-  ChevronsRight,
   ChevronsUpDown,
   Download,
   EyeOff,
@@ -102,7 +114,8 @@ import {
   type HTMLAttributes,
   type ReactNode,
 } from "react";
-import { Schema } from "effect";
+import { Effect, Layer, Schema } from "effect";
+import { KeyValueStore } from "effect/unstable/persistence";
 import { Atom } from "effect/unstable/reactivity";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -130,9 +143,27 @@ export const TableSearchSchemaStandard =
   Schema.toStandardSchemaV1(TableSearchSchema);
 export type TableParams = Schema.Schema.Type<typeof TableSearchSchema>;
 
-const dataTableStorageRuntime = Atom.runtime(
-  BrowserKeyValueStore.layerLocalStorage,
-);
+const compactDataTableStorage = Layer.effect(
+  KeyValueStore.KeyValueStore,
+  Effect.map(KeyValueStore.KeyValueStore, (store) =>
+    KeyValueStore.make({
+      clear: store.clear,
+      get: (key) =>
+        Effect.flatMap(store.get(key), (value) =>
+          value === "{}"
+            ? Effect.as(store.remove(key), undefined)
+            : Effect.succeed(value),
+        ),
+      getUint8Array: store.getUint8Array,
+      remove: store.remove,
+      set: (key, value) =>
+        value === "{}" ? store.remove(key) : store.set(key, value),
+      size: store.size,
+    }),
+  ),
+).pipe(Layer.provide(BrowserKeyValueStore.layerLocalStorage));
+
+const dataTableStorageRuntime = Atom.runtime(compactDataTableStorage);
 
 const DataTableViewSchema = Schema.Union([
   Schema.Literal("table"),
@@ -141,19 +172,17 @@ const DataTableViewSchema = Schema.Union([
 type DataTableView = typeof DataTableViewSchema.Type;
 
 const ColumnVisibilitySchema = Schema.Record(Schema.String, Schema.Boolean);
+const ColumnSizingSchema = Schema.Record(Schema.String, Schema.Number);
 
-export type DataTableMessages = {
+export type DataTableMessages = PaginationMessages & {
   actions: string;
-  pageSize: string;
   empty: string;
   loading: string;
   filter: string;
-  results: (count: number) => string;
   export: string;
   exportCsv: string;
   exportJson: string;
   refresh: string;
-  selectedOf: (selected: number, total: number) => string;
   view: string;
   tableView: string;
   galleryView: string;
@@ -165,27 +194,21 @@ export type DataTableMessages = {
   sortClear: string;
   sortBy: string;
   reorder: string;
-  pageOf: (page: number, total: number) => string;
-  goToFirstPage: string;
-  goToPreviousPage: string;
-  goToNextPage: string;
-  goToLastPage: string;
+  resizeColumn: (column: string) => string;
   listOthers: (count: number) => string;
 };
 
 const messages = {
   en: {
+    ...paginationMessages("en"),
     actions: "Actions",
-    pageSize: "Page size",
     empty: "No results.",
     loading: "Loading...",
     filter: "Filter results...",
-    results: (count: number) => `${count} results`,
     export: "Export",
     exportCsv: "CSV",
     exportJson: "JSON",
     refresh: "Refresh",
-    selectedOf: (selected: number, total: number) => `${selected} of ${total}`,
     view: "View",
     tableView: "Table",
     galleryView: "Gallery",
@@ -197,25 +220,20 @@ const messages = {
     sortClear: "Clear",
     sortBy: "Sort by",
     reorder: "Drag to reorder",
-    pageOf: (page: number, total: number) => `Page ${page} of ${total}`,
-    goToFirstPage: "Go to first page",
-    goToPreviousPage: "Go to previous page",
-    goToNextPage: "Go to next page",
-    goToLastPage: "Go to last page",
-    listOthers: (count: number) => `and ${count} others`,
+    resizeColumn: (column: string) => `Resize ${column} column`,
+    listOthers: (count: number) =>
+      count === 1 ? "and 1 other" : `and ${count} others`,
   },
   fr: {
+    ...paginationMessages("fr"),
     actions: "Actions",
-    pageSize: "Taille de la page",
     empty: "Aucun résultat.",
     loading: "Chargement...",
     filter: "Filtrer les résultats...",
-    results: (count: number) => `${count} résultats`,
     export: "Exporter",
     exportCsv: "CSV",
     exportJson: "JSON",
     refresh: "Rafraîchir",
-    selectedOf: (selected: number, total: number) => `${selected} sur ${total}`,
     view: "Affichage",
     tableView: "Tableau",
     galleryView: "Galerie",
@@ -227,12 +245,9 @@ const messages = {
     sortClear: "Effacer",
     sortBy: "Trier par",
     reorder: "Glisser pour réordonner",
-    pageOf: (page: number, total: number) => `Page ${page} sur ${total}`,
-    goToFirstPage: "Aller à la première page",
-    goToPreviousPage: "Aller à la page précédente",
-    goToNextPage: "Aller à la page suivante",
-    goToLastPage: "Aller à la dernière page",
-    listOthers: (count: number) => `et ${count} autres`,
+    resizeColumn: (column: string) => `Redimensionner la colonne ${column}`,
+    listOthers: (count: number) =>
+      count === 1 ? "et 1 autre" : `et ${count} autres`,
   },
 } as const satisfies Record<"en" | "fr", DataTableMessages>;
 
@@ -264,6 +279,7 @@ export interface DataTableGrouping<TData> {
 }
 
 export interface DataTableRelationshipOption {
+  icon?: ReactNode;
   label: string;
   value: string;
 }
@@ -838,18 +854,31 @@ const DataTableRow = <TData,>({
           <TableCell
             key={cell.id}
             className={cn(
-              "align-center min-w-32 max-w-0 overflow-hidden whitespace-normal [&:has([data-slot=relationship-cell])]:relative [&:has([data-slot=relationship-cell])]:min-w-56 [&:has([data-slot=relationship-cell])]:p-0 [&:has([data-slot=relationship-cell])>div]:absolute [&:has([data-slot=relationship-cell])>div]:inset-0 [&:has([data-slot=relationship-cell])>div]:line-clamp-none",
+              "align-center min-w-32 overflow-hidden [&:has([data-slot=relationship-cell])]:relative [&:has([data-slot=relationship-cell])]:p-0 [&:has([data-slot=relationship-cell])>div]:absolute [&:has([data-slot=relationship-cell])>div]:inset-0",
+              cell.column.columnDef.meta?.truncate
+                ? "whitespace-nowrap"
+                : "whitespace-normal",
               rowActions &&
                 isLastCell &&
-                "min-w-40 pr-12 [&:has([data-slot=relationship-cell])]:min-w-56 [&:has([data-slot=relationship-cell])]:pr-0 [&:has([data-slot=relationship-cell])>div]:mr-11",
+                "min-w-40 pr-12 [&:has([data-slot=relationship-cell])]:pr-0 [&:has([data-slot=relationship-cell])>div]:mr-11",
             )}
             style={
               index === 0 && firstCellIndent
-                ? { paddingLeft: firstCellIndent }
-                : undefined
+                ? {
+                    paddingLeft: firstCellIndent,
+                    width: cell.column.getSize(),
+                  }
+                : { width: cell.column.getSize() }
             }
           >
-            <div className="line-clamp-3 max-w-full min-w-0 overflow-hidden break-words">
+            <div
+              className={cn(
+                "w-full max-w-full min-w-0 overflow-hidden break-words [&:has([data-slot=list-summary])]:line-clamp-none",
+                cell.column.columnDef.meta?.truncate
+                  ? "truncate"
+                  : "line-clamp-3",
+              )}
+            >
               {flexRender(cell.column.columnDef.cell, cell.getContext())}
             </div>
           </TableCell>
@@ -1250,6 +1279,7 @@ export function DataTable<TData, TValue>({
   const search = location.search as TableParams | undefined;
   const pathname = location.pathname;
   const resolvedRouteFrom = routeFrom ?? from;
+  const [storagePath] = useState(() => resolvedRouteFrom ?? pathname);
   const navigate = useNavigate(
     resolvedRouteFrom ? { from: resolvedRouteFrom } : undefined,
   );
@@ -1287,14 +1317,24 @@ export function DataTable<TData, TValue>({
       })
       .join(",");
 
-    return `${pathname}:${columnIds}`;
-  }, [columns, pathname]);
+    return `${storagePath}:${columnIds}`;
+  }, [columns, storagePath]);
   const columnVisibilityAtom = useMemo(
     () =>
       Atom.kvs({
         runtime: dataTableStorageRuntime,
         key: `data-table:column-visibility:${tableStorageId}`,
         schema: ColumnVisibilitySchema,
+        defaultValue: () => ({}),
+      }),
+    [tableStorageId],
+  );
+  const columnSizingAtom = useMemo(
+    () =>
+      Atom.kvs({
+        runtime: dataTableStorageRuntime,
+        key: `data-table:column-sizing:${tableStorageId}`,
+        schema: ColumnSizingSchema,
         defaultValue: () => ({}),
       }),
     [tableStorageId],
@@ -1310,6 +1350,7 @@ export function DataTable<TData, TValue>({
     [tableStorageId],
   );
   const [columnVisibility, setColumnVisibility] = useAtom(columnVisibilityAtom);
+  const [columnSizing, setColumnSizing] = useAtom(columnSizingAtom);
   const [storedView, setStoredView] = useAtom(viewAtom);
   const currentView: DataTableView = showGallery ? storedView : "table";
   const isGalleryView = currentView === "gallery";
@@ -1376,6 +1417,19 @@ export function DataTable<TData, TValue>({
   const table = useReactTable({
     data,
     columns,
+    defaultColumn: {
+      minSize: 128,
+      size: 224,
+      maxSize: 640,
+    },
+    columnResizeMode: "onChange",
+    enableColumnResizing: true,
+    onColumnSizingChange: (updater) => {
+      const nextColumnSizing =
+        typeof updater === "function" ? updater(columnSizing) : updater;
+
+      setColumnSizing(nextColumnSizing);
+    },
     ...(reordering ? { getRowId: reordering.getRowId } : {}),
     onPaginationChange: (updater) => {
       const newPagination =
@@ -1459,6 +1513,7 @@ export function DataTable<TData, TValue>({
       pagination,
       globalFilter,
       columnVisibility,
+      columnSizing,
       rowSelection,
     },
   });
@@ -1901,7 +1956,12 @@ export function DataTable<TData, TValue>({
           ) : (
             <ScrollArea className="-m-1 max-w-full min-w-0">
               <div className="max-w-full min-w-0 p-1">
-                <Table className="min-w-full">
+                <Table
+                  className="table-fixed"
+                  style={{
+                    width: `max(100%, ${table.getTotalSize() + (canReorderRows ? 40 : 0)}px)`,
+                  }}
+                >
                   <TableHeader>
                     {table.getHeaderGroups().map((headerGroup) => (
                       <TableRow key={headerGroup.id} className="p-4">
@@ -1912,9 +1972,28 @@ export function DataTable<TData, TValue>({
                           return (
                             <TableHead
                               key={header.id}
-                              className="h-12 min-w-32 p-0"
+                              className="relative h-12 min-w-32 p-0"
+                              style={{ width: header.getSize() }}
                             >
                               {renderHeader(header)}
+                              {header.column.getCanResize() ? (
+                                <button
+                                  aria-label={labels.resizeColumn(
+                                    getHeaderName(header),
+                                  )}
+                                  className={cn(
+                                    "hover:bg-primary/60 absolute inset-y-0 right-0 z-10 w-1 cursor-col-resize touch-none bg-transparent p-0 select-none",
+                                    header.column.getIsResizing() &&
+                                      "bg-primary",
+                                  )}
+                                  type="button"
+                                  onDoubleClick={() =>
+                                    header.column.resetSize()
+                                  }
+                                  onMouseDown={header.getResizeHandler()}
+                                  onTouchStart={header.getResizeHandler()}
+                                />
+                              ) : null}
                             </TableHead>
                           );
                         })}
@@ -2223,84 +2302,26 @@ export function DataTablePagination<TData>({
   const totalRows = rowCount ?? filteredRows;
 
   return (
-    <div className="flex flex-col gap-3 px-2 sm:flex-row sm:items-center sm:justify-between">
-      <div className="text-muted-foreground flex flex-wrap items-center gap-x-3 gap-y-1 text-sm">
-        <span>{labels.results(totalRows)}</span>
-        {selectedRows > 0 ? (
-          <span>{labels.selectedOf(selectedRows, totalRows)}</span>
-        ) : null}
-      </div>
-      <div className="flex items-center gap-4 sm:justify-end">
-        <div className="flex items-center gap-2">
-          <Label htmlFor="page-size" className="hidden text-sm sm:block">
-            {labels.pageSize}
-          </Label>
-          <Select
-            items={pageSizes.map((pageSize) => ({
-              label: pageSize.toString(),
-              value: pageSize.toString(),
-            }))}
-            value={`${table.getState().pagination.pageSize}`}
-            onValueChange={(value) => {
-              table.setPageSize(Number(value));
-            }}
-          >
-            <SelectTrigger className="h-8 w-[70px]" id="page-size">
-              <SelectValue placeholder={table.getState().pagination.pageSize} />
-            </SelectTrigger>
-            <SelectContent side="top">
-              {pageSizes.map((pageSize) => (
-                <SelectItem key={pageSize} value={`${pageSize}`}>
-                  {pageSize}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
-        <div className="flex items-center gap-2">
-          <div className="flex items-center justify-center text-sm font-medium sm:block">
-            {labels.pageOf(
-              table.getState().pagination.pageIndex + 1,
-              table.getPageCount(),
-            )}
-          </div>
-          <div className="flex items-center gap-1">
-            <Button
-              className="hidden h-8 w-8 p-0 lg:flex"
-              onClick={() => table.setPageIndex(0)}
-              disabled={!table.getCanPreviousPage()}
-            >
-              <span className="sr-only">{labels.goToFirstPage}</span>
-              <ChevronsLeft />
-            </Button>
-            <Button
-              className="h-8 w-8 p-0"
-              onClick={() => table.previousPage()}
-              disabled={!table.getCanPreviousPage()}
-            >
-              <span className="sr-only">{labels.goToPreviousPage}</span>
-              <ChevronLeft />
-            </Button>
-            <Button
-              className="h-8 w-8 p-0"
-              onClick={() => table.nextPage()}
-              disabled={!table.getCanNextPage()}
-            >
-              <span className="sr-only">{labels.goToNextPage}</span>
-              <ChevronRight />
-            </Button>
-            <Button
-              className="hidden h-8 w-8 p-0 lg:flex"
-              onClick={() => table.setPageIndex(table.getPageCount() - 1)}
-              disabled={!table.getCanNextPage()}
-            >
-              <span className="sr-only">{labels.goToLastPage}</span>
-              <ChevronsRight />
-            </Button>
-          </div>
-        </div>
-      </div>
-    </div>
+    <Pagination
+      messages={{
+        pageSize: labels.pageSize,
+        results: labels.results,
+        selectedOf: labels.selectedOf,
+        pageOf: labels.pageOf,
+        goToFirstPage: labels.goToFirstPage,
+        goToPreviousPage: labels.goToPreviousPage,
+        goToNextPage: labels.goToNextPage,
+        goToLastPage: labels.goToLastPage,
+      }}
+      onPageChange={(page) => table.setPageIndex(page)}
+      onPageSizeChange={(pageSize) => table.setPageSize(pageSize)}
+      page={table.getState().pagination.pageIndex}
+      pageCount={table.getPageCount()}
+      pageSize={table.getState().pagination.pageSize}
+      pageSizes={pageSizes}
+      selectedRows={selectedRows}
+      totalRows={totalRows}
+    />
   );
 }
 
@@ -2359,7 +2380,9 @@ export function DataTableRelationshipCell({
         >
           <DataTableListSummary
             emptyLabel={emptyLabel}
-            items={selectedOptions.map(({ label }) => label)}
+            expandable={false}
+            items={selectedOptions}
+            variant={selectedOptions.some(({ icon }) => icon) ? "icon" : "text"}
           />
           <ChevronDown className="text-muted-foreground size-4 shrink-0" />
         </Button>
@@ -2371,32 +2394,142 @@ export function DataTableRelationshipCell({
 
 export function DataTableListSummary({
   emptyLabel,
+  expandable = true,
   items,
   overflowLabel,
+  totalCount = items.length,
+  variant = "text",
   visibleCount = 3,
 }: {
   emptyLabel: ReactNode;
-  items: readonly string[];
+  expandable?: boolean | undefined;
+  items: readonly (
+    | string
+    | { icon?: ReactNode; label: string; value?: string }
+  )[];
   overflowLabel?: ((remaining: number) => ReactNode) | undefined;
+  totalCount?: number | undefined;
+  variant?: "icon" | "text" | undefined;
   visibleCount?: number | undefined;
 }) {
   const labels = dataTableMessages();
-  const visibleItems = items.slice(0, visibleCount).join(", ");
-  const remaining = Math.max(items.length - visibleCount, 0);
+  const normalizedItems = items.map((item) =>
+    typeof item === "string" ? { label: item } : item,
+  );
+  const visibleItems = normalizedItems.slice(0, visibleCount);
+  const visibleLabels = visibleItems.map(({ label }) => label).join(", ");
+  const remaining = Math.max(totalCount - visibleItems.length, 0);
+  const remainingLabel =
+    overflowLabel?.(remaining) ?? labels.listOthers(remaining);
+  const expandedItems = (
+    <PopoverContent
+      align="start"
+      className="max-h-72 w-72 overflow-y-auto p-2"
+      onClick={(event) => event.stopPropagation()}
+    >
+      <ul className="grid gap-1">
+        {normalizedItems.map((item, index) => (
+          <li
+            className="flex items-center gap-2 rounded-sm px-2 py-1.5 break-words"
+            key={item.value ?? `${item.label}-${index}`}
+          >
+            {item.icon ? (
+              <span className="bg-muted flex size-6 shrink-0 items-center justify-center overflow-hidden rounded-full text-[9px] font-semibold">
+                {item.icon}
+              </span>
+            ) : null}
+            <span className="min-w-0">{item.label}</span>
+          </li>
+        ))}
+      </ul>
+    </PopoverContent>
+  );
 
-  if (items.length === 0) {
+  if (normalizedItems.length === 0) {
     return <span className="text-muted-foreground text-sm">{emptyLabel}</span>;
   }
 
+  if (variant === "icon") {
+    return (
+      <TooltipProvider>
+        <span className="flex min-w-0 items-center pl-2">
+          {visibleItems.map((item, index) => (
+            <Tooltip key={item.value ?? item.label}>
+              <TooltipTrigger
+                render={
+                  <span
+                    aria-label={item.label}
+                    className="bg-muted border-background relative flex size-8 shrink-0 items-center justify-center overflow-hidden rounded-full border-2 text-[10px] font-semibold"
+                    style={{ marginLeft: index ? -8 : 0 }}
+                  >
+                    {item.icon ?? item.label.slice(0, 2).toUpperCase()}
+                  </span>
+                }
+              />
+              <TooltipContent>{item.label}</TooltipContent>
+            </Tooltip>
+          ))}
+          {remaining ? (
+            expandable ? (
+              <Popover>
+                <PopoverTrigger
+                  render={
+                    <button
+                      aria-label={labels.listOthers(remaining)}
+                      className="bg-muted border-background relative -ml-2 flex size-8 shrink-0 items-center justify-center rounded-full border-2 text-[10px] font-semibold tabular-nums"
+                      onClick={(event) => event.stopPropagation()}
+                      onPointerDown={(event) => event.stopPropagation()}
+                      type="button"
+                    >
+                      +{remaining}
+                    </button>
+                  }
+                />
+                {expandedItems}
+              </Popover>
+            ) : (
+              <span className="bg-muted border-background relative -ml-2 flex size-8 shrink-0 items-center justify-center rounded-full border-2 text-[10px] font-semibold tabular-nums">
+                +{remaining}
+              </span>
+            )
+          ) : null}
+        </span>
+      </TooltipProvider>
+    );
+  }
+
   return remaining > 0 ? (
-    <span className="flex min-w-0 items-center text-sm">
-      <span className="min-w-0 truncate">{visibleItems}</span>
-      <span className="shrink-0">
-        , {overflowLabel?.(remaining) ?? labels.listOthers(remaining)}
+    <span
+      className="block min-w-0 text-sm whitespace-normal"
+      data-slot="list-summary"
+    >
+      <span>{visibleLabels}</span>{" "}
+      <span className="inline-block whitespace-nowrap">
+        {expandable ? (
+          <Popover>
+            <PopoverTrigger
+              render={
+                <button
+                  className="text-muted-foreground hover:text-foreground underline decoration-dotted underline-offset-2"
+                  onClick={(event) => event.stopPropagation()}
+                  onPointerDown={(event) => event.stopPropagation()}
+                  type="button"
+                >
+                  {remainingLabel}
+                </button>
+              }
+            />
+            {expandedItems}
+          </Popover>
+        ) : (
+          remainingLabel
+        )}
       </span>
     </span>
   ) : (
-    <span className="block truncate text-sm">{visibleItems}</span>
+    <span className="block min-w-0 text-sm" data-slot="list-summary">
+      {visibleLabels}
+    </span>
   );
 }
 
@@ -2420,7 +2553,12 @@ export function DataTableColumnHeader<TData, TValue>({
 
   if (!column.getCanSort()) {
     return (
-      <div className={cn("flex h-12 items-center px-2 text-sm", className)}>
+      <div
+        className={cn(
+          "flex h-12 items-center truncate px-2 text-sm",
+          className,
+        )}
+      >
         {title}
       </div>
     );

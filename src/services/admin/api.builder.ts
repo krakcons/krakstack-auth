@@ -9,6 +9,7 @@ import {
   gt,
   gte,
   ilike,
+  inArray,
   max,
   or,
 } from "drizzle-orm";
@@ -67,6 +68,27 @@ const paginationMeta = ({
   total,
   pageCount: Math.ceil(total / pageSize),
 });
+
+const previewsByResource = (
+  records: ReadonlyArray<{
+    resourceId: string;
+    id: string;
+    name: string;
+    logo: string | null;
+  }>,
+) => {
+  const projectsByResource = new Map<
+    string,
+    Array<{ id: string; name: string; logo: string | null }>
+  >();
+  for (const { resourceId, id, name, logo } of records) {
+    projectsByResource.set(resourceId, [
+      ...(projectsByResource.get(resourceId) ?? []),
+      { id, name, logo },
+    ]);
+  }
+  return projectsByResource;
+};
 
 const userOrderBy = (query: AdminListQuery) => {
   const sort = query.sort
@@ -501,10 +523,56 @@ export const adminApiHandler = HttpApiBuilder.group(
                   .offset(offset)
           ).pipe(Effect.mapError(internalServerError));
 
+          const userProjects = users.length
+            ? yield* db
+                .select({
+                  resourceId: projectUser.userId,
+                  id: project.id,
+                  name: project.name,
+                  logo: project.logo,
+                })
+                .from(projectUser)
+                .innerJoin(project, eq(project.id, projectUser.projectId))
+                .where(
+                  inArray(
+                    projectUser.userId,
+                    users.map(({ id }) => id),
+                  ),
+                )
+                .pipe(Effect.mapError(internalServerError))
+            : [];
+          const projectsByUser = previewsByResource(userProjects);
+          const userOrganizations = users.length
+            ? yield* db
+                .select({
+                  resourceId: member.userId,
+                  id: organization.id,
+                  name: organization.name,
+                  logo: organization.logo,
+                })
+                .from(member)
+                .innerJoin(
+                  organization,
+                  eq(organization.id, member.organizationId),
+                )
+                .where(
+                  inArray(
+                    member.userId,
+                    users.map(({ id }) => id),
+                  ),
+                )
+                .pipe(Effect.mapError(internalServerError))
+            : [];
+          const organizationsByUser = previewsByResource(userOrganizations);
+
           const total = Number(totals[0]?.count ?? 0);
 
           return {
-            data: users,
+            data: users.map((user) => ({
+              ...user,
+              organizations: organizationsByUser.get(user.id) ?? [],
+              projects: projectsByUser.get(user.id) ?? [],
+            })),
             meta: paginationMeta({
               page: query.page,
               pageSize: query.pageSize,
@@ -604,10 +672,72 @@ export const adminApiHandler = HttpApiBuilder.group(
                   .offset(offset)
           ).pipe(Effect.mapError(internalServerError));
 
+          const organizationMembers = organizations.length
+            ? yield* db
+                .select({
+                  organizationId: member.organizationId,
+                  id: user.id,
+                  name: user.name,
+                  image: user.image,
+                })
+                .from(member)
+                .innerJoin(user, eq(user.id, member.userId))
+                .where(
+                  inArray(
+                    member.organizationId,
+                    organizations.map(({ id }) => id),
+                  ),
+                )
+                .pipe(Effect.mapError(internalServerError))
+            : [];
+          const organizationProjects = organizations.length
+            ? yield* db
+                .select({
+                  resourceId: projectOrganization.organizationId,
+                  id: project.id,
+                  name: project.name,
+                  logo: project.logo,
+                })
+                .from(projectOrganization)
+                .innerJoin(
+                  project,
+                  eq(project.id, projectOrganization.projectId),
+                )
+                .where(
+                  inArray(
+                    projectOrganization.organizationId,
+                    organizations.map(({ id }) => id),
+                  ),
+                )
+                .pipe(Effect.mapError(internalServerError))
+            : [];
+          const projectsByOrganization =
+            previewsByResource(organizationProjects);
+          const membersByOrganization = new Map<
+            string,
+            typeof organizationMembers
+          >();
+          for (const organizationMember of organizationMembers) {
+            const current =
+              membersByOrganization.get(organizationMember.organizationId) ??
+              [];
+            membersByOrganization.set(organizationMember.organizationId, [
+              ...current,
+              organizationMember,
+            ]);
+          }
+
           const total = Number(totals[0]?.count ?? 0);
 
           return {
-            data: organizations,
+            data: organizations.map((organization) => ({
+              ...organization,
+              memberPreviews:
+                membersByOrganization
+                  .get(organization.id)
+                  ?.map(({ id, name, image }) => ({ id, name, image })) ?? [],
+              projects: projectsByOrganization.get(organization.id) ?? [],
+            })),
             meta: paginationMeta({
               page: query.page,
               pageSize: query.pageSize,

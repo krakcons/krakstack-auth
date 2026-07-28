@@ -1,12 +1,17 @@
 import { useAtomSet, useAtomValue } from "@effect/atom-react";
-import { Schema } from "effect";
+import { FormBuilder, FormReact } from "@lucas-barake/effect-form-react";
+import { Effect, Schema } from "effect";
 import { AsyncResult, Atom } from "effect/unstable/reactivity";
-import { Loader2 } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
 
-import { ErrorMessage, useAppForm } from "@/components/ui/form";
-import { Button } from "@/components/ui/button";
+import {
+  ImageField,
+  SingleSearchableSelectField,
+  SubmitButton,
+  SubmitError,
+  TextField,
+} from "@/components/ui/effect-form";
 import {
   Dialog,
   DialogContent,
@@ -39,7 +44,9 @@ const defaultMessages = {
     organization_parent: "Parent organization",
     organization_parent_description:
       "Optionally group this organization under another organization.",
+    organization_parent_empty: "No organizations found.",
     organization_parent_none: "No parent organization",
+    organization_parent_search: "Search organizations...",
     organization_slug: "Slug",
     organization_slug_description: "Leave blank to generate one from the name.",
     organization_update_error: "Unable to update organization.",
@@ -60,7 +67,9 @@ const defaultMessages = {
     organization_parent: "Organisation parente",
     organization_parent_description:
       "Regroupez facultativement cette organisation sous une autre organisation.",
+    organization_parent_empty: "Aucune organisation trouvée.",
     organization_parent_none: "Aucune organisation parente",
+    organization_parent_search: "Rechercher des organisations...",
     organization_slug: "Slug",
     organization_slug_description:
       "Laissez vide pour en générer un à partir du nom.",
@@ -69,22 +78,13 @@ const defaultMessages = {
   },
 } as const;
 
-const labels = (locale: KrakstackAuthLocale) => ({
-  ...defaultMessages[locale],
-});
+const labels = (locale: KrakstackAuthLocale) => defaultMessages[locale];
 
 const text = (value: string, params?: Record<string, string>) =>
   Object.entries(params ?? {}).reduce(
     (current, [key, replacement]) => current.replace(`{${key}}`, replacement),
     value,
   );
-
-type OrganizationFormValues = {
-  name: string;
-  slug: string;
-  logo: File | string | null;
-  parentId: string;
-};
 
 const noParentOrganization = "__none__";
 
@@ -103,14 +103,16 @@ const slugify = (value: string) =>
     .replace(/[^a-z0-9]+/g, "-")
     .replace(/^-+|-+$/g, "");
 
-const isFile = (value: unknown): value is File => value instanceof File;
-
-const valuesToPayload = (value: OrganizationFormValues, logo: string | null) =>
-  Schema.decodeUnknownSync(AdminCreateOrganizationPayload)({
-    name: value.name.trim(),
-    slug: slugify(value.slug || value.name),
-    logo: logo ?? undefined,
-  });
+const organizationFormBuilder = FormBuilder.empty
+  .addField("name", Schema.NonEmptyString)
+  .addField("slug", Schema.String)
+  .addField(
+    "logo",
+    Schema.UndefinedOr(
+      Schema.NullOr(Schema.Union([Schema.String, Schema.instanceOf(File)])),
+    ),
+  )
+  .addField("parentId", Schema.String);
 
 export function AdminOrganizationForm({
   organization,
@@ -142,163 +144,139 @@ export function AdminOrganizationForm({
     onFailure: () => [],
     onSuccess: ({ value }) => Array.from(value.data),
   });
-  const [error, setError] = useState("");
-  const isEditing = Boolean(organization);
-  const form = useAppForm({
-    defaultValues: {
-      name: organization?.name ?? "",
-      slug: organization?.slug ?? "",
-      logo: assetUrl(organization?.logo, baseUrl),
-      parentId: organization?.parentId ?? noParentOrganization,
-    } satisfies OrganizationFormValues,
-    onSubmit: async ({ value }) => {
-      setError("");
-      try {
-        const logoFile = isFile(value.logo) ? value.logo : null;
-        const logo = logoFile
-          ? await (async () => {
-              const payload = new FormData();
-              payload.append("file", logoFile);
-
-              return assetPath((await uploadLogo({ payload })).url);
-            })()
-          : assetPath(value.logo);
-        const payload = valuesToPayload(value, logo);
-        const saved = organization
-          ? await updateOrganization({
-              params: { id: organization.id },
-              payload: {
-                ...payload,
-                parentId:
-                  value.parentId === noParentOrganization
-                    ? null
-                    : value.parentId,
-              },
-            })
-          : await createOrganization({
-              payload: {
-                ...payload,
-                ...(value.parentId === noParentOrganization
-                  ? {}
-                  : { parentId: value.parentId }),
-              },
+  const [form] = useState(() =>
+    FormReact.make(organizationFormBuilder, {
+      fields: {
+        name: TextField,
+        slug: TextField,
+        logo: ImageField,
+        parentId: SingleSearchableSelectField,
+      },
+      mode: { validation: "onSubmit" },
+      onSubmit: (_, { decoded }) =>
+        Effect.tryPromise({
+          try: async () => {
+            const logoValue = decoded.logo;
+            const logo =
+              logoValue instanceof File
+                ? await (async () => {
+                    const payload = new FormData();
+                    payload.append("file", logoValue);
+                    return assetPath((await uploadLogo({ payload })).url);
+                  })()
+                : assetPath(logoValue);
+            const payload = Schema.decodeUnknownSync(
+              AdminCreateOrganizationPayload,
+            )({
+              name: decoded.name.trim(),
+              slug: slugify(decoded.slug || decoded.name),
+              logo: logo ?? undefined,
+              ...(decoded.parentId === noParentOrganization
+                ? {}
+                : { parentId: decoded.parentId }),
             });
+            const saved = organization
+              ? await updateOrganization({
+                  params: { id: organization.id },
+                  payload: {
+                    ...payload,
+                    parentId:
+                      decoded.parentId === noParentOrganization
+                        ? null
+                        : decoded.parentId,
+                  },
+                })
+              : await createOrganization({ payload });
 
-        toast.success(
-          organization
-            ? m.organization_updated_toast
-            : m.organization_created_toast,
-        );
-        onSaved(saved);
-        onClose();
-      } catch (cause) {
-        setError(
-          cause instanceof Error
-            ? cause.message
-            : organization
-              ? m.organization_update_error
-              : m.organization_create_error,
-        );
-      }
-    },
-  });
+            toast.success(
+              organization
+                ? m.organization_updated_toast
+                : m.organization_created_toast,
+            );
+            onSaved(saved);
+            onClose();
+            return saved;
+          },
+          catch: (cause) =>
+            cause instanceof Error
+              ? cause
+              : new Error(
+                  organization
+                    ? m.organization_update_error
+                    : m.organization_create_error,
+                ),
+        }),
+    }),
+  );
+  const submitResult = useAtomValue(form.submit);
+  const parentOptions = [
+    { label: m.organization_parent_none, value: noParentOrganization },
+    ...organizations
+      .filter(
+        (candidate) =>
+          candidate.id !== organization?.id &&
+          !candidate.userId &&
+          !candidate.parentId,
+      )
+      .map((candidate) => ({
+        label: candidate.name,
+        value: candidate.id,
+        data: candidate,
+      })),
+  ];
 
   return (
     <Dialog open onOpenChange={(open) => !open && onClose()}>
       <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-2xl">
         <DialogHeader>
           <DialogTitle>
-            {isEditing
+            {organization
               ? m.organization_edit_title
               : m.organization_create_title}
           </DialogTitle>
           <DialogDescription>
-            {isEditing
+            {organization
               ? text(m.admin_organization_edit_description, {
-                  name: organization?.name ?? "",
+                  name: organization.name,
                 })
               : m.organization_create_description}
           </DialogDescription>
         </DialogHeader>
-        <form.AppForm>
-          <form
-            className="flex flex-col gap-4"
-            onSubmit={(event) => {
-              event.preventDefault();
-              event.stopPropagation();
-              form.handleSubmit();
-            }}
-          >
-            <form.AppField name="name">
-              {(field) => <field.TextField label={m.field_name} autoFocus />}
-            </form.AppField>
-            <form.AppField name="slug">
-              {(field) => (
-                <field.TextField
-                  label={m.organization_slug}
-                  description={m.organization_slug_description}
-                />
-              )}
-            </form.AppField>
-            <form.AppField name="logo">
-              {(field) => (
-                <field.ImageField
-                  label={m.organization_field_logo_url}
-                  size={{
-                    width: 96,
-                    height: 96,
-                    suggestedWidth: 512,
-                    suggestedHeight: 512,
-                  }}
-                />
-              )}
-            </form.AppField>
-            <form.AppField name="parentId">
-              {(field) => (
-                <field.SelectField
-                  label={m.organization_parent}
-                  description={m.organization_parent_description}
-                  options={[
-                    {
-                      label: m.organization_parent_none,
-                      value: noParentOrganization,
-                    },
-                    ...organizations
-                      .filter(
-                        (candidate) =>
-                          candidate.id !== organization?.id &&
-                          !candidate.userId &&
-                          !candidate.parentId,
-                      )
-                      .map((candidate) => ({
-                        label: candidate.name,
-                        value: candidate.id,
-                      })),
-                  ]}
-                />
-              )}
-            </form.AppField>
-            <form.FormError />
-            {error ? <ErrorMessage text={error} /> : null}
-            <form.Subscribe selector={(state) => state.isSubmitting}>
-              {(isSubmitting) => (
-                <Button
-                  disabled={isSubmitting}
-                  type="submit"
-                  className="self-start"
-                >
-                  {isSubmitting ? (
-                    <Loader2
-                      className="animate-spin"
-                      data-icon="inline-start"
-                    />
-                  ) : null}
-                  {m.form_submit}
-                </Button>
-              )}
-            </form.Subscribe>
-          </form>
-        </form.AppForm>
+        <form.Initialize
+          defaultValues={{
+            name: organization?.name ?? "",
+            slug: organization?.slug ?? "",
+            logo: assetUrl(organization?.logo, baseUrl),
+            parentId: organization?.parentId ?? noParentOrganization,
+          }}
+        >
+          <div className="flex flex-col gap-4">
+            <form.name autoFocus label={m.field_name} />
+            <form.slug
+              description={m.organization_slug_description}
+              label={m.organization_slug}
+            />
+            <form.logo
+              label={m.organization_field_logo_url}
+              size={{
+                width: 96,
+                height: 96,
+                suggestedWidth: 512,
+                suggestedHeight: 512,
+              }}
+            />
+            <form.parentId
+              description={m.organization_parent_description}
+              emptyLabel={m.organization_parent_empty}
+              items={parentOptions}
+              label={m.organization_parent}
+              messages={{ search: m.organization_parent_search }}
+              placeholder={m.organization_parent_none}
+            />
+            <SubmitError result={submitResult} />
+            <SubmitButton form={form}>{m.form_submit}</SubmitButton>
+          </div>
+        </form.Initialize>
       </DialogContent>
     </Dialog>
   );

@@ -20,6 +20,8 @@
         "@effect/platform-browser": "^4.0.0-beta.93",
         "@effect/sql-pg": "^4.0.0-beta.78",
         "@krak-stack/auth": "workspace:*",
+        "@lucas-barake/effect-form": "0.25.0-beta.6",
+        "@lucas-barake/effect-form-react": "0.26.0-beta.5",
         "@opentelemetry/api": "^1.9.1",
         "@opentelemetry/exporter-trace-otlp-http": "^0.219.0",
         "@opentelemetry/resources": "^2.8.0",
@@ -429,6 +431,10 @@
     "@lix-js/sdk": ["@lix-js/sdk@0.4.10", "", { "dependencies": { "@lix-js/server-protocol-schema": "0.1.1", "dedent": "1.5.1", "human-id": "^4.1.1", "js-sha256": "^0.11.0", "kysely": "^0.28.12", "sqlite-wasm-kysely": "0.3.0", "uuid": "^14.0.0" } }, "sha512-0dMInAJK/67guTG5rRZaCEhvzC5cCXENOjaePA5AqMXrCE97kaY7SRor9e2vnoGsFIiGqXKlT0MCIoZj36G0gg=="],
 
     "@lix-js/server-protocol-schema": ["@lix-js/server-protocol-schema@0.1.1", "", {}, "sha512-jBeALB6prAbtr5q4vTuxnRZZv1M2rKe8iNqRQhFJ4Tv7150unEa0vKyz0hs8Gl3fUGsWaNJBh3J8++fpbrpRBQ=="],
+
+    "@lucas-barake/effect-form": ["@lucas-barake/effect-form@0.25.0-beta.6", "", { "peerDependencies": { "effect": ">=4.0.0-beta.52 <4.0.1" } }, "sha512-f8k3a4VPRZBiwuihhVJwhNEYg6IXqi5JUBHFL2aC6htURUuOk5VviDe6z2TkGQela2irpe2PUCXCeQySCeQfqw=="],
+
+    "@lucas-barake/effect-form-react": ["@lucas-barake/effect-form-react@0.26.0-beta.5", "", { "dependencies": { "@lucas-barake/effect-form": "^0.25.0-beta.6" }, "peerDependencies": { "@effect/atom-react": ">=4.0.0-beta.52 <4.0.1", "effect": ">=4.0.0-beta.52 <4.0.1", "react": "^19.0.0" } }, "sha512-Zj9V1/d5lNFLQPpoooUP3aX23+dxApzMcHnryEmbaRiTr0HwTr7GrgvZY1C6jNPL5+ZapUSAxiZzPvuD+f55uw=="],
 
     "@mermaid-js/parser": ["@mermaid-js/parser@1.2.0", "", { "dependencies": { "@chevrotain/types": "~11.1.2" } }, "sha512-oYPyv8A4As1yH5Bx+04iQEQxXuIQDe0GKCNSRgao6z8AM9jixXIfP0vsppRLvGf+nKIOb9/LdpWA4YuJiVvESA=="],
 

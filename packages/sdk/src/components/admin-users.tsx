@@ -16,7 +16,11 @@ import {
 } from "lucide-react";
 import { useState } from "react";
 
-import { DataTable, type TableParams } from "@/components/ui/data-table";
+import {
+  DataTable,
+  DataTableListSummary,
+  type TableParams,
+} from "@/components/ui/data-table";
 import { ErrorMessage } from "@/components/ui/form";
 import { AppBrand } from "@/components/ui/app-brand";
 import { Badge } from "@/components/ui/badge";
@@ -30,6 +34,10 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
+import type {
+  AdminOrganizationPreview,
+  AdminProjectPreview,
+} from "../admin/schema";
 
 import type { AuthUiClient } from "./auth-client";
 import { authClientApi } from "./auth-client-api";
@@ -47,6 +55,8 @@ const defaultMessages = {
     admin_ban_title: "Ban user",
     admin_column_created: "Created",
     admin_column_last_signed_in: "Last signed in",
+    admin_column_organizations: "Organizations",
+    admin_column_projects: "Projects",
     admin_column_role: "Role",
     admin_column_status: "Status",
     admin_column_unverified: "Unverified",
@@ -78,6 +88,8 @@ const defaultMessages = {
     admin_ban_title: "Bannir l'utilisateur",
     admin_column_created: "Créé",
     admin_column_last_signed_in: "Dernière connexion",
+    admin_column_organizations: "Organisations",
+    admin_column_projects: "Projets",
     admin_column_role: "Rôle",
     admin_column_status: "Statut",
     admin_column_unverified: "Non vérifié",
@@ -108,6 +120,14 @@ const labels = (locale: KrakstackAuthLocale) => ({
 
 type AdminUsersLabels = ReturnType<typeof labels>;
 
+const initials = (name: string) =>
+  name
+    .split(/\s+/)
+    .slice(0, 2)
+    .map((part) => part[0])
+    .join("")
+    .toUpperCase();
+
 const text = (value: string, params?: Record<string, string>) =>
   Object.entries(params ?? {}).reduce(
     (current, [key, replacement]) => current.replace(`{${key}}`, replacement),
@@ -126,6 +146,8 @@ type User = {
   banned: boolean | null;
   banReason: string | null;
   banExpires: Date | null;
+  organizations: ReadonlyArray<AdminOrganizationPreview>;
+  projects: ReadonlyArray<AdminProjectPreview>;
 };
 
 const adminUsersQuery = (search: TableParams, projectId?: string | null) => {
@@ -287,7 +309,7 @@ export function AdminUsersTable({
       {error ? <ErrorMessage text={error} /> : null}
       {impersonateError ? <ErrorMessage text={impersonateError} /> : null}
       <DataTable
-        columns={userColumns(m)}
+        columns={userColumns(m, baseUrl)}
         data={users}
         features={{
           export: { baseName: "users" },
@@ -427,7 +449,10 @@ export function useAdminUsersTotal(search: TableParams) {
   });
 }
 
-const userColumns = (m: AdminUsersLabels): ColumnDef<User>[] => [
+const userColumns = (
+  m: AdminUsersLabels,
+  baseUrl?: string | undefined,
+): ColumnDef<User>[] => [
   {
     accessorKey: "email",
     header: m.admin_column_user,
@@ -445,6 +470,50 @@ const userColumns = (m: AdminUsersLabels): ColumnDef<User>[] => [
         />
       );
     },
+  },
+  {
+    accessorKey: "organizations",
+    header: m.admin_column_organizations,
+    cell: ({ row }) => (
+      <DataTableListSummary
+        emptyLabel="-"
+        items={row.original.organizations.map((organization) => {
+          const logo = assetUrl(organization.logo, baseUrl);
+          return {
+            label: organization.name,
+            value: organization.id,
+            icon: logo ? (
+              <img alt="" className="size-full object-cover" src={logo} />
+            ) : (
+              initials(organization.name)
+            ),
+          };
+        })}
+        variant="icon"
+      />
+    ),
+  },
+  {
+    accessorKey: "projects",
+    header: m.admin_column_projects,
+    cell: ({ row }) => (
+      <DataTableListSummary
+        emptyLabel="-"
+        items={row.original.projects.map((project) => {
+          const logo = assetUrl(project.logo, baseUrl);
+          return {
+            label: project.name,
+            value: project.id,
+            icon: logo ? (
+              <img alt="" className="size-full object-cover" src={logo} />
+            ) : (
+              initials(project.name)
+            ),
+          };
+        })}
+        variant="icon"
+      />
+    ),
   },
   {
     accessorKey: "emailVerified",
