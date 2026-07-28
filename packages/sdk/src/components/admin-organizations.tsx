@@ -33,6 +33,7 @@ import { assetUrl, organizationBranding } from "./utils";
 const defaultMessages = {
   en: {
     admin_column_created: "Created",
+    admin_column_id: "ID",
     admin_column_members: "Members",
     admin_column_organization: "Organization",
     admin_column_projects: "Projects",
@@ -49,6 +50,7 @@ const defaultMessages = {
   },
   fr: {
     admin_column_created: "Créé",
+    admin_column_id: "ID",
     admin_column_members: "Membres",
     admin_column_organization: "Organisation",
     admin_column_projects: "Projets",
@@ -188,6 +190,7 @@ export function AdminOrganizationsTable({
       <DataTable
         columns={organizationColumns(m, locale, baseUrl)}
         data={organizations}
+        defaultColumnVisibility={{ id: false }}
         features={{
           export: { baseName: "organizations" },
           gallery: false,
@@ -251,6 +254,15 @@ const organizationColumns = (
   locale: KrakstackAuthLocale,
   baseUrl?: string | undefined,
 ): ColumnDef<AdminOrganization>[] => [
+  {
+    accessorKey: "id",
+    header: m.admin_column_id,
+    cell: ({ row }) => (
+      <span className="text-muted-foreground font-mono text-xs">
+        {row.original.id}
+      </span>
+    ),
+  },
   {
     accessorKey: "name",
     header: m.admin_column_organization,

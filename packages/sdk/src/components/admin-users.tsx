@@ -54,6 +54,7 @@ const defaultMessages = {
       "Are you sure you want to ban {name} ({email})? They will not be able to sign in.",
     admin_ban_title: "Ban user",
     admin_column_created: "Created",
+    admin_column_id: "ID",
     admin_column_last_signed_in: "Last signed in",
     admin_column_organizations: "Organizations",
     admin_column_projects: "Projects",
@@ -87,6 +88,7 @@ const defaultMessages = {
       "Êtes-vous sûr de vouloir bannir {name} ({email}) ? Il ne pourra plus se connecter.",
     admin_ban_title: "Bannir l'utilisateur",
     admin_column_created: "Créé",
+    admin_column_id: "ID",
     admin_column_last_signed_in: "Dernière connexion",
     admin_column_organizations: "Organisations",
     admin_column_projects: "Projets",
@@ -311,6 +313,7 @@ export function AdminUsersTable({
       <DataTable
         columns={userColumns(m, baseUrl)}
         data={users}
+        defaultColumnVisibility={{ id: false }}
         features={{
           export: { baseName: "users" },
           gallery: false,
@@ -453,6 +456,15 @@ const userColumns = (
   m: AdminUsersLabels,
   baseUrl?: string | undefined,
 ): ColumnDef<User>[] => [
+  {
+    accessorKey: "id",
+    header: m.admin_column_id,
+    cell: ({ row }) => (
+      <span className="text-muted-foreground font-mono text-xs">
+        {row.original.id}
+      </span>
+    ),
+  },
   {
     accessorKey: "email",
     header: m.admin_column_user,

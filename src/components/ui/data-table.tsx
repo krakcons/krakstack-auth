@@ -360,6 +360,7 @@ type LegacyDataTableRowAction<TData> = Omit<DataTableRowAction<TData>, "id"> & {
 interface DataTableProps<TData, TValue> {
   columns: ColumnDef<TData, TValue>[];
   data: TData[];
+  defaultColumnVisibility?: Record<string, boolean>;
   state?: DataTableState;
   search?: TableParams;
   onSearchChange?: (search: TableParams) => void;
@@ -1211,6 +1212,7 @@ const exportTableToJson = <TData,>(
 export function DataTable<TData, TValue>({
   columns,
   data,
+  defaultColumnVisibility = {},
   state,
   search: controlledSearch,
   onSearchChange,
@@ -1230,6 +1232,7 @@ export function DataTable<TData, TValue>({
   serverPagination,
   features,
 }: DataTableProps<TData, TValue>) {
+  const [initialColumnVisibility] = useState(() => defaultColumnVisibility);
   const labels = dataTableMessages(messages);
   const isLoading = state?.loading ?? legacyIsLoading ?? false;
   const emptyContent =
@@ -1325,9 +1328,9 @@ export function DataTable<TData, TValue>({
         runtime: dataTableStorageRuntime,
         key: `data-table:column-visibility:${tableStorageId}`,
         schema: ColumnVisibilitySchema,
-        defaultValue: () => ({}),
+        defaultValue: () => initialColumnVisibility,
       }),
-    [tableStorageId],
+    [initialColumnVisibility, tableStorageId],
   );
   const columnSizingAtom = useMemo(
     () =>
