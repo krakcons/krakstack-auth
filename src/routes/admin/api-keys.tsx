@@ -1,7 +1,9 @@
-import { useAtomSet, useAtomValue } from "@effect/atom-react";
+import { useAtomSet, useAtomSubscribe, useAtomValue } from "@effect/atom-react";
 import type { AdminApiKey } from "@krak-stack/auth/admin";
+import { FormBuilder, FormReact } from "@lucas-barake/effect-form-react";
 import { type ColumnDef } from "@tanstack/react-table";
 import { createFileRoute } from "@tanstack/react-router";
+import { Effect, Schema } from "effect";
 import { Atom, AsyncResult } from "effect/unstable/reactivity";
 import {
   Check,
@@ -30,7 +32,12 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { useAppForm } from "@/components/ui/form";
+import {
+  CheckboxField,
+  SubmitButton,
+  SubmitError,
+  TextField,
+} from "@/components/ui/effect-form";
 import { Separator } from "@/components/ui/separator";
 import { AdminApiClient } from "@/lib/admin-api-client";
 import { ApiClient } from "@/lib/api-client";
@@ -312,6 +319,13 @@ type ApiKeyFormValues = {
   rateLimitTimeWindowMinutes: string;
 };
 
+const apiKeyFormBuilder = FormBuilder.empty
+  .addField("name", Schema.String)
+  .addField("enabled", Schema.Boolean)
+  .addField("rateLimitEnabled", Schema.Boolean)
+  .addField("rateLimitMax", Schema.String)
+  .addField("rateLimitTimeWindowMinutes", Schema.String);
+
 const apiKeyFormDefaults = (apiKey: ApiKeySummary | null): ApiKeyFormValues =>
   apiKey
     ? {
@@ -343,6 +357,72 @@ const optionalNumber = (value: string, label: string) => {
   return number;
 };
 
+const makeApiKeyForm = (apiKey: ApiKeySummary | null) =>
+  FormReact.make(apiKeyFormBuilder, {
+    fields: {
+      name: TextField,
+      enabled: CheckboxField,
+      rateLimitEnabled: CheckboxField,
+      rateLimitMax: TextField,
+      rateLimitTimeWindowMinutes: TextField,
+    },
+    onSubmit: (_, { decoded: value, get }) => {
+      const name = value.name.trim();
+      const rateLimitMax = optionalNumber(
+        value.rateLimitMax,
+        m.admin_api_key_max_requests(),
+      );
+      const rateLimitTimeWindowMinutes = optionalNumber(
+        value.rateLimitTimeWindowMinutes,
+        m.admin_api_key_window_minutes_label(),
+      );
+      const payload = {
+        name: name || null,
+        enabled: value.enabled,
+        rateLimitEnabled: value.rateLimitEnabled,
+        rateLimitMax,
+        rateLimitTimeWindow: rateLimitTimeWindowMinutes
+          ? rateLimitTimeWindowMinutes * 60 * 1000
+          : null,
+      };
+
+      if (apiKey) {
+        return get
+          .setResult(updateApiKeyAtom, {
+            params: { id: apiKey.id },
+            payload,
+          })
+          .pipe(
+            Effect.as(apiKey.id),
+            Effect.mapError((cause) =>
+              cause instanceof Error ? cause : new Error(String(cause)),
+            ),
+          );
+      }
+
+      return get
+        .setResult(createApiKeyAtom, {
+          payload: {
+            configId: "service",
+            ...(name ? { name } : {}),
+          },
+        })
+        .pipe(
+          Effect.flatMap((created) =>
+            get
+              .setResult(updateApiKeyAtom, {
+                params: { id: created.id },
+                payload,
+              })
+              .pipe(Effect.as(created.key)),
+          ),
+          Effect.mapError((cause) =>
+            cause instanceof Error ? cause : new Error(String(cause)),
+          ),
+        );
+    },
+  });
+
 function ApiKeyForm({
   apiKey,
   onCreated,
@@ -352,74 +432,30 @@ function ApiKeyForm({
   onCreated: (key: string) => void;
   onSaved: () => void;
 }) {
-  const createApiKey = useAtomSet(createApiKeyAtom, { mode: "promise" });
-  const updateApiKey = useAtomSet(updateApiKeyAtom, { mode: "promise" });
-  const form = useAppForm({
-    defaultValues: apiKeyFormDefaults(apiKey),
-    onSubmit: async ({ value, formApi }) => {
-      formApi.setErrorMap({ onSubmit: undefined });
-
-      try {
-        const name = value.name.trim();
-        const rateLimitMax = optionalNumber(
-          value.rateLimitMax,
-          m.admin_api_key_max_requests(),
-        );
-        const rateLimitTimeWindowMinutes = optionalNumber(
-          value.rateLimitTimeWindowMinutes,
-          m.admin_api_key_window_minutes_label(),
-        );
-        const payload = {
-          name: name || null,
-          enabled: value.enabled,
-          rateLimitEnabled: value.rateLimitEnabled,
-          rateLimitMax,
-          rateLimitTimeWindow: rateLimitTimeWindowMinutes
-            ? rateLimitTimeWindowMinutes * 60 * 1000
-            : null,
-        };
-
-        if (apiKey) {
-          await updateApiKey({ params: { id: apiKey.id }, payload });
-          toast.success(m.admin_api_key_updated_toast());
-          onSaved();
-          return;
-        }
-
-        const created = await createApiKey({
-          payload: {
-            configId: "service",
-            ...(name ? { name } : {}),
-          },
-        });
-        await updateApiKey({ params: { id: created.id }, payload });
-        toast.success(m.admin_api_key_created_toast());
-        form.reset();
-        onCreated(created.key);
-      } catch (cause) {
-        formApi.setErrorMap({
-          onSubmit: {
-            form:
-              cause instanceof Error
-                ? cause.message
-                : apiKey
-                  ? m.admin_api_key_update_error()
-                  : m.admin_api_key_create_error(),
-            fields: {},
-          },
-        });
-      }
-    },
+  const [form] = useState(() => makeApiKeyForm(apiKey));
+  const submit = useAtomSet(form.submit);
+  const reset = useAtomSet(form.reset);
+  const submitResult = useAtomValue(form.submit);
+  useAtomSubscribe(form.submit, (result) => {
+    if (!AsyncResult.isSuccess(result)) return;
+    if (apiKey) {
+      toast.success(m.admin_api_key_updated_toast());
+      onSaved();
+      return;
+    }
+    toast.success(m.admin_api_key_created_toast());
+    reset();
+    onCreated(result.value);
   });
 
   return (
-    <form.AppForm>
+    <form.Initialize defaultValues={apiKeyFormDefaults(apiKey)}>
       <form
         className="flex flex-col gap-4"
         onSubmit={(event) => {
           event.preventDefault();
           event.stopPropagation();
-          form.handleSubmit();
+          submit();
         }}
       >
         {!apiKey ? (
@@ -427,41 +463,25 @@ function ApiKeyForm({
             {m.admin_api_key_warning()}
           </p>
         ) : null}
-        <form.AppField name="name">
-          {(field) => <field.TextField label={m.admin_api_key_name()} />}
-        </form.AppField>
-        <form.AppField name="enabled">
-          {(field) => <field.CheckboxField label={m.admin_api_key_enabled()} />}
-        </form.AppField>
-        <form.AppField name="rateLimitEnabled">
-          {(field) => (
-            <field.CheckboxField label={m.admin_api_key_rate_limit_enabled()} />
-          )}
-        </form.AppField>
+        <form.name label={m.admin_api_key_name()} />
+        <form.enabled label={m.admin_api_key_enabled()} />
+        <form.rateLimitEnabled label={m.admin_api_key_rate_limit_enabled()} />
         <div className="grid gap-4 sm:grid-cols-2">
-          <form.AppField name="rateLimitMax">
-            {(field) => (
-              <field.TextField
-                label={m.admin_api_key_max_requests()}
-                min={0}
-                type="number"
-              />
-            )}
-          </form.AppField>
-          <form.AppField name="rateLimitTimeWindowMinutes">
-            {(field) => (
-              <field.TextField
-                label={m.admin_api_key_window_minutes_label()}
-                min={0}
-                type="number"
-              />
-            )}
-          </form.AppField>
+          <form.rateLimitMax
+            label={m.admin_api_key_max_requests()}
+            min={0}
+            type="number"
+          />
+          <form.rateLimitTimeWindowMinutes
+            label={m.admin_api_key_window_minutes_label()}
+            min={0}
+            type="number"
+          />
         </div>
-        <form.FormError />
-        <form.SubmitButton />
+        <SubmitError result={submitResult} />
+        <SubmitButton form={form} />
       </form>
-    </form.AppForm>
+    </form.Initialize>
   );
 }
 

@@ -1,9 +1,14 @@
+import { useAtomSet, useAtomSubscribe, useAtomValue } from "@effect/atom-react";
+import { FormBuilder, FormReact } from "@lucas-barake/effect-form-react";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
+import { Effect } from "effect";
+import { AsyncResult } from "effect/unstable/reactivity";
+import { useState } from "react";
 
 import { m } from "@/paraglide/messages";
 import { authClient } from "@/services/auth/client";
-import { useAppForm } from "@/components/ui/form";
+import { SubmitError } from "@/components/ui/effect-form";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -27,6 +32,27 @@ export const Route = createFileRoute("/_auth/consent")({
   component: Consent,
 });
 
+const consentFormBuilder = FormBuilder.empty;
+
+const makeConsentForm = (scope: string) =>
+  FormReact.make(consentFormBuilder, {
+    fields: {},
+    onSubmit: (accept: boolean) =>
+      Effect.tryPromise({
+        try: async () => {
+          const result = await authClient.oauth2.consent({ accept, scope });
+
+          if (result.error) {
+            throw new Error(result.error.message ?? m.consent_error());
+          }
+
+          return result.data?.url ?? "/";
+        },
+        catch: (cause) =>
+          cause instanceof Error ? cause : new Error(m.consent_error()),
+      }),
+  });
+
 function Consent() {
   const navigate = useNavigate();
   const { clientId, scope } = Route.useSearch();
@@ -34,29 +60,11 @@ function Consent() {
   const projectConfig = useAuthBrandingConfig();
   const fallbackClientName = useOAuthClientName(clientId);
   const clientName = projectConfig?.name ?? fallbackClientName;
-  const form = useAppForm({
-    defaultValues: {},
-    onSubmitMeta: { accept: true },
-    onSubmit: async ({ meta, formApi }) => {
-      formApi.setErrorMap({ onSubmit: undefined });
-
-      const result = await authClient.oauth2.consent({
-        accept: meta.accept,
-        scope,
-      });
-
-      if (result.error) {
-        formApi.setErrorMap({
-          onSubmit: {
-            form: result.error.message ?? m.consent_error(),
-            fields: {},
-          },
-        });
-        return;
-      }
-
-      navigate({ href: result.data?.url ?? "/" });
-    },
+  const [form] = useState(() => makeConsentForm(scope));
+  const submit = useAtomSet(form.submit);
+  const submitResult = useAtomValue(form.submit);
+  useAtomSubscribe(form.submit, (result) => {
+    if (AsyncResult.isSuccess(result)) navigate({ href: result.value });
   });
 
   return (
@@ -67,7 +75,7 @@ function Consent() {
           {m.consent_description({ clientName })}
         </CardDescription>
       </CardHeader>
-      <form.AppForm>
+      <form.Initialize defaultValues={{}}>
         <CardContent className="space-y-4">
           <div className="rounded-md border p-4">
             <p className="text-sm font-medium">
@@ -84,32 +92,26 @@ function Consent() {
               ))}
             </div>
           </div>
-          <form.FormError />
+          <SubmitError result={submitResult} />
         </CardContent>
         <CardFooter className="gap-3">
-          <form.Subscribe selector={(formState) => formState.isSubmitting}>
-            {(isSubmitting) => (
-              <>
-                <Button
-                  disabled={isSubmitting}
-                  onClick={() => form.handleSubmit({ accept: true })}
-                  type="button"
-                >
-                  {m.consent_authorize()}
-                </Button>
-                <Button
-                  disabled={isSubmitting}
-                  onClick={() => form.handleSubmit({ accept: false })}
-                  type="button"
-                  variant="outline"
-                >
-                  {m.consent_deny()}
-                </Button>
-              </>
-            )}
-          </form.Subscribe>
+          <Button
+            disabled={submitResult.waiting}
+            onClick={() => submit(true)}
+            type="button"
+          >
+            {m.consent_authorize()}
+          </Button>
+          <Button
+            disabled={submitResult.waiting}
+            onClick={() => submit(false)}
+            type="button"
+            variant="outline"
+          >
+            {m.consent_deny()}
+          </Button>
         </CardFooter>
-      </form.AppForm>
+      </form.Initialize>
     </Card>
   );
 }

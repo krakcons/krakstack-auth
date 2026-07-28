@@ -6,7 +6,7 @@ import { useState } from "react";
 import { toast } from "sonner";
 
 import { DataTable } from "@/components/ui/data-table";
-import { ErrorMessage } from "@/components/ui/form";
+import { ErrorMessage } from "@/components/ui/effect-form";
 import { AppBrand } from "@/components/ui/app-brand";
 import {
   AlertDialog,

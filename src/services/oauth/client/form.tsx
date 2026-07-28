@@ -1,11 +1,18 @@
-import { useAtomSet, useAtomValue } from "@effect/atom-react";
+import { useAtomSet, useAtomSubscribe, useAtomValue } from "@effect/atom-react";
+import { FormBuilder, FormReact } from "@lucas-barake/effect-form-react";
+import { Schema } from "effect";
 import { AsyncResult } from "effect/unstable/reactivity";
-import { Loader2 } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
 
-import { ErrorMessage, useAppForm } from "@/components/ui/form";
-import { Button } from "@/components/ui/button";
+import {
+  MultiSelectField,
+  SelectField,
+  SubmitButton,
+  SubmitError,
+  TextAreaField,
+  TextField,
+} from "@/components/ui/effect-form";
 import {
   Dialog,
   DialogContent,
@@ -30,8 +37,14 @@ type OAuthClientFormValues = {
   name: string;
   projectId: string;
   redirectUris: string;
-  scope: string[];
+  scope: readonly string[];
 };
+
+const oauthClientFormBuilder = FormBuilder.empty
+  .addField("name", Schema.String)
+  .addField("projectId", Schema.String)
+  .addField("redirectUris", Schema.String)
+  .addField("scope", Schema.Array(Schema.String));
 
 const defaultScope = ["openid", "profile", "email"];
 
@@ -87,6 +100,25 @@ const valuesToCreatePayload = (value: OAuthClientFormValues) => {
   } satisfies CreateOAuthClientPayload;
 };
 
+const makeOAuthClientForm = (client?: OAuthClientAdmin) =>
+  FormReact.make(oauthClientFormBuilder, {
+    fields: {
+      name: TextField,
+      projectId: SelectField,
+      redirectUris: TextAreaField,
+      scope: MultiSelectField,
+    },
+    onSubmit: (_, { decoded: value, get }) =>
+      client
+        ? get.setResult(updateOAuthClientAtom, {
+            params: { clientId: client.clientId },
+            payload: valuesToPayload(value),
+          })
+        : get.setResult(createOAuthClientAtom, {
+            payload: valuesToCreatePayload(value),
+          }),
+  });
+
 export function OAuthClientForm({
   client,
   onClose,
@@ -96,13 +128,6 @@ export function OAuthClientForm({
   onClose: () => void;
   onSaved: (client: OAuthClientFormSaved) => void;
 }) {
-  const createOAuthClient = useAtomSet(createOAuthClientAtom, {
-    mode: "promise",
-  });
-  const updateOAuthClient = useAtomSet(updateOAuthClientAtom, {
-    mode: "promise",
-  });
-  const [error, setError] = useState("");
   const projectsResult = useAtomValue(projectsAtom);
   const projects = AsyncResult.match(projectsResult, {
     onInitial: () => [] as Project[],
@@ -111,44 +136,25 @@ export function OAuthClientForm({
   });
   const isEditing = Boolean(client);
 
-  const form = useAppForm({
-    defaultValues: {
-      name: client?.name ?? "",
-      projectId: client?.projectId ?? "",
-      redirectUris: client?.redirectUris.join("\n") ?? "",
-      scope: client?.scope
-        ? parseList(client.scope.replaceAll(" ", "\n"))
-        : defaultScope,
-    } satisfies OAuthClientFormValues,
-    onSubmit: async ({ value }) => {
-      setError("");
-      try {
-        const saved = client
-          ? await updateOAuthClient({
-              params: { clientId: client.clientId },
-              payload: valuesToPayload(value),
-            })
-          : await createOAuthClient({
-              payload: valuesToCreatePayload(value),
-            });
-        toast.success(
-          client
-            ? m.oauth_client_updated_toast()
-            : m.admin_client_created_toast(),
-        );
-        onSaved(saved);
-        onClose();
-      } catch (cause) {
-        setError(
-          cause instanceof Error
-            ? cause.message
-            : client
-              ? m.oauth_client_update_error()
-              : m.admin_error_create_client(),
-        );
-      }
-    },
+  const [form] = useState(() => makeOAuthClientForm(client));
+  const submit = useAtomSet(form.submit);
+  const submitResult = useAtomValue(form.submit);
+  useAtomSubscribe(form.submit, (result) => {
+    if (!AsyncResult.isSuccess(result)) return;
+    toast.success(
+      client ? m.oauth_client_updated_toast() : m.admin_client_created_toast(),
+    );
+    onSaved(result.value);
+    onClose();
   });
+  const defaultValues = {
+    name: client?.name ?? "",
+    projectId: client?.projectId ?? "",
+    redirectUris: client?.redirectUris.join("\n") ?? "",
+    scope: client?.scope
+      ? parseList(client.scope.replaceAll(" ", "\n"))
+      : defaultScope,
+  } satisfies OAuthClientFormValues;
 
   return (
     <Dialog open onOpenChange={(open) => !open && onClose()}>
@@ -165,76 +171,42 @@ export function OAuthClientForm({
               : m.admin_create_client_description()}
           </DialogDescription>
         </DialogHeader>
-        <form.AppForm>
+        <form.Initialize defaultValues={defaultValues}>
           <form
             className="flex flex-col gap-4"
             onSubmit={(event) => {
               event.preventDefault();
               event.stopPropagation();
-              form.handleSubmit();
+              submit();
             }}
           >
-            <form.AppField name="name">
-              {(field) => (
-                <field.TextField label={m.admin_field_display_name()} />
-              )}
-            </form.AppField>
-            <form.AppField name="projectId">
-              {(field) => (
-                <field.SelectField
-                  label={m.project()}
-                  options={[
-                    { label: m.project_none(), value: "" },
-                    ...projects.map((project) => ({
-                      label: project.name,
-                      value: project.id,
-                    })),
-                  ]}
-                  description={m.oauth_client_project_description()}
-                />
-              )}
-            </form.AppField>
-            <form.AppField name="redirectUris">
-              {(field) => (
-                <field.TextAreaField
-                  label={m.admin_field_redirect_uris()}
-                  description={m.admin_field_redirect_uris_description()}
-                  rows={4}
-                />
-              )}
-            </form.AppField>
-            <form.AppField name="scope">
-              {(field) => (
-                <field.SelectField
-                  label={m.admin_column_scopes()}
-                  multiple
-                  options={scopeOptions}
-                  placeholder={m.oauth_client_scopes_placeholder()}
-                  description={m.oauth_client_scopes_description()}
-                />
-              )}
-            </form.AppField>
-            <form.FormError />
-            {error ? <ErrorMessage text={error} /> : null}
-            <form.Subscribe selector={(state) => state.isSubmitting}>
-              {(isSubmitting) => (
-                <Button
-                  disabled={isSubmitting}
-                  type="submit"
-                  className="self-start"
-                >
-                  {isSubmitting ? (
-                    <Loader2
-                      className="animate-spin"
-                      data-icon="inline-start"
-                    />
-                  ) : null}
-                  {m.form_submit()}
-                </Button>
-              )}
-            </form.Subscribe>
+            <form.name label={m.admin_field_display_name()} />
+            <form.projectId
+              label={m.project()}
+              options={[
+                { label: m.project_none(), value: "" },
+                ...projects.map((project) => ({
+                  label: project.name,
+                  value: project.id,
+                })),
+              ]}
+              description={m.oauth_client_project_description()}
+            />
+            <form.redirectUris
+              label={m.admin_field_redirect_uris()}
+              description={m.admin_field_redirect_uris_description()}
+              rows={4}
+            />
+            <form.scope
+              label={m.admin_column_scopes()}
+              options={scopeOptions}
+              placeholder={m.oauth_client_scopes_placeholder()}
+              description={m.oauth_client_scopes_description()}
+            />
+            <SubmitError result={submitResult} />
+            <SubmitButton form={form}>{m.form_submit()}</SubmitButton>
           </form>
-        </form.AppForm>
+        </form.Initialize>
       </DialogContent>
     </Dialog>
   );

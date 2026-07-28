@@ -1,5 +1,7 @@
-import { useAtomSet, useAtomValue } from "@effect/atom-react";
+import { useAtomSet, useAtomSubscribe, useAtomValue } from "@effect/atom-react";
+import { FormBuilder, FormReact } from "@lucas-barake/effect-form-react";
 import { type ColumnDef } from "@tanstack/react-table";
+import { Effect, Schema } from "effect";
 import { Atom, AsyncResult } from "effect/unstable/reactivity";
 import { Building2, FolderKanban, Pencil, Trash2 } from "lucide-react";
 import { useState } from "react";
@@ -7,7 +9,13 @@ import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
 import { DataTable } from "@/components/ui/data-table";
-import { ErrorMessage, useAppForm } from "@/components/ui/form";
+import {
+  CheckboxField,
+  ErrorMessage,
+  SubmitButton,
+  SubmitError,
+  TextField,
+} from "@/components/ui/effect-form";
 import { AppBrand } from "@/components/ui/app-brand";
 import {
   AlertDialog,
@@ -60,8 +68,6 @@ export function DomainsTable({
 }) {
   const result = useAtomValue(domainsAtom(reloadKey));
   const deleteDomain = useAtomSet(deleteDomainAtom, { mode: "promise" });
-  const createDomain = useAtomSet(createDomainAtom, { mode: "promise" });
-  const updateDomain = useAtomSet(updateDomainAtom, { mode: "promise" });
   const [domains, setDomains] = useState<ServerDomain[] | null>(null);
   const [editingDomain, setEditingDomain] = useState<ServerDomain | null>(null);
   const [deletingDomain, setDeletingDomain] = useState<ServerDomain | null>(
@@ -130,13 +136,6 @@ export function DomainsTable({
               ),
             );
           }}
-          saveDomain={(value) =>
-            updateDomain({
-              params: { id: editingDomain.id },
-              payload: updateDomainPayloadFromValue(value),
-              reactivityKeys: ["domains"],
-            })
-          }
         />
       ) : null}
       {creatingDomain ? (
@@ -148,12 +147,6 @@ export function DomainsTable({
               ...(current ?? rows).filter((domain) => domain.id !== created.id),
             ]);
           }}
-          saveDomain={(value) =>
-            createDomain({
-              payload: createDomainPayloadFromValue(value),
-              reactivityKeys: ["domains"],
-            })
-          }
         />
       ) : null}
     </div>
@@ -167,6 +160,13 @@ type DomainFormValues = {
   organizationId: string;
   managed: boolean;
 };
+
+const domainFormBuilder = FormBuilder.empty
+  .addField("hostname", Schema.String)
+  .addField("rootHostname", Schema.String)
+  .addField("projectId", Schema.String)
+  .addField("organizationId", Schema.String)
+  .addField("managed", Schema.Boolean);
 
 const createDomainPayloadFromValue = (
   value: DomainFormValues,
@@ -188,46 +188,58 @@ const updateDomainPayloadFromValue = (
   managed: value.managed,
 });
 
+const makeDomainForm = (domain?: ServerDomain) =>
+  FormReact.make(domainFormBuilder, {
+    fields: {
+      hostname: TextField,
+      rootHostname: TextField,
+      projectId: TextField,
+      organizationId: TextField,
+      managed: CheckboxField,
+    },
+    onSubmit: (_, { decoded: value, get }) =>
+      domain
+        ? get
+            .setResult(updateDomainAtom, {
+              params: { id: domain.id },
+              payload: updateDomainPayloadFromValue(value),
+              reactivityKeys: ["domains"],
+            })
+            .pipe(
+              Effect.mapError((cause) =>
+                cause instanceof Error ? cause : new Error(String(cause)),
+              ),
+            )
+        : get
+            .setResult(createDomainAtom, {
+              payload: createDomainPayloadFromValue(value),
+              reactivityKeys: ["domains"],
+            })
+            .pipe(
+              Effect.mapError((cause) =>
+                cause instanceof Error ? cause : new Error(String(cause)),
+              ),
+            ),
+  });
+
 function DomainDialog({
   domain,
   onClose,
   onSaved,
-  saveDomain,
 }: {
   domain?: ServerDomain;
   onClose: () => void;
   onSaved: (domain: ServerDomain) => void;
-  saveDomain: (value: DomainFormValues) => Promise<ServerDomain>;
 }) {
   const isEditing = Boolean(domain);
-  const [error, setError] = useState("");
-  const form = useAppForm({
-    defaultValues: {
-      hostname: domain?.hostname ?? "",
-      rootHostname: domain?.rootHostname ?? "",
-      projectId: domain?.projectId ?? "",
-      organizationId: domain?.organizationId ?? "",
-      managed: domain?.managed ?? true,
-    } satisfies DomainFormValues,
-    onSubmit: async ({ value }) => {
-      setError("");
-      try {
-        const saved = await saveDomain(value);
-        onSaved(saved);
-        toast.success(
-          isEditing ? m.domain_updated_toast() : m.domain_created_toast(),
-        );
-        onClose();
-      } catch (cause) {
-        setError(
-          cause instanceof Error
-            ? cause.message
-            : isEditing
-              ? m.domain_update_error()
-              : m.domain_create_error(),
-        );
-      }
-    },
+  const [form] = useState(() => makeDomainForm(domain));
+  const submit = useAtomSet(form.submit);
+  const submitResult = useAtomValue(form.submit);
+  useAtomSubscribe(form.submit, (result) => {
+    if (!AsyncResult.isSuccess(result)) return;
+    onSaved(result.value);
+    toast.success(domain ? m.domain_updated_toast() : m.domain_created_toast());
+    onClose();
   });
 
   return (
@@ -243,67 +255,55 @@ function DomainDialog({
               : m.domain_create_description()}
           </DialogDescription>
         </DialogHeader>
-        <form
-          className="flex flex-col gap-4"
-          onSubmit={(event) => {
-            event.preventDefault();
-            form.handleSubmit();
+        <form.Initialize
+          defaultValues={{
+            hostname: domain?.hostname ?? "",
+            rootHostname: domain?.rootHostname ?? "",
+            projectId: domain?.projectId ?? "",
+            organizationId: domain?.organizationId ?? "",
+            managed: domain?.managed ?? true,
           }}
         >
-          <form.AppForm>
-            <form.AppField name="hostname">
-              {(field) => (
-                <field.TextField
-                  label={m.domain_hostname()}
-                  description={m.domain_hostname_description()}
-                  disabled={isEditing && domain?.managed}
-                  autoFocus
-                />
-              )}
-            </form.AppField>
-            <form.AppField name="rootHostname">
-              {(field) => (
-                <field.TextField
-                  label={m.domain_root_hostname()}
-                  description={m.domain_root_hostname_description()}
-                />
-              )}
-            </form.AppField>
-            <form.AppField name="projectId">
-              {(field) => (
-                <field.TextField
-                  label={m.project()}
-                  description={m.domain_project_id_description()}
-                />
-              )}
-            </form.AppField>
-            <form.AppField name="organizationId">
-              {(field) => (
-                <field.TextField
-                  label={m.admin_column_organization()}
-                  description={m.domain_organization_id_description()}
-                />
-              )}
-            </form.AppField>
-            <form.AppField name="managed">
-              {(field) => (
-                <field.CheckboxField
-                  label={m.domain_managed()}
-                  description={m.domain_managed_description()}
-                />
-              )}
-            </form.AppField>
-            {error ? <ErrorMessage text={error} /> : null}
+          <form
+            className="flex flex-col gap-4"
+            onSubmit={(event) => {
+              event.preventDefault();
+              submit();
+            }}
+          >
+            <form.hostname
+              label={m.domain_hostname()}
+              description={m.domain_hostname_description()}
+              disabled={isEditing && domain?.managed}
+              autoFocus
+            />
+            <form.rootHostname
+              label={m.domain_root_hostname()}
+              description={m.domain_root_hostname_description()}
+            />
+            <form.projectId
+              label={m.project()}
+              description={m.domain_project_id_description()}
+            />
+            <form.organizationId
+              label={m.admin_column_organization()}
+              description={m.domain_organization_id_description()}
+            />
+            <form.managed
+              label={m.domain_managed()}
+              description={m.domain_managed_description()}
+            />
+            <SubmitError result={submitResult} />
             <div className="flex justify-end gap-2">
               <Button type="button" variant="outline" onClick={onClose}>
                 {m.actions_cancel()}
               </Button>
-              <form.SubmitButton>
+              <SubmitButton form={form}>
                 {isEditing ? m.form_submit() : m.domain_create()}
-              </form.SubmitButton>
+              </SubmitButton>
             </div>
-          </form.AppForm>
-        </form>
+          </form>
+        </form.Initialize>
       </DialogContent>
     </Dialog>
   );

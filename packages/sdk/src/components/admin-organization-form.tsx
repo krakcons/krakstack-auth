@@ -1,4 +1,4 @@
-import { useAtomSet, useAtomValue } from "@effect/atom-react";
+import { useAtomSubscribe, useAtomValue } from "@effect/atom-react";
 import { FormBuilder, FormReact } from "@lucas-barake/effect-form-react";
 import { Effect, Schema } from "effect";
 import { AsyncResult, Atom } from "effect/unstable/reactivity";
@@ -95,6 +95,15 @@ const organizationOptionsAtom = Atom.family((baseUrl?: string | undefined) =>
     reactivityKeys: ["organizations"],
   }),
 );
+const createOrganizationAtom = Atom.family((baseUrl?: string | undefined) =>
+  authClientApi(baseUrl).mutation("admin", "createOrganization"),
+);
+const updateOrganizationAtom = Atom.family((baseUrl?: string | undefined) =>
+  authClientApi(baseUrl).mutation("admin", "updateOrganization"),
+);
+const uploadOrganizationLogoAtom = Atom.family((baseUrl?: string | undefined) =>
+  authClientApi(baseUrl).mutation("authExtra", "uploadUserImage"),
+);
 
 const slugify = (value: string) =>
   value
@@ -114,6 +123,64 @@ const organizationFormBuilder = FormBuilder.empty
   )
   .addField("parentId", Schema.String);
 
+type OrganizationFormResource = {
+  baseUrl: string | undefined;
+  organization: AdminOrganization | undefined;
+};
+
+const makeOrganizationForm = ({
+  baseUrl,
+  organization,
+}: OrganizationFormResource) =>
+  FormReact.make(organizationFormBuilder, {
+    fields: {
+      name: TextField,
+      slug: TextField,
+      logo: ImageField,
+      parentId: SingleSearchableSelectField,
+    },
+    mode: { validation: "onSubmit" },
+    onSubmit: (_, { decoded, get }) =>
+      Effect.gen(function* () {
+        const logoValue = decoded.logo;
+        let logo = assetPath(logoValue instanceof File ? null : logoValue);
+        if (logoValue instanceof File) {
+          const payload = new FormData();
+          payload.append("file", logoValue);
+          const uploaded = yield* get.setResult(
+            uploadOrganizationLogoAtom(baseUrl),
+            { payload },
+          );
+          logo = assetPath(uploaded.url);
+        }
+
+        const payload = Schema.decodeUnknownSync(
+          AdminCreateOrganizationPayload,
+        )({
+          name: decoded.name.trim(),
+          slug: slugify(decoded.slug || decoded.name),
+          logo: logo ?? undefined,
+          ...(decoded.parentId === noParentOrganization
+            ? {}
+            : { parentId: decoded.parentId }),
+        });
+        const saved = organization
+          ? yield* get.setResult(updateOrganizationAtom(baseUrl), {
+              params: { id: organization.id },
+              payload: {
+                ...payload,
+                parentId:
+                  decoded.parentId === noParentOrganization
+                    ? null
+                    : decoded.parentId,
+              },
+            })
+          : yield* get.setResult(createOrganizationAtom(baseUrl), { payload });
+
+        return saved;
+      }),
+  });
+
 export function AdminOrganizationForm({
   organization,
   onClose,
@@ -126,18 +193,6 @@ export function AdminOrganizationForm({
   const auth = useKrakstackAuth();
   const m = labels(auth?.locale ?? "en");
   const baseUrl = auth?.baseUrl;
-  const createOrganization = useAtomSet(
-    authClientApi(baseUrl).mutation("admin", "createOrganization"),
-    { mode: "promise" },
-  );
-  const updateOrganization = useAtomSet(
-    authClientApi(baseUrl).mutation("admin", "updateOrganization"),
-    { mode: "promise" },
-  );
-  const uploadLogo = useAtomSet(
-    authClientApi(baseUrl).mutation("authExtra", "uploadUserImage"),
-    { mode: "promise" },
-  );
   const organizationsResult = useAtomValue(organizationOptionsAtom(baseUrl));
   const organizations = AsyncResult.match(organizationsResult, {
     onInitial: () => [],
@@ -145,70 +200,19 @@ export function AdminOrganizationForm({
     onSuccess: ({ value }) => Array.from(value.data),
   });
   const [form] = useState(() =>
-    FormReact.make(organizationFormBuilder, {
-      fields: {
-        name: TextField,
-        slug: TextField,
-        logo: ImageField,
-        parentId: SingleSearchableSelectField,
-      },
-      mode: { validation: "onSubmit" },
-      onSubmit: (_, { decoded }) =>
-        Effect.tryPromise({
-          try: async () => {
-            const logoValue = decoded.logo;
-            const logo =
-              logoValue instanceof File
-                ? await (async () => {
-                    const payload = new FormData();
-                    payload.append("file", logoValue);
-                    return assetPath((await uploadLogo({ payload })).url);
-                  })()
-                : assetPath(logoValue);
-            const payload = Schema.decodeUnknownSync(
-              AdminCreateOrganizationPayload,
-            )({
-              name: decoded.name.trim(),
-              slug: slugify(decoded.slug || decoded.name),
-              logo: logo ?? undefined,
-              ...(decoded.parentId === noParentOrganization
-                ? {}
-                : { parentId: decoded.parentId }),
-            });
-            const saved = organization
-              ? await updateOrganization({
-                  params: { id: organization.id },
-                  payload: {
-                    ...payload,
-                    parentId:
-                      decoded.parentId === noParentOrganization
-                        ? null
-                        : decoded.parentId,
-                  },
-                })
-              : await createOrganization({ payload });
-
-            toast.success(
-              organization
-                ? m.organization_updated_toast
-                : m.organization_created_toast,
-            );
-            onSaved(saved);
-            onClose();
-            return saved;
-          },
-          catch: (cause) =>
-            cause instanceof Error
-              ? cause
-              : new Error(
-                  organization
-                    ? m.organization_update_error
-                    : m.organization_create_error,
-                ),
-        }),
-    }),
+    makeOrganizationForm({ baseUrl, organization }),
   );
   const submitResult = useAtomValue(form.submit);
+  useAtomSubscribe(form.submit, (result) => {
+    if (!AsyncResult.isSuccess(result)) return;
+    toast.success(
+      organization
+        ? m.organization_updated_toast
+        : m.organization_created_toast,
+    );
+    onSaved(result.value);
+    onClose();
+  });
   const parentOptions = [
     { label: m.organization_parent_none, value: noParentOrganization },
     ...organizations

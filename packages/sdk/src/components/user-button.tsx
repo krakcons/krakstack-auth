@@ -1,5 +1,6 @@
 import type { ApiKey } from "@better-auth/api-key/client";
 import { useAtomRefresh, useAtomSet, useAtomValue } from "@effect/atom-react";
+import { FormBuilder, FormReact } from "@lucas-barake/effect-form-react";
 import { type ColumnDef } from "@tanstack/react-table";
 import {
   type UseNavigateResult,
@@ -13,6 +14,7 @@ import {
   Copy,
   Building2,
   KeyRound,
+  Loader2,
   LogOutIcon,
   ShieldCheck,
   StopCircle,
@@ -27,12 +29,19 @@ import {
   type ReactNode,
   createContext,
   useContext,
+  useRef,
   useState,
 } from "react";
 
 import { DataTable } from "@/components/ui/data-table";
 import { AppBrand } from "@/components/ui/app-brand";
-import { useAppForm } from "@/components/ui/form";
+import {
+  effectFormMessages,
+  ImageField,
+  SubmitButton,
+  SubmitError,
+  TextField,
+} from "@/components/ui/effect-form";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -356,6 +365,35 @@ type UserFormType = {
   name: string;
   image: File | string | null;
 };
+
+const changePasswordFormBuilder = FormBuilder.empty
+  .addField("currentPassword", Schema.NonEmptyString)
+  .addField("newPassword", Schema.NonEmptyString);
+
+const passwordFormBuilder = (required: boolean) =>
+  FormBuilder.empty.addField(
+    "password",
+    required ? Schema.NonEmptyString : Schema.String,
+  );
+
+const userFormBuilder = FormBuilder.empty
+  .addField("name", Schema.NonEmptyString)
+  .addField(
+    "image",
+    Schema.UndefinedOr(
+      Schema.NullOr(Schema.Union([Schema.String, Schema.instanceOf(File)])),
+    ),
+  );
+
+const totpCodeFormBuilder = FormBuilder.empty.addField(
+  "code",
+  Schema.NonEmptyString,
+);
+
+const apiKeyFormBuilder = FormBuilder.empty.addField(
+  "name",
+  Schema.NonEmptyString,
+);
 
 const isFile = (value: unknown): value is File => value instanceof File;
 
@@ -1192,40 +1230,45 @@ function PasswordSettings({
 function ChangePasswordForm({ authClient }: { authClient: AuthUiClient }) {
   const m = useUserButtonMessages();
   const [saved, setSaved] = useState(false);
-  const form = useAppForm({
-    defaultValues: { currentPassword: "", newPassword: "" },
-    onSubmit: async ({ value, formApi }) => {
-      setSaved(false);
-      formApi.setErrorMap({ onSubmit: undefined });
-      const result = await authClient.changePassword({
-        currentPassword: value.currentPassword,
-        newPassword: value.newPassword,
-      });
-
-      if (result.error) {
-        formApi.setErrorMap({
-          onSubmit: {
-            form:
-              result.error.message ?? m.user_account_password_change_error(),
-            fields: {},
+  const [form] = useState(() =>
+    FormReact.make(changePasswordFormBuilder, {
+      fields: { currentPassword: TextField, newPassword: TextField },
+      mode: { validation: "onSubmit" },
+      onSubmit: (_, { decoded }) =>
+        Effect.tryPromise({
+          try: async () => {
+            setSaved(false);
+            const result = await authClient.changePassword({
+              currentPassword: decoded.currentPassword,
+              newPassword: decoded.newPassword,
+            });
+            if (result.error) {
+              throw new Error(
+                result.error.message ?? m.user_account_password_change_error(),
+              );
+            }
+            reset();
+            setSaved(true);
           },
-        });
-        return;
-      }
-
-      form.reset();
-      setSaved(true);
-    },
-  });
+          catch: (cause) =>
+            cause instanceof Error
+              ? cause
+              : new Error(m.user_account_password_change_error()),
+        }),
+    }),
+  );
+  const reset = useAtomSet(form.reset);
+  const submit = useAtomSet(form.submit);
+  const submitResult = useAtomValue(form.submit);
 
   return (
-    <form.AppForm>
+    <form.Initialize defaultValues={{ currentPassword: "", newPassword: "" }}>
       <form
         className="flex w-full flex-col gap-3 sm:max-w-md"
         onSubmit={(event) => {
           event.preventDefault();
           event.stopPropagation();
-          form.handleSubmit();
+          submit();
         }}
       >
         <div className="flex flex-col gap-1">
@@ -1236,37 +1279,29 @@ function ChangePasswordForm({ authClient }: { authClient: AuthUiClient }) {
             {m.user_account_password_change_description()}
           </p>
         </div>
-        <form.AppField name="currentPassword">
-          {(field) => (
-            <field.TextField
-              label={m.user_account_current_password()}
-              type="password"
-              autoComplete="current-password"
-              required
-            />
-          )}
-        </form.AppField>
-        <form.AppField name="newPassword">
-          {(field) => (
-            <field.TextField
-              label={m.user_account_new_password()}
-              type="password"
-              autoComplete="new-password"
-              required
-            />
-          )}
-        </form.AppField>
-        <form.FormError />
+        <form.currentPassword
+          label={m.user_account_current_password()}
+          type="password"
+          autoComplete="current-password"
+          required
+        />
+        <form.newPassword
+          label={m.user_account_new_password()}
+          type="password"
+          autoComplete="new-password"
+          required
+        />
+        <SubmitError result={submitResult} />
         {saved ? (
           <p className="text-sm text-green-600">
             {m.user_account_password_change_success()}
           </p>
         ) : null}
-        <Button type="submit" className="self-start">
+        <SubmitButton form={form}>
           {m.user_account_password_change_submit()}
-        </Button>
+        </SubmitButton>
       </form>
-    </form.AppForm>
+    </form.Initialize>
   );
 }
 
@@ -1278,54 +1313,56 @@ function SetPasswordForm({
   onSaved: () => Promise<void>;
 }) {
   const m = useUserButtonMessages();
-  const form = useAppForm({
-    defaultValues: { password: "" },
-    onSubmit: async ({ value, formApi }) => {
-      formApi.setErrorMap({ onSubmit: undefined });
-      const result = await authClient.$fetch("/set-password", {
-        method: "POST",
-        body: { newPassword: value.password },
-      });
-
-      if (result.error) {
-        formApi.setErrorMap({
-          onSubmit: {
-            form: result.error.message ?? m.user_account_password_set_error(),
-            fields: {},
+  const [form] = useState(() =>
+    FormReact.make(passwordFormBuilder(true), {
+      fields: { password: TextField },
+      mode: { validation: "onSubmit" },
+      onSubmit: (_, { decoded }) =>
+        Effect.tryPromise({
+          try: async () => {
+            const result = await authClient.$fetch("/set-password", {
+              method: "POST",
+              body: { newPassword: decoded.password },
+            });
+            if (result.error) {
+              throw new Error(
+                result.error.message ?? m.user_account_password_set_error(),
+              );
+            }
+            reset();
+            await onSaved();
           },
-        });
-        return;
-      }
-
-      form.reset();
-      await onSaved();
-    },
-  });
+          catch: (cause) =>
+            cause instanceof Error
+              ? cause
+              : new Error(m.user_account_password_set_error()),
+        }),
+    }),
+  );
+  const reset = useAtomSet(form.reset);
+  const submit = useAtomSet(form.submit);
+  const submitResult = useAtomValue(form.submit);
 
   return (
-    <form.AppForm>
+    <form.Initialize defaultValues={{ password: "" }}>
       <form
         className="flex w-full flex-col gap-3 sm:max-w-sm"
         onSubmit={(event) => {
           event.preventDefault();
           event.stopPropagation();
-          form.handleSubmit();
+          submit();
         }}
       >
-        <form.AppField name="password">
-          {(field) => (
-            <field.TextField
-              label={m.user_account_new_password()}
-              type="password"
-              autoComplete="new-password"
-              required
-            />
-          )}
-        </form.AppField>
-        <form.FormError />
-        <form.SubmitButton>{m.user_account_password_set()}</form.SubmitButton>
+        <form.password
+          label={m.user_account_new_password()}
+          type="password"
+          autoComplete="new-password"
+          required
+        />
+        <SubmitError result={submitResult} />
+        <SubmitButton form={form}>{m.user_account_password_set()}</SubmitButton>
       </form>
-    </form.AppForm>
+    </form.Initialize>
   );
 }
 
@@ -1347,40 +1384,38 @@ function RevokeAccountForm({
     authClientApi(baseUrl).mutation("authExtra", "verifyPassword"),
     { mode: "promise" },
   );
-  const form = useAppForm({
-    defaultValues: { password: "" },
-    onSubmit: async ({ value, formApi }) => {
-      formApi.setErrorMap({ onSubmit: undefined });
-
-      if (requirePassword) {
-        try {
-          await verifyPassword({ payload: { password: value.password } });
-        } catch (error) {
-          formApi.setErrorMap({
-            onSubmit: {
-              form:
-                error instanceof Error
-                  ? error.message
-                  : m.user_account_password_verify_error(),
-              fields: {},
-            },
-          });
-          return;
-        }
-      }
-
-      await onRevoke(account);
-    },
-  });
+  const [form] = useState(() =>
+    FormReact.make(passwordFormBuilder(requirePassword), {
+      fields: { password: TextField },
+      mode: { validation: "onSubmit" },
+      onSubmit: (_, { decoded }) =>
+        Effect.tryPromise({
+          try: async () => {
+            if (requirePassword) {
+              await verifyPassword({
+                payload: { password: decoded.password },
+              });
+            }
+            await onRevoke(account);
+          },
+          catch: (cause) =>
+            cause instanceof Error
+              ? cause
+              : new Error(m.user_account_password_verify_error()),
+        }),
+    }),
+  );
+  const submit = useAtomSet(form.submit);
+  const submitResult = useAtomValue(form.submit);
 
   return (
-    <form.AppForm>
+    <form.Initialize defaultValues={{ password: "" }}>
       <form
         className="bg-muted/40 flex flex-col gap-3 rounded-lg border p-4"
         onSubmit={(event) => {
           event.preventDefault();
           event.stopPropagation();
-          form.handleSubmit();
+          submit();
         }}
       >
         <div className="flex flex-col gap-1">
@@ -1392,26 +1427,37 @@ function RevokeAccountForm({
           </p>
         </div>
         {requirePassword ? (
-          <form.AppField name="password">
-            {(field) => (
-              <field.TextField
-                label={m.user_field_password()}
-                type="password"
-                autoComplete="current-password"
-                required
-              />
-            )}
-          </form.AppField>
+          <form.password
+            label={m.user_field_password()}
+            type="password"
+            autoComplete="current-password"
+            required
+          />
         ) : null}
-        <form.FormError />
+        <SubmitError result={submitResult} />
         <div className="flex flex-wrap gap-2">
           <Button type="button" variant="outline" onClick={onCancel}>
             {m.user_account_cancel()}
           </Button>
-          <Button type="submit">{m.user_account_confirm_revoke()}</Button>
+          {requirePassword ? (
+            <SubmitButton form={form}>
+              {m.user_account_confirm_revoke()}
+            </SubmitButton>
+          ) : (
+            <Button
+              type="button"
+              disabled={submitResult.waiting}
+              onClick={() => submit()}
+            >
+              {submitResult.waiting ? (
+                <Loader2 data-icon="inline-start" className="animate-spin" />
+              ) : null}
+              {m.user_account_confirm_revoke()}
+            </Button>
+          )}
         </div>
       </form>
-    </form.AppForm>
+    </form.Initialize>
   );
 }
 
@@ -1434,10 +1480,21 @@ const UserForm = ({
   onSubmit: (values: UserFormType) => Promise<void>;
 }) => {
   const m = useUserButtonMessages();
-  const form = useAppForm({
-    defaultValues,
-    onSubmit: ({ value }) => onSubmit(value),
-  });
+  const [form] = useState(() =>
+    FormReact.make(userFormBuilder, {
+      fields: { name: TextField, image: ImageField },
+      mode: { validation: "onSubmit" },
+      onSubmit: (_, { decoded }) =>
+        Effect.tryPromise({
+          try: () => onSubmit({ ...decoded, image: decoded.image ?? null }),
+          catch: (cause) =>
+            cause instanceof Error
+              ? cause
+              : new Error(m.user_form_update_error()),
+        }),
+    }),
+  );
+  const submit = useAtomSet(form.submit);
 
   return (
     <section className="flex flex-col gap-4">
@@ -1449,45 +1506,37 @@ const UserForm = ({
           {m.user_profile_description()}
         </p>
       </div>
-      <form
-        className="flex flex-col gap-4"
-        onSubmit={(event) => {
-          event.preventDefault();
-          event.stopPropagation();
-          form.handleSubmit();
-        }}
-      >
-        <form.AppForm>
-          <form.AppField name="image">
-            {(field) => (
-              <field.ImageField
-                label={m.user_profile_photo_upload_label()}
-                size={{
-                  width: 96,
-                  height: 96,
-                  suggestedWidth: 512,
-                  suggestedHeight: 512,
-                }}
-              />
-            )}
-          </form.AppField>
-          <form.AppField name="name">
-            {(field) => (
-              <field.TextField
-                label={m.user_form_name_label()}
-                autoComplete="name"
-                required
-              />
-            )}
-          </form.AppField>
+      <form.Initialize defaultValues={defaultValues}>
+        <form
+          className="flex flex-col gap-4"
+          onSubmit={(event) => {
+            event.preventDefault();
+            event.stopPropagation();
+            submit();
+          }}
+        >
+          <form.image
+            label={m.user_profile_photo_upload_label()}
+            size={{
+              width: 96,
+              height: 96,
+              suggestedWidth: 512,
+              suggestedHeight: 512,
+            }}
+          />
+          <form.name
+            label={m.user_form_name_label()}
+            autoComplete="name"
+            required
+          />
           {error && (
             <p role="alert" className="text-destructive text-sm">
               {error}
             </p>
           )}
-          <form.SubmitButton />
-        </form.AppForm>
-      </form>
+          <SubmitButton form={form} />
+        </form>
+      </form.Initialize>
     </section>
   );
 };
@@ -1580,59 +1629,73 @@ function EnableTotpForm({
   onEnabled: (setup: TotpSetup) => void;
 }) {
   const m = useUserButtonMessages();
-  const form = useAppForm({
-    defaultValues: { password: "" },
-    onSubmit: async ({ value, formApi }) => {
-      formApi.setErrorMap({ onSubmit: undefined });
-      const result = await authClient.twoFactor.enable(
-        requirePassword ? { password: value.password } : {},
-      );
-
-      if (result.error || !result.data) {
-        formApi.setErrorMap({
-          onSubmit: {
-            form: result.error?.message ?? m.user_two_factor_enable_error(),
-            fields: {},
+  const [form] = useState(() =>
+    FormReact.make(passwordFormBuilder(requirePassword), {
+      fields: { password: TextField },
+      mode: { validation: "onSubmit" },
+      onSubmit: (_, { decoded }) =>
+        Effect.tryPromise({
+          try: async () => {
+            const result = await authClient.twoFactor.enable(
+              requirePassword ? { password: decoded.password } : {},
+            );
+            if (result.error || !result.data) {
+              throw new Error(
+                result.error?.message ?? m.user_two_factor_enable_error(),
+              );
+            }
+            onEnabled({
+              totpURI: result.data.totpURI,
+              backupCodes: result.data.backupCodes,
+            });
           },
-        });
-        return;
-      }
-
-      onEnabled({
-        totpURI: result.data.totpURI,
-        backupCodes: result.data.backupCodes,
-      });
-    },
-  });
+          catch: (cause) =>
+            cause instanceof Error
+              ? cause
+              : new Error(m.user_two_factor_enable_error()),
+        }),
+    }),
+  );
+  const submit = useAtomSet(form.submit);
+  const submitResult = useAtomValue(form.submit);
 
   return (
-    <form.AppForm>
+    <form.Initialize defaultValues={{ password: "" }}>
       <form
         className="flex max-w-md flex-col gap-4"
         onSubmit={(event) => {
           event.preventDefault();
           event.stopPropagation();
-          form.handleSubmit();
+          submit();
         }}
       >
         {requirePassword ? (
-          <form.AppField name="password">
-            {(field) => (
-              <field.TextField
-                label={m.user_field_password()}
-                type="password"
-                autoComplete="current-password"
-                required
-              />
-            )}
-          </form.AppField>
+          <form.password
+            label={m.user_field_password()}
+            type="password"
+            autoComplete="current-password"
+            required
+          />
         ) : null}
-        <form.FormError />
-        <form.SubmitButton>
-          {m.user_two_factor_enable_submit()}
-        </form.SubmitButton>
+        <SubmitError result={submitResult} />
+        {requirePassword ? (
+          <SubmitButton form={form}>
+            {m.user_two_factor_enable_submit()}
+          </SubmitButton>
+        ) : (
+          <Button
+            type="button"
+            disabled={submitResult.waiting}
+            onClick={() => submit()}
+          >
+            {submitResult.waiting ? (
+              <Loader2 data-icon="inline-start" className="animate-spin" />
+            ) : null}
+            {m.user_two_factor_enable_submit()}
+          </Button>
+        )}
       </form>
-    </form.AppForm>
+    </form.Initialize>
   );
 }
 
@@ -1646,27 +1709,32 @@ function VerifyTotpSetup({
   onVerified: () => Promise<void>;
 }) {
   const m = useUserButtonMessages();
-  const form = useAppForm({
-    defaultValues: { code: "" },
-    onSubmit: async ({ value, formApi }) => {
-      formApi.setErrorMap({ onSubmit: undefined });
-      const result = await authClient.twoFactor.verifyTotp({
-        code: value.code.trim(),
-      });
-
-      if (result.error) {
-        formApi.setErrorMap({
-          onSubmit: {
-            form: result.error.message ?? m.user_two_factor_verify_error(),
-            fields: {},
+  const [form] = useState(() =>
+    FormReact.make(totpCodeFormBuilder, {
+      fields: { code: TextField },
+      mode: { validation: "onSubmit" },
+      onSubmit: (_, { decoded }) =>
+        Effect.tryPromise({
+          try: async () => {
+            const result = await authClient.twoFactor.verifyTotp({
+              code: decoded.code.trim(),
+            });
+            if (result.error) {
+              throw new Error(
+                result.error.message ?? m.user_two_factor_verify_error(),
+              );
+            }
+            await onVerified();
           },
-        });
-        return;
-      }
-
-      await onVerified();
-    },
-  });
+          catch: (cause) =>
+            cause instanceof Error
+              ? cause
+              : new Error(m.user_two_factor_verify_error()),
+        }),
+    }),
+  );
+  const submit = useAtomSet(form.submit);
+  const submitResult = useAtomValue(form.submit);
 
   return (
     <div className="flex flex-col gap-5">
@@ -1692,29 +1760,25 @@ function VerifyTotpSetup({
           {m.user_two_factor_backup_codes_warning()}
         </p>
       </div>
-      <form.AppForm>
+      <form.Initialize defaultValues={{ code: "" }}>
         <form
           className="flex w-full max-w-sm flex-col gap-4"
           onSubmit={(event) => {
             event.preventDefault();
             event.stopPropagation();
-            form.handleSubmit();
+            submit();
           }}
         >
-          <form.AppField name="code">
-            {(field) => (
-              <field.TextField
-                label={m.user_two_factor_code()}
-                autoComplete="one-time-code"
-                inputMode="numeric"
-                required
-              />
-            )}
-          </form.AppField>
-          <form.FormError />
-          <form.SubmitButton />
+          <form.code
+            label={m.user_two_factor_code()}
+            autoComplete="one-time-code"
+            inputMode="numeric"
+            required
+          />
+          <SubmitError result={submitResult} />
+          <SubmitButton form={form} />
         </form>
-      </form.AppForm>
+      </form.Initialize>
     </div>
   );
 }
@@ -1729,54 +1793,68 @@ function DisableTotpForm({
   onDisabled: () => Promise<void>;
 }) {
   const m = useUserButtonMessages();
-  const form = useAppForm({
-    defaultValues: { password: "" },
-    onSubmit: async ({ value, formApi }) => {
-      formApi.setErrorMap({ onSubmit: undefined });
-      const result = await authClient.twoFactor.disable(
-        requirePassword ? { password: value.password } : {},
-      );
-
-      if (result.error) {
-        formApi.setErrorMap({
-          onSubmit: {
-            form: result.error.message ?? m.user_two_factor_disable_error(),
-            fields: {},
+  const [form] = useState(() =>
+    FormReact.make(passwordFormBuilder(requirePassword), {
+      fields: { password: TextField },
+      mode: { validation: "onSubmit" },
+      onSubmit: (_, { decoded }) =>
+        Effect.tryPromise({
+          try: async () => {
+            const result = await authClient.twoFactor.disable(
+              requirePassword ? { password: decoded.password } : {},
+            );
+            if (result.error) {
+              throw new Error(
+                result.error.message ?? m.user_two_factor_disable_error(),
+              );
+            }
+            await onDisabled();
           },
-        });
-        return;
-      }
-
-      await onDisabled();
-    },
-  });
+          catch: (cause) =>
+            cause instanceof Error
+              ? cause
+              : new Error(m.user_two_factor_disable_error()),
+        }),
+    }),
+  );
+  const submit = useAtomSet(form.submit);
+  const submitResult = useAtomValue(form.submit);
 
   return (
-    <form.AppForm>
+    <form.Initialize defaultValues={{ password: "" }}>
       <form
         className="flex max-w-md flex-col gap-4"
         onSubmit={(event) => {
           event.preventDefault();
           event.stopPropagation();
-          form.handleSubmit();
+          submit();
         }}
       >
         {requirePassword ? (
-          <form.AppField name="password">
-            {(field) => (
-              <field.TextField
-                label={m.user_field_password()}
-                type="password"
-                autoComplete="current-password"
-                required
-              />
-            )}
-          </form.AppField>
+          <form.password
+            label={m.user_field_password()}
+            type="password"
+            autoComplete="current-password"
+            required
+          />
         ) : null}
-        <form.FormError />
-        <form.SubmitButton />
+        <SubmitError result={submitResult} />
+        {requirePassword ? (
+          <SubmitButton form={form} />
+        ) : (
+          <Button
+            type="button"
+            disabled={submitResult.waiting}
+            onClick={() => submit()}
+          >
+            {submitResult.waiting ? (
+              <Loader2 data-icon="inline-start" className="animate-spin" />
+            ) : null}
+            {effectFormMessages().submit}
+          </Button>
+        )}
       </form>
-    </form.AppForm>
+    </form.Initialize>
   );
 }
 
@@ -1812,44 +1890,45 @@ function ApiKeyManager({
     onSuccess: () => null,
   });
   const loading = keysResult._tag === "Initial";
-
-  const createForm = useAppForm({
-    defaultValues: { name: "" },
-    onSubmit: async ({ value, formApi }) => {
-      formApi.setErrorMap({ onSubmit: undefined });
-      setCreatedKey(null);
-      setCopiedKey(false);
-      const selectedPermissionObject = getSelectedPermissionObject(
-        permissionOptions,
-        selectedPermissions,
-      );
-      try {
-        const created = await createApiKey(
-          {
-            configId: "user",
-            name: value.name.trim(),
-            permissions: selectedPermissionObject,
+  const permissionOptionsRef = useRef(permissionOptions);
+  const selectedPermissionsRef = useRef(selectedPermissions);
+  permissionOptionsRef.current = permissionOptions;
+  selectedPermissionsRef.current = selectedPermissions;
+  const [createForm] = useState(() =>
+    FormReact.make(apiKeyFormBuilder, {
+      fields: { name: TextField },
+      mode: { validation: "onSubmit" },
+      onSubmit: (_, { decoded }) =>
+        Effect.tryPromise({
+          try: async () => {
+            setCreatedKey(null);
+            setCopiedKey(false);
+            const created = await createApiKey(
+              {
+                configId: "user",
+                name: decoded.name.trim(),
+                permissions: getSelectedPermissionObject(
+                  permissionOptionsRef.current,
+                  selectedPermissionsRef.current,
+                ),
+              },
+              m.user_api_key_create_error(),
+            );
+            setCreatedKey(created.key);
+            resetCreateForm();
+            setSelectedPermissions({});
+            refreshKeys();
           },
-          m.user_api_key_create_error(),
-        );
-
-        setCreatedKey(created.key);
-        createForm.reset();
-        setSelectedPermissions({});
-        refreshKeys();
-      } catch (cause) {
-        formApi.setErrorMap({
-          onSubmit: {
-            form:
-              cause instanceof Error
-                ? cause.message
-                : m.user_api_key_create_error(),
-            fields: {},
-          },
-        });
-      }
-    },
-  });
+          catch: (cause) =>
+            cause instanceof Error
+              ? cause
+              : new Error(m.user_api_key_create_error()),
+        }),
+    }),
+  );
+  const resetCreateForm = useAtomSet(createForm.reset);
+  const submitCreateForm = useAtomSet(createForm.submit);
+  const createSubmitResult = useAtomValue(createForm.submit);
 
   const togglePermission = (id: string, checked: boolean) => {
     setSelectedPermissions((current) => ({ ...current, [id]: checked }));
@@ -1879,23 +1958,19 @@ function ApiKeyManager({
 
   return (
     <div className="flex flex-col gap-5">
-      <createForm.AppForm>
+      <createForm.Initialize defaultValues={{ name: "" }}>
         <form
           className="flex max-w-xl flex-col gap-4"
           onSubmit={(event) => {
             event.preventDefault();
             event.stopPropagation();
-            createForm.handleSubmit();
+            submitCreateForm();
           }}
         >
           <p className="text-muted-foreground text-sm">
             {m.api_key_rate_limit_notice()}
           </p>
-          <createForm.AppField name="name">
-            {(field) => (
-              <field.TextField label={m.user_api_key_name()} required />
-            )}
-          </createForm.AppField>
+          <createForm.name label={m.user_api_key_name()} required />
           {permissionOptions.length > 0 ? (
             <FieldSet>
               <FieldLegend>{m.user_api_key_permissions()}</FieldLegend>
@@ -1922,10 +1997,10 @@ function ApiKeyManager({
               </FieldGroup>
             </FieldSet>
           ) : null}
-          <createForm.FormError />
-          <createForm.SubmitButton />
+          <SubmitError result={createSubmitResult} />
+          <SubmitButton form={createForm} />
         </form>
-      </createForm.AppForm>
+      </createForm.Initialize>
       {createdKey ? (
         <div className="flex flex-col gap-2 rounded-lg border p-4">
           <div className="flex items-center gap-2 font-medium">

@@ -1,8 +1,8 @@
 import type { ApiKey } from "@better-auth/api-key/client";
 import { useAtomRefresh, useAtomSet, useAtomValue } from "@effect/atom-react";
-import { useStore } from "@tanstack/react-form";
+import { FormBuilder, FormReact } from "@lucas-barake/effect-form-react";
 import { type ColumnDef } from "@tanstack/react-table";
-import { Effect, Schema } from "effect";
+import { Effect, Option, Schema } from "effect";
 import { AsyncResult, Atom } from "effect/unstable/reactivity";
 import {
   Building2,
@@ -35,10 +35,16 @@ import {
   DataTable,
   DataTableRelationshipCell,
 } from "@/components/ui/data-table";
+import {
+  ImageField,
+  SelectField,
+  SubmitButton,
+  SubmitError,
+  TextField,
+} from "@/components/ui/effect-form";
 import { EditingLocaleSwitcher } from "@/components/ui/editing-locale-switcher";
 import { AppBrand } from "@/components/ui/app-brand";
 import { FieldSet } from "@/components/ui/field";
-import { useAppForm } from "@/components/ui/form";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -532,16 +538,46 @@ type OrganizationFormValues = {
   parentId: string;
   slug: string;
   enName: string;
-  enLogo: File | string | null;
-  enIcon: File | string | null;
+  enLogo: File | string | null | undefined;
+  enIcon: File | string | null | undefined;
   enContactEmail: string;
   enLocation: string;
   frName: string;
-  frLogo: File | string | null;
-  frIcon: File | string | null;
+  frLogo: File | string | null | undefined;
+  frIcon: File | string | null | undefined;
   frContactEmail: string;
   frLocation: string;
 };
+
+const organizationImageSchema = Schema.Union([
+  Schema.String,
+  Schema.instanceOf(File),
+  Schema.Null,
+  Schema.Undefined,
+]);
+
+const organizationFormBuilder = FormBuilder.empty
+  .addField("parentId", Schema.String)
+  .addField("slug", Schema.String)
+  .addField("enName", Schema.String)
+  .addField("enLogo", organizationImageSchema)
+  .addField("enIcon", organizationImageSchema)
+  .addField("enContactEmail", Schema.String)
+  .addField("enLocation", Schema.String)
+  .addField("frName", Schema.String)
+  .addField("frLogo", organizationImageSchema)
+  .addField("frIcon", organizationImageSchema)
+  .addField("frContactEmail", Schema.String)
+  .addField("frLocation", Schema.String);
+
+const inviteMemberFormBuilder = FormBuilder.empty
+  .addField("email", Schema.NonEmptyString)
+  .addField("role", Schema.String);
+
+const apiKeyFormBuilder = FormBuilder.empty.addField(
+  "name",
+  Schema.NonEmptyString,
+);
 
 const slugify = (value: string) =>
   value
@@ -694,7 +730,7 @@ const organizationFormDefaults = (
 };
 
 const organizationLogoFromForm = async (
-  value: File | string | null,
+  value: File | string | null | undefined,
   m: ReturnType<typeof organizationMessageFns>,
   uploadImage: (input: { payload: FormData }) => Promise<unknown>,
 ) => {
@@ -1508,74 +1544,70 @@ function EditOrganizationSection({
   const [editingLocale, setEditingLocale] =
     useState<OrganizationLocale>(defaultLocale);
   const defaultValues = organizationFormDefaults(organization, baseUrl);
-  const form = useAppForm({
-    defaultValues,
-    onSubmit: async ({ value, formApi }) => {
-      formApi.setErrorMap({ onSubmit: undefined });
-      try {
-        const name = organizationNameFromForm(value, defaultLocale);
-        if (!name) {
-          formApi.setErrorMap({
-            onSubmit: {
-              form: m.organization_name_required(),
-              fields: {},
-            },
-          });
-          return;
-        }
-        const slug = value.slug.trim().toLowerCase();
-        const metadata = await organizationMetadataFromForm(
-          value,
-          m,
-          uploadImage,
-        );
+  const [form] = useState(() =>
+    FormReact.make(organizationFormBuilder, {
+      fields: {
+        parentId: SelectField,
+        slug: TextField,
+        enName: TextField,
+        enLogo: ImageField,
+        enIcon: ImageField,
+        enContactEmail: TextField,
+        enLocation: TextField,
+        frName: TextField,
+        frLogo: ImageField,
+        frIcon: ImageField,
+        frContactEmail: TextField,
+        frLocation: TextField,
+      },
+      onSubmit: (_, { decoded: value }) =>
+        Effect.tryPromise({
+          try: async () => {
+            const name = organizationNameFromForm(value, defaultLocale);
+            if (!name) throw new Error(m.organization_name_required());
 
-        const result = await authClient.organization.update({
-          organizationId: organization.id,
-          data: { name, slug, metadata },
-        });
+            const slug = value.slug.trim().toLowerCase();
+            const metadata = await organizationMetadataFromForm(
+              value,
+              m,
+              uploadImage,
+            );
+            const result = await authClient.organization.update({
+              organizationId: organization.id,
+              data: { name, slug, metadata },
+            });
 
-        if (result.error) {
-          formApi.setErrorMap({
-            onSubmit: {
-              form: result.error.message ?? m.organization_update_error(),
-              fields: {},
-            },
-          });
-          return;
-        }
+            if (result.error) {
+              throw new Error(
+                result.error.message ?? m.organization_update_error(),
+              );
+            }
 
-        await onUpdated();
-      } catch (cause) {
-        formApi.setErrorMap({
-          onSubmit: {
-            form:
-              cause instanceof Error
-                ? cause.message
-                : m.organization_update_error(),
-            fields: {},
+            await onUpdated();
+            return result.data;
           },
-        });
-      }
-    },
-  });
+          catch: (cause) =>
+            cause instanceof Error
+              ? cause
+              : new Error(m.organization_update_error()),
+        }),
+    }),
+  );
+  const submit = useAtomSet(form.submit);
+  const submitResult = useAtomValue(form.submit);
 
   return (
     <section className="flex flex-col gap-4">
-      <form.AppForm>
+      <form.Initialize defaultValues={defaultValues}>
         <form
           className="flex max-w-xl flex-col gap-4"
           onSubmit={(event) => {
             event.preventDefault();
             event.stopPropagation();
-            form.handleSubmit();
+            submit();
           }}
         >
-          <form.AppField name="slug">
-            {(field) => (
-              <field.TextField label={m.organization_slug()} required />
-            )}
-          </form.AppField>
+          <form.slug label={m.organization_slug()} required />
           <Separator className="my-2" />
           <OrganizationTranslationHeader
             locale={editingLocale}
@@ -1586,102 +1618,66 @@ function EditOrganizationSection({
             disabled={editingLocale !== "en"}
             className={editingLocale === "en" ? "contents" : "hidden"}
           >
-            <form.AppField name="enName">
-              {(field) => (
-                <field.TextField label={m.organization_translation_name()} />
-              )}
-            </form.AppField>
-            <form.AppField name="enLogo">
-              {(field) => (
-                <field.ImageField
-                  label={m.organization_logo()}
-                  size={{
-                    width: 175,
-                    height: 50,
-                    suggestedWidth: 350,
-                    suggestedHeight: 100,
-                  }}
-                />
-              )}
-            </form.AppField>
-            <form.AppField name="enIcon">
-              {(field) => (
-                <field.ImageField
-                  label={m.organization_icon()}
-                  size={{
-                    width: 96,
-                    height: 96,
-                    suggestedWidth: 512,
-                    suggestedHeight: 512,
-                  }}
-                />
-              )}
-            </form.AppField>
-            <form.AppField name="enContactEmail">
-              {(field) => (
-                <field.TextField
-                  label={m.organization_contact_email()}
-                  placeholder="team@example.com"
-                  type="email"
-                />
-              )}
-            </form.AppField>
-            <form.AppField name="enLocation">
-              {(field) => <field.TextField label={m.organization_location()} />}
-            </form.AppField>
+            <form.enName label={m.organization_translation_name()} />
+            <form.enLogo
+              label={m.organization_logo()}
+              size={{
+                width: 175,
+                height: 50,
+                suggestedWidth: 350,
+                suggestedHeight: 100,
+              }}
+            />
+            <form.enIcon
+              label={m.organization_icon()}
+              size={{
+                width: 96,
+                height: 96,
+                suggestedWidth: 512,
+                suggestedHeight: 512,
+              }}
+            />
+            <form.enContactEmail
+              label={m.organization_contact_email()}
+              placeholder="team@example.com"
+              type="email"
+            />
+            <form.enLocation label={m.organization_location()} />
           </FieldSet>
           <FieldSet
             disabled={editingLocale !== "fr"}
             className={editingLocale === "fr" ? "contents" : "hidden"}
           >
-            <form.AppField name="frName">
-              {(field) => (
-                <field.TextField label={m.organization_translation_name()} />
-              )}
-            </form.AppField>
-            <form.AppField name="frLogo">
-              {(field) => (
-                <field.ImageField
-                  label={m.organization_logo()}
-                  size={{
-                    width: 175,
-                    height: 50,
-                    suggestedWidth: 350,
-                    suggestedHeight: 100,
-                  }}
-                />
-              )}
-            </form.AppField>
-            <form.AppField name="frIcon">
-              {(field) => (
-                <field.ImageField
-                  label={m.organization_icon()}
-                  size={{
-                    width: 96,
-                    height: 96,
-                    suggestedWidth: 512,
-                    suggestedHeight: 512,
-                  }}
-                />
-              )}
-            </form.AppField>
-            <form.AppField name="frContactEmail">
-              {(field) => (
-                <field.TextField
-                  label={m.organization_contact_email()}
-                  placeholder="team@example.com"
-                  type="email"
-                />
-              )}
-            </form.AppField>
-            <form.AppField name="frLocation">
-              {(field) => <field.TextField label={m.organization_location()} />}
-            </form.AppField>
+            <form.frName label={m.organization_translation_name()} />
+            <form.frLogo
+              label={m.organization_logo()}
+              size={{
+                width: 175,
+                height: 50,
+                suggestedWidth: 350,
+                suggestedHeight: 100,
+              }}
+            />
+            <form.frIcon
+              label={m.organization_icon()}
+              size={{
+                width: 96,
+                height: 96,
+                suggestedWidth: 512,
+                suggestedHeight: 512,
+              }}
+            />
+            <form.frContactEmail
+              label={m.organization_contact_email()}
+              placeholder="team@example.com"
+              type="email"
+            />
+            <form.frLocation label={m.organization_location()} />
           </FieldSet>
-          <form.FormError />
-          <form.SubmitButton />
+          <SubmitError result={submitResult} />
+          <SubmitButton form={form} />
         </form>
-      </form.AppForm>
+      </form.Initialize>
     </section>
   );
 }
@@ -1706,118 +1702,105 @@ function CreateOrganizationSection({
   const [editingLocale, setEditingLocale] =
     useState<OrganizationLocale>(defaultLocale);
   const defaultValues = organizationFormDefaults(undefined, baseUrl);
-  const form = useAppForm({
-    defaultValues,
-    onSubmit: async ({ value, formApi }) => {
-      formApi.setErrorMap({ onSubmit: undefined });
-      try {
-        const name = organizationNameFromForm(value, defaultLocale);
-        if (!name) {
-          formApi.setErrorMap({
-            onSubmit: {
-              form: m.organization_name_required(),
-              fields: {},
-            },
-          });
-          return;
-        }
-        const slug = (value.slug.trim() || slugify(name)).toLowerCase();
-        const metadata = await organizationMetadataFromForm(
-          {
-            ...value,
-            slug,
-          },
-          m,
-          uploadImage,
-        );
+  const [form] = useState(() =>
+    FormReact.make(organizationFormBuilder, {
+      fields: {
+        parentId: SelectField,
+        slug: TextField,
+        enName: TextField,
+        enLogo: ImageField,
+        enIcon: ImageField,
+        enContactEmail: TextField,
+        enLocation: TextField,
+        frName: TextField,
+        frLogo: ImageField,
+        frIcon: ImageField,
+        frContactEmail: TextField,
+        frLocation: TextField,
+      },
+      onSubmit: (_, { decoded: value }) =>
+        Effect.tryPromise({
+          try: async () => {
+            const name = organizationNameFromForm(value, defaultLocale);
+            if (!name) throw new Error(m.organization_name_required());
 
-        const result = await authClient.organization.create({
-          name,
-          slug,
-          metadata,
-          ...(value.parentId === noParentOrganization
-            ? {}
-            : { parentId: value.parentId }),
-        });
-
-        if (result.error) {
-          if (isOrganizationSlugConflict(result.error)) {
-            formApi.setErrorMap({
-              onSubmit: {
-                fields: {
-                  slug: { message: m.organization_create_slug_conflict() },
-                },
-              },
+            const slug = (value.slug.trim() || slugify(name)).toLowerCase();
+            const metadata = await organizationMetadataFromForm(
+              { ...value, slug },
+              m,
+              uploadImage,
+            );
+            const result = await authClient.organization.create({
+              name,
+              slug,
+              metadata,
+              ...(value.parentId === noParentOrganization
+                ? {}
+                : { parentId: value.parentId }),
             });
-            return;
-          }
 
-          formApi.setErrorMap({
-            onSubmit: {
-              form: result.error.message ?? m.organization_create_error(),
-              fields: {},
-            },
-          });
-          return;
-        }
+            if (result.error) {
+              throw new Error(
+                isOrganizationSlugConflict(result.error)
+                  ? m.organization_create_slug_conflict()
+                  : (result.error.message ?? m.organization_create_error()),
+              );
+            }
 
-        form.reset();
-        await onCreated(result.data);
-      } catch (cause) {
-        formApi.setErrorMap({
-          onSubmit: {
-            form:
-              cause instanceof Error
-                ? cause.message
-                : m.organization_create_error(),
-            fields: {},
+            await onCreated(result.data);
+            return result.data;
           },
-        });
-      }
-    },
-  });
-  const name = useStore(form.store, (state) =>
-    organizationNameFromForm(state.values, defaultLocale),
+          catch: (cause) =>
+            cause instanceof Error
+              ? cause
+              : new Error(m.organization_create_error()),
+        }),
+    }),
   );
-  const slugIsDirty = useStore(
-    form.store,
-    (state) => state.fieldMeta.slug?.isDirty ?? false,
-  );
+  const submit = useAtomSet(form.submit);
+  const submitResult = useAtomValue(form.submit);
+  const values = useAtomValue(form.values);
+  const setSlug = useAtomSet(form.getFieldAtoms(form.fields.slug).setValue);
+  const lastGeneratedSlug = useRef("");
+  const slugWasEdited = useRef(false);
 
   useEffect(() => {
-    if (!slugIsDirty) {
-      form.setFieldValue("slug", slugify(name), { dontUpdateMeta: true });
+    if (Option.isNone(values) || slugWasEdited.current) return;
+
+    if (values.value.slug !== lastGeneratedSlug.current) {
+      slugWasEdited.current = true;
+      return;
     }
-  }, [form, name, slugIsDirty]);
+
+    const generatedSlug = slugify(
+      organizationNameFromForm(values.value, defaultLocale),
+    );
+    if (generatedSlug === values.value.slug) return;
+
+    lastGeneratedSlug.current = generatedSlug;
+    setSlug(generatedSlug);
+  }, [defaultLocale, setSlug, values]);
 
   return (
     <section className="flex flex-col gap-4">
-      <form.AppForm>
+      <form.Initialize defaultValues={defaultValues}>
         <form
           className="flex max-w-xl flex-col gap-4"
           onSubmit={(event) => {
             event.preventDefault();
             event.stopPropagation();
-            form.handleSubmit();
+            submit();
           }}
         >
-          <form.AppField name="slug">
-            {(field) => (
-              <field.TextField
-                label={m.organization_slug()}
-                description={m.organization_slug_description()}
-              />
-            )}
-          </form.AppField>
-          <form.AppField name="parentId">
-            {(field) => (
-              <field.SelectField
-                label={m.organization_parent()}
-                description={m.organization_parent_description()}
-                options={organizationParentOptions(organizations, m)}
-              />
-            )}
-          </form.AppField>
+          <form.slug
+            label={m.organization_slug()}
+            description={m.organization_slug_description()}
+          />
+          <form.parentId
+            label={m.organization_parent()}
+            description={m.organization_parent_description()}
+            options={organizationParentOptions(organizations, m)}
+          />
           <Separator className="my-2" />
           <OrganizationTranslationHeader
             locale={editingLocale}
@@ -1828,102 +1811,66 @@ function CreateOrganizationSection({
             disabled={editingLocale !== "en"}
             className={editingLocale === "en" ? "contents" : "hidden"}
           >
-            <form.AppField name="enName">
-              {(field) => (
-                <field.TextField label={m.organization_translation_name()} />
-              )}
-            </form.AppField>
-            <form.AppField name="enLogo">
-              {(field) => (
-                <field.ImageField
-                  label={m.organization_logo()}
-                  size={{
-                    width: 175,
-                    height: 50,
-                    suggestedWidth: 350,
-                    suggestedHeight: 100,
-                  }}
-                />
-              )}
-            </form.AppField>
-            <form.AppField name="enIcon">
-              {(field) => (
-                <field.ImageField
-                  label={m.organization_icon()}
-                  size={{
-                    width: 96,
-                    height: 96,
-                    suggestedWidth: 512,
-                    suggestedHeight: 512,
-                  }}
-                />
-              )}
-            </form.AppField>
-            <form.AppField name="enContactEmail">
-              {(field) => (
-                <field.TextField
-                  label={m.organization_contact_email()}
-                  placeholder="team@example.com"
-                  type="email"
-                />
-              )}
-            </form.AppField>
-            <form.AppField name="enLocation">
-              {(field) => <field.TextField label={m.organization_location()} />}
-            </form.AppField>
+            <form.enName label={m.organization_translation_name()} />
+            <form.enLogo
+              label={m.organization_logo()}
+              size={{
+                width: 175,
+                height: 50,
+                suggestedWidth: 350,
+                suggestedHeight: 100,
+              }}
+            />
+            <form.enIcon
+              label={m.organization_icon()}
+              size={{
+                width: 96,
+                height: 96,
+                suggestedWidth: 512,
+                suggestedHeight: 512,
+              }}
+            />
+            <form.enContactEmail
+              label={m.organization_contact_email()}
+              placeholder="team@example.com"
+              type="email"
+            />
+            <form.enLocation label={m.organization_location()} />
           </FieldSet>
           <FieldSet
             disabled={editingLocale !== "fr"}
             className={editingLocale === "fr" ? "contents" : "hidden"}
           >
-            <form.AppField name="frName">
-              {(field) => (
-                <field.TextField label={m.organization_translation_name()} />
-              )}
-            </form.AppField>
-            <form.AppField name="frLogo">
-              {(field) => (
-                <field.ImageField
-                  label={m.organization_logo()}
-                  size={{
-                    width: 175,
-                    height: 50,
-                    suggestedWidth: 350,
-                    suggestedHeight: 100,
-                  }}
-                />
-              )}
-            </form.AppField>
-            <form.AppField name="frIcon">
-              {(field) => (
-                <field.ImageField
-                  label={m.organization_icon()}
-                  size={{
-                    width: 96,
-                    height: 96,
-                    suggestedWidth: 512,
-                    suggestedHeight: 512,
-                  }}
-                />
-              )}
-            </form.AppField>
-            <form.AppField name="frContactEmail">
-              {(field) => (
-                <field.TextField
-                  label={m.organization_contact_email()}
-                  placeholder="team@example.com"
-                  type="email"
-                />
-              )}
-            </form.AppField>
-            <form.AppField name="frLocation">
-              {(field) => <field.TextField label={m.organization_location()} />}
-            </form.AppField>
+            <form.frName label={m.organization_translation_name()} />
+            <form.frLogo
+              label={m.organization_logo()}
+              size={{
+                width: 175,
+                height: 50,
+                suggestedWidth: 350,
+                suggestedHeight: 100,
+              }}
+            />
+            <form.frIcon
+              label={m.organization_icon()}
+              size={{
+                width: 96,
+                height: 96,
+                suggestedWidth: 512,
+                suggestedHeight: 512,
+              }}
+            />
+            <form.frContactEmail
+              label={m.organization_contact_email()}
+              placeholder="team@example.com"
+              type="email"
+            />
+            <form.frLocation label={m.organization_location()} />
           </FieldSet>
-          <form.FormError />
-          <form.SubmitButton />
+          <SubmitError result={submitResult} />
+          <SubmitButton form={form} />
         </form>
-      </form.AppForm>
+      </form.Initialize>
     </section>
   );
 }
@@ -2025,30 +1972,44 @@ function OrganizationMembersManager({
     setLastMembersData(currentMembersData);
   }, [currentMembersData]);
 
-  const inviteForm = useAppForm({
-    defaultValues: { email: "", role: "member" },
-    onSubmit: async ({ value, formApi }) => {
-      formApi.setErrorMap({ onSubmit: undefined });
-      const result = await authClient.organization.inviteMember({
-        email: value.email.trim(),
-        role: normalizeInvitationRole(value.role),
-        organizationId: organization.id,
-      });
+  const [inviteForm] = useState(() =>
+    FormReact.make(inviteMemberFormBuilder, {
+      fields: {
+        email: TextField,
+        role: SelectField,
+      },
+      onSubmit: (_, { decoded: value }) =>
+        Effect.tryPromise({
+          try: async () => {
+            const result = await authClient.organization.inviteMember({
+              email: value.email.trim(),
+              role: normalizeInvitationRole(value.role),
+              organizationId: organization.id,
+            });
 
-      if (result.error) {
-        formApi.setErrorMap({
-          onSubmit: {
-            form: result.error.message ?? m.organization_invite_error(),
-            fields: {},
+            if (result.error) {
+              throw new Error(
+                result.error.message ?? m.organization_invite_error(),
+              );
+            }
+
+            refreshMembers();
+            return result.data;
           },
-        });
-        return;
-      }
+          catch: (cause) =>
+            cause instanceof Error
+              ? cause
+              : new Error(m.organization_invite_error()),
+        }),
+    }),
+  );
+  const submitInvitation = useAtomSet(inviteForm.submit);
+  const resetInvitation = useAtomSet(inviteForm.reset);
+  const inviteResult = useAtomValue(inviteForm.submit);
 
-      inviteForm.reset();
-      refreshMembers();
-    },
-  });
+  useEffect(() => {
+    if (AsyncResult.isSuccess(inviteResult)) resetInvitation();
+  }, [inviteResult, resetInvitation]);
 
   const updateRole = async (
     member: OrganizationMemberRow,
@@ -2139,13 +2100,13 @@ function OrganizationMembersManager({
     <div className="flex min-w-0 flex-col gap-5">
       {canInviteMembers ? (
         <div className="min-h-40 rounded-lg border p-4">
-          <inviteForm.AppForm>
+          <inviteForm.Initialize defaultValues={{ email: "", role: "member" }}>
             <form
               className="grid gap-4 sm:grid-cols-[minmax(0,1fr)_12rem_auto] sm:items-end"
               onSubmit={(event) => {
                 event.preventDefault();
                 event.stopPropagation();
-                inviteForm.handleSubmit();
+                submitInvitation();
               }}
             >
               <div className="sm:col-span-3">
@@ -2157,33 +2118,25 @@ function OrganizationMembersManager({
                   {m.organization_invite_member_description()}
                 </p>
               </div>
-              <inviteForm.AppField name="email">
-                {(field) => (
-                  <field.TextField
-                    label={m.organization_member_email()}
-                    placeholder="teammate@example.com"
-                    type="email"
-                    required
-                  />
-                )}
-              </inviteForm.AppField>
-              <inviteForm.AppField name="role">
-                {(field) => (
-                  <field.SelectField
-                    label={m.organization_member_role()}
-                    options={organizationRoles.map((role) => ({
-                      label: organizationRoleLabel(role, m),
-                      value: role,
-                    }))}
-                  />
-                )}
-              </inviteForm.AppField>
+              <inviteForm.email
+                label={m.organization_member_email()}
+                placeholder="teammate@example.com"
+                type="email"
+                required
+              />
+              <inviteForm.role
+                label={m.organization_member_role()}
+                options={organizationRoles.map((role) => ({
+                  label: organizationRoleLabel(role, m),
+                  value: role,
+                }))}
+              />
               <div className="self-end">
-                <inviteForm.SubmitButton />
+                <SubmitButton form={inviteForm} />
               </div>
-              <inviteForm.FormError />
+              <SubmitError result={inviteResult} />
             </form>
-          </inviteForm.AppForm>
+          </inviteForm.Initialize>
         </div>
       ) : null}
       {membersError ? (
@@ -2480,37 +2433,40 @@ function OrganizationApiKeyManager({
   });
   const loading = keysResult._tag === "Initial";
 
-  const createForm = useAppForm({
-    defaultValues: { name: "" },
-    onSubmit: async ({ value, formApi }) => {
-      formApi.setErrorMap({ onSubmit: undefined });
-      setCreatedKey(null);
-      try {
-        const created = await createApiKey(
-          {
-            configId: "organization",
-            organizationId: organization.id,
-            name: value.name.trim(),
-          },
-          m.user_api_key_create_error(),
-        );
+  const [createForm] = useState(() =>
+    FormReact.make(apiKeyFormBuilder, {
+      fields: { name: TextField },
+      onSubmit: (_, { decoded: value }) =>
+        Effect.tryPromise({
+          try: async () => {
+            setCreatedKey(null);
+            const created = await createApiKey(
+              {
+                configId: "organization",
+                organizationId: organization.id,
+                name: value.name.trim(),
+              },
+              m.user_api_key_create_error(),
+            );
 
-        setCreatedKey(created.key);
-        createForm.reset();
-        refreshKeys();
-      } catch (cause) {
-        formApi.setErrorMap({
-          onSubmit: {
-            form:
-              cause instanceof Error
-                ? cause.message
-                : m.user_api_key_create_error(),
-            fields: {},
+            setCreatedKey(created.key);
+            refreshKeys();
+            return created;
           },
-        });
-      }
-    },
-  });
+          catch: (cause) =>
+            cause instanceof Error
+              ? cause
+              : new Error(m.user_api_key_create_error()),
+        }),
+    }),
+  );
+  const submitApiKey = useAtomSet(createForm.submit);
+  const resetApiKey = useAtomSet(createForm.reset);
+  const createResult = useAtomValue(createForm.submit);
+
+  useEffect(() => {
+    if (AsyncResult.isSuccess(createResult)) resetApiKey();
+  }, [createResult, resetApiKey]);
 
   const deleteKey = async (key: ApiKeySummary) => {
     const result = await authClient.apiKey.delete({
@@ -2528,27 +2484,23 @@ function OrganizationApiKeyManager({
 
   return (
     <div className="flex flex-col gap-5">
-      <createForm.AppForm>
+      <createForm.Initialize defaultValues={{ name: "" }}>
         <form
           className="flex max-w-xl flex-col gap-4"
           onSubmit={(event) => {
             event.preventDefault();
             event.stopPropagation();
-            createForm.handleSubmit();
+            submitApiKey();
           }}
         >
           <p className="text-muted-foreground text-sm">
             {m.api_key_rate_limit_notice()}
           </p>
-          <createForm.AppField name="name">
-            {(field) => (
-              <field.TextField label={m.user_api_key_name()} required />
-            )}
-          </createForm.AppField>
-          <createForm.FormError />
-          <createForm.SubmitButton />
+          <createForm.name label={m.user_api_key_name()} required />
+          <SubmitError result={createResult} />
+          <SubmitButton form={createForm} />
         </form>
-      </createForm.AppForm>
+      </createForm.Initialize>
       {createdKey ? (
         <div className="flex flex-col gap-2 rounded-lg border p-4">
           <div className="flex items-center gap-2 font-medium">

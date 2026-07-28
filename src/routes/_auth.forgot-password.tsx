@@ -1,7 +1,15 @@
+import { useAtomSet, useAtomSubscribe, useAtomValue } from "@effect/atom-react";
+import { FormBuilder, FormReact } from "@lucas-barake/effect-form-react";
 import { createFileRoute, useRouterState } from "@tanstack/react-router";
+import { Effect, Schema } from "effect";
+import { AsyncResult } from "effect/unstable/reactivity";
 import { useState } from "react";
 
-import { useAppForm } from "@/components/ui/form";
+import {
+  SubmitButton,
+  SubmitError,
+  TextField,
+} from "@/components/ui/effect-form";
 import {
   Card,
   CardContent,
@@ -16,36 +24,42 @@ export const Route = createFileRoute("/_auth/forgot-password")({
   component: ForgotPassword,
 });
 
+const forgotPasswordFormBuilder = FormBuilder.empty.addField(
+  "email",
+  Schema.NonEmptyString,
+);
+
+const forgotPasswordForm = FormReact.make(forgotPasswordFormBuilder, {
+  fields: { email: TextField },
+  onSubmit: (_, { decoded: value }) =>
+    Effect.tryPromise({
+      try: async () => {
+        const result = await authClient.requestPasswordReset({
+          email: value.email.trim(),
+          redirectTo: `${window.location.origin}/reset-password`,
+        });
+
+        if (result.error) {
+          throw new Error(result.error.message ?? m.forgot_password_error());
+        }
+      },
+      catch: (cause) =>
+        cause instanceof Error ? cause : new Error(m.forgot_password_error()),
+    }),
+});
+
 function ForgotPassword() {
   const [successMessage, setSuccessMessage] = useState("");
   const searchString = useRouterState({
     select: (state) => state.location.searchStr,
   });
-  const form = useAppForm({
-    defaultValues: {
-      email: "",
-    },
-    onSubmit: async ({ value, formApi }) => {
-      formApi.setErrorMap({ onSubmit: undefined });
-      setSuccessMessage("");
-
-      const result = await authClient.requestPasswordReset({
-        email: value.email.trim(),
-        redirectTo: `${window.location.origin}/reset-password`,
-      });
-
-      if (result.error) {
-        formApi.setErrorMap({
-          onSubmit: {
-            form: result.error.message ?? m.forgot_password_error(),
-            fields: {},
-          },
-        });
-        return;
-      }
-
+  const submit = useAtomSet(forgotPasswordForm.submit);
+  const submitResult = useAtomValue(forgotPasswordForm.submit);
+  useAtomSubscribe(forgotPasswordForm.submit, (result) => {
+    if (result.waiting) setSuccessMessage("");
+    if (AsyncResult.isSuccess(result)) {
       setSuccessMessage(m.forgot_password_success());
-    },
+    }
   });
 
   return (
@@ -55,34 +69,32 @@ function ForgotPassword() {
         <CardDescription>{m.forgot_password_description()}</CardDescription>
       </CardHeader>
       <CardContent>
-        <form.AppForm>
+        <forgotPasswordForm.Initialize defaultValues={{ email: "" }}>
           <form
             className="flex flex-col gap-4"
             onSubmit={(event) => {
               event.preventDefault();
               event.stopPropagation();
-              form.handleSubmit();
+              submit();
             }}
           >
-            <form.AppField name="email">
-              {(field) => (
-                <field.TextField
-                  label={m.field_email()}
-                  type="email"
-                  autoComplete="email"
-                  required
-                />
-              )}
-            </form.AppField>
-            <form.FormError />
+            <forgotPasswordForm.email
+              label={m.field_email()}
+              type="email"
+              autoComplete="email"
+              required
+            />
+            <SubmitError result={submitResult} />
             {successMessage ? (
               <p className="bg-card text-card-foreground rounded-lg border px-4 py-3 text-sm shadow-xs">
                 {successMessage}
               </p>
             ) : null}
-            <form.SubmitButton />
+            <SubmitButton form={forgotPasswordForm}>
+              {m.form_submit()}
+            </SubmitButton>
           </form>
-        </form.AppForm>
+        </forgotPasswordForm.Initialize>
         <p className="text-muted-foreground mt-6 text-center text-sm">
           <a
             className="text-foreground font-medium underline-offset-4 hover:underline"

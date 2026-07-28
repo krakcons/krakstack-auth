@@ -1,9 +1,10 @@
-import { useAtomSuspense } from "@effect/atom-react";
+import { useAtomSet, useAtomSuspense, useAtomValue } from "@effect/atom-react";
+import { FormBuilder, FormReact } from "@lucas-barake/effect-form-react";
 import { Link, useNavigate, useRouterState } from "@tanstack/react-router";
-import { Schema } from "effect";
+import { Effect, Option, Schema } from "effect";
 import { Atom, AsyncResult } from "effect/unstable/reactivity";
 import { REGEXP_ONLY_DIGITS } from "input-otp";
-import { KeyRound, Mail } from "lucide-react";
+import { KeyRound, Loader2, Mail } from "lucide-react";
 import { useEffect, useState } from "react";
 
 import { Button, buttonVariants } from "@/components/ui/button";
@@ -14,8 +15,14 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import {
+  CheckboxField,
+  ErrorMessage,
+  SubmitError,
+  TextField,
+  effectFormMessages,
+} from "@/components/ui/effect-form";
 import { Field, FieldLabel } from "@/components/ui/field";
-import { FieldError, useAppForm } from "@/components/ui/form";
 import {
   InputOTP,
   InputOTPGroup,
@@ -33,6 +40,29 @@ import {
 } from "../extra/schema";
 
 const EMAIL_OTP_RESEND_COOLDOWN_SECONDS = 60;
+
+const signinFormBuilder = FormBuilder.empty
+  .addField("email", Schema.String)
+  .addField("password", Schema.String)
+  .addField("otp", Schema.String);
+
+const signupFormBuilder = FormBuilder.empty
+  .addField("name", Schema.String)
+  .addField("email", Schema.String)
+  .addField("password", Schema.String);
+
+const verifyEmailFormBuilder = FormBuilder.empty
+  .addField("email", Schema.String)
+  .addField("otp", Schema.String);
+
+const resetPasswordFormBuilder = FormBuilder.empty.addField(
+  "password",
+  Schema.String,
+);
+
+const twoFactorFormBuilder = FormBuilder.empty
+  .addField("code", Schema.String)
+  .addField("trustDevice", Schema.Boolean);
 
 const defaultMessages = {
   en: {
@@ -325,164 +355,165 @@ export function Signin(props: AuthFormProps) {
     return () => window.clearInterval(interval);
   }, [emailOtpResendAvailableAt]);
 
-  const form = useAppForm({
-    defaultValues: { email: "", password: "", otp: "" },
-    onSubmit: async ({ value, formApi }) => {
-      formApi.setErrorMap({ onSubmit: undefined });
-      const email = value.email.trim();
+  const [form] = useState(() =>
+    FormReact.make(signinFormBuilder, {
+      fields: { email: TextField, password: TextField, otp: OtpField },
+      mode: { validation: "onSubmit" },
+      onSubmit: (
+        action:
+          | {
+              type: "submit";
+              emailSubmitted: boolean;
+              method: "password" | "emailOtp";
+              otpSent: boolean;
+            }
+          | { type: "sendEmailOtp" }
+          | { type: "social" },
+        { decoded: value },
+      ) =>
+        Effect.tryPromise({
+          try: async () => {
+            const email = value.email.trim();
+            const sendEmailOtp = async () => {
+              const result = await authClient.emailOtp.sendVerificationOtp({
+                email,
+                type: "sign-in",
+              });
+              if (result.error) {
+                throw new Error(
+                  result.error.message ?? m.sign_in_email_otp_send_error,
+                );
+              }
+              setAuthMethod("emailOtp");
+              setEmailSubmitted(true);
+              setOtpSentTo(email);
+              setEmailOtpResendAvailableAt(
+                Date.now() + EMAIL_OTP_RESEND_COOLDOWN_SECONDS * 1000,
+              );
+            };
 
-      if (!emailSubmitted) {
-        if (selectedAuthMethod === "emailOtp") {
-          await sendEmailOtp(email, (message) =>
-            formApi.setErrorMap({ onSubmit: { form: message, fields: {} } }),
-          );
-          return;
-        }
-        setEmailSubmitted(true);
-        return;
-      }
+            if (action.type === "social") {
+              const result = await authClient.signIn.social({
+                provider: "google",
+                callbackURL: socialRedirectTarget,
+                errorCallbackURL: "/sign-in",
+                ...(oauthQuery
+                  ? { additionalData: { query: oauthQuery } }
+                  : {}),
+                ...(oauthQuery ? { oauth_query: oauthQuery } : {}),
+              });
+              if (result.error) {
+                throw new Error(result.error.message ?? m.sign_in_error);
+              }
+              if (result.data?.url) onNavigate(result.data.url);
+              return;
+            }
 
-      try {
-        if (selectedAuthMethod === "emailOtp") {
-          if (!otpSentTo) {
-            await sendEmailOtp(email, (message) =>
-              formApi.setErrorMap({ onSubmit: { form: message, fields: {} } }),
-            );
-            return;
-          }
+            if (action.type === "sendEmailOtp") {
+              await sendEmailOtp();
+              return;
+            }
 
-          const result = await authClient.signIn.emailOtp({
-            email,
-            otp: value.otp.trim(),
-          });
-          if (result.error) {
-            formApi.setErrorMap({
-              onSubmit: {
-                form: result.error.message ?? m.sign_in_email_otp_error,
-                fields: {},
-              },
+            if (!action.emailSubmitted) {
+              if (action.method === "emailOtp") await sendEmailOtp();
+              else setEmailSubmitted(true);
+              return;
+            }
+
+            if (action.method === "emailOtp") {
+              if (!action.otpSent) {
+                await sendEmailOtp();
+                return;
+              }
+              const result = await authClient.signIn.emailOtp({
+                email,
+                otp: value.otp.trim(),
+              });
+              if (result.error) {
+                throw new Error(
+                  result.error.message ?? m.sign_in_email_otp_error,
+                );
+              }
+              onNavigate(redirectTarget);
+              return;
+            }
+
+            const result = await authClient.signIn.email({
+              email,
+              password: value.password,
+              callbackURL: redirectTarget,
+              ...(oauthQuery ? { oauth_query: oauthQuery } : {}),
             });
-            return;
-          }
-          onNavigate(redirectTarget);
-          return;
-        }
-
-        const result = await authClient.signIn.email({
-          email,
-          password: value.password,
-          callbackURL: redirectTarget,
-          ...(oauthQuery ? { oauth_query: oauthQuery } : {}),
-        });
-        if (result.error) {
-          formApi.setErrorMap({
-            onSubmit: {
-              form: result.error.message ?? m.sign_in_error,
-              fields: {},
-            },
-          });
-          return;
-        }
-        if (hasTwoFactorRedirect(result.data)) {
-          onTwoFactorRedirect(
-            `/2fa${oauthQuery ? `?${oauthQuery}` : `?callbackURL=${encodeURIComponent(redirectTarget)}`}`,
-          );
-          return;
-        }
-        onNavigate(result.data?.url ?? redirectTarget);
-      } catch {
-        formApi.setErrorMap({
-          onSubmit: {
-            form:
-              selectedAuthMethod === "emailOtp"
-                ? m.sign_in_email_otp_error
-                : m.sign_in_error,
-            fields: {},
+            if (result.error) {
+              throw new Error(result.error.message ?? m.sign_in_error);
+            }
+            if (hasTwoFactorRedirect(result.data)) {
+              onTwoFactorRedirect(
+                `/2fa${oauthQuery ? `?${oauthQuery}` : `?callbackURL=${encodeURIComponent(redirectTarget)}`}`,
+              );
+              return;
+            }
+            onNavigate(result.data?.url ?? redirectTarget);
           },
-        });
-      }
-    },
-  });
-
-  const sendEmailOtp = async (
-    email: string,
-    setError: (message: string) => void,
-  ) => {
-    try {
-      const result = await authClient.emailOtp.sendVerificationOtp({
-        email,
-        type: "sign-in",
-      });
-      if (result.error) {
-        setError(result.error.message ?? m.sign_in_email_otp_send_error);
-        return;
-      }
-      setAuthMethod("emailOtp");
-      setEmailSubmitted(true);
-      setOtpSentTo(email);
-      setEmailOtpResendAvailableAt(
-        Date.now() + EMAIL_OTP_RESEND_COOLDOWN_SECONDS * 1000,
-      );
-    } catch {
-      setError(m.sign_in_email_otp_send_error);
-    }
-  };
+          catch: (cause) =>
+            cause instanceof Error
+              ? cause
+              : new Error(
+                  action.type === "sendEmailOtp" ||
+                    (action.type === "submit" &&
+                      action.method === "emailOtp" &&
+                      (!action.emailSubmitted || !action.otpSent))
+                    ? m.sign_in_email_otp_send_error
+                    : action.type === "submit" && action.method === "emailOtp"
+                      ? m.sign_in_email_otp_error
+                      : m.sign_in_error,
+                ),
+        }),
+    }),
+  );
+  const submit = useAtomSet(form.submit);
+  const submitResult = useAtomValue(form.submit);
+  const formValues = Option.getOrElse(useAtomValue(form.values), () => ({
+    email: "",
+    password: "",
+    otp: "",
+  }));
+  const resetForm = useAtomSet(form.reset);
+  const setEmail = useAtomSet(form.getFieldAtoms(form.fields.email).setValue);
+  const setPassword = useAtomSet(
+    form.getFieldAtoms(form.fields.password).setValue,
+  );
+  const setOtp = useAtomSet(form.getFieldAtoms(form.fields.otp).setValue);
 
   const resetEmailStep = () => {
+    const email = formValues.email;
+    resetForm();
+    setEmail(email);
     setEmailSubmitted(false);
     setOtpSentTo("");
     setEmailOtpResendAvailableAt(0);
-    form.setFieldValue("password", "");
-    form.setFieldValue("otp", "");
-    form.setErrorMap({ onSubmit: undefined });
   };
 
-  const switchAuthMethod = async () => {
-    form.setErrorMap({ onSubmit: undefined });
-    form.setFieldValue("password", "");
-    form.setFieldValue("otp", "");
+  const switchAuthMethod = () => {
+    setPassword("");
+    setOtp("");
     if (selectedAuthMethod === "emailOtp") {
+      resetForm();
+      setEmail(formValues.email);
       setAuthMethod("password");
       setOtpSentTo("");
       setEmailOtpResendAvailableAt(0);
       return;
     }
-    await sendEmailOtp(form.state.values.email.trim(), (message) =>
-      form.setErrorMap({ onSubmit: { form: message, fields: {} } }),
-    );
+    submit({ type: "sendEmailOtp" });
   };
 
-  const resendEmailOtp = async () => {
-    form.setErrorMap({ onSubmit: undefined });
-    form.setFieldValue("otp", "");
-    await sendEmailOtp(form.state.values.email.trim(), (message) =>
-      form.setErrorMap({ onSubmit: { form: message, fields: {} } }),
-    );
+  const resendEmailOtp = () => {
+    setOtp("");
+    submit({ type: "sendEmailOtp" });
   };
 
-  const signInWithGoogle = async () => {
-    try {
-      const result = await authClient.signIn.social({
-        provider: "google",
-        callbackURL: socialRedirectTarget,
-        errorCallbackURL: "/sign-in",
-        ...(oauthQuery ? { additionalData: { query: oauthQuery } } : {}),
-        ...(oauthQuery ? { oauth_query: oauthQuery } : {}),
-      });
-      if (result.error) {
-        form.setErrorMap({
-          onSubmit: {
-            form: result.error.message ?? m.sign_in_error,
-            fields: {},
-          },
-        });
-        return;
-      }
-      if (result.data?.url) onNavigate(result.data.url);
-    } catch {
-      form.setErrorMap({ onSubmit: { form: m.sign_in_error, fields: {} } });
-    }
-  };
+  const signInWithGoogle = () => submit({ type: "social" });
 
   return (
     <Card className="w-full max-w-md">
@@ -493,7 +524,7 @@ export function Signin(props: AuthFormProps) {
             m.sign_in_description
           ) : (
             <>
-              {text(m.sign_in_email_as, { email: form.state.values.email })}{" "}
+              {text(m.sign_in_email_as, { email: formValues.email })}{" "}
               <Button
                 type="button"
                 variant="link"
@@ -508,44 +539,36 @@ export function Signin(props: AuthFormProps) {
       </CardHeader>
       <CardContent>
         {hasPrimaryAuth ? (
-          <form.AppForm>
+          <form.Initialize defaultValues={{ email: "", password: "", otp: "" }}>
             <form
               className="flex flex-col gap-4"
               onSubmit={(event) => {
                 event.preventDefault();
                 event.stopPropagation();
-                form.handleSubmit();
+                submit({
+                  type: "submit",
+                  emailSubmitted,
+                  method: selectedAuthMethod,
+                  otpSent: Boolean(otpSentTo),
+                });
               }}
             >
               {!emailSubmitted ? (
-                <form.AppField name="email">
-                  {(field) => (
-                    <field.TextField
-                      label={m.field_email}
-                      type="email"
-                      autoComplete="email"
-                      onKeyDown={(event) => {
-                        if (event.key !== "Enter") return;
-                        event.preventDefault();
-                        form.handleSubmit();
-                      }}
-                      required
-                    />
-                  )}
-                </form.AppField>
+                <form.email
+                  label={m.field_email}
+                  type="email"
+                  autoComplete="email"
+                  required
+                />
               ) : null}
               {emailSubmitted && selectedAuthMethod === "password" ? (
                 <div className="flex flex-col gap-2">
-                  <form.AppField name="password">
-                    {(field) => (
-                      <field.TextField
-                        label={m.field_password}
-                        type="password"
-                        autoComplete="current-password"
-                        required
-                      />
-                    )}
-                  </form.AppField>
+                  <form.password
+                    label={m.field_password}
+                    type="password"
+                    autoComplete="current-password"
+                    required
+                  />
                   <div className="flex flex-wrap gap-x-4 gap-y-2 text-sm">
                     <Link
                       className={authLinkClassName}
@@ -570,14 +593,7 @@ export function Signin(props: AuthFormProps) {
               ) : null}
               {emailSubmitted && selectedAuthMethod === "emailOtp" ? (
                 <div className="flex flex-col gap-2">
-                  <form.AppField name="otp">
-                    {(field) => (
-                      <OtpInput
-                        field={field}
-                        label={m.sign_in_email_otp_code}
-                      />
-                    )}
-                  </form.AppField>
+                  <form.otp label={m.sign_in_email_otp_code} />
                   <div className="flex flex-wrap gap-x-4 gap-y-2 text-sm">
                     {otpSentTo ? (
                       <Button
@@ -608,18 +624,24 @@ export function Signin(props: AuthFormProps) {
                   </div>
                 </div>
               ) : null}
-              <form.FormError />
+              <SubmitError result={submitResult} />
               <div>
-                <form.SubmitButton>
+                <Button type="submit" disabled={submitResult.waiting}>
+                  {submitResult.waiting ? (
+                    <Loader2
+                      className="animate-spin"
+                      data-icon="inline-start"
+                    />
+                  ) : null}
                   {!emailSubmitted
                     ? m.sign_in_continue
                     : selectedAuthMethod === "emailOtp"
                       ? m.sign_in_email_otp_verify
                       : m.auth_sign_in}
-                </form.SubmitButton>
+                </Button>
               </div>
             </form>
-          </form.AppForm>
+          </form.Initialize>
         ) : null}
         {options.google && !emailSubmitted ? (
           <div className="mt-4 flex flex-col gap-3">
@@ -630,6 +652,7 @@ export function Signin(props: AuthFormProps) {
               type="button"
               variant="outline"
               className="w-full"
+              disabled={submitResult.waiting}
               onClick={signInWithGoogle}
             >
               <GoogleLogo />
@@ -691,63 +714,50 @@ export function Signup(props: AuthFormProps) {
     signUp: authOptions?.signUp ?? true,
     signUpName: authOptions?.signUpName ?? true,
   };
-  const form = useAppForm({
-    defaultValues: { name: "", email: "", password: "" },
-    onSubmit: async ({ value, formApi }) => {
-      formApi.setErrorMap({ onSubmit: undefined });
-      if (!options.signUp) {
-        formApi.setErrorMap({
-          onSubmit: { form: m.sign_up_disabled_description, fields: {} },
-        });
-        return;
-      }
-      try {
-        const result = await authClient.signUp.email({
-          name: options.signUpName
-            ? value.name.trim()
-            : nameFromEmail(value.email),
-          email: value.email.trim(),
-          password: value.password,
-        });
-        if (result.error) {
-          formApi.setErrorMap({
-            onSubmit: {
-              form: result.error.message ?? m.sign_up_error,
-              fields: {},
-            },
-          });
-          return;
-        }
-        onVerifyEmail(value.email.trim());
-      } catch {
-        formApi.setErrorMap({
-          onSubmit: { form: m.sign_up_error, fields: {} },
-        });
-      }
-    },
-  });
+  const [form] = useState(() =>
+    FormReact.make(signupFormBuilder, {
+      fields: { name: TextField, email: TextField, password: TextField },
+      mode: { validation: "onSubmit" },
+      onSubmit: (action: "email" | "social", { decoded: value }) =>
+        Effect.tryPromise({
+          try: async () => {
+            if (action === "social") {
+              const result = await authClient.signIn.social({
+                provider: "google",
+                callbackURL: redirectTarget,
+                errorCallbackURL: "/sign-up",
+              });
+              if (result.error) {
+                throw new Error(result.error.message ?? m.sign_up_error);
+              }
+              if (result.data?.url) onNavigate(result.data.url);
+              return;
+            }
 
-  const signUpWithGoogle = async () => {
-    try {
-      const result = await authClient.signIn.social({
-        provider: "google",
-        callbackURL: redirectTarget,
-        errorCallbackURL: "/sign-up",
-      });
-      if (result.error) {
-        form.setErrorMap({
-          onSubmit: {
-            form: result.error.message ?? m.sign_up_error,
-            fields: {},
+            if (!options.signUp) {
+              throw new Error(m.sign_up_disabled_description);
+            }
+            const result = await authClient.signUp.email({
+              name: options.signUpName
+                ? value.name.trim()
+                : nameFromEmail(value.email),
+              email: value.email.trim(),
+              password: value.password,
+            });
+            if (result.error) {
+              throw new Error(result.error.message ?? m.sign_up_error);
+            }
+            onVerifyEmail(value.email.trim());
           },
-        });
-        return;
-      }
-      if (result.data?.url) onNavigate(result.data.url);
-    } catch {
-      form.setErrorMap({ onSubmit: { form: m.sign_up_error, fields: {} } });
-    }
-  };
+          catch: (cause) =>
+            cause instanceof Error ? cause : new Error(m.sign_up_error),
+        }),
+    }),
+  );
+  const submit = useAtomSet(form.submit);
+  const submitResult = useAtomValue(form.submit);
+
+  const signUpWithGoogle = () => submit("social");
 
   if (!options.signUp) {
     return (
@@ -778,51 +788,40 @@ export function Signup(props: AuthFormProps) {
         <CardDescription>{m.sign_up_description}</CardDescription>
       </CardHeader>
       <CardContent>
-        <form.AppForm>
+        <form.Initialize defaultValues={{ name: "", email: "", password: "" }}>
           <form
             className="flex flex-col gap-4"
             onSubmit={(event) => {
               event.preventDefault();
               event.stopPropagation();
-              form.handleSubmit();
+              submit("email");
             }}
           >
             {options.signUpName ? (
-              <form.AppField name="name">
-                {(field) => (
-                  <field.TextField
-                    label={m.field_name}
-                    autoComplete="name"
-                    required
-                  />
-                )}
-              </form.AppField>
+              <form.name label={m.field_name} autoComplete="name" required />
             ) : null}
-            <form.AppField name="email">
-              {(field) => (
-                <field.TextField
-                  label={m.field_email}
-                  type="email"
-                  autoComplete="email"
-                  required
-                />
-              )}
-            </form.AppField>
-            <form.AppField name="password">
-              {(field) => (
-                <field.TextField
-                  label={m.field_password}
-                  type="password"
-                  autoComplete="new-password"
-                  minLength={8}
-                  required
-                />
-              )}
-            </form.AppField>
-            <form.FormError />
-            <form.SubmitButton />
+            <form.email
+              label={m.field_email}
+              type="email"
+              autoComplete="email"
+              required
+            />
+            <form.password
+              label={m.field_password}
+              type="password"
+              autoComplete="new-password"
+              minLength={8}
+              required
+            />
+            <SubmitError result={submitResult} />
+            <Button type="submit" disabled={submitResult.waiting}>
+              {submitResult.waiting ? (
+                <Loader2 className="animate-spin" data-icon="inline-start" />
+              ) : null}
+              {effectFormMessages().submit}
+            </Button>
           </form>
-        </form.AppForm>
+        </form.Initialize>
         {options.google ? (
           <div className="mt-4 flex flex-col gap-3">
             <Divider label={m.auth_or_continue_with} />
@@ -830,6 +829,7 @@ export function Signup(props: AuthFormProps) {
               type="button"
               variant="outline"
               className="w-full"
+              disabled={submitResult.waiting}
               onClick={signUpWithGoogle}
             >
               <GoogleLogo />
@@ -874,52 +874,50 @@ export function VerifyEmail(props: AuthFormProps) {
   );
   const onNavigate = (target: string) => navigateTarget(target, navigate);
   const [resent, setResent] = useState(false);
-  const form = useAppForm({
-    defaultValues: {
-      email: getSearchParam(searchString, "email") ?? "",
-      otp: "",
-    },
-    onSubmit: async ({ value, formApi }) => {
-      formApi.setErrorMap({ onSubmit: undefined });
+  const [form] = useState(() =>
+    FormReact.make(verifyEmailFormBuilder, {
+      fields: { email: TextField, otp: OtpField },
+      mode: { validation: "onSubmit" },
+      onSubmit: (action: "verify" | "resend", { decoded: value }) =>
+        Effect.tryPromise({
+          try: async () => {
+            if (action === "resend") {
+              const result = await authClient.emailOtp.sendVerificationOtp({
+                email: value.email.trim(),
+                type: "email-verification",
+              });
+              if (result.error) {
+                throw new Error(
+                  result.error.message ?? m.verify_email_resend_error,
+                );
+              }
+              setResent(true);
+              return;
+            }
 
-      const result = await authClient.emailOtp.verifyEmail({
-        email: value.email.trim(),
-        otp: value.otp.trim(),
-      });
-
-      if (result.error) {
-        formApi.setErrorMap({
-          onSubmit: {
-            form: result.error.message ?? m.verify_email_error,
-            fields: {},
+            const result = await authClient.emailOtp.verifyEmail({
+              email: value.email.trim(),
+              otp: value.otp.trim(),
+            });
+            if (result.error) {
+              throw new Error(result.error.message ?? m.verify_email_error);
+            }
+            onNavigate(redirectTarget);
           },
-        });
-        return;
-      }
-
-      onNavigate(redirectTarget);
-    },
-  });
-
-  const resendCode = async () => {
-    form.setErrorMap({ onSubmit: undefined });
-    const result = await authClient.emailOtp.sendVerificationOtp({
-      email: form.state.values.email.trim(),
-      type: "email-verification",
-    });
-
-    if (result.error) {
-      form.setErrorMap({
-        onSubmit: {
-          form: result.error.message ?? m.verify_email_resend_error,
-          fields: {},
-        },
-      });
-      return;
-    }
-
-    setResent(true);
-  };
+          catch: (cause) =>
+            cause instanceof Error
+              ? cause
+              : new Error(
+                  action === "resend"
+                    ? m.verify_email_resend_error
+                    : m.verify_email_error,
+                ),
+        }),
+    }),
+  );
+  const submit = useAtomSet(form.submit);
+  const submitResult = useAtomValue(form.submit);
+  const resendCode = () => submit("resend");
 
   return (
     <Card className="w-full max-w-md">
@@ -928,76 +926,51 @@ export function VerifyEmail(props: AuthFormProps) {
         <CardDescription>{m.verify_email_description}</CardDescription>
       </CardHeader>
       <CardContent>
-        <form.AppForm>
+        <form.Initialize
+          defaultValues={{
+            email: getSearchParam(searchString, "email") ?? "",
+            otp: "",
+          }}
+        >
           <form
             className="flex flex-col gap-4"
             onSubmit={(event) => {
               event.preventDefault();
               event.stopPropagation();
-              form.handleSubmit();
+              submit("verify");
             }}
           >
-            <form.AppField name="email">
-              {(field) => (
-                <field.TextField
-                  label={m.field_email}
-                  type="email"
-                  autoComplete="email"
-                  required
-                />
-              )}
-            </form.AppField>
-            <form.AppField name="otp">
-              {(field) => {
-                const invalid = !field.state.meta.isValid;
-                return (
-                  <Field data-invalid={invalid}>
-                    <FieldLabel htmlFor={field.name}>
-                      {m.verify_email_code}
-                    </FieldLabel>
-                    <InputOTP
-                      id={field.name}
-                      name={field.name}
-                      maxLength={6}
-                      value={field.state.value ?? ""}
-                      onChange={(value) => field.handleChange(value)}
-                      onBlur={field.handleBlur}
-                      autoComplete="one-time-code"
-                      inputMode="numeric"
-                      pattern={REGEXP_ONLY_DIGITS}
-                      required
-                    >
-                      <InputOTPGroup>
-                        <InputOTPSlot index={0} aria-invalid={invalid} />
-                        <InputOTPSlot index={1} aria-invalid={invalid} />
-                        <InputOTPSlot index={2} aria-invalid={invalid} />
-                      </InputOTPGroup>
-                      <InputOTPSeparator />
-                      <InputOTPGroup>
-                        <InputOTPSlot index={3} aria-invalid={invalid} />
-                        <InputOTPSlot index={4} aria-invalid={invalid} />
-                        <InputOTPSlot index={5} aria-invalid={invalid} />
-                      </InputOTPGroup>
-                    </InputOTP>
-                    <FieldError errors={field.getMeta().errors} />
-                  </Field>
-                );
-              }}
-            </form.AppField>
-            <form.FormError />
+            <form.email
+              label={m.field_email}
+              type="email"
+              autoComplete="email"
+              required
+            />
+            <form.otp label={m.verify_email_code} />
+            <SubmitError result={submitResult} />
             {resent ? (
               <p className="text-muted-foreground text-sm">
                 {m.verify_email_resent}
               </p>
             ) : null}
             <div className="flex flex-wrap items-center gap-3">
-              <form.SubmitButton />
-              <Button type="button" variant="ghost" onClick={resendCode}>
+              <Button type="submit" disabled={submitResult.waiting}>
+                {submitResult.waiting ? (
+                  <Loader2 className="animate-spin" data-icon="inline-start" />
+                ) : null}
+                {effectFormMessages().submit}
+              </Button>
+              <Button
+                type="button"
+                variant="ghost"
+                disabled={submitResult.waiting}
+                onClick={resendCode}
+              >
                 {m.verify_email_resend}
               </Button>
             </div>
           </form>
-        </form.AppForm>
+        </form.Initialize>
         <p className="text-muted-foreground mt-6 text-center text-sm">
           <Link className={authLinkClassName} to="/sign-in">
             {m.forgot_password_back_to_sign_in}
@@ -1016,32 +989,30 @@ export function ResetPassword(props: AuthFormProps) {
   });
   const token = getSearchParam(searchString, "token") ?? "";
   const onSuccess = () => navigate({ to: "/sign-in" });
-  const form = useAppForm({
-    defaultValues: { password: "" },
-    onSubmit: async ({ value, formApi }) => {
-      formApi.setErrorMap({ onSubmit: undefined });
-      if (!token) {
-        formApi.setErrorMap({
-          onSubmit: { form: m.reset_password_missing_token, fields: {} },
-        });
-        return;
-      }
-      const result = await authClient.resetPassword({
-        newPassword: value.password,
-        token,
-      });
-      if (result.error) {
-        formApi.setErrorMap({
-          onSubmit: {
-            form: result.error.message ?? m.reset_password_error,
-            fields: {},
+  const [form] = useState(() =>
+    FormReact.make(resetPasswordFormBuilder, {
+      fields: { password: TextField },
+      mode: { validation: "onSubmit" },
+      onSubmit: (_, { decoded: value }) =>
+        Effect.tryPromise({
+          try: async () => {
+            if (!token) throw new Error(m.reset_password_missing_token);
+            const result = await authClient.resetPassword({
+              newPassword: value.password,
+              token,
+            });
+            if (result.error) {
+              throw new Error(result.error.message ?? m.reset_password_error);
+            }
+            onSuccess();
           },
-        });
-        return;
-      }
-      onSuccess();
-    },
-  });
+          catch: (cause) =>
+            cause instanceof Error ? cause : new Error(m.reset_password_error),
+        }),
+    }),
+  );
+  const submit = useAtomSet(form.submit);
+  const submitResult = useAtomValue(form.submit);
 
   return (
     <Card className="w-full max-w-md">
@@ -1050,30 +1021,31 @@ export function ResetPassword(props: AuthFormProps) {
         <CardDescription>{m.reset_password_description}</CardDescription>
       </CardHeader>
       <CardContent>
-        <form.AppForm>
+        <form.Initialize defaultValues={{ password: "" }}>
           <form
             className="flex flex-col gap-4"
             onSubmit={(event) => {
               event.preventDefault();
               event.stopPropagation();
-              form.handleSubmit();
+              submit();
             }}
           >
-            <form.AppField name="password">
-              {(field) => (
-                <field.TextField
-                  label={m.reset_password_new_password}
-                  type="password"
-                  autoComplete="new-password"
-                  minLength={8}
-                  required
-                />
-              )}
-            </form.AppField>
-            <form.FormError />
-            <form.SubmitButton />
+            <form.password
+              label={m.reset_password_new_password}
+              type="password"
+              autoComplete="new-password"
+              minLength={8}
+              required
+            />
+            <SubmitError result={submitResult} />
+            <Button type="submit" disabled={submitResult.waiting}>
+              {submitResult.waiting ? (
+                <Loader2 className="animate-spin" data-icon="inline-start" />
+              ) : null}
+              {effectFormMessages().submit}
+            </Button>
           </form>
-        </form.AppForm>
+        </form.Initialize>
       </CardContent>
     </Card>
   );
@@ -1104,56 +1076,72 @@ export function TwoFactor(props: AuthFormProps) {
   const onNavigate = (target: string) => navigateTarget(target, navigate);
   const [mode, setMode] = useState<"totp" | "email" | "backup">("totp");
   const [emailCodeSent, setEmailCodeSent] = useState(false);
-  const form = useAppForm({
-    defaultValues: { code: "", trustDevice: true },
-    onSubmit: async ({ value, formApi }) => {
-      formApi.setErrorMap({ onSubmit: undefined });
-      const code = value.code.trim();
-      const result =
-        mode === "backup"
-          ? await authClient.twoFactor.verifyBackupCode({
-              code,
-              trustDevice: value.trustDevice,
-              ...(oauthQuery ? { oauth_query: oauthQuery } : {}),
-            })
-          : mode === "email"
-            ? await authClient.twoFactor.verifyOtp({
-                code,
-                trustDevice: value.trustDevice,
-                ...(oauthQuery ? { oauth_query: oauthQuery } : {}),
-              })
-            : await authClient.twoFactor.verifyTotp({
-                code,
-                trustDevice: value.trustDevice,
-                ...(oauthQuery ? { oauth_query: oauthQuery } : {}),
-              });
-      if (result.error) {
-        formApi.setErrorMap({
-          onSubmit: {
-            form: result.error.message ?? m.two_factor_verify_error,
-            fields: {},
+  const [form] = useState(() =>
+    FormReact.make(twoFactorFormBuilder, {
+      fields: { code: AuthCodeField, trustDevice: CheckboxField },
+      mode: { validation: "onSubmit" },
+      onSubmit: (
+        action:
+          | { type: "verify"; mode: "totp" | "email" | "backup" }
+          | {
+              type: "sendEmailCode";
+            },
+        { decoded: value },
+      ) =>
+        Effect.tryPromise({
+          try: async () => {
+            if (action.type === "sendEmailCode") {
+              const result = await authClient.twoFactor.sendOtp();
+              if (result.error) {
+                throw new Error(
+                  result.error.message ?? m.two_factor_send_email_code_error,
+                );
+              }
+              setEmailCodeSent(true);
+              setMode("email");
+              return;
+            }
+
+            const code = value.code.trim();
+            const result =
+              action.mode === "backup"
+                ? await authClient.twoFactor.verifyBackupCode({
+                    code,
+                    trustDevice: value.trustDevice,
+                    ...(oauthQuery ? { oauth_query: oauthQuery } : {}),
+                  })
+                : action.mode === "email"
+                  ? await authClient.twoFactor.verifyOtp({
+                      code,
+                      trustDevice: value.trustDevice,
+                      ...(oauthQuery ? { oauth_query: oauthQuery } : {}),
+                    })
+                  : await authClient.twoFactor.verifyTotp({
+                      code,
+                      trustDevice: value.trustDevice,
+                      ...(oauthQuery ? { oauth_query: oauthQuery } : {}),
+                    });
+            if (result.error) {
+              throw new Error(
+                result.error.message ?? m.two_factor_verify_error,
+              );
+            }
+            onNavigate(getResultRedirectUrl(result.data) ?? redirectTarget);
           },
-        });
-        return;
-      }
-      onNavigate(getResultRedirectUrl(result.data) ?? redirectTarget);
-    },
-  });
-  const sendEmailCode = async () => {
-    form.setErrorMap({ onSubmit: undefined });
-    const result = await authClient.twoFactor.sendOtp();
-    if (result.error) {
-      form.setErrorMap({
-        onSubmit: {
-          form: result.error.message ?? m.two_factor_send_email_code_error,
-          fields: {},
-        },
-      });
-      return;
-    }
-    setEmailCodeSent(true);
-    setMode("email");
-  };
+          catch: (cause) =>
+            cause instanceof Error
+              ? cause
+              : new Error(
+                  action.type === "sendEmailCode"
+                    ? m.two_factor_send_email_code_error
+                    : m.two_factor_verify_error,
+                ),
+        }),
+    }),
+  );
+  const submit = useAtomSet(form.submit);
+  const submitResult = useAtomValue(form.submit);
+  const sendEmailCode = () => submit({ type: "sendEmailCode" });
 
   return (
     <Card className="w-full max-w-md">
@@ -1168,49 +1156,47 @@ export function TwoFactor(props: AuthFormProps) {
         </CardDescription>
       </CardHeader>
       <CardContent>
-        <form.AppForm>
+        <form.Initialize defaultValues={{ code: "", trustDevice: true }}>
           <form
             className="flex flex-col gap-4"
             onSubmit={(event) => {
               event.preventDefault();
               event.stopPropagation();
-              form.handleSubmit();
+              submit({ type: "verify", mode });
             }}
           >
-            <form.AppField name="code">
-              {(field) =>
-                mode === "backup" ? (
-                  <field.TextField
-                    label={m.two_factor_backup_code}
-                    autoComplete="one-time-code"
-                    required
-                  />
-                ) : (
-                  <OtpInput
-                    field={field}
-                    label={
-                      mode === "email"
-                        ? m.two_factor_email_code
-                        : m.two_factor_code
-                    }
-                  />
-                )
+            <form.code
+              autoComplete="one-time-code"
+              label={
+                mode === "backup"
+                  ? m.two_factor_backup_code
+                  : mode === "email"
+                    ? m.two_factor_email_code
+                    : m.two_factor_code
               }
-            </form.AppField>
-            <form.AppField name="trustDevice">
-              {(field) => (
-                <field.CheckboxField label={m.two_factor_trust_device} />
-              )}
-            </form.AppField>
-            <form.FormError />
+              otp={mode !== "backup"}
+              required
+            />
+            <form.trustDevice label={m.two_factor_trust_device} />
+            <SubmitError result={submitResult} />
             {emailCodeSent && mode === "email" ? (
               <p className="text-muted-foreground text-sm">
                 {m.two_factor_email_code_sent}
               </p>
             ) : null}
             <div className="flex flex-wrap items-center gap-3">
-              <form.SubmitButton />
-              <Button type="button" variant="ghost" onClick={sendEmailCode}>
+              <Button type="submit" disabled={submitResult.waiting}>
+                {submitResult.waiting ? (
+                  <Loader2 className="animate-spin" data-icon="inline-start" />
+                ) : null}
+                {effectFormMessages().submit}
+              </Button>
+              <Button
+                type="button"
+                variant="ghost"
+                disabled={submitResult.waiting}
+                onClick={sendEmailCode}
+              >
                 {m.two_factor_send_email_code}
               </Button>
               <Button
@@ -1224,32 +1210,27 @@ export function TwoFactor(props: AuthFormProps) {
               </Button>
             </div>
           </form>
-        </form.AppForm>
+        </form.Initialize>
       </CardContent>
     </Card>
   );
 }
 
-type OtpField = {
-  name: string;
-  state: { value?: string; meta: { isValid: boolean } };
-  handleChange: (value: string) => void;
-  handleBlur: () => void;
-  getMeta: () => { errors?: Parameters<typeof FieldError>[0]["errors"] };
-};
-
-const OtpInput = ({ field, label }: { field: OtpField; label: string }) => {
-  const invalid = !field.state.meta.isValid;
+const OtpField: FormReact.FieldComponent<string, { label: string }> = ({
+  field,
+  props,
+}) => {
+  const invalid = Option.isSome(field.error);
   return (
     <Field data-invalid={invalid}>
-      <FieldLabel htmlFor={field.name}>{label}</FieldLabel>
+      <FieldLabel htmlFor={field.path}>{props.label}</FieldLabel>
       <InputOTP
-        id={field.name}
-        name={field.name}
+        id={field.path}
+        name={field.path}
         maxLength={6}
-        value={field.state.value ?? ""}
-        onChange={(value) => field.handleChange(value)}
-        onBlur={field.handleBlur}
+        value={field.value}
+        onChange={field.onChange}
+        onBlur={field.onBlur}
         autoComplete="one-time-code"
         inputMode="numeric"
         pattern={REGEXP_ONLY_DIGITS}
@@ -1267,9 +1248,28 @@ const OtpInput = ({ field, label }: { field: OtpField; label: string }) => {
           <InputOTPSlot index={5} aria-invalid={invalid} />
         </InputOTPGroup>
       </InputOTP>
-      <FieldError errors={field.getMeta().errors ?? []} />
+      {Option.isSome(field.error) ? (
+        <ErrorMessage text={field.error.value} />
+      ) : null}
     </Field>
   );
+};
+
+const AuthCodeField: FormReact.FieldComponent<
+  string,
+  {
+    autoComplete?: "one-time-code";
+    label: string;
+    otp: boolean;
+    required?: boolean;
+  }
+> = ({ field, props }) => {
+  if (props.otp) {
+    return <OtpField field={field} props={{ label: props.label }} />;
+  }
+
+  const { otp: _, ...textFieldProps } = props;
+  return <TextField field={field} props={textFieldProps} />;
 };
 
 const Divider = ({ label }: { label: string }) => (

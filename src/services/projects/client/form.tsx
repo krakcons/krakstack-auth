@@ -1,11 +1,18 @@
-import { useAtomSet } from "@effect/atom-react";
-import { Schema } from "effect";
-import { Loader2 } from "lucide-react";
+import { useAtomSet, useAtomSubscribe, useAtomValue } from "@effect/atom-react";
+import { FormBuilder, FormReact } from "@lucas-barake/effect-form-react";
+import { Effect, Schema } from "effect";
+import { AsyncResult } from "effect/unstable/reactivity";
 import { useState } from "react";
 import { toast } from "sonner";
 
-import { Button } from "@/components/ui/button";
-import { ErrorMessage, useAppForm } from "@/components/ui/form";
+import {
+  CheckboxField,
+  ImageField,
+  SubmitButton,
+  SubmitError,
+  TextAreaField,
+  TextField,
+} from "@/components/ui/effect-form";
 import {
   Dialog,
   DialogContent,
@@ -25,7 +32,7 @@ const uploadLogoAtom = AdminApiClient.mutation("projects", "uploadProjectLogo");
 
 type ProjectFormValues = {
   name: string;
-  logo: File | string | null;
+  logo: File | string | null | undefined;
   themeCss: string;
   emailPassword: boolean;
   emailOtp: boolean;
@@ -33,6 +40,24 @@ type ProjectFormValues = {
   signUp: boolean;
   signUpName: boolean;
 };
+
+const projectFormBuilder = FormBuilder.empty
+  .addField("name", Schema.String)
+  .addField(
+    "logo",
+    Schema.Union([
+      Schema.String,
+      Schema.instanceOf(File),
+      Schema.Null,
+      Schema.Undefined,
+    ]),
+  )
+  .addField("themeCss", Schema.String)
+  .addField("emailPassword", Schema.Boolean)
+  .addField("emailOtp", Schema.Boolean)
+  .addField("google", Schema.Boolean)
+  .addField("signUp", Schema.Boolean)
+  .addField("signUpName", Schema.Boolean);
 
 const isFile = (value: unknown): value is File => value instanceof File;
 
@@ -48,6 +73,45 @@ const valuesToData = (value: ProjectFormValues) =>
     },
   });
 
+const makeProjectForm = (project?: Project) =>
+  FormReact.make(projectFormBuilder, {
+    fields: {
+      name: TextField,
+      logo: ImageField,
+      themeCss: TextAreaField,
+      emailPassword: CheckboxField,
+      emailOtp: CheckboxField,
+      google: CheckboxField,
+      signUp: CheckboxField,
+      signUpName: CheckboxField,
+    },
+    onSubmit: (_, { decoded: value, get }) => {
+      let logo = assetPath(isFile(value.logo) ? null : value.logo);
+      const save = (uploadedLogo?: string) => {
+        if (uploadedLogo) logo = assetPath(uploadedLogo);
+        const data = valuesToData(value);
+        return project
+          ? get.setResult(updateProjectAtom, {
+              params: { id: project.id },
+              payload: { name: value.name.trim(), logo, data },
+              reactivityKeys: ["projects"],
+            })
+          : get.setResult(createProjectAtom, {
+              payload: { name: value.name.trim(), logo, data },
+              reactivityKeys: ["projects"],
+            });
+      };
+
+      if (!isFile(value.logo)) return save();
+
+      const payload = new FormData();
+      payload.append("file", value.logo);
+      return get
+        .setResult(uploadLogoAtom, { payload })
+        .pipe(Effect.flatMap((uploaded) => save(uploaded.url)));
+    },
+  });
+
 export function ProjectForm({
   project,
   onClose,
@@ -57,66 +121,27 @@ export function ProjectForm({
   onClose: () => void;
   onSaved: (project: Project) => void;
 }) {
-  const createProject = useAtomSet(createProjectAtom, { mode: "promise" });
-  const updateProject = useAtomSet(updateProjectAtom, { mode: "promise" });
-  const uploadLogo = useAtomSet(uploadLogoAtom, {
-    mode: "promise",
+  const [form] = useState(() => makeProjectForm(project));
+  const submit = useAtomSet(form.submit);
+  const submitResult = useAtomValue(form.submit);
+  useAtomSubscribe(form.submit, (result) => {
+    if (!AsyncResult.isSuccess(result)) return;
+    toast.success(
+      project ? m.project_updated_toast() : m.project_created_toast(),
+    );
+    onSaved(result.value);
+    onClose();
   });
-  const [error, setError] = useState("");
-  const form = useAppForm({
-    defaultValues: {
-      name: project?.name ?? "",
-      logo: assetUrl(project?.logo, authBaseUrl),
-      themeCss: project?.data.branding?.themeCss ?? "",
-      emailPassword: project?.data.authOptions?.emailPassword ?? true,
-      emailOtp: project?.data.authOptions?.emailOtp ?? true,
-      google: project?.data.authOptions?.google ?? true,
-      signUp: project?.data.authOptions?.signUp ?? true,
-      signUpName: project?.data.authOptions?.signUpName ?? true,
-    } satisfies ProjectFormValues,
-    onSubmit: async ({ value }) => {
-      setError("");
-      try {
-        const logoFile = isFile(value.logo) ? value.logo : null;
-        const logo = logoFile
-          ? await (async () => {
-              const payload = new FormData();
-              payload.append("file", logoFile);
-
-              return assetPath((await uploadLogo({ payload })).url);
-            })()
-          : assetPath(value.logo);
-        const data = valuesToData(value);
-        const saved = project
-          ? await updateProject({
-              params: { id: project.id },
-              payload: {
-                name: value.name.trim(),
-                logo,
-                data,
-              },
-              reactivityKeys: ["projects"],
-            })
-          : await createProject({
-              payload: {
-                name: value.name.trim(),
-                logo,
-                data,
-              },
-              reactivityKeys: ["projects"],
-            });
-        toast.success(
-          project ? m.project_updated_toast() : m.project_created_toast(),
-        );
-        onSaved(saved);
-        onClose();
-      } catch (cause) {
-        setError(
-          cause instanceof Error ? cause.message : m.project_save_error(),
-        );
-      }
-    },
-  });
+  const defaultValues = {
+    name: project?.name ?? "",
+    logo: assetUrl(project?.logo, authBaseUrl),
+    themeCss: project?.data.branding?.themeCss ?? "",
+    emailPassword: project?.data.authOptions?.emailPassword ?? true,
+    emailOtp: project?.data.authOptions?.emailOtp ?? true,
+    google: project?.data.authOptions?.google ?? true,
+    signUp: project?.data.authOptions?.signUp ?? true,
+    signUpName: project?.data.authOptions?.signUpName ?? true,
+  } satisfies ProjectFormValues;
 
   return (
     <Dialog open onOpenChange={(open) => !open && onClose()}>
@@ -127,97 +152,44 @@ export function ProjectForm({
           </DialogTitle>
           <DialogDescription>{m.project_form_description()}</DialogDescription>
         </DialogHeader>
-        <form.AppForm>
+        <form.Initialize defaultValues={defaultValues}>
           <form
             className="flex flex-col gap-4"
             onSubmit={(event) => {
               event.preventDefault();
               event.stopPropagation();
-              form.handleSubmit();
+              submit();
             }}
           >
-            <form.AppField name="name">
-              {(field) => (
-                <field.TextField label={m.admin_field_display_name()} />
-              )}
-            </form.AppField>
-            <form.AppField name="logo">
-              {(field) => (
-                <field.ImageField
-                  label={m.oauth_client_logo_url()}
-                  size={{
-                    width: 96,
-                    height: 96,
-                    suggestedWidth: 512,
-                    suggestedHeight: 512,
-                  }}
-                />
-              )}
-            </form.AppField>
-            <form.AppField name="themeCss">
-              {(field) => (
-                <field.TextAreaField
-                  label={m.oauth_client_theme_css()}
-                  description={m.oauth_client_theme_css_description()}
-                  rows={12}
-                  spellCheck={false}
-                />
-              )}
-            </form.AppField>
+            <form.name label={m.admin_field_display_name()} />
+            <form.logo
+              label={m.oauth_client_logo_url()}
+              size={{
+                width: 96,
+                height: 96,
+                suggestedWidth: 512,
+                suggestedHeight: 512,
+              }}
+            />
+            <form.themeCss
+              label={m.oauth_client_theme_css()}
+              description={m.oauth_client_theme_css_description()}
+              rows={12}
+              spellCheck={false}
+            />
             <div className="grid gap-3 rounded-lg border p-4 md:grid-cols-5">
-              <form.AppField name="emailPassword">
-                {(field) => (
-                  <field.CheckboxField
-                    label={m.oauth_client_auth_email_password()}
-                  />
-                )}
-              </form.AppField>
-              <form.AppField name="emailOtp">
-                {(field) => (
-                  <field.CheckboxField
-                    label={m.oauth_client_auth_email_otp()}
-                  />
-                )}
-              </form.AppField>
-              <form.AppField name="google">
-                {(field) => (
-                  <field.CheckboxField label={m.oauth_client_auth_google()} />
-                )}
-              </form.AppField>
-              <form.AppField name="signUp">
-                {(field) => (
-                  <field.CheckboxField label={m.oauth_client_auth_sign_up()} />
-                )}
-              </form.AppField>
-              <form.AppField name="signUpName">
-                {(field) => (
-                  <field.CheckboxField
-                    label={m.oauth_client_auth_sign_up_name()}
-                  />
-                )}
-              </form.AppField>
+              <form.emailPassword
+                label={m.oauth_client_auth_email_password()}
+              />
+              <form.emailOtp label={m.oauth_client_auth_email_otp()} />
+              <form.google label={m.oauth_client_auth_google()} />
+              <form.signUp label={m.oauth_client_auth_sign_up()} />
+              <form.signUpName label={m.oauth_client_auth_sign_up_name()} />
             </div>
-            <form.FormError />
-            {error ? <ErrorMessage text={error} /> : null}
-            <form.Subscribe selector={(state) => state.isSubmitting}>
-              {(isSubmitting) => (
-                <Button
-                  disabled={isSubmitting}
-                  type="submit"
-                  className="self-start"
-                >
-                  {isSubmitting ? (
-                    <Loader2
-                      className="animate-spin"
-                      data-icon="inline-start"
-                    />
-                  ) : null}
-                  {m.form_submit()}
-                </Button>
-              )}
-            </form.Subscribe>
+            <SubmitError result={submitResult} />
+            <SubmitButton form={form}>{m.form_submit()}</SubmitButton>
           </form>
-        </form.AppForm>
+        </form.Initialize>
       </DialogContent>
     </Dialog>
   );
