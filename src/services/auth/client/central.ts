@@ -6,6 +6,15 @@ import {
   twoFactorClient,
 } from "better-auth/client/plugins";
 
+const organizationSchema = {
+  organization: {
+    additionalFields: {
+      userId: { type: "string", required: false },
+      parentId: { type: "string", required: false },
+    },
+  },
+} as const;
+
 export const centralAuthClient = createAuthClient({
   baseURL: import.meta.env.VITE_KRAKSTACK_AUTH_URL,
   fetchOptions: {
@@ -16,7 +25,7 @@ export const centralAuthClient = createAuthClient({
     twoFactorClient({
       twoFactorPage: `${import.meta.env.VITE_KRAKSTACK_AUTH_URL}/2fa`,
     }),
-    organizationClient(),
+    organizationClient({ schema: organizationSchema }),
     apiKeyClient(),
   ],
 });

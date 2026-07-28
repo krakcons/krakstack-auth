@@ -12,6 +12,15 @@ import { oauthProviderClient } from "@better-auth/oauth-provider/client";
 import { apiKeyClient } from "@better-auth/api-key/client";
 
 export const KRAK_ORGANIZATION_SLUG = "krak";
+
+const organizationSchema = {
+  organization: {
+    additionalFields: {
+      userId: { type: "string", required: false },
+      parentId: { type: "string", required: false },
+    },
+  },
+} as const;
 export const authBaseUrl =
   import.meta.env.VITE_KRAKSTACK_AUTH_URL ?? import.meta.env.VITE_SITE_URL;
 
@@ -23,7 +32,7 @@ export const authClient = createAuthClient({
     lastLoginMethodClient({
       cookieName: "krakstack-auth.last_used_login_method",
     }),
-    organizationClient(),
+    organizationClient({ schema: organizationSchema }),
     twoFactorClient({
       twoFactorPage: "/2fa",
     }),

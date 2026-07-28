@@ -126,6 +126,7 @@ export const Organization = Schema.Struct({
   slug: Schema.String,
   logo: Schema.NullOr(Schema.String),
   metadata: Schema.NullOr(OrganizationMetadata),
+  parentId: Schema.NullOr(Schema.String),
   createdAt: Schema.Date,
 }).annotate({
   identifier: "Organization",
@@ -137,6 +138,7 @@ export const Organization = Schema.Struct({
       name: "KrakStack",
       slug: "krakstack",
       logo: null,
+      parentId: null,
       metadata: {
         translations: [
           {

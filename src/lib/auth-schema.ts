@@ -35,6 +35,7 @@ export const AuthOrganization = Schema.Struct({
   slug: Schema.String,
   logo: Schema.NullOr(Schema.String),
   metadata: Schema.NullOr(Schema.Unknown),
+  parentId: Schema.NullOr(Schema.String),
   createdAt: Schema.Date,
 }).annotate({
   identifier: "AuthOrganization",
@@ -46,6 +47,7 @@ export const AuthOrganization = Schema.Struct({
       name: "KrakStack",
       slug: "krakstack",
       logo: null,
+      parentId: null,
       metadata: { tier: "internal" },
       createdAt: new Date("2026-01-01T00:00:00.000Z"),
     },

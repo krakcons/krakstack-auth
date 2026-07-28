@@ -1,5 +1,6 @@
-import { useAtomSet } from "@effect/atom-react";
+import { useAtomSet, useAtomValue } from "@effect/atom-react";
 import { Schema } from "effect";
+import { AsyncResult, Atom } from "effect/unstable/reactivity";
 import { Loader2 } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
@@ -35,6 +36,10 @@ const defaultMessages = {
     organization_created_toast: "Organization created.",
     organization_edit_title: "Edit organization",
     organization_field_logo_url: "Logo",
+    organization_parent: "Parent organization",
+    organization_parent_description:
+      "Optionally group this organization under another organization.",
+    organization_parent_none: "No parent organization",
     organization_slug: "Slug",
     organization_slug_description: "Leave blank to generate one from the name.",
     organization_update_error: "Unable to update organization.",
@@ -52,6 +57,10 @@ const defaultMessages = {
     organization_created_toast: "Organisation créée.",
     organization_edit_title: "Modifier l'organisation",
     organization_field_logo_url: "Logo",
+    organization_parent: "Organisation parente",
+    organization_parent_description:
+      "Regroupez facultativement cette organisation sous une autre organisation.",
+    organization_parent_none: "Aucune organisation parente",
     organization_slug: "Slug",
     organization_slug_description:
       "Laissez vide pour en générer un à partir du nom.",
@@ -74,7 +83,18 @@ type OrganizationFormValues = {
   name: string;
   slug: string;
   logo: File | string | null;
+  parentId: string;
 };
+
+const noParentOrganization = "__none__";
+
+const organizationOptionsAtom = Atom.family((baseUrl?: string | undefined) =>
+  authClientApi(baseUrl).query("admin", "listOrganizations", {
+    query: { page: 0, pageSize: 100 },
+    timeToLive: "1 minute",
+    reactivityKeys: ["organizations"],
+  }),
+);
 
 const slugify = (value: string) =>
   value
@@ -116,6 +136,12 @@ export function AdminOrganizationForm({
     authClientApi(baseUrl).mutation("authExtra", "uploadUserImage"),
     { mode: "promise" },
   );
+  const organizationsResult = useAtomValue(organizationOptionsAtom(baseUrl));
+  const organizations = AsyncResult.match(organizationsResult, {
+    onInitial: () => [],
+    onFailure: () => [],
+    onSuccess: ({ value }) => Array.from(value.data),
+  });
   const [error, setError] = useState("");
   const isEditing = Boolean(organization);
   const form = useAppForm({
@@ -123,6 +149,7 @@ export function AdminOrganizationForm({
       name: organization?.name ?? "",
       slug: organization?.slug ?? "",
       logo: assetUrl(organization?.logo, baseUrl),
+      parentId: organization?.parentId ?? noParentOrganization,
     } satisfies OrganizationFormValues,
     onSubmit: async ({ value }) => {
       setError("");
@@ -140,9 +167,22 @@ export function AdminOrganizationForm({
         const saved = organization
           ? await updateOrganization({
               params: { id: organization.id },
-              payload,
+              payload: {
+                ...payload,
+                parentId:
+                  value.parentId === noParentOrganization
+                    ? null
+                    : value.parentId,
+              },
             })
-          : await createOrganization({ payload });
+          : await createOrganization({
+              payload: {
+                ...payload,
+                ...(value.parentId === noParentOrganization
+                  ? {}
+                  : { parentId: value.parentId }),
+              },
+            });
 
         toast.success(
           organization
@@ -210,6 +250,31 @@ export function AdminOrganizationForm({
                     suggestedWidth: 512,
                     suggestedHeight: 512,
                   }}
+                />
+              )}
+            </form.AppField>
+            <form.AppField name="parentId">
+              {(field) => (
+                <field.SelectField
+                  label={m.organization_parent}
+                  description={m.organization_parent_description}
+                  options={[
+                    {
+                      label: m.organization_parent_none,
+                      value: noParentOrganization,
+                    },
+                    ...organizations
+                      .filter(
+                        (candidate) =>
+                          candidate.id !== organization?.id &&
+                          !candidate.userId &&
+                          !candidate.parentId,
+                      )
+                      .map((candidate) => ({
+                        label: candidate.name,
+                        value: candidate.id,
+                      })),
+                  ]}
                 />
               )}
             </form.AppField>

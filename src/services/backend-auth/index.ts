@@ -12,6 +12,7 @@ import { DB } from "@/services/database";
 import type {
   BackendAuthActiveOrganization,
   BackendAuthMembersResponse,
+  BackendAuthOrganizationChildrenResponse,
   BackendAuthOrganizationsResponse,
   BackendAuthUsersResponse,
 } from "./schema";
@@ -176,6 +177,7 @@ export class BackendAuth extends Context.Service<BackendAuth>()("BackendAuth", {
           slug: organization.slug,
           logo: organization.logo,
           metadata: organization.metadata,
+          parentId: organization.parentId,
           createdAt: organization.createdAt,
         })
         .from(organization)
@@ -203,6 +205,7 @@ export class BackendAuth extends Context.Service<BackendAuth>()("BackendAuth", {
             slug: organization.slug,
             logo: organization.logo,
             metadata: organization.metadata,
+            parentId: organization.parentId,
             createdAt: organization.createdAt,
           })
           .from(organization)
@@ -218,6 +221,28 @@ export class BackendAuth extends Context.Service<BackendAuth>()("BackendAuth", {
       },
     );
 
+    const getOrganizationChildren = Effect.fn(
+      "BackendAuth.getOrganizationChildren",
+    )(function* ({ organizationId }: { organizationId: string }) {
+      const records = yield* db
+        .select({
+          id: organization.id,
+          name: organization.name,
+          slug: organization.slug,
+          logo: organization.logo,
+          metadata: organization.metadata,
+          parentId: organization.parentId,
+          createdAt: organization.createdAt,
+        })
+        .from(organization)
+        .where(eq(organization.parentId, organizationId));
+
+      return records.map((record) => ({
+        ...record,
+        metadata: parseMetadata(record.metadata),
+      })) satisfies BackendAuthOrganizationChildrenResponse;
+    });
+
     const listOrganizationsByUserId = Effect.fn(
       "BackendAuth.listOrganizationsByUserId",
     )(function* ({ userId }: { userId: string }) {
@@ -228,6 +253,7 @@ export class BackendAuth extends Context.Service<BackendAuth>()("BackendAuth", {
           slug: organization.slug,
           logo: organization.logo,
           metadata: organization.metadata,
+          parentId: organization.parentId,
           createdAt: organization.createdAt,
         })
         .from(member)
@@ -306,6 +332,7 @@ export class BackendAuth extends Context.Service<BackendAuth>()("BackendAuth", {
       listOrganizationsByIds,
       listOrganizationsByUserId,
       getOrganization,
+      getOrganizationChildren,
       getUserActiveOrganization,
       getActiveMember,
       listOrganizationMembers,

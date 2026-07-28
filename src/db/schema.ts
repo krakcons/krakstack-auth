@@ -1,5 +1,6 @@
 import { defineRelations } from "drizzle-orm";
 import {
+  type AnyPgColumn,
   pgTable,
   text,
   timestamp,
@@ -129,10 +130,14 @@ export const organization = pgTable(
     userId: text("user_id").references(() => user.id, {
       onDelete: "cascade",
     }),
+    parentId: text("parent_id").references((): AnyPgColumn => organization.id, {
+      onDelete: "set null",
+    }),
   },
   (table) => [
     uniqueIndex("organization_slug_uidx").on(table.slug),
     uniqueIndex("organization_userId_uidx").on(table.userId),
+    index("organization_parentId_idx").on(table.parentId),
   ],
 );
 

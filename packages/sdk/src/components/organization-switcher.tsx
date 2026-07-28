@@ -132,6 +132,10 @@ const messages = {
     organization_invite_member_title: "Invite a member",
     organization_loading: "Loading...",
     organization_location: "Location",
+    organization_parent: "Parent organization",
+    organization_parent_description:
+      "Optionally group this organization under another organization.",
+    organization_parent_none: "No parent organization",
     organization_icon: "Icon",
     organization_logo: "Logo",
     organization_logo_upload_error: "Could not upload the organization logo.",
@@ -232,6 +236,10 @@ const messages = {
     organization_invite_member_title: "Inviter un membre",
     organization_loading: "Chargement...",
     organization_location: "Emplacement",
+    organization_parent: "Organisation parente",
+    organization_parent_description:
+      "Regroupez facultativement cette organisation sous une autre organisation.",
+    organization_parent_none: "Aucune organisation parente",
     organization_icon: "Icône",
     organization_logo: "Logo",
     organization_logo_upload_error:
@@ -354,6 +362,7 @@ export type OrganizationSwitcherProps = {
   menuActions?: ReactNode;
   renderUnauthenticated?: () => ReactNode;
   locked?: boolean;
+  organizationWhitelist?: readonly string[];
   messages?: OrganizationSwitcherMessages;
   dialog?: OrganizationSwitcherDialog | null;
   onChange?: (organization: OrganizationSummary | null) => void;
@@ -367,6 +376,7 @@ type OrganizationSummary = {
   slug: string;
   metadata?: unknown;
   userId?: string | null;
+  parentId?: string | null;
 };
 
 export type OrganizationSwitcherDialog =
@@ -519,6 +529,7 @@ const emptyOrganizationApiKeysAtom = Atom.make(
 );
 
 type OrganizationFormValues = {
+  parentId: string;
   slug: string;
   enName: string;
   enLogo: File | string | null;
@@ -538,6 +549,8 @@ const slugify = (value: string) =>
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, "-")
     .replace(/^-+|-+$/g, "");
+
+const noParentOrganization = "__none__";
 
 const isOrganizationSlugConflict = (error: unknown) => {
   if (typeof error !== "object" || error === null) return false;
@@ -632,6 +645,28 @@ const organizationSwitcherSubtitle = (
     ? `${m.organization_switcher_personal()} · ${subtitle}`
     : subtitle;
 
+const organizationParentOptions = (
+  organizations: readonly OrganizationSummary[],
+  m: ReturnType<typeof organizationMessageFns>,
+  excludedOrganizationId?: string,
+) => [
+  {
+    label: m.organization_parent_none(),
+    value: noParentOrganization,
+  },
+  ...organizations
+    .filter(
+      (organization) =>
+        organization.id !== excludedOrganizationId &&
+        !organization.userId &&
+        !organization.parentId,
+    )
+    .map((organization) => ({
+      label: organizationDisplay(organization, m).name,
+      value: organization.id,
+    })),
+];
+
 const organizationFormDefaults = (
   organization?: OrganizationSummary,
   baseUrl?: string,
@@ -643,6 +678,7 @@ const organizationFormDefaults = (
   const fr = translations.find((translation) => translation.locale === "fr");
 
   return {
+    parentId: organization?.parentId ?? noParentOrganization,
     slug: organization?.slug ?? "",
     enName: en?.name || organization?.name || "",
     enLogo: assetUrl(en?.logo, baseUrl) || null,
@@ -767,6 +803,7 @@ export function OrganizationSwitcher({
   menuActions,
   renderUnauthenticated,
   locked = false,
+  organizationWhitelist,
   messages,
   dialog: controlledDialog,
   onChange,
@@ -854,10 +891,16 @@ export function OrganizationSwitcher({
 
   const active = activeOrganization.data;
   const activeName = active?.name;
+  const visibleOrganizations =
+    organizations.data?.filter(
+      (organization) =>
+        !organizationWhitelist ||
+        organizationWhitelist.includes(organization.id),
+    ) ?? [];
   const selectableOrganizations = !locked
-    ? (organizations.data?.filter(
+    ? visibleOrganizations.filter(
         (organization) => organization.id !== active?.id,
-      ) ?? [])
+      )
     : [];
   const hasOrganizationListItems =
     organizations.isPending || Boolean(organizations.error) || !locked;
@@ -1081,6 +1124,7 @@ export function OrganizationSwitcher({
           <CreateOrganizationSection
             authClient={authClient}
             baseUrl={baseUrl}
+            organizations={visibleOrganizations}
             onCreated={async (organization) => {
               setDialog(null);
               const activeResult = await authClient.organization.setActive({
@@ -1645,10 +1689,12 @@ function EditOrganizationSection({
 function CreateOrganizationSection({
   authClient,
   baseUrl,
+  organizations,
   onCreated,
 }: {
   authClient: AuthUiClient;
   baseUrl?: string | undefined;
+  organizations: readonly OrganizationSummary[];
   onCreated: (organization: OrganizationSummary) => Promise<void>;
 }) {
   const m = useOrganizationMessages();
@@ -1689,6 +1735,9 @@ function CreateOrganizationSection({
           name,
           slug,
           metadata,
+          ...(value.parentId === noParentOrganization
+            ? {}
+            : { parentId: value.parentId }),
         });
 
         if (result.error) {
@@ -1757,6 +1806,15 @@ function CreateOrganizationSection({
               <field.TextField
                 label={m.organization_slug()}
                 description={m.organization_slug_description()}
+              />
+            )}
+          </form.AppField>
+          <form.AppField name="parentId">
+            {(field) => (
+              <field.SelectField
+                label={m.organization_parent()}
+                description={m.organization_parent_description()}
+                options={organizationParentOptions(organizations, m)}
               />
             )}
           </form.AppField>

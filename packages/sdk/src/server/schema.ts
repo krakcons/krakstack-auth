@@ -88,6 +88,14 @@ export const ServerOrganizationsResponse = Schema.Struct({
     "Batch organization response with records and requested IDs that were not found.",
 });
 
+export const ServerOrganizationChildrenResponse = Schema.Array(
+  Organization,
+).annotate({
+  identifier: "ServerOrganizationChildrenResponse",
+  title: "Server organization children response",
+  description: "Direct child organizations belonging to an organization.",
+});
+
 export const ServerMembersResponse = Schema.Array(Member).annotate({
   identifier: "ServerMembersResponse",
   title: "Server members response",
@@ -219,6 +227,8 @@ export const ServerDomainRecordsResponse = Schema.Array(
 export type ServerUsersResponse = typeof ServerUsersResponse.Type;
 export type ServerOrganizationsResponse =
   typeof ServerOrganizationsResponse.Type;
+export type ServerOrganizationChildrenResponse =
+  typeof ServerOrganizationChildrenResponse.Type;
 export type ServerMembersResponse = typeof ServerMembersResponse.Type;
 export type ServerActiveOrganization = typeof ServerActiveOrganization.Type;
 export type ServerDomain = typeof ServerDomain.Type;

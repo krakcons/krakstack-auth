@@ -22,6 +22,7 @@ import {
   BackendAuthIdsQuery,
   BackendAuthMemberParams,
   BackendAuthMembersResponse,
+  BackendAuthOrganizationChildrenResponse,
   BackendAuthOrganizationIdParams,
   BackendAuthOrganizationsQuery,
   BackendAuthOrganizationsResponse,
@@ -124,6 +125,24 @@ export const BackendAuthOrganizationsApiGroup = HttpApiGroup.make(
         summary: "Get an organization by ID",
         description:
           "Returns a trusted organization record by ID. Requires a service API key.",
+      }),
+    ),
+  )
+  .add(
+    HttpApiEndpoint.get(
+      "getOrganizationChildren",
+      "/organizations/:organizationId/children",
+      {
+        params: BackendAuthOrganizationIdParams,
+        success: BackendAuthOrganizationChildrenResponse,
+        error: [HttpApiError.Unauthorized, HttpApiError.InternalServerError],
+      },
+    ).annotateMerge(
+      OpenApi.annotations({
+        title: "Get organization children",
+        summary: "Get direct child organizations",
+        description:
+          "Returns direct child organizations for a parent organization. Requires a service API key.",
       }),
     ),
   )

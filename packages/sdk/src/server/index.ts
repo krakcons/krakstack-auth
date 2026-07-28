@@ -26,6 +26,7 @@ export {
   ServerDomainIdParams,
   ServerDomainRecordsResponse,
   ServerMembersResponse,
+  ServerOrganizationChildrenResponse,
   ServerOrganizationsResponse,
   ServerUpdateDomainPayload,
   ServerUsersResponse,

@@ -88,6 +88,14 @@ export const BackendAuthOrganizationsResponse = Schema.Struct({
     "Batch organization response with records and requested IDs that were not found.",
 });
 
+export const BackendAuthOrganizationChildrenResponse = Schema.Array(
+  AuthOrganization,
+).annotate({
+  identifier: "BackendAuthOrganizationChildrenResponse",
+  title: "Backend auth organization children response",
+  description: "Direct child organizations belonging to an organization.",
+});
+
 export const BackendAuthMembersResponse = Schema.Array(AuthMember).annotate({
   identifier: "BackendAuthMembersResponse",
   title: "Backend auth members response",
@@ -97,6 +105,8 @@ export const BackendAuthMembersResponse = Schema.Array(AuthMember).annotate({
 export type BackendAuthUsersResponse = typeof BackendAuthUsersResponse.Type;
 export type BackendAuthOrganizationsResponse =
   typeof BackendAuthOrganizationsResponse.Type;
+export type BackendAuthOrganizationChildrenResponse =
+  typeof BackendAuthOrganizationChildrenResponse.Type;
 export type BackendAuthMembersResponse = typeof BackendAuthMembersResponse.Type;
 export type BackendAuthActiveOrganization =
   typeof BackendAuthActiveOrganization.Type;

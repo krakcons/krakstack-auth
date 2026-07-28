@@ -60,6 +60,8 @@ export const AdminOrganization = Schema.Struct({
   slug: Schema.String,
   logo: Schema.optional(Schema.NullOr(Schema.String)),
   metadata: Schema.optional(Schema.NullOr(Schema.String)),
+  userId: Schema.optional(Schema.NullOr(Schema.String)),
+  parentId: Schema.optional(Schema.NullOr(Schema.String)),
   memberCount: Schema.optional(Schema.Number),
   createdAt: Schema.Date,
 }).annotate({
@@ -73,6 +75,8 @@ export const AdminOrganization = Schema.Struct({
       slug: "krakstack",
       logo: "https://example.com/logo.svg",
       metadata: '{"tier":"internal"}',
+      userId: null,
+      parentId: null,
       memberCount: 12,
       createdAt: new Date("2026-01-01T00:00:00.000Z"),
     },
@@ -166,6 +170,7 @@ export const AdminCreateOrganizationPayload = Schema.Struct({
   name: Schema.NonEmptyString,
   slug: Schema.NonEmptyString,
   logo: Schema.optional(Schema.String),
+  parentId: Schema.optional(Schema.String),
 }).annotate({
   identifier: "AdminCreateOrganizationPayload",
   title: "Create organization payload",
@@ -177,6 +182,7 @@ export const AdminUpdateOrganizationPayload = Schema.Struct({
   name: Schema.optional(Schema.NonEmptyString),
   slug: Schema.optional(Schema.NonEmptyString),
   logo: Schema.optional(Schema.String),
+  parentId: Schema.optional(Schema.NullOr(Schema.String)),
 }).annotate({
   identifier: "AdminUpdateOrganizationPayload",
   title: "Update organization payload",

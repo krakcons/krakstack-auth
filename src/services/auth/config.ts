@@ -55,6 +55,70 @@ const organizationAuthRoles = Object.fromEntries(
   ]),
 );
 
+const organizationParentId = (value: object) => {
+  const parentId = Reflect.get(value, "parentId");
+  return typeof parentId === "string" && parentId ? parentId : null;
+};
+
+const validateOrganizationParent = ({
+  organizationId,
+  parentId,
+  userId,
+}: {
+  organizationId?: string;
+  parentId: string | null;
+  userId: string;
+}) =>
+  Effect.gen(function* () {
+    if (!parentId) return;
+    if (parentId === organizationId) {
+      return yield* Effect.fail(
+        new APIError("BAD_REQUEST", {
+          message: "An organization cannot be its own parent",
+        }),
+      );
+    }
+
+    const database = yield* DB;
+    const parent = yield* database.query.organization.findFirst({
+      where: { id: parentId },
+      columns: { id: true, parentId: true },
+    });
+
+    if (!parent || parent.parentId) {
+      return yield* Effect.fail(
+        new APIError("BAD_REQUEST", {
+          message: "Parent organization must be a root organization",
+        }),
+      );
+    }
+
+    const [actor, parentMember] = yield* Effect.all([
+      database.query.user.findFirst({
+        where: { id: userId },
+        columns: { role: true },
+      }),
+      database.query.member.findFirst({
+        where: { organizationId: parentId, userId },
+        columns: { role: true },
+      }),
+    ]);
+    const isPlatformAdmin =
+      actor?.role?.split(",").some((role) => role.trim() === "admin") ?? false;
+    const canManageParent =
+      parentMember?.role
+        .split(",")
+        .some((role) => role === "owner" || role === "admin") ?? false;
+
+    if (!isPlatformAdmin && !canManageParent) {
+      return yield* Effect.fail(
+        new APIError("FORBIDDEN", {
+          message: "Parent organization admin access is required",
+        }),
+      );
+    }
+  });
+
 const googleClientId = process.env.GOOGLE_CLIENT_ID;
 const googleClientSecret = process.env.GOOGLE_CLIENT_SECRET;
 const betterAuthUrl = process.env.BETTER_AUTH_URL ?? "http://localhost:3000";
@@ -351,11 +415,21 @@ const createAuth = ({
                 type: "string",
                 required: false,
               },
+              parentId: {
+                type: "string",
+                required: false,
+              },
             },
           },
         },
         organizationHooks: {
           beforeCreateOrganization: async ({ organization, user }) => {
+            const parentId = organizationParentId(organization);
+            await Effect.runPromise(
+              validateOrganizationParent({ parentId, userId: user.id }).pipe(
+                Effect.provide(DB.layer),
+              ),
+            );
             const slugPart = personalOrganizationSlugPart(user);
             const personalSlugs = [
               `${slugPart}-org`,
@@ -374,6 +448,11 @@ const createAuth = ({
           beforeUpdateOrganization: async ({ organization, member }) => {
             return await Effect.runPromise(
               Effect.gen(function* () {
+                yield* validateOrganizationParent({
+                  organizationId: member.organizationId,
+                  parentId: organizationParentId(organization),
+                  userId: member.userId,
+                });
                 const database = yield* DB;
                 const current = yield* database.query.organization.findFirst({
                   where: { id: member.organizationId },

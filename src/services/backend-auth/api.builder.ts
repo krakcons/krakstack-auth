@@ -111,6 +111,16 @@ const backendAuthOrganizationsApiHandler = HttpApiBuilder.group(
           return organization;
         }),
       )
+      .handle("getOrganizationChildren", ({ params }) =>
+        Effect.gen(function* () {
+          const backendAuth = yield* BackendAuth;
+          return yield* backendAuth
+            .getOrganizationChildren({
+              organizationId: params.organizationId,
+            })
+            .pipe(Effect.mapError(internalServerError));
+        }),
+      )
       .handle("getActiveMember", ({ params }) =>
         Effect.gen(function* () {
           const backendAuth = yield* BackendAuth;

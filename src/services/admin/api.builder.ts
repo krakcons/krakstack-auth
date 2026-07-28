@@ -549,6 +549,8 @@ export const adminApiHandler = HttpApiBuilder.group(
                     slug: organization.slug,
                     logo: organization.logo,
                     metadata: organization.metadata,
+                    userId: organization.userId,
+                    parentId: organization.parentId,
                     memberCount: count(member.id),
                     createdAt: organization.createdAt,
                   })
@@ -565,6 +567,8 @@ export const adminApiHandler = HttpApiBuilder.group(
                     organization.slug,
                     organization.logo,
                     organization.metadata,
+                    organization.userId,
+                    organization.parentId,
                     organization.createdAt,
                   )
                   .orderBy(...(orderBy.length ? orderBy : fallbackOrderBy))
@@ -577,6 +581,8 @@ export const adminApiHandler = HttpApiBuilder.group(
                     slug: organization.slug,
                     logo: organization.logo,
                     metadata: organization.metadata,
+                    userId: organization.userId,
+                    parentId: organization.parentId,
                     memberCount: count(member.id),
                     createdAt: organization.createdAt,
                   })
@@ -589,6 +595,8 @@ export const adminApiHandler = HttpApiBuilder.group(
                     organization.slug,
                     organization.logo,
                     organization.metadata,
+                    organization.userId,
+                    organization.parentId,
                     organization.createdAt,
                   )
                   .orderBy(...(orderBy.length ? orderBy : fallbackOrderBy))

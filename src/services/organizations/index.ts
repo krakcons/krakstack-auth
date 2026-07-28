@@ -1,5 +1,8 @@
 import { Context, Effect, Layer } from "effect";
+import { eq } from "drizzle-orm";
 
+import { organization } from "@/db/schema";
+import { DB } from "@/services/database";
 import { BetterAuthRequest } from "@/services/auth/better-auth-request";
 
 import type {
@@ -24,9 +27,10 @@ export class Organizations extends Context.Service<Organizations>()(
         payload: AdminCreateOrganizationPayload;
       }) {
         const betterAuth = yield* BetterAuthRequest;
+        const { parentId, ...data } = payload;
         return yield* Effect.promise(() =>
           betterAuth.api.createOrganization({
-            body: payload,
+            body: { ...data, ...(parentId ? { parentId } : {}) },
             headers: betterAuth.headers,
           }),
         );
@@ -40,12 +44,26 @@ export class Organizations extends Context.Service<Organizations>()(
         payload: AdminUpdateOrganizationPayload;
       }) {
         const betterAuth = yield* BetterAuthRequest;
-        return yield* Effect.promise(() =>
+        const { parentId, ...data } = payload;
+        const updated = yield* Effect.promise(() =>
           betterAuth.api.updateOrganization({
-            body: { organizationId: id, data: payload },
+            body: {
+              organizationId: id,
+              data: { ...data, ...(parentId ? { parentId } : {}) },
+            },
             headers: betterAuth.headers,
           }),
         );
+
+        if (parentId !== null || !updated) return updated;
+
+        const database = yield* DB;
+        yield* database
+          .update(organization)
+          .set({ parentId: null })
+          .where(eq(organization.id, id));
+
+        return { ...updated, parentId: null };
       });
 
       const _delete = Effect.fn("Organizations.delete")(function* ({

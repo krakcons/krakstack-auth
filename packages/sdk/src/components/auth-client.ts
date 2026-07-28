@@ -28,6 +28,10 @@ const organizationSchema = {
         type: "string",
         required: false,
       },
+      parentId: {
+        type: "string",
+        required: false,
+      },
     },
   },
 } as const;
