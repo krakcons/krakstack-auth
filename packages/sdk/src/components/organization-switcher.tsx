@@ -81,6 +81,7 @@ import {
   OrganizationSocial,
   OrganizationTranslation,
   OrganizationWebsite,
+  decodeOrganizationMetadata,
   type OrganizationEmail as OrganizationEmailValue,
   type OrganizationAddress as OrganizationAddressValue,
   type OrganizationContactTranslation,
@@ -503,15 +504,17 @@ const userInvitationsAtom = Atom.family((authClient: AuthUiClient) =>
 const invitationOrganizationProfileAtom = Atom.family(
   ({
     baseUrl,
+    locale,
     organizationId,
   }: {
     baseUrl?: string | undefined;
+    locale: OrganizationLocale;
     organizationId: string;
   }) =>
     authClientApi(baseUrl).query("authExtra", "getOrganizationPublicProfile", {
-      query: { organizationId },
+      query: { locale, organizationId },
       timeToLive: "5 minutes",
-      serializationKey: `invitation-organization:${organizationId}`,
+      serializationKey: `invitation-organization:${organizationId}:${locale}`,
     }),
 );
 
@@ -1170,23 +1173,7 @@ const uploadImageAsset = async (
 const currentOrganizationLocale = (): OrganizationLocale =>
   getLocale() === "fr" ? "fr" : "en";
 
-const OrganizationTranslationsMetadata = Schema.Struct({
-  translations: Schema.Array(OrganizationTranslation),
-});
-
-const parseOrganizationMetadata = (metadata: unknown): OrganizationMetadata => {
-  let value: unknown = metadata;
-  try {
-    value = typeof metadata === "string" ? JSON.parse(metadata) : metadata;
-    return Schema.decodeUnknownSync(OrganizationMetadata)(value);
-  } catch {
-    try {
-      return Schema.decodeUnknownSync(OrganizationTranslationsMetadata)(value);
-    } catch {
-      return { translations: [] };
-    }
-  }
-};
+const parseOrganizationMetadata = decodeOrganizationMetadata;
 
 const findOrganizationTranslation = (
   organization: OrganizationSummary,
@@ -1361,8 +1348,23 @@ const organizationMetadataFromForm = async (
   value: OrganizationFormValues,
   m: ReturnType<typeof organizationMessageFns>,
   uploadImage: (input: { payload: FormData }) => Promise<unknown>,
-  existingMetadata?: OrganizationMetadata,
+  existingMetadata?: unknown,
 ): Promise<OrganizationMetadata> => {
+  const existing = parseOrganizationMetadata(existingMetadata);
+  const decodedExistingMetadata =
+    typeof existingMetadata === "string"
+      ? Option.getOrNull(
+          Schema.decodeUnknownOption(Schema.fromJsonString(Schema.Unknown))(
+            existingMetadata,
+          ),
+        )
+      : existingMetadata;
+  const preservedMetadata =
+    typeof decodedExistingMetadata === "object" &&
+    decodedExistingMetadata !== null &&
+    !Array.isArray(decodedExistingMetadata)
+      ? decodedExistingMetadata
+      : {};
   const translations: OrganizationTranslation[] = [];
   const enName = value.enName.trim();
   const frName = value.frName.trim();
@@ -1439,38 +1441,58 @@ const organizationMetadataFromForm = async (
         ]
       : [];
   });
+  const localizedEmail = (locale: OrganizationLocale) =>
+    emails.find((email) =>
+      email.translations.some((translation) => translation.locale === locale),
+    )?.email ??
+    emails[0]?.email ??
+    null;
+  const localizedLocation = (locale: OrganizationLocale) => {
+    const address =
+      addresses.find((item) =>
+        item.translations.some((translation) => translation.locale === locale),
+      ) ?? addresses[0];
+    if (!address) {
+      return existing.translations.find(
+        (translation) => translation.locale === locale,
+      )?.location;
+    }
+
+    return [
+      address.streetAddress,
+      [address.locality, address.region, address.postalCode]
+        .filter(Boolean)
+        .join(" "),
+      address.country,
+    ]
+      .filter(Boolean)
+      .join(", ");
+  };
 
   if (enName) {
-    const legacyLocation = existingMetadata?.translations.find(
-      (translation) => translation.locale === "en",
-    )?.location;
     translations.push({
       locale: "en",
       name: enName,
       logo: enLogo,
       icon: enIcon,
-      ...(!addresses.length && legacyLocation
-        ? { location: legacyLocation }
-        : {}),
+      contactEmail: localizedEmail("en"),
+      location: localizedLocation("en") ?? null,
     });
   }
 
   if (frName) {
-    const legacyLocation = existingMetadata?.translations.find(
-      (translation) => translation.locale === "fr",
-    )?.location;
     translations.push({
       locale: "fr",
       name: frName,
       logo: frLogo,
       icon: frIcon,
-      ...(!addresses.length && legacyLocation
-        ? { location: legacyLocation }
-        : {}),
+      contactEmail: localizedEmail("fr"),
+      location: localizedLocation("fr") ?? null,
     });
   }
 
   return {
+    ...preservedMetadata,
     translations,
     emails,
     phones,
@@ -2143,9 +2165,11 @@ function InvitationOrganizationBrand({
   baseUrl?: string | undefined;
   invitation: UserInvitationSummary;
 }) {
+  const locale = useKrakstackAuth()?.locale ?? currentOrganizationLocale();
   const profileResult = useAtomValue(
     invitationOrganizationProfileAtom({
       baseUrl,
+      locale,
       organizationId: invitation.organizationId,
     }),
   );
@@ -2237,7 +2261,7 @@ function EditOrganizationSection({
               value,
               m,
               uploadImage,
-              parseOrganizationMetadata(organization.metadata),
+              organization.metadata,
             );
             const result = await authClient.organization.update({
               organizationId: organization.id,

@@ -37,6 +37,7 @@ import {
   sendTwoFactorOtpEmail,
 } from "@/services/auth/email.server";
 import { organizationImpersonation } from "@/services/auth/plugins/organization-impersonation";
+import { mergeOrganizationMetadata } from "@/services/auth/organization-metadata";
 import { DB } from "@/services/database";
 import { connectProjectSession } from "@/services/projects/connections";
 
@@ -456,12 +457,20 @@ const createAuth = ({
                 const database = yield* DB;
                 const current = yield* database.query.organization.findFirst({
                   where: { id: member.organizationId },
-                  columns: { userId: true },
+                  columns: { metadata: true, userId: true },
                 });
 
                 return {
                   data: {
                     ...organization,
+                    ...(organization.metadata
+                      ? {
+                          metadata: mergeOrganizationMetadata(
+                            current?.metadata,
+                            organization.metadata,
+                          ),
+                        }
+                      : {}),
                     userId: current?.userId ?? null,
                   },
                 };

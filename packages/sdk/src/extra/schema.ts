@@ -4,6 +4,7 @@ import { HttpApiSchema } from "effect/unstable/httpapi";
 
 import {
   OrganizationEmail,
+  OrganizationLocale,
   OrganizationPhone,
   OrganizationSocial,
   OrganizationWebsite,
@@ -242,12 +243,13 @@ export const ExtraProjectPublicConfig = Schema.Struct({
 
 export const ExtraOrganizationPublicProfileQuery = Schema.Struct({
   organizationId: Schema.String,
+  locale: Schema.optional(OrganizationLocale),
 }).annotate({
   identifier: "ExtraOrganizationPublicProfileQuery",
   title: "Extra organization public profile query",
   description:
     "Organization ID used to resolve public organization display metadata.",
-  examples: [{ organizationId: "org_1" }],
+  examples: [{ organizationId: "org_1", locale: "en" }],
 });
 
 export const ExtraOrganizationPublicProfile = Schema.Struct({

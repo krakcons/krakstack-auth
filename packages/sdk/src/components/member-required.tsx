@@ -133,8 +133,8 @@ const organizationContactEmail = (
   organization: FullOrganization | null,
   fallback: string | undefined,
 ) =>
-  organization?.emails?.[0]?.email ??
   organization?.contactEmail ??
+  organization?.emails?.[0]?.email ??
   fallback ??
   null;
 
@@ -152,21 +152,24 @@ const organizationDisplayName = (
 const organizationProfileUrl = (
   baseUrl: string | undefined,
   organizationId: string,
+  locale: KrakstackAuthLocale | undefined,
 ) => {
   const root =
     baseUrl?.trim() ||
     (typeof window === "undefined" ? "" : window.location.origin);
   const url = new URL("/api/auth/organization-profile", root);
   url.searchParams.set("organizationId", organizationId);
+  if (locale) url.searchParams.set("locale", locale);
   return url;
 };
 
 const getOrganizationPublicProfile = async (
   baseUrl: string | undefined,
   organizationId: string,
+  locale: KrakstackAuthLocale | undefined,
 ): Promise<FullOrganization | null> => {
   const response = await fetch(
-    organizationProfileUrl(baseUrl, organizationId),
+    organizationProfileUrl(baseUrl, organizationId, locale),
     {
       credentials: "include",
     },
@@ -187,8 +190,9 @@ type AccessResult =
 
 const accessAtom = Atom.family((authClient: AuthUiClient) =>
   Atom.family((key: string) => {
-    const { baseUrl, organizationId } = JSON.parse(key) as {
+    const { baseUrl, locale, organizationId } = JSON.parse(key) as {
       baseUrl?: string | undefined;
+      locale?: KrakstackAuthLocale | undefined;
       organizationId: string;
       userId?: string | undefined;
     };
@@ -204,9 +208,11 @@ const accessAtom = Atom.family((authClient: AuthUiClient) =>
             if (!activeResult.error) return { allowed: true };
 
             const [organization, invitationsResult] = await Promise.all([
-              getOrganizationPublicProfile(baseUrl, organizationId).catch(
-                () => null,
-              ),
+              getOrganizationPublicProfile(
+                baseUrl,
+                organizationId,
+                locale,
+              ).catch(() => null),
               authClient.organization.listUserInvitations({}),
             ]);
 
@@ -229,14 +235,23 @@ const accessAtom = Atom.family((authClient: AuthUiClient) =>
 const accessAtomKey = ({
   authRefreshVersion,
   baseUrl,
+  locale,
   organizationId,
   userId,
 }: {
   authRefreshVersion: number;
   baseUrl?: string | undefined;
+  locale?: KrakstackAuthLocale | undefined;
   organizationId: string;
   userId?: string | undefined;
-}) => JSON.stringify({ authRefreshVersion, baseUrl, organizationId, userId });
+}) =>
+  JSON.stringify({
+    authRefreshVersion,
+    baseUrl,
+    locale,
+    organizationId,
+    userId,
+  });
 
 export function MemberRequired({
   authClient: providedAuthClient,
@@ -260,6 +275,7 @@ export function MemberRequired({
   const currentAccessKey = accessAtomKey({
     authRefreshVersion,
     baseUrl,
+    locale,
     organizationId,
     userId,
   });

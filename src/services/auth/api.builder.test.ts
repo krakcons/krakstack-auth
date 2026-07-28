@@ -97,4 +97,52 @@ describe("organizationPublicProfile", () => {
     expect(profile.displayName).toBe("Localized Example");
     expect(profile.emails).toEqual([]);
   });
+
+  it("selects a compatibility email using the requested locale", () => {
+    const profile = organizationPublicProfile(
+      {
+        id: "org_1",
+        name: "Example",
+        slug: "example",
+        metadata: {
+          translations: [
+            { locale: "en", name: "Example" },
+            { locale: "fr", name: "Exemple" },
+          ],
+          emails: [
+            {
+              email: "team@example.com",
+              translations: [{ locale: "en", label: "Email" }],
+            },
+            {
+              email: "equipe@example.com",
+              translations: [{ locale: "fr", label: "Courriel" }],
+            },
+          ],
+        },
+      },
+      { locale: "fr", fallbackLocale: "en" },
+    );
+
+    expect(profile.contactEmail).toBe("equipe@example.com");
+  });
+
+  it("does not promote an invalid legacy email into the validated array", () => {
+    const profile = organizationPublicProfile(
+      {
+        id: "org_1",
+        name: "Example",
+        slug: "example",
+        metadata: {
+          translations: [
+            { locale: "en", name: "Example", contactEmail: "support" },
+          ],
+        },
+      },
+      { locale: "en", fallbackLocale: "en" },
+    );
+
+    expect(profile.contactEmail).toBe("support");
+    expect(profile.emails).toEqual([]);
+  });
 });

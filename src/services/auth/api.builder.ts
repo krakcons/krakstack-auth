@@ -1,5 +1,5 @@
 import { ExtraBadRequest } from "@krak-stack/auth/extra";
-import { Effect, Schema } from "effect";
+import { Effect, Option, Schema } from "effect";
 import { HttpServerRequest } from "effect/unstable/http";
 import { HttpApiBuilder, HttpApiError } from "effect/unstable/httpapi";
 import { eq } from "drizzle-orm";
@@ -14,8 +14,9 @@ import { organization } from "@/db/schema";
 import { BetterAuthRequest } from "@/services/auth/better-auth-request";
 import { db } from "@/services/database";
 import {
+  EmailAddress,
   OrganizationMetadata,
-  OrganizationTranslation,
+  decodeOrganizationMetadata,
 } from "@krak-stack/auth/schema";
 import { Projects } from "@/services/projects";
 import { uploadImageFromMultipart } from "@/services/s3/upload";
@@ -47,33 +48,21 @@ export const organizationPublicProfile = (
   },
   localeContext: LocalizedInputType,
 ) => {
-  let metadata: OrganizationMetadata | null = null;
-  let value = record.metadata;
+  const metadata: OrganizationMetadata = decodeOrganizationMetadata(
+    record.metadata,
+  );
 
-  try {
-    value =
-      typeof record.metadata === "string"
-        ? JSON.parse(record.metadata)
-        : record.metadata;
-    metadata = Schema.decodeUnknownSync(OrganizationMetadata)(value);
-  } catch {
-    try {
-      metadata = Schema.decodeUnknownSync(
-        Schema.Struct({ translations: Schema.Array(OrganizationTranslation) }),
-      )(value);
-    } catch {
-      metadata = null;
-    }
-  }
-
-  const translation = metadata?.translations.length
+  const translation = metadata.translations.length
     ? localize(localeContext, {
         translations: Array.from(metadata.translations),
       })
     : null;
-  const emails = Array.from(metadata?.emails ?? []);
+  const emails = Array.from(metadata.emails ?? []);
   if (
     translation?.contactEmail &&
+    Option.isSome(
+      Schema.decodeUnknownOption(EmailAddress)(translation.contactEmail),
+    ) &&
     !emails.some((email) => email.email === translation.contactEmail)
   ) {
     emails.unshift({
@@ -86,7 +75,7 @@ export const organizationPublicProfile = (
       ],
     });
   }
-  const addresses = Array.from(metadata?.addresses ?? []).map(
+  const addresses = Array.from(metadata.addresses ?? []).map(
     (postalAddress) => ({
       ...postalAddress,
       formatted: [
@@ -111,7 +100,18 @@ export const organizationPublicProfile = (
       ],
     });
   }
-  const contactEmail = emails[0]?.email ?? translation?.contactEmail ?? null;
+  const localizedEmail = emails.find(
+    (email) =>
+      localize(localeContext, {
+        ...email,
+        translations: Array.from(email.translations),
+      }).locale === localeContext.locale,
+  );
+  const contactEmail =
+    localizedEmail?.email ??
+    emails[0]?.email ??
+    translation?.contactEmail ??
+    null;
 
   return {
     id: record.id,
@@ -120,9 +120,9 @@ export const organizationPublicProfile = (
     displayName: translation?.name ?? record.name,
     contactEmail,
     emails,
-    phones: Array.from(metadata?.phones ?? []),
-    websites: Array.from(metadata?.websites ?? []),
-    socials: Array.from(metadata?.socials ?? []),
+    phones: Array.from(metadata.phones ?? []),
+    websites: Array.from(metadata.websites ?? []),
+    socials: Array.from(metadata.socials ?? []),
     addresses,
     logo: translation?.logo ?? null,
     icon: translation?.icon ?? null,

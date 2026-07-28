@@ -4,8 +4,10 @@ import { Schema } from "effect";
 import {
   EmailAddress,
   OrganizationEmail,
+  Organization,
   OrganizationMetadata,
   WebsiteUrl,
+  decodeOrganizationMetadata,
 } from "./schema";
 
 describe("organization contact schemas", () => {
@@ -50,5 +52,39 @@ describe("organization contact schemas", () => {
     });
 
     expect(metadata.addresses).toHaveLength(2);
+  });
+
+  it("decodes valid fields independently from legacy key collisions", () => {
+    const metadata = decodeOrganizationMetadata({
+      translations: [{ locale: "en", name: "Example" }],
+      emails: "legacy custom value",
+      phones: [
+        {
+          number: "+1 514 555 0100",
+          translations: [{ locale: "en", label: "Office" }],
+        },
+      ],
+    });
+
+    expect(metadata.emails).toBeUndefined();
+    expect(metadata.phones).toHaveLength(1);
+  });
+
+  it("decodes organization responses with legacy metadata collisions", () => {
+    const organization = Schema.decodeUnknownSync(Organization)({
+      id: "org_1",
+      name: "Example",
+      slug: "example",
+      logo: null,
+      metadata: {
+        translations: [{ locale: "en", name: "Example" }],
+        emails: "legacy custom value",
+      },
+      parentId: null,
+      createdAt: new Date("2026-01-01T00:00:00.000Z"),
+    });
+
+    expect(organization.metadata?.translations).toHaveLength(1);
+    expect(organization.metadata?.emails).toBeUndefined();
   });
 });

@@ -1,4 +1,4 @@
-import { Schema } from "effect";
+import { Option, Schema, SchemaGetter } from "effect";
 
 export const User = Schema.Struct({
   id: Schema.String,
@@ -282,12 +282,63 @@ export const OrganizationMetadata = Schema.Struct({
   ],
 });
 
+const decodeOrganizationMetadataJson = Schema.decodeUnknownOption(
+  Schema.fromJsonString(Schema.Unknown),
+);
+
+export const decodeOrganizationMetadata = (
+  metadata: unknown,
+): OrganizationMetadata => {
+  const value =
+    typeof metadata === "string"
+      ? Option.getOrNull(decodeOrganizationMetadataJson(metadata))
+      : metadata;
+  if (typeof value !== "object" || value === null) {
+    return { translations: [] };
+  }
+
+  const translations = Schema.decodeUnknownOption(
+    Schema.Array(OrganizationTranslation),
+  )(Reflect.get(value, "translations"));
+  const emails = Schema.decodeUnknownOption(Schema.Array(OrganizationEmail))(
+    Reflect.get(value, "emails"),
+  );
+  const phones = Schema.decodeUnknownOption(Schema.Array(OrganizationPhone))(
+    Reflect.get(value, "phones"),
+  );
+  const websites = Schema.decodeUnknownOption(
+    Schema.Array(OrganizationWebsite),
+  )(Reflect.get(value, "websites"));
+  const socials = Schema.decodeUnknownOption(Schema.Array(OrganizationSocial))(
+    Reflect.get(value, "socials"),
+  );
+  const addresses = Schema.decodeUnknownOption(
+    Schema.Array(OrganizationAddress),
+  )(Reflect.get(value, "addresses"));
+
+  return {
+    translations: Option.getOrElse(translations, () => []),
+    ...(Option.isSome(emails) ? { emails: emails.value } : {}),
+    ...(Option.isSome(phones) ? { phones: phones.value } : {}),
+    ...(Option.isSome(websites) ? { websites: websites.value } : {}),
+    ...(Option.isSome(socials) ? { socials: socials.value } : {}),
+    ...(Option.isSome(addresses) ? { addresses: addresses.value } : {}),
+  };
+};
+
+const CompatibleOrganizationMetadata = Schema.Unknown.pipe(
+  Schema.decodeTo(OrganizationMetadata, {
+    decode: SchemaGetter.transform(decodeOrganizationMetadata),
+    encode: SchemaGetter.transform((metadata) => metadata),
+  }),
+);
+
 export const Organization = Schema.Struct({
   id: Schema.String,
   name: Schema.String,
   slug: Schema.String,
   logo: Schema.NullOr(Schema.String),
-  metadata: Schema.NullOr(OrganizationMetadata),
+  metadata: Schema.NullOr(CompatibleOrganizationMetadata),
   parentId: Schema.NullOr(Schema.String),
   createdAt: Schema.Date,
 }).annotate({
