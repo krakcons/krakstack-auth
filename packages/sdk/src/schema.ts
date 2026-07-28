@@ -74,12 +74,138 @@ export const OrganizationLocale = Schema.Union([
   examples: ["en", "fr"],
 });
 
+export const EmailAddress = Schema.NonEmptyString.check(
+  Schema.isPattern(/^[^\s@]+@[^\s@]+\.[^\s@]+$/),
+).annotate({
+  identifier: "EmailAddress",
+  title: "Email address",
+});
+
+export const PhoneNumber = Schema.NonEmptyString.check(
+  Schema.isPattern(/^\+?[0-9 ()-]{7,}$/),
+).annotate({
+  identifier: "PhoneNumber",
+  title: "Phone number",
+});
+
+export const WebsiteUrl = Schema.NonEmptyString.check(
+  Schema.isPattern(/^https?:\/\/[^\s]+$/),
+).annotate({
+  identifier: "WebsiteUrl",
+  title: "Website URL",
+});
+
+export const SocialPlatform = Schema.Literals([
+  "facebook",
+  "github",
+  "instagram",
+  "linkedin",
+  "tiktok",
+  "x",
+  "youtube",
+]).annotate({
+  identifier: "SocialPlatform",
+  title: "Social platform",
+});
+
+export const OrganizationContactTranslation = Schema.Struct({
+  locale: OrganizationLocale,
+  label: Schema.NonEmptyString.check(Schema.isPattern(/\S/)),
+}).annotate({
+  identifier: "OrganizationContactTranslation",
+  title: "Organization contact translation",
+});
+
+export const OrganizationEmail = Schema.Struct({
+  email: EmailAddress,
+  translations: Schema.Array(OrganizationContactTranslation).check(
+    Schema.isMinLength(1),
+  ),
+}).annotate({
+  identifier: "OrganizationEmail",
+  title: "Organization email",
+});
+
+export const OrganizationPhone = Schema.Struct({
+  number: PhoneNumber,
+  extension: Schema.optional(Schema.String),
+  translations: Schema.Array(OrganizationContactTranslation).check(
+    Schema.isMinLength(1),
+  ),
+}).annotate({
+  identifier: "OrganizationPhone",
+  title: "Organization phone",
+});
+
+export const OrganizationWebsite = Schema.Struct({
+  url: WebsiteUrl,
+  translations: Schema.Array(OrganizationContactTranslation).check(
+    Schema.isMinLength(1),
+  ),
+}).annotate({
+  identifier: "OrganizationWebsite",
+  title: "Organization website",
+});
+
+export const OrganizationSocial = Schema.Struct({
+  platform: SocialPlatform,
+  url: WebsiteUrl,
+  translations: Schema.Array(OrganizationContactTranslation).check(
+    Schema.isMinLength(1),
+  ),
+}).annotate({
+  identifier: "OrganizationSocial",
+  title: "Organization social profile",
+});
+
+export const PostalAddress = Schema.Struct({
+  streetAddress: Schema.optional(Schema.String),
+  locality: Schema.optional(Schema.String),
+  region: Schema.optional(Schema.String),
+  postalCode: Schema.optional(Schema.String),
+  country: Schema.optional(Schema.String),
+}).annotate({
+  identifier: "PostalAddress",
+  title: "Postal address",
+  description: "Structured postal address compatible with OIDC address claims.",
+  examples: [
+    {
+      streetAddress: "123 Example Street",
+      locality: "Montreal",
+      region: "QC",
+      postalCode: "H2X 1Y4",
+      country: "Canada",
+    },
+  ],
+});
+
+export const OrganizationAddress = Schema.Struct({
+  ...PostalAddress.fields,
+  translations: Schema.Array(OrganizationContactTranslation).check(
+    Schema.isMinLength(1),
+  ),
+}).annotate({
+  identifier: "OrganizationAddress",
+  title: "Organization address",
+});
+
+export const FormattedOrganizationAddress = Schema.Struct({
+  ...OrganizationAddress.fields,
+  formatted: Schema.String,
+}).annotate({
+  identifier: "FormattedOrganizationAddress",
+  title: "Formatted organization address",
+  description: "Organization address with a server-generated display value.",
+});
+
 export const OrganizationTranslation = Schema.Struct({
   locale: OrganizationLocale,
   name: Schema.String,
   logo: Schema.optional(Schema.NullOr(Schema.String)),
   icon: Schema.optional(Schema.NullOr(Schema.String)),
+  // Retained when decoding metadata written before repeatable contacts.
   contactEmail: Schema.optional(Schema.NullOr(Schema.String)),
+  // Retained when decoding metadata written before structured addresses.
   location: Schema.optional(Schema.NullOr(Schema.String)),
 }).annotate({
   identifier: "OrganizationTranslation",
@@ -91,19 +217,22 @@ export const OrganizationTranslation = Schema.Struct({
       name: "KrakStack",
       logo: "https://example.com/logo.svg",
       icon: "https://example.com/icon.png",
-      contactEmail: "team@example.com",
-      location: "Montreal, QC",
     },
   ],
 });
 
 export const OrganizationMetadata = Schema.Struct({
   translations: Schema.Array(OrganizationTranslation),
+  emails: Schema.optional(Schema.Array(OrganizationEmail)),
+  phones: Schema.optional(Schema.Array(OrganizationPhone)),
+  websites: Schema.optional(Schema.Array(OrganizationWebsite)),
+  socials: Schema.optional(Schema.Array(OrganizationSocial)),
+  addresses: Schema.optional(Schema.Array(OrganizationAddress)),
 }).annotate({
   identifier: "OrganizationMetadata",
   title: "Organization metadata",
   description:
-    "Localized names, logos, icons, contact emails, and locations stored on an organization record.",
+    "Localized profile and contact details stored on an organization record.",
   examples: [
     {
       translations: [
@@ -112,8 +241,41 @@ export const OrganizationMetadata = Schema.Struct({
           name: "KrakStack",
           logo: "https://example.com/logo.svg",
           icon: "https://example.com/icon.png",
-          contactEmail: "team@example.com",
-          location: "Montreal, QC",
+        },
+      ],
+      emails: [
+        {
+          email: "team@example.com",
+          translations: [{ locale: "en", label: "General inquiries" }],
+        },
+      ],
+      phones: [
+        {
+          number: "+1 514 555 0100",
+          translations: [{ locale: "en", label: "Office" }],
+        },
+      ],
+      websites: [
+        {
+          url: "https://example.com",
+          translations: [{ locale: "en", label: "Website" }],
+        },
+      ],
+      socials: [
+        {
+          platform: "linkedin",
+          url: "https://linkedin.com/company/example",
+          translations: [{ locale: "en", label: "LinkedIn" }],
+        },
+      ],
+      addresses: [
+        {
+          streetAddress: "123 Example Street",
+          locality: "Montreal",
+          region: "QC",
+          postalCode: "H2X 1Y4",
+          country: "Canada",
+          translations: [{ locale: "en", label: "Head office" }],
         },
       ],
     },
@@ -146,8 +308,41 @@ export const Organization = Schema.Struct({
             name: "KrakStack",
             logo: null,
             icon: null,
-            contactEmail: "team@example.com",
-            location: "Montreal, QC",
+          },
+        ],
+        emails: [
+          {
+            email: "team@example.com",
+            translations: [{ locale: "en", label: "General inquiries" }],
+          },
+        ],
+        phones: [
+          {
+            number: "+1 514 555 0100",
+            translations: [{ locale: "en", label: "Office" }],
+          },
+        ],
+        websites: [
+          {
+            url: "https://example.com",
+            translations: [{ locale: "en", label: "Website" }],
+          },
+        ],
+        socials: [
+          {
+            platform: "linkedin",
+            url: "https://linkedin.com/company/example",
+            translations: [{ locale: "en", label: "LinkedIn" }],
+          },
+        ],
+        addresses: [
+          {
+            streetAddress: "123 Example Street",
+            locality: "Montreal",
+            region: "QC",
+            postalCode: "H2X 1Y4",
+            country: "Canada",
+            translations: [{ locale: "en", label: "Head office" }],
           },
         ],
       },
@@ -193,6 +388,20 @@ export const Member = Schema.Struct({
 export type User = typeof User.Type;
 export type Session = typeof Session.Type;
 export type OrganizationLocale = typeof OrganizationLocale.Type;
+export type EmailAddress = typeof EmailAddress.Type;
+export type PhoneNumber = typeof PhoneNumber.Type;
+export type WebsiteUrl = typeof WebsiteUrl.Type;
+export type SocialPlatform = typeof SocialPlatform.Type;
+export type PostalAddress = typeof PostalAddress.Type;
+export type OrganizationAddress = typeof OrganizationAddress.Type;
+export type FormattedOrganizationAddress =
+  typeof FormattedOrganizationAddress.Type;
+export type OrganizationContactTranslation =
+  typeof OrganizationContactTranslation.Type;
+export type OrganizationEmail = typeof OrganizationEmail.Type;
+export type OrganizationPhone = typeof OrganizationPhone.Type;
+export type OrganizationWebsite = typeof OrganizationWebsite.Type;
+export type OrganizationSocial = typeof OrganizationSocial.Type;
 export type OrganizationTranslation = typeof OrganizationTranslation.Type;
 export type OrganizationMetadata = typeof OrganizationMetadata.Type;
 export type Organization = typeof Organization.Type;

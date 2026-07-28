@@ -2,6 +2,14 @@ import { Schema } from "effect";
 import { Multipart } from "effect/unstable/http";
 import { HttpApiSchema } from "effect/unstable/httpapi";
 
+import {
+  OrganizationEmail,
+  OrganizationPhone,
+  OrganizationSocial,
+  OrganizationWebsite,
+  FormattedOrganizationAddress,
+} from "../schema";
+
 export const ExtraImageUploadPayload = Schema.Struct({
   file: Multipart.SingleFileSchema,
 }).annotate({
@@ -248,6 +256,11 @@ export const ExtraOrganizationPublicProfile = Schema.Struct({
   slug: Schema.String,
   displayName: Schema.String,
   contactEmail: Schema.NullOr(Schema.String),
+  emails: Schema.optional(Schema.Array(OrganizationEmail)),
+  phones: Schema.optional(Schema.Array(OrganizationPhone)),
+  websites: Schema.optional(Schema.Array(OrganizationWebsite)),
+  socials: Schema.optional(Schema.Array(OrganizationSocial)),
+  addresses: Schema.optional(Schema.Array(FormattedOrganizationAddress)),
   logo: Schema.NullOr(Schema.String),
   icon: Schema.NullOr(Schema.String),
 }).annotate({
@@ -262,6 +275,11 @@ export const ExtraOrganizationPublicProfile = Schema.Struct({
       slug: "krak",
       displayName: "Krak",
       contactEmail: null,
+      emails: [],
+      phones: [],
+      websites: [],
+      socials: [],
+      addresses: [],
       logo: null,
       icon: null,
     },

@@ -1,7 +1,7 @@
 import { Schema } from "effect";
 import { OrganizationMetadata } from "@krak-stack/auth/schema";
 
-export type OrganizationBrandingLocale = "en" | "fr";
+import { localize, type Locale } from "@/lib/localization";
 
 export interface OrganizationBrandingSource {
   readonly name: string;
@@ -22,17 +22,19 @@ const parseOrganizationMetadata = (metadata: unknown) => {
 
 export const organizationBranding = (
   organization: OrganizationBrandingSource | null | undefined,
-  locale: OrganizationBrandingLocale = "en",
+  locale: Locale = "en",
 ) => {
   if (!organization) return null;
 
   const translations = parseOrganizationMetadata(
     organization.metadata,
   ).translations;
-  const translation =
-    translations.find((item) => item.locale === locale) ??
-    translations.find((item) => item.locale === "en") ??
-    translations[0];
+  const translation = translations.length
+    ? localize(
+        { locale, fallbackLocale: "en" },
+        { translations: Array.from(translations) },
+      )
+    : null;
 
   return {
     name: translation?.name || organization.name,

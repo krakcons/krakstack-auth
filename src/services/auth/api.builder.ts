@@ -5,10 +5,18 @@ import { HttpApiBuilder, HttpApiError } from "effect/unstable/httpapi";
 import { eq } from "drizzle-orm";
 
 import { FrontendApi } from "@/api";
+import {
+  LocaleContext,
+  localize,
+  type LocalizedInputType,
+} from "@/lib/localization";
 import { organization } from "@/db/schema";
 import { BetterAuthRequest } from "@/services/auth/better-auth-request";
 import { db } from "@/services/database";
-import { OrganizationMetadata } from "@krak-stack/auth/schema";
+import {
+  OrganizationMetadata,
+  OrganizationTranslation,
+} from "@krak-stack/auth/schema";
 import { Projects } from "@/services/projects";
 import { uploadImageFromMultipart } from "@/services/s3/upload";
 
@@ -30,35 +38,92 @@ const hasAdminRole = (role: unknown) =>
   typeof role === "string" &&
   role.split(",").some((item) => item.trim() === "admin");
 
-const organizationPublicProfile = (record: {
-  id: string;
-  name: string;
-  slug: string;
-  metadata: unknown;
-}) => {
+export const organizationPublicProfile = (
+  record: {
+    id: string;
+    name: string;
+    slug: string;
+    metadata: unknown;
+  },
+  localeContext: LocalizedInputType,
+) => {
   let metadata: OrganizationMetadata | null = null;
+  let value = record.metadata;
 
   try {
-    metadata = Schema.decodeUnknownSync(OrganizationMetadata)(
+    value =
       typeof record.metadata === "string"
         ? JSON.parse(record.metadata)
-        : record.metadata,
-    );
+        : record.metadata;
+    metadata = Schema.decodeUnknownSync(OrganizationMetadata)(value);
   } catch {
-    metadata = null;
+    try {
+      metadata = Schema.decodeUnknownSync(
+        Schema.Struct({ translations: Schema.Array(OrganizationTranslation) }),
+      )(value);
+    } catch {
+      metadata = null;
+    }
   }
 
-  const translation =
-    metadata?.translations.find((item) => item.locale === "en") ??
-    metadata?.translations[0] ??
-    null;
+  const translation = metadata?.translations.length
+    ? localize(localeContext, {
+        translations: Array.from(metadata.translations),
+      })
+    : null;
+  const emails = Array.from(metadata?.emails ?? []);
+  if (
+    translation?.contactEmail &&
+    !emails.some((email) => email.email === translation.contactEmail)
+  ) {
+    emails.unshift({
+      email: translation.contactEmail,
+      translations: [
+        {
+          locale: translation.locale,
+          label: translation.locale === "fr" ? "Courriel" : "Email",
+        },
+      ],
+    });
+  }
+  const addresses = Array.from(metadata?.addresses ?? []).map(
+    (postalAddress) => ({
+      ...postalAddress,
+      formatted: [
+        postalAddress.streetAddress,
+        [postalAddress.locality, postalAddress.region, postalAddress.postalCode]
+          .filter(Boolean)
+          .join(" "),
+        postalAddress.country,
+      ]
+        .filter(Boolean)
+        .join(", "),
+    }),
+  );
+  if (!addresses.length && translation?.location) {
+    addresses.push({
+      formatted: translation.location,
+      translations: [
+        {
+          locale: translation.locale,
+          label: translation.locale === "fr" ? "Adresse" : "Address",
+        },
+      ],
+    });
+  }
+  const contactEmail = emails[0]?.email ?? translation?.contactEmail ?? null;
 
   return {
     id: record.id,
     name: record.name,
     slug: record.slug,
     displayName: translation?.name ?? record.name,
-    contactEmail: translation?.contactEmail ?? null,
+    contactEmail,
+    emails,
+    phones: Array.from(metadata?.phones ?? []),
+    websites: Array.from(metadata?.websites ?? []),
+    socials: Array.from(metadata?.socials ?? []),
+    addresses,
     logo: translation?.logo ?? null,
     icon: translation?.icon ?? null,
   };
@@ -120,6 +185,7 @@ export const authApiHandler = HttpApiBuilder.group(
       )
       .handle("getOrganizationPublicProfile", ({ query }) =>
         Effect.gen(function* () {
+          const localeContext = yield* LocaleContext;
           const [record] = yield* Effect.tryPromise({
             try: () =>
               db
@@ -137,7 +203,7 @@ export const authApiHandler = HttpApiBuilder.group(
 
           if (!record) return yield* new HttpApiError.NotFound({});
 
-          return organizationPublicProfile(record);
+          return organizationPublicProfile(record, localeContext);
         }),
       )
       .handle("setPassword", ({ payload, request }) =>

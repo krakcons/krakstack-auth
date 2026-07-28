@@ -17,6 +17,7 @@ import {
 
 import type { AuthUiClient } from "./auth-client";
 import { type KrakstackAuthLocale, useKrakstackAuth } from "./auth-provider";
+import type { OrganizationEmail } from "../schema";
 import {
   isInvitationExpired,
   useInvitationExpirationClock,
@@ -91,7 +92,8 @@ type FullOrganization = {
   name: string;
   slug: string;
   displayName: string;
-  contactEmail: string | null;
+  contactEmail?: string | null;
+  emails?: ReadonlyArray<OrganizationEmail>;
   logo: string | null;
   icon: string | null;
 };
@@ -104,6 +106,7 @@ const isFullOrganization = (value: unknown): value is FullOrganization => {
   if (!("displayName" in value) || typeof value.displayName !== "string") {
     return false;
   }
+  if ("emails" in value && !Array.isArray(value.emails)) return false;
 
   return true;
 };
@@ -129,7 +132,11 @@ const invitationMatches = (invitation: Invitation, organizationId: string) =>
 const organizationContactEmail = (
   organization: FullOrganization | null,
   fallback: string | undefined,
-) => organization?.contactEmail ?? fallback ?? null;
+) =>
+  organization?.emails?.[0]?.email ??
+  organization?.contactEmail ??
+  fallback ??
+  null;
 
 const organizationDisplayName = (
   invitation: Invitation | null,

@@ -20,6 +20,7 @@ import {
 } from "effect/unstable/httpapi";
 
 import { AdminApi, FrontendApi } from "@/api";
+import { LocaleMiddlewareLive } from "@/lib/localization";
 import { AuthDocsApi } from "@/api.docs";
 import { corsMiddleware } from "@/lib/cors";
 import { adminApiHandler } from "@/services/admin/api.builder";
@@ -245,6 +246,7 @@ const apiLayer = Layer.mergeAll(
     Layer.provide(authApiHandler),
     Layer.provide(publicOAuthClientsApiHandler),
     Layer.provide(publicProjectsApiHandler),
+    Layer.provide(LocaleMiddlewareLive),
   ),
   HttpApiBuilder.layer(BackendAuthApi, {
     openapiPath: "/api/backend-openapi.json",

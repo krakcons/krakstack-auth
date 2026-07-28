@@ -36,6 +36,7 @@ import {
   DataTableRelationshipCell,
 } from "@/components/ui/data-table";
 import {
+  ErrorMessage,
   ImageField,
   SelectField,
   SubmitButton,
@@ -44,7 +45,8 @@ import {
 } from "@/components/ui/effect-form";
 import { EditingLocaleSwitcher } from "@/components/ui/editing-locale-switcher";
 import { AppBrand } from "@/components/ui/app-brand";
-import { FieldSet } from "@/components/ui/field";
+import { Field, FieldLabel, FieldSet } from "@/components/ui/field";
+import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -63,11 +65,30 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Separator } from "@/components/ui/separator";
 import {
+  OrganizationEmail,
+  OrganizationAddress,
   OrganizationMetadata,
+  OrganizationPhone,
+  OrganizationSocial,
+  OrganizationTranslation,
+  OrganizationWebsite,
+  type OrganizationEmail as OrganizationEmailValue,
+  type OrganizationAddress as OrganizationAddressValue,
+  type OrganizationContactTranslation,
   type OrganizationLocale,
-  type OrganizationTranslation,
+  type OrganizationPhone as OrganizationPhoneValue,
+  type OrganizationSocial as OrganizationSocialValue,
+  type OrganizationWebsite as OrganizationWebsiteValue,
+  type SocialPlatform,
 } from "@krak-stack/auth/schema";
 import {
   isOrganizationRole,
@@ -96,7 +117,20 @@ const messages = {
   en: {
     api_key_rate_limit_notice:
       "API keys are subject to the same rate limits as your account.",
-    organization_contact_email: "Contact email",
+    organization_contact: "Contact methods",
+    organization_contact_add_email: "Add email",
+    organization_contact_add_phone: "Add phone",
+    organization_contact_add_social: "Add social profile",
+    organization_contact_add_website: "Add website",
+    organization_contact_email_type: "Email",
+    organization_contact_extension: "Extension",
+    organization_contact_label: "Label",
+    organization_contact_phone_type: "Phone",
+    organization_contact_platform: "Platform",
+    organization_contact_remove: "Remove contact method",
+    organization_contact_social_type: "Social",
+    organization_contact_url: "URL",
+    organization_contact_website_type: "Website",
     organization_create_description:
       "Create a workspace for team-based access.",
     organization_create_error: "Could not create the organization.",
@@ -137,11 +171,18 @@ const messages = {
       "Send an invitation to join this organization with the selected role.",
     organization_invite_member_title: "Invite a member",
     organization_loading: "Loading...",
-    organization_location: "Location",
+    organization_address: "Address",
+    organization_address_add: "Add address",
+    organization_address_country: "Country",
+    organization_address_locality: "City or locality",
+    organization_address_postal_code: "Postal code",
+    organization_address_region: "State, province, or region",
+    organization_address_street: "Street address",
     organization_parent: "Parent organization",
     organization_parent_description:
       "Optionally group this organization under another organization.",
     organization_parent_none: "No parent organization",
+    organization_profile: "Profile",
     organization_icon: "Icon",
     organization_logo: "Logo",
     organization_logo_upload_error: "Could not upload the organization logo.",
@@ -165,7 +206,7 @@ const messages = {
     organization_role_member: "Member",
     organization_role_owner: "Owner",
     organization_role_support: "Support",
-    organization_slug: "Organization slug",
+    organization_slug: "Slug",
     organization_slug_description: "Leave blank to generate one from the name.",
     organization_switcher_empty: "You do not belong to any organizations yet.",
     organization_switcher_label: "Organization",
@@ -174,8 +215,6 @@ const messages = {
     organization_switcher_personal: "Personal",
     organization_translation_description:
       "Localized organization details stored in metadata.",
-    organization_translation_english: "English profile",
-    organization_translation_french: "French profile",
     organization_translation_name: "Name",
     organization_update_error: "Could not update the organization.",
     table_empty: "No results.",
@@ -199,7 +238,20 @@ const messages = {
   fr: {
     api_key_rate_limit_notice:
       "Les clés API sont soumises aux mêmes limites de débit que votre compte.",
-    organization_contact_email: "E-mail de contact",
+    organization_contact: "Moyens de contact",
+    organization_contact_add_email: "Ajouter un courriel",
+    organization_contact_add_phone: "Ajouter un téléphone",
+    organization_contact_add_social: "Ajouter un profil social",
+    organization_contact_add_website: "Ajouter un site Web",
+    organization_contact_email_type: "Courriel",
+    organization_contact_extension: "Poste",
+    organization_contact_label: "Libellé",
+    organization_contact_phone_type: "Téléphone",
+    organization_contact_platform: "Plateforme",
+    organization_contact_remove: "Supprimer le moyen de contact",
+    organization_contact_social_type: "Réseau social",
+    organization_contact_url: "URL",
+    organization_contact_website_type: "Site Web",
     organization_create_description:
       "Créez un espace de travail pour l'accès en équipe.",
     organization_create_error: "Impossible de créer l'organisation.",
@@ -241,11 +293,18 @@ const messages = {
       "Envoyez une invitation à rejoindre cette organisation avec le rôle sélectionné.",
     organization_invite_member_title: "Inviter un membre",
     organization_loading: "Chargement...",
-    organization_location: "Emplacement",
+    organization_address: "Adresse",
+    organization_address_add: "Ajouter une adresse",
+    organization_address_country: "Pays",
+    organization_address_locality: "Ville ou localité",
+    organization_address_postal_code: "Code postal",
+    organization_address_region: "État, province ou région",
+    organization_address_street: "Adresse municipale",
     organization_parent: "Organisation parente",
     organization_parent_description:
       "Regroupez facultativement cette organisation sous une autre organisation.",
     organization_parent_none: "Aucune organisation parente",
+    organization_profile: "Profil",
     organization_icon: "Icône",
     organization_logo: "Logo",
     organization_logo_upload_error:
@@ -271,7 +330,7 @@ const messages = {
     organization_role_member: "Membre",
     organization_role_owner: "Propriétaire",
     organization_role_support: "Support",
-    organization_slug: "Slug de l'organisation",
+    organization_slug: "Slug",
     organization_slug_description:
       "Laissez vide pour en générer un à partir du nom.",
     organization_switcher_empty:
@@ -282,8 +341,6 @@ const messages = {
     organization_switcher_personal: "Personnel",
     organization_translation_description:
       "Détails localisés de l'organisation stockés dans les métadonnées.",
-    organization_translation_english: "Profil anglais",
-    organization_translation_french: "Profil français",
     organization_translation_name: "Nom",
     organization_update_error: "Impossible de mettre à jour l'organisation.",
     table_empty: "Aucun résultat.",
@@ -543,16 +600,17 @@ const emptyOrganizationApiKeysAtom = Atom.make(
 type OrganizationFormValues = {
   parentId: string;
   slug: string;
+  emails: ReadonlyArray<OrganizationEmailValue>;
+  phones: ReadonlyArray<OrganizationPhoneValue>;
+  websites: ReadonlyArray<OrganizationWebsiteValue>;
+  socials: ReadonlyArray<OrganizationSocialValue>;
+  addresses: ReadonlyArray<OrganizationAddressValue>;
   enName: string;
   enLogo: File | string | null | undefined;
   enIcon: File | string | null | undefined;
-  enContactEmail: string;
-  enLocation: string;
   frName: string;
   frLogo: File | string | null | undefined;
   frIcon: File | string | null | undefined;
-  frContactEmail: string;
-  frLocation: string;
 };
 
 const organizationImageSchema = Schema.Union([
@@ -565,16 +623,498 @@ const organizationImageSchema = Schema.Union([
 const organizationFormBuilder = FormBuilder.empty
   .addField("parentId", Schema.String)
   .addField("slug", Schema.String)
+  .addField("emails", Schema.Array(OrganizationEmail))
+  .addField("phones", Schema.Array(OrganizationPhone))
+  .addField("websites", Schema.Array(OrganizationWebsite))
+  .addField("socials", Schema.Array(OrganizationSocial))
+  .addField("addresses", Schema.Array(OrganizationAddress))
   .addField("enName", Schema.String)
   .addField("enLogo", organizationImageSchema)
   .addField("enIcon", organizationImageSchema)
-  .addField("enContactEmail", Schema.String)
-  .addField("enLocation", Schema.String)
   .addField("frName", Schema.String)
   .addField("frLogo", organizationImageSchema)
-  .addField("frIcon", organizationImageSchema)
-  .addField("frContactEmail", Schema.String)
-  .addField("frLocation", Schema.String);
+  .addField("frIcon", organizationImageSchema);
+
+const socialPlatform = (value: string | null): SocialPlatform | null => {
+  switch (value) {
+    case "facebook":
+    case "github":
+    case "instagram":
+    case "linkedin":
+    case "tiktok":
+    case "x":
+    case "youtube":
+      return value;
+    default:
+      return null;
+  }
+};
+
+const contactLabel = (
+  translations: ReadonlyArray<OrganizationContactTranslation> | undefined,
+  locale: OrganizationLocale,
+) =>
+  translations?.find((translation) => translation.locale === locale)?.label ??
+  "";
+
+const contactTranslations = (
+  translations: ReadonlyArray<OrganizationContactTranslation> | undefined,
+  locale: OrganizationLocale,
+  label: string,
+): OrganizationContactTranslation[] => [
+  ...(translations ?? []).filter(
+    (translation) => translation.locale !== locale,
+  ),
+  ...(label ? [{ locale, label }] : []),
+];
+
+const EmailsField: FormReact.FieldComponent<
+  ReadonlyArray<OrganizationEmailValue>,
+  { locale: OrganizationLocale }
+> = ({ field, props }) => {
+  const m = useOrganizationMessages();
+
+  return (
+    <RepeatableContactField
+      addLabel={m.organization_contact_add_email()}
+      emptyValue={{
+        email: "",
+        translations: [{ locale: props.locale, label: "" }],
+      }}
+      error={Option.isSome(field.error) ? field.error.value : undefined}
+      path={field.path}
+      values={field.value}
+      onChange={field.onChange}
+      render={(contact, index, update) => (
+        <div className="grid gap-3 sm:grid-cols-2">
+          <ContactInput
+            id={`${field.path}-${index}-email`}
+            label={m.organization_contact_email_type()}
+            placeholder="team@example.com"
+            type="email"
+            value={contact.email}
+            onBlur={field.onBlur}
+            onChange={(email) => update({ ...contact, email })}
+          />
+          <ContactLabelInput
+            id={`${field.path}-${index}-label`}
+            locale={props.locale}
+            translations={contact.translations}
+            onBlur={field.onBlur}
+            onChange={(translations) =>
+              update({
+                ...contact,
+                translations,
+              })
+            }
+          />
+        </div>
+      )}
+    />
+  );
+};
+
+const PhonesField: FormReact.FieldComponent<
+  ReadonlyArray<OrganizationPhoneValue>,
+  { locale: OrganizationLocale }
+> = ({ field, props }) => {
+  const m = useOrganizationMessages();
+  return (
+    <RepeatableContactField
+      addLabel={m.organization_contact_add_phone()}
+      emptyValue={{
+        number: "",
+        translations: [{ locale: props.locale, label: "" }],
+      }}
+      error={Option.isSome(field.error) ? field.error.value : undefined}
+      path={field.path}
+      values={field.value}
+      onChange={field.onChange}
+      render={(phone, index, update) => (
+        <div className="grid gap-3 sm:grid-cols-2">
+          <ContactInput
+            id={`${field.path}-${index}-number`}
+            label={m.organization_contact_phone_type()}
+            placeholder="+1 514 555 0100"
+            type="tel"
+            value={phone.number}
+            onBlur={field.onBlur}
+            onChange={(number) => update({ ...phone, number })}
+          />
+          <ContactInput
+            id={`${field.path}-${index}-extension`}
+            label={m.organization_contact_extension()}
+            value={phone.extension ?? ""}
+            onBlur={field.onBlur}
+            onChange={(extension) =>
+              update({
+                ...phone,
+                ...(extension ? { extension } : { extension: undefined }),
+              })
+            }
+          />
+          <ContactLabelInput
+            id={`${field.path}-${index}-label`}
+            locale={props.locale}
+            translations={phone.translations}
+            onBlur={field.onBlur}
+            onChange={(translations) =>
+              update({
+                ...phone,
+                translations,
+              })
+            }
+          />
+        </div>
+      )}
+    />
+  );
+};
+
+function ContactInput({
+  className,
+  id,
+  label,
+  onBlur,
+  onChange,
+  placeholder,
+  type = "text",
+  value,
+}: {
+  className?: string;
+  id: string;
+  label: string;
+  onBlur: () => void;
+  onChange: (value: string) => void;
+  placeholder?: string;
+  type?: "email" | "tel" | "text" | "url";
+  value: string;
+}) {
+  return (
+    <div className={className}>
+      <FieldLabel htmlFor={id}>{label}</FieldLabel>
+      <Input
+        id={id}
+        className="mt-2"
+        value={value}
+        type={type}
+        placeholder={placeholder}
+        onBlur={onBlur}
+        onChange={(event) => onChange(event.target.value)}
+      />
+    </div>
+  );
+}
+
+function ContactLabelInput({
+  id,
+  locale,
+  onBlur,
+  onChange,
+  translations,
+}: {
+  id: string;
+  locale: OrganizationLocale;
+  onBlur: () => void;
+  onChange: (translations: OrganizationContactTranslation[]) => void;
+  translations: ReadonlyArray<OrganizationContactTranslation> | undefined;
+}) {
+  const m = useOrganizationMessages();
+
+  return (
+    <ContactInput
+      id={id}
+      label={m.organization_contact_label()}
+      value={contactLabel(translations, locale)}
+      onBlur={onBlur}
+      onChange={(label) =>
+        onChange(contactTranslations(translations, locale, label))
+      }
+    />
+  );
+}
+
+const WebsitesField: FormReact.FieldComponent<
+  ReadonlyArray<OrganizationWebsiteValue>,
+  { locale: OrganizationLocale }
+> = ({ field, props }) => {
+  const m = useOrganizationMessages();
+  return (
+    <RepeatableContactField
+      addLabel={m.organization_contact_add_website()}
+      emptyValue={{
+        url: "",
+        translations: [{ locale: props.locale, label: "" }],
+      }}
+      error={Option.isSome(field.error) ? field.error.value : undefined}
+      path={field.path}
+      values={field.value}
+      onChange={field.onChange}
+      render={(website, index, update) => (
+        <div className="grid gap-3 sm:grid-cols-2">
+          <ContactInput
+            id={`${field.path}-${index}-url`}
+            label={m.organization_contact_url()}
+            placeholder="https://example.com"
+            type="url"
+            value={website.url}
+            onBlur={field.onBlur}
+            onChange={(url) => update({ ...website, url })}
+          />
+          <ContactLabelInput
+            id={`${field.path}-${index}-label`}
+            locale={props.locale}
+            translations={website.translations}
+            onBlur={field.onBlur}
+            onChange={(translations) =>
+              update({
+                ...website,
+                translations,
+              })
+            }
+          />
+        </div>
+      )}
+    />
+  );
+};
+
+function RepeatableContactField<T>({
+  addLabel,
+  emptyValue,
+  error,
+  onChange,
+  path,
+  render,
+  values,
+}: {
+  addLabel: string;
+  emptyValue: T;
+  error: string | undefined;
+  onChange: (values: ReadonlyArray<T>) => void;
+  path: string;
+  render: (value: T, index: number, onChange: (value: T) => void) => ReactNode;
+  values: ReadonlyArray<T>;
+}) {
+  const m = useOrganizationMessages();
+
+  return (
+    <Field>
+      <div className="flex flex-col gap-3">
+        {values.map((value, index) => (
+          <div
+            className="bg-muted/20 relative rounded-lg border p-4 pr-12"
+            key={`${path}-${index}`}
+          >
+            {render(value, index, (next) =>
+              onChange(
+                values.map((item, itemIndex) =>
+                  itemIndex === index ? next : item,
+                ),
+              ),
+            )}
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon"
+              className="absolute top-2 right-2"
+              aria-label={m.organization_contact_remove()}
+              onClick={() =>
+                onChange(values.filter((_, itemIndex) => itemIndex !== index))
+              }
+            >
+              <Trash2 />
+            </Button>
+          </div>
+        ))}
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          className="self-start"
+          onClick={() => onChange([...values, emptyValue])}
+        >
+          <Plus />
+          {addLabel}
+        </Button>
+        {error ? <ErrorMessage text={error} /> : null}
+      </div>
+    </Field>
+  );
+}
+
+function SocialPlatformSelect({
+  value,
+  onChange,
+}: {
+  value: SocialPlatform;
+  onChange: (value: SocialPlatform) => void;
+}) {
+  const m = useOrganizationMessages();
+  const items = [
+    { label: "Facebook", value: "facebook" },
+    { label: "GitHub", value: "github" },
+    { label: "Instagram", value: "instagram" },
+    { label: "LinkedIn", value: "linkedin" },
+    { label: "TikTok", value: "tiktok" },
+    { label: "X", value: "x" },
+    { label: "YouTube", value: "youtube" },
+  ];
+
+  return (
+    <div>
+      <FieldLabel>{m.organization_contact_platform()}</FieldLabel>
+      <Select
+        items={items}
+        value={value}
+        onValueChange={(next) => {
+          const platform = socialPlatform(next);
+          if (platform) onChange(platform);
+        }}
+      >
+        <SelectTrigger className="mt-2 w-full">
+          <SelectValue />
+        </SelectTrigger>
+        <SelectContent>
+          {items.map((item) => (
+            <SelectItem key={item.value} value={item.value}>
+              {item.label}
+            </SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
+    </div>
+  );
+}
+
+const SocialsField: FormReact.FieldComponent<
+  ReadonlyArray<OrganizationSocialValue>,
+  { locale: OrganizationLocale }
+> = ({ field, props }) => {
+  const m = useOrganizationMessages();
+
+  return (
+    <RepeatableContactField
+      addLabel={m.organization_contact_add_social()}
+      emptyValue={{
+        platform: "linkedin",
+        url: "",
+        translations: [{ locale: props.locale, label: "" }],
+      }}
+      error={Option.isSome(field.error) ? field.error.value : undefined}
+      path={field.path}
+      values={field.value}
+      onChange={field.onChange}
+      render={(social, index, update) => (
+        <div className="grid gap-3 sm:grid-cols-2">
+          <SocialPlatformSelect
+            value={social.platform}
+            onChange={(platform) => update({ ...social, platform })}
+          />
+          <ContactInput
+            id={`${field.path}-${index}-url`}
+            label={m.organization_contact_url()}
+            placeholder="https://example.com/profile"
+            type="url"
+            value={social.url}
+            onBlur={field.onBlur}
+            onChange={(url) => update({ ...social, url })}
+          />
+          <ContactLabelInput
+            id={`${field.path}-${index}-label`}
+            locale={props.locale}
+            translations={social.translations}
+            onBlur={field.onBlur}
+            onChange={(translations) =>
+              update({
+                ...social,
+                translations,
+              })
+            }
+          />
+        </div>
+      )}
+    />
+  );
+};
+
+const AddressesField: FormReact.FieldComponent<
+  ReadonlyArray<OrganizationAddressValue>,
+  { locale: OrganizationLocale }
+> = ({ field, props }) => {
+  const m = useOrganizationMessages();
+  const inputs: ReadonlyArray<{
+    key: "streetAddress" | "locality" | "region" | "postalCode" | "country";
+    label: string;
+    className?: string;
+  }> = [
+    {
+      key: "streetAddress",
+      label: m.organization_address_street(),
+      className: "sm:col-span-2",
+    },
+    { key: "locality", label: m.organization_address_locality() },
+    { key: "region", label: m.organization_address_region() },
+    { key: "postalCode", label: m.organization_address_postal_code() },
+    { key: "country", label: m.organization_address_country() },
+  ];
+
+  return (
+    <RepeatableContactField
+      addLabel={m.organization_address_add()}
+      emptyValue={{
+        translations: [{ locale: props.locale, label: "" }],
+      }}
+      error={Option.isSome(field.error) ? field.error.value : undefined}
+      path={field.path}
+      values={field.value}
+      onChange={field.onChange}
+      render={(address, index, update) => (
+        <div className="grid gap-4 sm:grid-cols-2">
+          <ContactLabelInput
+            id={`${field.path}-${index}-label`}
+            locale={props.locale}
+            translations={address.translations}
+            onBlur={field.onBlur}
+            onChange={(translations) =>
+              update({
+                ...address,
+                translations,
+              })
+            }
+          />
+          {inputs.map((input) => (
+            <ContactInput
+              {...(input.className ? { className: input.className } : {})}
+              id={`${field.path}-${index}-${input.key}`}
+              key={input.key}
+              label={input.label}
+              value={address[input.key] ?? ""}
+              onBlur={field.onBlur}
+              onChange={(value) => update({ ...address, [input.key]: value })}
+            />
+          ))}
+        </div>
+      )}
+    />
+  );
+};
+
+const organizationFormFields = {
+  parentId: SelectField,
+  slug: TextField,
+  emails: EmailsField,
+  phones: PhonesField,
+  websites: WebsitesField,
+  socials: SocialsField,
+  addresses: AddressesField,
+  enName: TextField,
+  enLogo: ImageField,
+  enIcon: ImageField,
+  frName: TextField,
+  frLogo: ImageField,
+  frIcon: ImageField,
+};
 
 const inviteMemberFormBuilder = FormBuilder.empty
   .addField("email", Schema.NonEmptyString)
@@ -608,9 +1148,6 @@ const isOrganizationSlugConflict = (error: unknown) => {
   });
 };
 
-const nullableString = (value: unknown) =>
-  typeof value === "string" && value.trim() ? value.trim() : null;
-
 const decodeUploadedAsset = Schema.decodeUnknownPromise(ExtraUploadedAsset);
 
 const uploadImageAsset = async (
@@ -633,14 +1170,21 @@ const uploadImageAsset = async (
 const currentOrganizationLocale = (): OrganizationLocale =>
   getLocale() === "fr" ? "fr" : "en";
 
-const parseOrganizationMetadata = (metadata: unknown): OrganizationMetadata => {
-  try {
-    const value =
-      typeof metadata === "string" ? JSON.parse(metadata) : metadata;
+const OrganizationTranslationsMetadata = Schema.Struct({
+  translations: Schema.Array(OrganizationTranslation),
+});
 
+const parseOrganizationMetadata = (metadata: unknown): OrganizationMetadata => {
+  let value: unknown = metadata;
+  try {
+    value = typeof metadata === "string" ? JSON.parse(metadata) : metadata;
     return Schema.decodeUnknownSync(OrganizationMetadata)(value);
   } catch {
-    return { translations: [] };
+    try {
+      return Schema.decodeUnknownSync(OrganizationTranslationsMetadata)(value);
+    } catch {
+      return { translations: [] };
+    }
   }
 };
 
@@ -713,25 +1257,41 @@ const organizationFormDefaults = (
   organization?: OrganizationSummary,
   baseUrl?: string,
 ): OrganizationFormValues => {
-  const translations = parseOrganizationMetadata(
-    organization?.metadata,
-  ).translations;
+  const metadata = parseOrganizationMetadata(organization?.metadata);
+  const translations = metadata.translations;
   const en = translations.find((translation) => translation.locale === "en");
   const fr = translations.find((translation) => translation.locale === "fr");
-
+  const emails = Array.from(metadata.emails ?? []);
+  for (const translation of translations) {
+    if (
+      translation.contactEmail &&
+      !emails.some((email) => email.email === translation.contactEmail)
+    ) {
+      emails.push({
+        email: translation.contactEmail,
+        translations: [
+          {
+            locale: translation.locale,
+            label: translation.locale === "fr" ? "Courriel" : "Email",
+          },
+        ],
+      });
+    }
+  }
   return {
     parentId: organization?.parentId ?? noParentOrganization,
     slug: organization?.slug ?? "",
+    emails,
+    phones: Array.from(metadata.phones ?? []),
+    websites: Array.from(metadata.websites ?? []),
+    socials: Array.from(metadata.socials ?? []),
+    addresses: Array.from(metadata.addresses ?? []),
     enName: en?.name || organization?.name || "",
     enLogo: assetUrl(en?.logo, baseUrl) || null,
     enIcon: assetUrl(en?.icon, baseUrl) || null,
-    enContactEmail: en?.contactEmail ?? "",
-    enLocation: en?.location ?? "",
     frName: fr?.name ?? "",
     frLogo: assetUrl(fr?.logo, baseUrl) || null,
     frIcon: assetUrl(fr?.icon, baseUrl) || null,
-    frContactEmail: fr?.contactEmail ?? "",
-    frLocation: fr?.location ?? "",
   };
 };
 
@@ -801,6 +1361,7 @@ const organizationMetadataFromForm = async (
   value: OrganizationFormValues,
   m: ReturnType<typeof organizationMessageFns>,
   uploadImage: (input: { payload: FormData }) => Promise<unknown>,
+  existingMetadata?: OrganizationMetadata,
 ): Promise<OrganizationMetadata> => {
   const translations: OrganizationTranslation[] = [];
   const enName = value.enName.trim();
@@ -809,30 +1370,114 @@ const organizationMetadataFromForm = async (
   const enIcon = await organizationLogoFromForm(value.enIcon, m, uploadImage);
   const frLogo = await organizationLogoFromForm(value.frLogo, m, uploadImage);
   const frIcon = await organizationLogoFromForm(value.frIcon, m, uploadImage);
+  const localized = (
+    values: ReadonlyArray<OrganizationContactTranslation> | undefined,
+  ): OrganizationContactTranslation[] =>
+    (values ?? []).flatMap((translation) => {
+      const label = translation.label.trim();
+      return label ? [{ ...translation, label }] : [];
+    });
+  const emails = value.emails.flatMap((email) => {
+    const address = email.email.trim();
+    return address
+      ? [
+          {
+            email: address,
+            translations: localized(email.translations),
+          },
+        ]
+      : [];
+  });
+  const phones = value.phones.flatMap((phone) => {
+    const number = phone.number.trim();
+    return number
+      ? [
+          {
+            number,
+            ...(phone.extension?.trim()
+              ? { extension: phone.extension.trim() }
+              : {}),
+            translations: localized(phone.translations),
+          },
+        ]
+      : [];
+  });
+  const websites = value.websites.flatMap((website) => {
+    const url = website.url.trim();
+    return url ? [{ url, translations: localized(website.translations) }] : [];
+  });
+  const socials = value.socials.flatMap((social) => {
+    const url = social.url.trim();
+    return url
+      ? [
+          {
+            platform: social.platform,
+            url,
+            translations: localized(social.translations),
+          },
+        ]
+      : [];
+  });
+  const addresses = value.addresses.flatMap((input) => {
+    const normalized = {
+      ...(input.streetAddress?.trim()
+        ? { streetAddress: input.streetAddress.trim() }
+        : {}),
+      ...(input.locality?.trim() ? { locality: input.locality.trim() } : {}),
+      ...(input.region?.trim() ? { region: input.region.trim() } : {}),
+      ...(input.postalCode?.trim()
+        ? { postalCode: input.postalCode.trim() }
+        : {}),
+      ...(input.country?.trim() ? { country: input.country.trim() } : {}),
+    };
+    return Object.keys(normalized).length
+      ? [
+          {
+            ...normalized,
+            translations: localized(input.translations),
+          },
+        ]
+      : [];
+  });
 
   if (enName) {
+    const legacyLocation = existingMetadata?.translations.find(
+      (translation) => translation.locale === "en",
+    )?.location;
     translations.push({
       locale: "en",
       name: enName,
       logo: enLogo,
       icon: enIcon,
-      contactEmail: nullableString(value.enContactEmail),
-      location: nullableString(value.enLocation),
+      ...(!addresses.length && legacyLocation
+        ? { location: legacyLocation }
+        : {}),
     });
   }
 
   if (frName) {
+    const legacyLocation = existingMetadata?.translations.find(
+      (translation) => translation.locale === "fr",
+    )?.location;
     translations.push({
       locale: "fr",
       name: frName,
       logo: frLogo,
       icon: frIcon,
-      contactEmail: nullableString(value.frContactEmail),
-      location: nullableString(value.frLocation),
+      ...(!addresses.length && legacyLocation
+        ? { location: legacyLocation }
+        : {}),
     });
   }
 
-  return { translations };
+  return {
+    translations,
+    emails,
+    phones,
+    websites,
+    socials,
+    addresses,
+  };
 };
 
 export function OrganizationSwitcher({
@@ -867,6 +1512,8 @@ export function OrganizationSwitcher({
   const lastAuthRefreshVersion = useRef(auth?.authRefreshVersion ?? 0);
   const [uncontrolledDialog, setUncontrolledDialog] =
     useState<OrganizationSwitcherDialog | null>(defaultDialog);
+  const [editingOrganizationLocale, setEditingOrganizationLocale] =
+    useState<OrganizationLocale>(currentOrganizationLocale);
   const dialog =
     controlledDialog !== undefined ? controlledDialog : uncontrolledDialog;
   const invitationsAtom = session.data
@@ -1165,7 +1812,7 @@ export function OrganizationSwitcher({
           );
         }}
       >
-        <DialogContent className="max-h-[85vh] overflow-y-auto sm:max-w-xl">
+        <DialogContent className="max-h-[85vh] overflow-y-auto sm:max-w-2xl">
           <DialogHeader>
             <DialogTitle className="text-2xl">
               {m.organization_create_title()}
@@ -1173,11 +1820,18 @@ export function OrganizationSwitcher({
             <DialogDescription>
               {m.organization_create_description()}
             </DialogDescription>
+            <div className="pt-2">
+              <EditingLocaleSwitcher
+                value={editingOrganizationLocale}
+                onValueChange={setEditingOrganizationLocale}
+              />
+            </div>
           </DialogHeader>
           <Separator />
           <CreateOrganizationSection
             authClient={authClient}
             baseUrl={baseUrl}
+            editingLocale={editingOrganizationLocale}
             organizations={visibleOrganizations}
             onCreated={async (organization) => {
               setDialog(null);
@@ -1201,7 +1855,7 @@ export function OrganizationSwitcher({
           );
         }}
       >
-        <DialogContent className="max-h-[85vh] overflow-y-auto sm:max-w-xl">
+        <DialogContent className="max-h-[85vh] overflow-y-auto sm:max-w-2xl">
           <DialogHeader>
             <DialogTitle className="text-2xl">
               {m.organization_switcher_manage()}
@@ -1209,12 +1863,19 @@ export function OrganizationSwitcher({
             <DialogDescription>
               {m.organization_edit_description()}
             </DialogDescription>
+            <div className="pt-2">
+              <EditingLocaleSwitcher
+                value={editingOrganizationLocale}
+                onValueChange={setEditingOrganizationLocale}
+              />
+            </div>
           </DialogHeader>
           <Separator />
           {activeOrganization.data && canUpdateOrganization ? (
             <EditOrganizationSection
               authClient={authClient}
               baseUrl={baseUrl}
+              editingLocale={editingOrganizationLocale}
               organization={activeOrganization.data}
               onUpdated={refresh}
             />
@@ -1545,11 +2206,13 @@ const userInvitationRowActions = ({
 function EditOrganizationSection({
   authClient,
   baseUrl,
+  editingLocale,
   organization,
   onUpdated,
 }: {
   authClient: AuthUiClient;
   baseUrl?: string | undefined;
+  editingLocale: OrganizationLocale;
   organization: OrganizationSummary;
   onUpdated: () => Promise<void>;
 }) {
@@ -1559,25 +2222,10 @@ function EditOrganizationSection({
     { mode: "promise" },
   );
   const [defaultLocale] = useState(currentOrganizationLocale);
-  const [editingLocale, setEditingLocale] =
-    useState<OrganizationLocale>(defaultLocale);
   const defaultValues = organizationFormDefaults(organization, baseUrl);
   const [form] = useState(() =>
     FormReact.make(organizationFormBuilder, {
-      fields: {
-        parentId: SelectField,
-        slug: TextField,
-        enName: TextField,
-        enLogo: ImageField,
-        enIcon: ImageField,
-        enContactEmail: TextField,
-        enLocation: TextField,
-        frName: TextField,
-        frLogo: ImageField,
-        frIcon: ImageField,
-        frContactEmail: TextField,
-        frLocation: TextField,
-      },
+      fields: organizationFormFields,
       onSubmit: (_, { decoded: value }) =>
         Effect.tryPromise({
           try: async () => {
@@ -1589,6 +2237,7 @@ function EditOrganizationSection({
               value,
               m,
               uploadImage,
+              parseOrganizationMetadata(organization.metadata),
             );
             const result = await authClient.organization.update({
               organizationId: organization.id,
@@ -1618,7 +2267,7 @@ function EditOrganizationSection({
     <section className="flex flex-col gap-4">
       <form.Initialize defaultValues={defaultValues}>
         <form
-          className="flex max-w-xl flex-col gap-4"
+          className="flex w-full flex-col gap-4"
           onSubmit={(event) => {
             event.preventDefault();
             event.stopPropagation();
@@ -1627,71 +2276,86 @@ function EditOrganizationSection({
         >
           <form.slug label={m.organization_slug()} required />
           <Separator className="my-2" />
-          <OrganizationTranslationHeader
-            locale={editingLocale}
-            editingLocale={editingLocale}
-            onEditingLocaleChange={setEditingLocale}
-          />
-          <FieldSet
-            disabled={editingLocale !== "en"}
-            className={editingLocale === "en" ? "contents" : "hidden"}
+          <OrganizationFormSection
+            title={m.organization_profile()}
+            description={m.organization_translation_description()}
           >
-            <form.enName label={m.organization_translation_name()} />
-            <form.enLogo
-              label={m.organization_logo()}
-              size={{
-                width: 175,
-                height: 50,
-                suggestedWidth: 350,
-                suggestedHeight: 100,
-              }}
-            />
-            <form.enIcon
-              label={m.organization_icon()}
-              size={{
-                width: 96,
-                height: 96,
-                suggestedWidth: 512,
-                suggestedHeight: 512,
-              }}
-            />
-            <form.enContactEmail
-              label={m.organization_contact_email()}
-              placeholder="team@example.com"
-              type="email"
-            />
-            <form.enLocation label={m.organization_location()} />
-          </FieldSet>
-          <FieldSet
-            disabled={editingLocale !== "fr"}
-            className={editingLocale === "fr" ? "contents" : "hidden"}
-          >
-            <form.frName label={m.organization_translation_name()} />
-            <form.frLogo
-              label={m.organization_logo()}
-              size={{
-                width: 175,
-                height: 50,
-                suggestedWidth: 350,
-                suggestedHeight: 100,
-              }}
-            />
-            <form.frIcon
-              label={m.organization_icon()}
-              size={{
-                width: 96,
-                height: 96,
-                suggestedWidth: 512,
-                suggestedHeight: 512,
-              }}
-            />
-            <form.frContactEmail
-              label={m.organization_contact_email()}
-              placeholder="team@example.com"
-              type="email"
-            />
-            <form.frLocation label={m.organization_location()} />
-          </FieldSet>
+            <FieldSet
+              disabled={editingLocale !== "en"}
+              className={editingLocale === "en" ? "contents" : "hidden"}
+            >
+              <form.enName label={m.organization_translation_name()} />
+              <form.enLogo
+                label={m.organization_logo()}
+                size={{
+                  width: 175,
+                  height: 50,
+                  suggestedWidth: 350,
+                  suggestedHeight: 100,
+                }}
+              />
+              <form.enIcon
+                label={m.organization_icon()}
+                size={{
+                  width: 96,
+                  height: 96,
+                  suggestedWidth: 512,
+                  suggestedHeight: 512,
+                }}
+              />
+            </FieldSet>
+            <FieldSet
+              disabled={editingLocale !== "fr"}
+              className={editingLocale === "fr" ? "contents" : "hidden"}
+            >
+              <form.frName label={m.organization_translation_name()} />
+              <form.frLogo
+                label={m.organization_logo()}
+                size={{
+                  width: 175,
+                  height: 50,
+                  suggestedWidth: 350,
+                  suggestedHeight: 100,
+                }}
+              />
+              <form.frIcon
+                label={m.organization_icon()}
+                size={{
+                  width: 96,
+                  height: 96,
+                  suggestedWidth: 512,
+                  suggestedHeight: 512,
+                }}
+              />
+            </FieldSet>
+          </OrganizationFormSection>
+          <Separator className="my-2" />
+          <OrganizationFormSection title={m.organization_contact()}>
+            <OrganizationContactGroup
+              title={m.organization_contact_email_type()}
+            >
+              <form.emails locale={editingLocale} />
+            </OrganizationContactGroup>
+            <OrganizationContactGroup
+              title={m.organization_contact_phone_type()}
+            >
+              <form.phones locale={editingLocale} />
+            </OrganizationContactGroup>
+            <OrganizationContactGroup
+              title={m.organization_contact_website_type()}
+            >
+              <form.websites locale={editingLocale} />
+            </OrganizationContactGroup>
+            <OrganizationContactGroup
+              title={m.organization_contact_social_type()}
+            >
+              <form.socials locale={editingLocale} />
+            </OrganizationContactGroup>
+          </OrganizationFormSection>
+          <Separator className="my-2" />
+          <OrganizationFormSection title={m.organization_address()}>
+            <form.addresses locale={editingLocale} />
+          </OrganizationFormSection>
           <SubmitError result={submitResult} />
           <SubmitButton form={form} />
         </form>
@@ -1703,11 +2367,13 @@ function EditOrganizationSection({
 function CreateOrganizationSection({
   authClient,
   baseUrl,
+  editingLocale,
   organizations,
   onCreated,
 }: {
   authClient: AuthUiClient;
   baseUrl?: string | undefined;
+  editingLocale: OrganizationLocale;
   organizations: readonly OrganizationSummary[];
   onCreated: (organization: OrganizationSummary) => Promise<void>;
 }) {
@@ -1717,25 +2383,10 @@ function CreateOrganizationSection({
     { mode: "promise" },
   );
   const [defaultLocale] = useState(currentOrganizationLocale);
-  const [editingLocale, setEditingLocale] =
-    useState<OrganizationLocale>(defaultLocale);
   const defaultValues = organizationFormDefaults(undefined, baseUrl);
   const [form] = useState(() =>
     FormReact.make(organizationFormBuilder, {
-      fields: {
-        parentId: SelectField,
-        slug: TextField,
-        enName: TextField,
-        enLogo: ImageField,
-        enIcon: ImageField,
-        enContactEmail: TextField,
-        enLocation: TextField,
-        frName: TextField,
-        frLogo: ImageField,
-        frIcon: ImageField,
-        frContactEmail: TextField,
-        frLocation: TextField,
-      },
+      fields: organizationFormFields,
       onSubmit: (_, { decoded: value }) =>
         Effect.tryPromise({
           try: async () => {
@@ -1803,7 +2454,7 @@ function CreateOrganizationSection({
     <section className="flex flex-col gap-4">
       <form.Initialize defaultValues={defaultValues}>
         <form
-          className="flex max-w-xl flex-col gap-4"
+          className="flex w-full flex-col gap-4"
           onSubmit={(event) => {
             event.preventDefault();
             event.stopPropagation();
@@ -1820,71 +2471,86 @@ function CreateOrganizationSection({
             options={organizationParentOptions(organizations, m)}
           />
           <Separator className="my-2" />
-          <OrganizationTranslationHeader
-            locale={editingLocale}
-            editingLocale={editingLocale}
-            onEditingLocaleChange={setEditingLocale}
-          />
-          <FieldSet
-            disabled={editingLocale !== "en"}
-            className={editingLocale === "en" ? "contents" : "hidden"}
+          <OrganizationFormSection
+            title={m.organization_profile()}
+            description={m.organization_translation_description()}
           >
-            <form.enName label={m.organization_translation_name()} />
-            <form.enLogo
-              label={m.organization_logo()}
-              size={{
-                width: 175,
-                height: 50,
-                suggestedWidth: 350,
-                suggestedHeight: 100,
-              }}
-            />
-            <form.enIcon
-              label={m.organization_icon()}
-              size={{
-                width: 96,
-                height: 96,
-                suggestedWidth: 512,
-                suggestedHeight: 512,
-              }}
-            />
-            <form.enContactEmail
-              label={m.organization_contact_email()}
-              placeholder="team@example.com"
-              type="email"
-            />
-            <form.enLocation label={m.organization_location()} />
-          </FieldSet>
-          <FieldSet
-            disabled={editingLocale !== "fr"}
-            className={editingLocale === "fr" ? "contents" : "hidden"}
-          >
-            <form.frName label={m.organization_translation_name()} />
-            <form.frLogo
-              label={m.organization_logo()}
-              size={{
-                width: 175,
-                height: 50,
-                suggestedWidth: 350,
-                suggestedHeight: 100,
-              }}
-            />
-            <form.frIcon
-              label={m.organization_icon()}
-              size={{
-                width: 96,
-                height: 96,
-                suggestedWidth: 512,
-                suggestedHeight: 512,
-              }}
-            />
-            <form.frContactEmail
-              label={m.organization_contact_email()}
-              placeholder="team@example.com"
-              type="email"
-            />
-            <form.frLocation label={m.organization_location()} />
-          </FieldSet>
+            <FieldSet
+              disabled={editingLocale !== "en"}
+              className={editingLocale === "en" ? "contents" : "hidden"}
+            >
+              <form.enName label={m.organization_translation_name()} />
+              <form.enLogo
+                label={m.organization_logo()}
+                size={{
+                  width: 175,
+                  height: 50,
+                  suggestedWidth: 350,
+                  suggestedHeight: 100,
+                }}
+              />
+              <form.enIcon
+                label={m.organization_icon()}
+                size={{
+                  width: 96,
+                  height: 96,
+                  suggestedWidth: 512,
+                  suggestedHeight: 512,
+                }}
+              />
+            </FieldSet>
+            <FieldSet
+              disabled={editingLocale !== "fr"}
+              className={editingLocale === "fr" ? "contents" : "hidden"}
+            >
+              <form.frName label={m.organization_translation_name()} />
+              <form.frLogo
+                label={m.organization_logo()}
+                size={{
+                  width: 175,
+                  height: 50,
+                  suggestedWidth: 350,
+                  suggestedHeight: 100,
+                }}
+              />
+              <form.frIcon
+                label={m.organization_icon()}
+                size={{
+                  width: 96,
+                  height: 96,
+                  suggestedWidth: 512,
+                  suggestedHeight: 512,
+                }}
+              />
+            </FieldSet>
+          </OrganizationFormSection>
+          <Separator className="my-2" />
+          <OrganizationFormSection title={m.organization_contact()}>
+            <OrganizationContactGroup
+              title={m.organization_contact_email_type()}
+            >
+              <form.emails locale={editingLocale} />
+            </OrganizationContactGroup>
+            <OrganizationContactGroup
+              title={m.organization_contact_phone_type()}
+            >
+              <form.phones locale={editingLocale} />
+            </OrganizationContactGroup>
+            <OrganizationContactGroup
+              title={m.organization_contact_website_type()}
+            >
+              <form.websites locale={editingLocale} />
+            </OrganizationContactGroup>
+            <OrganizationContactGroup
+              title={m.organization_contact_social_type()}
+            >
+              <form.socials locale={editingLocale} />
+            </OrganizationContactGroup>
+          </OrganizationFormSection>
+          <Separator className="my-2" />
+          <OrganizationFormSection title={m.organization_address()}>
+            <form.addresses locale={editingLocale} />
+          </OrganizationFormSection>
           <SubmitError result={submitResult} />
           <SubmitButton form={form} />
         </form>
@@ -1893,33 +2559,39 @@ function CreateOrganizationSection({
   );
 }
 
-function OrganizationTranslationHeader({
-  locale,
-  editingLocale,
-  onEditingLocaleChange,
+function OrganizationFormSection({
+  children,
+  description,
+  title,
 }: {
-  locale: OrganizationLocale;
-  editingLocale: OrganizationLocale;
-  onEditingLocaleChange: (locale: OrganizationLocale) => void;
+  children: ReactNode;
+  description?: string;
+  title: string;
 }) {
-  const m = useOrganizationMessages();
-  const title =
-    locale === "en"
-      ? m.organization_translation_english()
-      : m.organization_translation_french();
-
   return (
-    <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+    <section className="flex flex-col gap-4">
       <div>
         <h3 className="font-medium">{title}</h3>
-        <p className="text-muted-foreground text-sm">
-          {m.organization_translation_description()}
-        </p>
+        {description ? (
+          <p className="text-muted-foreground text-sm">{description}</p>
+        ) : null}
       </div>
-      <EditingLocaleSwitcher
-        value={editingLocale}
-        onValueChange={onEditingLocaleChange}
-      />
+      {children}
+    </section>
+  );
+}
+
+function OrganizationContactGroup({
+  children,
+  title,
+}: {
+  children: ReactNode;
+  title: string;
+}) {
+  return (
+    <div className="flex flex-col gap-3">
+      <h4 className="text-sm font-medium">{title}</h4>
+      {children}
     </div>
   );
 }

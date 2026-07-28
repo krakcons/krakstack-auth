@@ -1,6 +1,7 @@
 import { ExtraApiGroup } from "@krak-stack/auth/extra";
 import { HttpApi, OpenApi } from "effect/unstable/httpapi";
 
+import { LocaleMiddleware } from "@/lib/localization";
 import { AdminApiGroup } from "@/services/admin/api.group";
 import {
   AdminOAuthClientsApiGroup,
@@ -25,6 +26,7 @@ export const AdminApi = HttpApi.make("AdminApi")
   .prefix("/api/auth");
 
 export const FrontendApi = HttpApi.make("FrontendApi")
+  .middleware(LocaleMiddleware)
   .annotateMerge(
     OpenApi.annotations({
       title: "KrakStack Auth API",
