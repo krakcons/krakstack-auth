@@ -190,8 +190,8 @@ export function AdminOrganizationsTable({
       <DataTable
         columns={organizationColumns(m, locale, baseUrl)}
         data={organizations}
-        defaultColumnVisibility={{ id: false }}
         features={{
+          columnVisibility: { default: { id: false } },
           export: { baseName: "organizations" },
           gallery: false,
           pagination: { mode: "server", rowCount: total },

@@ -79,6 +79,7 @@ import {
   type RowData,
   type SortingState,
   type Table as TanstackTable,
+  type VisibilityState,
   useReactTable,
 } from "@tanstack/react-table";
 
@@ -343,11 +344,15 @@ export interface DataTableRowActionsFeature<TData> {
   items: readonly DataTableRowAction<TData>[];
 }
 
+export interface DataTableColumnVisibilityFeature {
+  default?: VisibilityState;
+}
+
 export interface DataTableFeatures<TData> {
   pagination?: DataTablePaginationFeature;
   search?: boolean;
   export?: false | DataTableExportFeature;
-  columnVisibility?: boolean;
+  columnVisibility?: boolean | DataTableColumnVisibilityFeature;
   gallery?: false | DataTableGalleryConfig;
   sorting?: boolean;
   rowActions?: false | DataTableRowActionsFeature<TData>;
@@ -360,7 +365,6 @@ type LegacyDataTableRowAction<TData> = Omit<DataTableRowAction<TData>, "id"> & {
 interface DataTableProps<TData, TValue> {
   columns: ColumnDef<TData, TValue>[];
   data: TData[];
-  defaultColumnVisibility?: Record<string, boolean>;
   state?: DataTableState;
   search?: TableParams;
   onSearchChange?: (search: TableParams) => void;
@@ -1212,7 +1216,6 @@ const exportTableToJson = <TData,>(
 export function DataTable<TData, TValue>({
   columns,
   data,
-  defaultColumnVisibility = {},
   state,
   search: controlledSearch,
   onSearchChange,
@@ -1232,7 +1235,6 @@ export function DataTable<TData, TValue>({
   serverPagination,
   features,
 }: DataTableProps<TData, TValue>) {
-  const [initialColumnVisibility] = useState(() => defaultColumnVisibility);
   const labels = dataTableMessages(messages);
   const isLoading = state?.loading ?? legacyIsLoading ?? false;
   const emptyContent =
@@ -1270,7 +1272,12 @@ export function DataTable<TData, TValue>({
   const pageSizes = paginationFeature ? paginationFeature.pageSizes : undefined;
   const showSearch = features?.search ?? true;
   const showExport = exportFeature !== false;
-  const showColumnVisibility = features?.columnVisibility ?? true;
+  const columnVisibilityFeature = features?.columnVisibility ?? true;
+  const showColumnVisibility = columnVisibilityFeature !== false;
+  const defaultColumnVisibility =
+    typeof columnVisibilityFeature === "object"
+      ? columnVisibilityFeature.default
+      : undefined;
   const showGallery = !!galleryConfig;
   const showSorting = features?.sorting ?? true;
   const isServerMode =
@@ -1328,9 +1335,9 @@ export function DataTable<TData, TValue>({
         runtime: dataTableStorageRuntime,
         key: `data-table:column-visibility:${tableStorageId}`,
         schema: ColumnVisibilitySchema,
-        defaultValue: () => initialColumnVisibility,
+        defaultValue: () => defaultColumnVisibility ?? {},
       }),
-    [initialColumnVisibility, tableStorageId],
+    [defaultColumnVisibility, tableStorageId],
   );
   const columnSizingAtom = useMemo(
     () =>

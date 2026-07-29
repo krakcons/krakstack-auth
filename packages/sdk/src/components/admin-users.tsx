@@ -313,8 +313,8 @@ export function AdminUsersTable({
       <DataTable
         columns={userColumns(m, baseUrl)}
         data={users}
-        defaultColumnVisibility={{ id: false }}
         features={{
+          columnVisibility: { default: { id: false } },
           export: { baseName: "users" },
           gallery: false,
           pagination: { mode: "server", rowCount: total },
