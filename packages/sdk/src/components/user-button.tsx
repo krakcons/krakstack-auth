@@ -138,7 +138,7 @@ const messages = {
     user_api_key_delete_error: "Could not delete the API key.",
     user_api_key_disabled: "Disabled",
     user_api_key_edit_description:
-      "Update the key name, status, and allowed referrers.",
+      "Update the key name, status, allowed referrers, and permissions.",
     user_api_key_edit_title: "Edit API key",
     user_api_key_enabled: "Enabled",
     user_api_key_hidden: "Secret hidden",
@@ -269,7 +269,7 @@ const messages = {
     user_api_key_delete_error: "Impossible de supprimer la clé API.",
     user_api_key_disabled: "Désactivée",
     user_api_key_edit_description:
-      "Mettez à jour le nom, le statut et les référents autorisés de la clé.",
+      "Mettez à jour le nom, le statut, les référents autorisés et les autorisations de la clé.",
     user_api_key_edit_title: "Modifier la clé API",
     user_api_key_enabled: "Activée",
     user_api_key_hidden: "Secret masqué",
@@ -538,7 +538,7 @@ type UserDropdownProps = {
   defaultDialog?: UserButtonDialog | null;
   hideTrigger?: boolean;
   renderUnauthenticated?: () => ReactNode;
-  apiKeyPermissions?: Record<string, string[]>;
+  apiKeyPermissions?: Readonly<Record<string, ReadonlyArray<string>>>;
   messages?: UserButtonMessages;
   dialog?: UserButtonDialog | null;
   onDialogChange?: (dialog: UserButtonDialog | null) => void;
@@ -895,7 +895,9 @@ export const UserButton = ({
           <ApiKeyManager
             authClient={authClient}
             active={settingsDialog === "apiKeys"}
-            permissions={apiKeyPermissions ?? {}}
+            permissions={
+              apiKeyPermissions ?? auth?.access?.userApiKeyPermissions ?? {}
+            }
           />
         </DialogContent>
       </Dialog>
@@ -1906,7 +1908,7 @@ function ApiKeyManager({
 }: {
   authClient: AuthUiClient;
   active: boolean;
-  permissions?: Record<string, string[]>;
+  permissions?: Readonly<Record<string, ReadonlyArray<string>>>;
 }) {
   const m = useUserButtonMessages();
   const hasOpened = useOpenedOnce(active);
@@ -2147,9 +2149,9 @@ function ApiKeyManager({
         {editingKey ? (
           <ApiKeyEditForm
             key={editingKey.id}
-            authClient={authClient}
             configId="user"
             keyData={editingKey}
+            permissions={permissions}
             messages={{
               enabled: m.user_api_key_enabled(),
               name: m.user_api_key_name(),
@@ -2157,6 +2159,8 @@ function ApiKeyManager({
               referrersDescription: m.user_api_key_referrers_description(),
               referrersError: m.user_api_key_referrers_error(),
               referrersPlaceholder: m.user_api_key_referrers_placeholder(),
+              permissions: m.user_api_key_permissions(),
+              permissionsDescription: m.user_api_key_permissions_description(),
               updateError: m.user_api_key_update_error(),
             }}
             onSaved={() => {
@@ -2299,7 +2303,9 @@ const formatPermissions = (permissions: unknown) => {
   );
 };
 
-const getPermissionOptions = (permissions: Record<string, string[]>) =>
+const getPermissionOptions = (
+  permissions: Readonly<Record<string, ReadonlyArray<string>>>,
+) =>
   Object.entries(permissions).flatMap(([resource, actions]) =>
     actions.map((action) => ({
       id: getPermissionId(resource, action),

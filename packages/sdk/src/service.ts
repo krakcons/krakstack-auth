@@ -48,7 +48,7 @@ export type AuthSessionWithUserAndOrganization = AuthSessionWithUser &
 
 export type AuthServiceLayerOptions = Partial<ClientConfig> & {
   readonly headers?: Record<string, string>;
-  readonly apiKeyConfigId?: "user" | "organization";
+  readonly apiKeyConfigId?: "user" | "organization" | "service";
 };
 
 const forwardedAuthHeaderNames = [
@@ -148,7 +148,7 @@ export class AuthService extends Context.Service<AuthService>()(
     make: (options: AuthServiceLayerOptions = {}) =>
       Effect.gen(function* () {
         const headers = options.headers ?? {};
-        const apiKeyConfigId = options.apiKeyConfigId ?? "user";
+        const apiKeyConfigId = options.apiKeyConfigId;
         const config = yield* AuthClientConfig;
         const http = yield* HttpClient.HttpClient;
         const httpClient = HttpClient.mapRequest(http, (request) =>
@@ -221,7 +221,10 @@ export class AuthService extends Context.Service<AuthService>()(
           Effect.gen(function* () {
             const verified = yield* api.authExtra
               .verifyApiKey({
-                payload: { key, configId: apiKeyConfigId },
+                payload: {
+                  key,
+                  ...(apiKeyConfigId ? { configId: apiKeyConfigId } : {}),
+                },
               })
               .pipe(Effect.mapError(unauthorized));
 

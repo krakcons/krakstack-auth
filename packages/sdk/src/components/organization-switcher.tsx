@@ -51,6 +51,7 @@ import { Field, FieldLabel, FieldSet } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
 import { CopyButton } from "@/components/ui/copy-button";
 import {
   Dialog,
@@ -99,6 +100,7 @@ import {
   normalizeOrganizationRole,
   normalizeOrganizationRoles,
   organizationRoles,
+  parseRoleList,
   type OrganizationRole,
 } from "../roles";
 
@@ -239,11 +241,15 @@ const messages = {
     user_api_key_delete_error: "Could not delete the API key.",
     user_api_key_disabled: "Disabled",
     user_api_key_edit_description:
-      "Update the key name, status, and allowed referrers.",
+      "Update the key name, status, allowed referrers, and permissions.",
     user_api_key_edit_title: "Edit API key",
     user_api_key_enabled: "Enabled",
     user_api_key_hidden: "Secret hidden",
     user_api_key_name: "Key name",
+    user_api_key_no_permissions: "No permissions",
+    user_api_key_permissions: "Permissions",
+    user_api_key_permissions_description:
+      "Choose the project permissions this API key should receive.",
     user_api_key_rate_limit: "Rate limit",
     user_api_key_referrers: "Allowed referrers (optional)",
     user_api_key_referrers_any: "Any referrer",
@@ -394,11 +400,15 @@ const messages = {
     user_api_key_delete_error: "Impossible de supprimer la clé API.",
     user_api_key_disabled: "Désactivée",
     user_api_key_edit_description:
-      "Mettez à jour le nom, le statut et les référents autorisés de la clé.",
+      "Mettez à jour le nom, le statut, les référents autorisés et les autorisations de la clé.",
     user_api_key_edit_title: "Modifier la clé API",
     user_api_key_enabled: "Activée",
     user_api_key_hidden: "Secret masqué",
     user_api_key_name: "Nom de la clé",
+    user_api_key_no_permissions: "Aucune autorisation",
+    user_api_key_permissions: "Autorisations",
+    user_api_key_permissions_description:
+      "Choisissez les autorisations de projet à attribuer à cette clé API.",
     user_api_key_rate_limit: "Limite de débit",
     user_api_key_referrers: "Référents autorisés (facultatifs)",
     user_api_key_referrers_any: "Tout référent",
@@ -503,6 +513,7 @@ export type OrganizationSwitcherProps = {
   onChange?: (organization: OrganizationSummary | null) => void;
   onCreate?: (organization: OrganizationSummary) => void;
   onDialogChange?: (dialog: OrganizationSwitcherDialog | null) => void;
+  apiKeyPermissions?: Readonly<Record<string, ReadonlyArray<string>>>;
 };
 
 type OrganizationSummary = {
@@ -1582,6 +1593,7 @@ export function OrganizationSwitcher({
   onChange,
   onCreate,
   onDialogChange,
+  apiKeyPermissions,
 }: OrganizationSwitcherProps) {
   const auth = useKrakstackAuth();
   const authClient = providedAuthClient ?? auth?.authClient;
@@ -1618,13 +1630,14 @@ export function OrganizationSwitcher({
     onSuccess: () => null,
   });
   const loadingUserInvitations = invitationsResult._tag === "Initial";
-  const activeMemberRole = normalizeOrganizationRole(
+  const activeMemberRoles = parseRoleList(
     activeOrganization.data?.members.find(
       (member) => member.userId === session.data?.user.id,
     )?.role,
   );
-  const canManageApiKeys =
-    activeMemberRole === "owner" || activeMemberRole === "admin";
+  const canManageApiKeys = activeMemberRoles.some(
+    (role) => role === "owner" || role === "admin",
+  );
   const canUpdateOrganization = canManageApiKeys;
   const canSwitchOrganizations = features?.organizationSwitching ?? true;
   const canCreateOrganization = features?.organizationCreation ?? true;
@@ -2009,6 +2022,11 @@ export function OrganizationSwitcher({
               authClient={authClient}
               organization={activeOrganization.data}
               active={dialog === "apiKeys" && canManageApiKeys}
+              permissions={
+                apiKeyPermissions ??
+                auth?.access?.organizationApiKeyPermissions ??
+                {}
+              }
             />
           ) : null}
         </DialogContent>
@@ -3204,10 +3222,12 @@ function OrganizationApiKeyManager({
   authClient,
   organization,
   active,
+  permissions,
 }: {
   authClient: AuthUiClient;
   organization: OrganizationSummary;
   active: boolean;
+  permissions: Readonly<Record<string, ReadonlyArray<string>>>;
 }) {
   const m = useOrganizationMessages();
   const hasOpened = useOpenedOnce(active);
@@ -3220,6 +3240,14 @@ function OrganizationApiKeyManager({
   const [creating, setCreating] = useState(false);
   const [editingKey, setEditingKey] = useState<ApiKeySummary | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const permissionOptions = organizationApiKeyPermissionOptions(permissions);
+  const [selectedPermissions, setSelectedPermissions] = useState<
+    Record<string, boolean>
+  >({});
+  const permissionOptionsRef = useRef(permissionOptions);
+  const selectedPermissionsRef = useRef(selectedPermissions);
+  permissionOptionsRef.current = permissionOptions;
+  selectedPermissionsRef.current = selectedPermissions;
   const keys = AsyncResult.match(keysResult, {
     onInitial: () => [],
     onFailure: () => [],
@@ -3244,6 +3272,10 @@ function OrganizationApiKeyManager({
                 configId: "organization",
                 organizationId: organization.id,
                 name: value.name.trim(),
+                permissions: organizationApiKeySelectedPermissions(
+                  permissionOptionsRef.current,
+                  selectedPermissionsRef.current,
+                ),
                 referrers: parseApiKeyReferrers(
                   value.referrers,
                   m.user_api_key_referrers_error(),
@@ -3253,6 +3285,7 @@ function OrganizationApiKeyManager({
             );
 
             setCreatedKey(created.key);
+            setSelectedPermissions({});
             refreshKeys();
             return created;
           },
@@ -3266,6 +3299,10 @@ function OrganizationApiKeyManager({
   const submitApiKey = useAtomSet(createForm.submit);
   const resetApiKey = useAtomSet(createForm.reset);
   const createResult = useAtomValue(createForm.submit);
+
+  const togglePermission = (id: string, checked: boolean) => {
+    setSelectedPermissions((current) => ({ ...current, [id]: checked }));
+  };
 
   useEffect(() => {
     if (AsyncResult.isSuccess(createResult)) resetApiKey();
@@ -3356,6 +3393,34 @@ function OrganizationApiKeyManager({
                   placeholder={m.user_api_key_referrers_placeholder()}
                   rows={3}
                 />
+                {permissionOptions.length > 0 ? (
+                  <FieldSet>
+                    <p className="font-medium">
+                      {m.user_api_key_permissions()}
+                    </p>
+                    <p className="text-muted-foreground text-sm">
+                      {m.user_api_key_permissions_description()}
+                    </p>
+                    <div className="flex flex-col gap-3">
+                      {permissionOptions.map((permission) => (
+                        <Field key={permission.id} orientation="horizontal">
+                          <Checkbox
+                            id={`organization-${permission.id}`}
+                            checked={
+                              selectedPermissions[permission.id] ?? false
+                            }
+                            onCheckedChange={(checked: boolean) =>
+                              togglePermission(permission.id, checked)
+                            }
+                          />
+                          <FieldLabel htmlFor={`organization-${permission.id}`}>
+                            {permission.resource}: {permission.action}
+                          </FieldLabel>
+                        </Field>
+                      ))}
+                    </div>
+                  </FieldSet>
+                ) : null}
                 <SubmitError result={createResult} />
                 <SubmitButton form={createForm} />
               </form>
@@ -3413,9 +3478,9 @@ function OrganizationApiKeyManager({
         {editingKey ? (
           <ApiKeyEditForm
             key={editingKey.id}
-            authClient={authClient}
             configId="organization"
             keyData={editingKey}
+            permissions={permissions}
             messages={{
               enabled: m.user_api_key_enabled(),
               name: m.user_api_key_name(),
@@ -3423,6 +3488,8 @@ function OrganizationApiKeyManager({
               referrersDescription: m.user_api_key_referrers_description(),
               referrersError: m.user_api_key_referrers_error(),
               referrersPlaceholder: m.user_api_key_referrers_placeholder(),
+              permissions: m.user_api_key_permissions(),
+              permissionsDescription: m.user_api_key_permissions_description(),
               updateError: m.user_api_key_update_error(),
             }}
             onSaved={() => {
@@ -3467,6 +3534,29 @@ const apiKeyColumns = ({
     ),
   },
   {
+    id: "permissions",
+    accessorFn: (keyData) => keyData.permissions,
+    header: m.user_api_key_permissions(),
+    cell: ({ row }) => {
+      const values = organizationApiKeyFormattedPermissions(
+        row.original.permissions,
+      );
+      return values.length > 0 ? (
+        <div className="flex flex-wrap gap-1">
+          {values.map((value) => (
+            <Badge key={value} variant="outline">
+              {value}
+            </Badge>
+          ))}
+        </div>
+      ) : (
+        <span className="text-muted-foreground text-sm">
+          {m.user_api_key_no_permissions()}
+        </span>
+      );
+    },
+  },
+  {
     id: "referrers",
     accessorFn: (keyData) => keyData.metadata,
     header: m.user_api_key_referrers_column(),
@@ -3498,6 +3588,43 @@ const apiKeyColumns = ({
     ),
   },
 ];
+
+const organizationApiKeyPermissionOptions = (
+  permissions: Readonly<Record<string, ReadonlyArray<string>>>,
+) =>
+  Object.entries(permissions).flatMap(([resource, actions]) =>
+    actions.map((action) => ({
+      id: `${resource}:${action}`,
+      resource,
+      action,
+    })),
+  );
+
+const organizationApiKeySelectedPermissions = (
+  options: ReturnType<typeof organizationApiKeyPermissionOptions>,
+  selected: Record<string, boolean>,
+) => {
+  const permissions: Record<string, string[]> = {};
+  for (const option of options) {
+    if (!selected[option.id]) continue;
+    permissions[option.resource] = [
+      ...(permissions[option.resource] ?? []),
+      option.action,
+    ];
+  }
+  return permissions;
+};
+
+const organizationApiKeyFormattedPermissions = (value: unknown) => {
+  const decoded = Schema.decodeUnknownOption(
+    Schema.Record(Schema.String, Schema.Array(Schema.String)),
+  )(value);
+  return Option.isSome(decoded)
+    ? Object.entries(decoded.value).flatMap(([resource, actions]) =>
+        actions.map((action) => `${resource}:${action}`),
+      )
+    : [];
+};
 
 const apiKeyRowActions = ({
   m,

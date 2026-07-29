@@ -1,6 +1,6 @@
 {
   "name": "@krak-stack/auth",
-  "version": "0.1.57",
+  "version": "0.1.60",
   "description": "Effect HttpApi clients and schemas for KrakStack Auth.",
   "license": "MIT",
   "files": [
@@ -33,6 +33,10 @@
     "./roles": {
       "types": "./dist/roles.d.ts",
       "default": "./dist/roles.js"
+    },
+    "./access": {
+      "types": "./dist/access.d.ts",
+      "default": "./dist/access.js"
     },
     "./components": {
       "types": "./dist/components/index.d.ts",

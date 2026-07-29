@@ -3,10 +3,12 @@ export {
   useAuthClient,
   useKrakstackAuth,
   useKrakstackAuthProjectConfig,
+  usePermissions,
 } from "./auth-provider";
 export { createAuthUiClient } from "./auth-client";
 export { OrganizationSwitcher } from "./organization-switcher";
 export { MemberRequired } from "./member-required";
+export { HasPermission, useHasPermission } from "./has-permission";
 export {
   ResetPassword,
   Signin,
@@ -19,6 +21,28 @@ export { AdminOrganizationsTable } from "./admin-organizations";
 export { AdminOrganizationForm } from "./admin-organization-form";
 export { AdminUsersTable, useAdminUsersTotal } from "./admin-users";
 export { assetUrl } from "./utils";
+export {
+  ApiKeyPermissionGrant,
+  CurrentActor,
+  Forbidden,
+  all,
+  actorUserId,
+  any,
+  defineProjectAccess,
+  permission,
+  policy,
+  withPolicy,
+} from "../access";
+export type {
+  ApiKeyOwner,
+  ApiKeyActor,
+  Actor,
+  Policy,
+  ProjectAccessConfig,
+  ProjectAccessCatalog,
+  ProjectAccessDefinition,
+  UserActor,
+} from "../access";
 export type {
   KrakstackAuthContextValue,
   KrakstackAuthLocale,

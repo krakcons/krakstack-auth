@@ -1,4 +1,7 @@
-import { ExtraBadRequest } from "@krak-stack/auth/extra";
+import {
+  ExtraApiKeyPermissions,
+  ExtraBadRequest,
+} from "@krak-stack/auth/extra";
 import { Effect, Option, Schema } from "effect";
 import { Headers, HttpServerRequest } from "effect/unstable/http";
 import { HttpApiBuilder, HttpApiError } from "effect/unstable/httpapi";
@@ -14,6 +17,7 @@ import { organization } from "@/db/schema";
 import { BetterAuthRequest } from "@/services/auth/better-auth-request";
 import {
   apiKeyAllowedOrigins,
+  apiKeyMetadata,
   requestMatchesAllowedOrigins,
 } from "@/services/auth/api-key-referrers";
 import { db } from "@/services/database";
@@ -31,6 +35,24 @@ const authError = (fallback: string) => (error: unknown) =>
   });
 
 const internalServerError = () => new HttpApiError.InternalServerError({});
+
+export const mergeApiKeyPermissions = (
+  current: Readonly<Record<string, ReadonlyArray<string>>>,
+  updates: Readonly<Record<string, ReadonlyArray<string>>>,
+) => ({
+  ...Object.fromEntries(
+    Object.entries(current).map(([project, actions]) => [
+      project,
+      Array.from(actions),
+    ]),
+  ),
+  ...Object.fromEntries(
+    Object.entries(updates).map(([project, actions]) => [
+      project,
+      Array.from(actions),
+    ]),
+  ),
+});
 
 const userRole = (value: unknown) => {
   if (typeof value !== "object" || value === null || !("role" in value)) {
@@ -293,23 +315,73 @@ export const authApiHandler = HttpApiBuilder.group(
           return { id: result.id, key: result.key };
         }),
       )
+      .handle("updateApiKey", ({ params, payload, request }) =>
+        Effect.gen(function* () {
+          const client = yield* requestAuth(
+            request,
+            "Could not update API key",
+          );
+          const session = yield* requireMutableUserSession(request);
+
+          if (
+            payload.configId === "service" &&
+            !hasAdminRole(userRole(session.user))
+          ) {
+            return yield* new HttpApiError.Forbidden({});
+          }
+
+          const key = yield* Effect.tryPromise({
+            try: () =>
+              client.api.getApiKey({
+                query: { configId: payload.configId, id: params.keyId },
+                headers: client.headers,
+              }),
+            catch: authError("Could not read API key permissions"),
+          });
+          const currentPermissions = yield* Schema.decodeUnknownEffect(
+            ExtraApiKeyPermissions,
+          )(key.permissions ?? {}).pipe(
+            Effect.mapError(authError("API key permissions are invalid")),
+          );
+          const permissions = mergeApiKeyPermissions(
+            currentPermissions,
+            payload.permissions ?? {},
+          );
+          const metadata = payload.referrers
+            ? {
+                ...apiKeyMetadata(key.metadata),
+                allowedOrigins: Array.from(payload.referrers),
+              }
+            : apiKeyMetadata(key.metadata);
+
+          yield* Effect.tryPromise({
+            try: () =>
+              client.api.updateApiKey({
+                body: {
+                  configId: payload.configId,
+                  keyId: params.keyId,
+                  userId: session.user.id,
+                  name: payload.name,
+                  enabled: payload.enabled,
+                  metadata,
+                  permissions,
+                },
+              }),
+            catch: authError("Could not update API key"),
+          });
+
+          return { ok: true };
+        }),
+      )
       .handle("verifyApiKey", ({ payload, request }) =>
         Effect.gen(function* () {
           const client = yield* requestAuth(
             request,
             "Could not verify API key",
           );
-          const permissions = payload.permissions
-            ? Object.fromEntries(
-                Object.entries(payload.permissions).map(
-                  ([resource, actions]) => [resource, Array.from(actions)],
-                ),
-              )
-            : undefined;
           const body = {
             key: payload.key,
             ...(payload.configId ? { configId: payload.configId } : {}),
-            ...(permissions ? { permissions } : {}),
           };
 
           const result = yield* Effect.tryPromise({

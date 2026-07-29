@@ -13,6 +13,8 @@ import {
 import { createAuthUiClient, type AuthUiClient } from "./auth-client";
 import { authClientApi } from "./auth-client-api";
 import type { ExtraProjectPublicConfig } from "../extra/schema";
+import type { ProjectAccessCatalog } from "../access";
+import { parseRoleList } from "../roles";
 
 export type KrakstackAuthLocale = "en" | "fr";
 
@@ -22,6 +24,7 @@ export type KrakstackAuthProviderProps = {
   baseUrl?: string | undefined;
   projectId?: string | null | undefined;
   authClient?: AuthUiClient | undefined;
+  access?: ProjectAccessCatalog | undefined;
 };
 
 export type KrakstackAuthContextValue = {
@@ -30,6 +33,7 @@ export type KrakstackAuthContextValue = {
   projectId?: string | null | undefined;
   authClient: AuthUiClient;
   projectConfig: ExtraProjectPublicConfig | null;
+  access: ProjectAccessCatalog | null;
   authRefreshVersion: number;
   refreshAuth: () => void;
 };
@@ -122,6 +126,7 @@ export function KrakstackAuthProvider({
   baseUrl,
   projectId,
   authClient,
+  access,
 }: KrakstackAuthProviderProps) {
   const searchString = useRouterState({
     select: (state) => state.location.searchStr,
@@ -149,6 +154,7 @@ export function KrakstackAuthProvider({
       locale,
       projectId: resolvedProjectId,
       projectConfig,
+      access: access ?? null,
       authRefreshVersion,
       refreshAuth,
     }),
@@ -158,6 +164,7 @@ export function KrakstackAuthProvider({
       locale,
       resolvedProjectId,
       projectConfig,
+      access,
       authRefreshVersion,
       refreshAuth,
     ],
@@ -184,3 +191,37 @@ export const useAuthClient = (): AuthUiClient => {
 
 export const useKrakstackAuthProjectConfig = () =>
   useKrakstackAuth()?.projectConfig ?? null;
+
+export const usePermissions = () => {
+  const auth = useKrakstackAuth();
+  if (!auth) {
+    throw new Error("KrakstackAuthProvider is required to use permissions.");
+  }
+
+  const session = auth.authClient.useSession();
+  const activeOrganization = auth.authClient.useActiveOrganization();
+  const memberRole = activeOrganization.data?.members.find(
+    (member) => member.userId === session.data?.user.id,
+  )?.role;
+  const actions = new Set<string>();
+
+  if (auth.access) {
+    for (const role of parseRoleList(memberRole)) {
+      for (const action of auth.access.roles[role] ?? []) actions.add(action);
+    }
+  }
+
+  return {
+    loading: session.isPending || activeOrganization.isPending,
+    permissions: auth.access
+      ? new Set(
+          Array.from(actions, (action) => `${auth.access?.project}:${action}`),
+        )
+      : new Set<string>(),
+    can: (action: string) => actions.has(action),
+    canAll: (required: ReadonlyArray<string>) =>
+      required.every((action) => actions.has(action)),
+    canAny: (required: ReadonlyArray<string>) =>
+      required.some((action) => actions.has(action)),
+  };
+};

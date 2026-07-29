@@ -1,3 +1,4 @@
+import { Schema } from "effect";
 import { OpenApi } from "effect/unstable/httpapi";
 import {
   HttpApiEndpoint,
@@ -16,6 +17,7 @@ import {
   ExtraProjectPublicConfig,
   ExtraProjectPublicConfigQuery,
   ExtraSetPasswordPayload,
+  ExtraUpdateApiKeyPayload,
   ExtraUploadedAsset,
   ExtraVerifyApiKeyPayload,
   ExtraVerifyApiKeyResponse,
@@ -37,6 +39,32 @@ export const ExtraApiGroup = HttpApiGroup.make("authExtra")
         summary: "Get host-aware project white-label config",
         description:
           "Returns resolved public branding and authentication options through the proxied auth API.",
+      }),
+    ),
+  )
+  .add(
+    HttpApiEndpoint.patch("updateApiKey", "/auth/api-key/:keyId", {
+      params: Schema.Struct({ keyId: Schema.NonEmptyString }),
+      payload: Schema.Struct({
+        configId: ExtraUpdateApiKeyPayload.fields.configId,
+        name: ExtraUpdateApiKeyPayload.fields.name,
+        enabled: ExtraUpdateApiKeyPayload.fields.enabled,
+        permissions: ExtraUpdateApiKeyPayload.fields.permissions,
+        referrers: ExtraUpdateApiKeyPayload.fields.referrers,
+      }),
+      success: ExtraOkResponse,
+      error: [
+        ExtraBadRequest,
+        HttpApiError.Unauthorized,
+        HttpApiError.Forbidden,
+        HttpApiError.InternalServerError,
+      ],
+    }).annotateMerge(
+      OpenApi.annotations({
+        title: "Update API key",
+        summary: "Update an API key",
+        description:
+          "Updates API key details and server-only permissions after Better Auth verifies user ownership or organization key-management access.",
       }),
     ),
   )

@@ -2,7 +2,7 @@ import type { ApiKey } from "@better-auth/api-key/client";
 import { useAtomSet, useAtomValue } from "@effect/atom-react";
 import { FormBuilder, FormReact } from "@lucas-barake/effect-form-react";
 import { Effect, Schema } from "effect";
-import { useState } from "react";
+import { useRef, useState } from "react";
 
 import {
   CheckboxField,
@@ -11,10 +11,20 @@ import {
   TextAreaField,
   TextField,
 } from "@/components/ui/effect-form";
+import { Checkbox } from "@/components/ui/checkbox";
+import {
+  Field,
+  FieldContent,
+  FieldDescription,
+  FieldGroup,
+  FieldLabel,
+  FieldLegend,
+  FieldSet,
+} from "@/components/ui/field";
 
-import type { AuthUiClient } from "./auth-client";
-import { parseApiKeyReferrers } from "./api-key";
-import { apiKeyReferrers, withApiKeyReferrers } from "./api-key-referrers";
+import { parseApiKeyReferrers, updateApiKey } from "./api-key";
+import { apiKeyReferrers } from "./api-key-referrers";
+import { ExtraApiKeyPermissions } from "../extra/schema";
 
 type ApiKeySummary = Omit<ApiKey, "key">;
 
@@ -30,22 +40,52 @@ export type ApiKeyEditMessages = {
   referrersDescription: string;
   referrersError: string;
   referrersPlaceholder: string;
+  permissions: string;
+  permissionsDescription: string;
   updateError: string;
 };
 
 export const ApiKeyEditForm = ({
-  authClient,
   configId,
   keyData,
   messages,
+  permissions,
   onSaved,
 }: {
-  authClient: AuthUiClient;
   configId: "organization" | "user";
   keyData: ApiKeySummary;
   messages: ApiKeyEditMessages;
+  permissions: Readonly<Record<string, ReadonlyArray<string>>>;
   onSaved: () => void;
 }) => {
+  const permissionOptions = Object.entries(permissions).flatMap(
+    ([project, actions]) =>
+      actions.map((action) => ({
+        id: `${project}:${action}`,
+        project,
+        action,
+      })),
+  );
+  const currentPermissions = Schema.decodeUnknownOption(ExtraApiKeyPermissions)(
+    keyData.permissions ?? {},
+  );
+  const currentGrant =
+    currentPermissions._tag === "Some" ? currentPermissions.value : {};
+  const initialSelectedPermissions = Object.fromEntries(
+    permissionOptions.map((option) => [
+      option.id,
+      currentGrant[option.project]?.includes(option.action) ?? false,
+    ]),
+  );
+  const [selectedPermissions, setSelectedPermissions] = useState(
+    initialSelectedPermissions,
+  );
+  const selectedPermissionsRef = useRef(selectedPermissions);
+  const permissionOptionsRef = useRef(permissionOptions);
+  const permissionsRef = useRef(permissions);
+  selectedPermissionsRef.current = selectedPermissions;
+  permissionOptionsRef.current = permissionOptions;
+  permissionsRef.current = permissions;
   const [form] = useState(() =>
     FormReact.make(editApiKeyFormBuilder, {
       fields: {
@@ -61,16 +101,28 @@ export const ApiKeyEditForm = ({
               decoded.referrers,
               messages.referrersError,
             );
-            const result = await authClient.apiKey.update({
-              configId,
-              keyId: keyData.id,
-              name: decoded.name.trim(),
-              enabled: decoded.enabled,
-              metadata: withApiKeyReferrers(keyData.metadata, referrers),
-            });
-            if (result.error) {
-              throw new Error(result.error.message ?? messages.updateError);
+            const selectedGrant: Record<string, string[]> = {};
+            for (const project of Object.keys(permissionsRef.current)) {
+              selectedGrant[project] = [];
             }
+            for (const option of permissionOptionsRef.current) {
+              if (!selectedPermissionsRef.current[option.id]) continue;
+              selectedGrant[option.project] = [
+                ...(selectedGrant[option.project] ?? []),
+                option.action,
+              ];
+            }
+            await updateApiKey(
+              {
+                configId,
+                keyId: keyData.id,
+                name: decoded.name.trim(),
+                enabled: decoded.enabled,
+                permissions: selectedGrant,
+                referrers,
+              },
+              messages.updateError,
+            );
 
             onSaved();
           },
@@ -107,6 +159,35 @@ export const ApiKeyEditForm = ({
             placeholder={messages.referrersPlaceholder}
             rows={3}
           />
+          {permissionOptions.length > 0 ? (
+            <FieldSet>
+              <FieldLegend>{messages.permissions}</FieldLegend>
+              <FieldDescription>
+                {messages.permissionsDescription}
+              </FieldDescription>
+              <FieldGroup data-slot="checkbox-group" className="gap-3">
+                {permissionOptions.map((permission) => (
+                  <Field key={permission.id} orientation="horizontal">
+                    <Checkbox
+                      id={`edit-${permission.id}`}
+                      checked={selectedPermissions[permission.id] ?? false}
+                      onCheckedChange={(checked: boolean) =>
+                        setSelectedPermissions((current) => ({
+                          ...current,
+                          [permission.id]: checked,
+                        }))
+                      }
+                    />
+                    <FieldContent>
+                      <FieldLabel htmlFor={`edit-${permission.id}`}>
+                        {permission.id}
+                      </FieldLabel>
+                    </FieldContent>
+                  </Field>
+                ))}
+              </FieldGroup>
+            </FieldSet>
+          ) : null}
           <SubmitError result={submitResult} />
           <SubmitButton form={form} />
         </form>

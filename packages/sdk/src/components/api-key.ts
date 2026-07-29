@@ -3,10 +3,13 @@ import { Option, Schema } from "effect";
 import {
   ExtraCreateApiKeyPayload,
   ExtraCreateApiKeyResponse,
+  ExtraOkResponse,
+  ExtraUpdateApiKeyPayload,
 } from "../extra/schema";
 
 export type CreateApiKeyPayload = typeof ExtraCreateApiKeyPayload.Type;
 export type CreatedApiKey = typeof ExtraCreateApiKeyResponse.Type;
+export type UpdateApiKeyPayload = typeof ExtraUpdateApiKeyPayload.Type;
 
 const decodeUrl = Schema.decodeUnknownOption(Schema.URLFromString);
 
@@ -58,4 +61,35 @@ export const createApiKey = async (
   }
 
   return await Schema.decodeUnknownPromise(ExtraCreateApiKeyResponse)(data);
+};
+
+export const updateApiKey = async (
+  payload: UpdateApiKeyPayload,
+  fallbackError: string,
+) => {
+  const decoded = await Schema.decodeUnknownPromise(ExtraUpdateApiKeyPayload)(
+    payload,
+  );
+  const response = await fetch(
+    `/api/auth/api-key/${encodeURIComponent(decoded.keyId)}`,
+    {
+      method: "PATCH",
+      credentials: "include",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        configId: decoded.configId,
+        name: decoded.name,
+        enabled: decoded.enabled,
+        permissions: decoded.permissions,
+        referrers: decoded.referrers,
+      }),
+    },
+  );
+  const data = await response.json().catch(() => null);
+
+  if (!response.ok) {
+    throw new Error(await errorMessage(data, fallbackError));
+  }
+
+  return await Schema.decodeUnknownPromise(ExtraOkResponse)(data);
 };

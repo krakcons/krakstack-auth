@@ -1,6 +1,26 @@
 import { describe, expect, it } from "@effect/vitest";
 
-import { organizationPublicProfile } from "./api.builder";
+import {
+  mergeApiKeyPermissions,
+  organizationPublicProfile,
+} from "./api.builder";
+
+describe("mergeApiKeyPermissions", () => {
+  it("updates selected projects without removing other project grants", () => {
+    expect(
+      mergeApiKeyPermissions(
+        {
+          "211-search": ["search:execute"],
+          kokobi: ["course:read"],
+        },
+        { "211-search": ["records:read"] },
+      ),
+    ).toEqual({
+      "211-search": ["records:read"],
+      kokobi: ["course:read"],
+    });
+  });
+});
 
 describe("organizationPublicProfile", () => {
   it("returns compatibility email and a formatted structured address", () => {

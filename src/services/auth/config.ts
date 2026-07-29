@@ -493,6 +493,7 @@ const createAuth = ({
           defaultPrefix: "user_",
           references: "user",
           enableMetadata: true,
+          permissions: { defaultPermissions: {} },
           rateLimit: apiKeyRateLimit,
         },
         {
@@ -500,6 +501,7 @@ const createAuth = ({
           defaultPrefix: "org_",
           references: "organization",
           enableMetadata: true,
+          permissions: { defaultPermissions: {} },
           rateLimit: apiKeyRateLimit,
         },
         {
@@ -507,6 +509,7 @@ const createAuth = ({
           defaultPrefix: "svc_",
           references: "user",
           enableMetadata: true,
+          permissions: { defaultPermissions: {} },
           rateLimit: {
             enabled: true,
             timeWindow: 1000 * 60 * 60 * 24,

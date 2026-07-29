@@ -12,6 +12,8 @@ export {
   ServerUsersApiGroup,
 } from "./api.group";
 export { proxyAuthRequest } from "./proxy";
+export { ActorRequired } from "./actor";
+export type { ActorConstraint } from "./actor";
 export {
   ApiKeySecurity,
   AuthMiddleware,
@@ -37,3 +39,25 @@ export type {
   OrganizationMetadata,
   User,
 } from "../schema";
+export {
+  ApiKeyPermissionGrant,
+  CurrentActor,
+  Forbidden,
+  all,
+  actorUserId,
+  any,
+  defineProjectAccess,
+  permission,
+  policy,
+  withPolicy,
+} from "../access";
+export type {
+  ApiKeyOwner,
+  ApiKeyActor,
+  Actor,
+  Policy,
+  ProjectAccessConfig,
+  ProjectAccessCatalog,
+  ProjectAccessDefinition,
+  UserActor,
+} from "../access";

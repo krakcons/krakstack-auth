@@ -97,19 +97,42 @@ export const ExtraCreateApiKeyResponse = Schema.Struct({
   examples: [{ id: "api-key-id", key: "user_1234567890" }],
 });
 
+export const ExtraUpdateApiKeyPayload = Schema.Struct({
+  configId: ExtraApiKeyConfigId,
+  keyId: Schema.NonEmptyString,
+  name: Schema.NonEmptyString,
+  enabled: Schema.Boolean,
+  permissions: Schema.optional(ExtraApiKeyPermissions),
+  referrers: Schema.optional(Schema.Array(Schema.String)),
+}).annotate({
+  identifier: "ExtraUpdateApiKeyPayload",
+  title: "Extra update API key payload",
+  description:
+    "Server-authorized updates for an existing API key, including its permissions.",
+  examples: [
+    {
+      configId: "organization",
+      keyId: "api-key-id",
+      name: "Production key",
+      enabled: true,
+      permissions: { "211-search": ["search:execute"] },
+      referrers: ["https://app.example.com"],
+    },
+  ],
+});
+
 export const ExtraVerifyApiKeyPayload = Schema.Struct({
   key: Schema.NonEmptyString,
   configId: Schema.optional(ExtraApiKeyConfigId),
-  permissions: Schema.optional(ExtraApiKeyPermissions),
 }).annotate({
   identifier: "ExtraVerifyApiKeyPayload",
   title: "Extra verify API key payload",
-  description: "Payload used by remote services to verify a KrakStack API key.",
+  description:
+    "Payload used to verify a KrakStack API key. Project permissions are enforced by consumer access policies.",
   examples: [
     {
       key: "user_1234567890",
       configId: "user",
-      permissions: { projects: ["read"] },
     },
   ],
 });
@@ -333,6 +356,7 @@ export type ExtraSetPasswordPayload = typeof ExtraSetPasswordPayload.Type;
 export type ExtraVerifyPasswordPayload = typeof ExtraVerifyPasswordPayload.Type;
 export type ExtraCreateApiKeyPayload = typeof ExtraCreateApiKeyPayload.Type;
 export type ExtraCreateApiKeyResponse = typeof ExtraCreateApiKeyResponse.Type;
+export type ExtraUpdateApiKeyPayload = typeof ExtraUpdateApiKeyPayload.Type;
 export type ExtraVerifyApiKeyPayload = typeof ExtraVerifyApiKeyPayload.Type;
 export type ExtraVerifyApiKeyResponse = typeof ExtraVerifyApiKeyResponse.Type;
 export type ExtraProjectPublicConfigQuery =
