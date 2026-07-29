@@ -1,4 +1,11 @@
+import { Schema } from "effect";
 import { HttpApiError, HttpApiMiddleware } from "effect/unstable/httpapi";
+
+export class ServiceApiKeyUnauthorized extends Schema.TaggedErrorClass<ServiceApiKeyUnauthorized>()(
+  "ServiceApiKeyUnauthorized",
+  { message: Schema.String },
+  { httpApiStatus: 401 },
+) {}
 
 export class AdminAuthMiddleware extends HttpApiMiddleware.Service<AdminAuthMiddleware>()(
   "KrakStack/AdminAuthMiddleware",
@@ -14,6 +21,6 @@ export class AdminAuthMiddleware extends HttpApiMiddleware.Service<AdminAuthMidd
 export class ServiceApiKeyMiddleware extends HttpApiMiddleware.Service<ServiceApiKeyMiddleware>()(
   "KrakStack/ServiceApiKeyMiddleware",
   {
-    error: [HttpApiError.Unauthorized, HttpApiError.InternalServerError],
+    error: [ServiceApiKeyUnauthorized, HttpApiError.InternalServerError],
   },
 ) {}

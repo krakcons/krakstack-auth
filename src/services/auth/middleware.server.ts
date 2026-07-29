@@ -4,8 +4,13 @@ import { HttpApiError } from "effect/unstable/httpapi";
 
 import { BetterAuthRequest } from "@/services/auth/better-auth-request";
 import {
+  apiKeyAllowedOrigins,
+  requestMatchesAllowedOrigins,
+} from "@/services/auth/api-key-referrers";
+import {
   AdminAuthMiddleware,
   ServiceApiKeyMiddleware,
+  ServiceApiKeyUnauthorized,
 } from "@/services/auth/middleware";
 
 const userRole = (value: unknown) => {
@@ -65,7 +70,11 @@ export const serviceApiKeyMiddlewareLayer = Layer.succeed(
     Effect.gen(function* () {
       const request = yield* HttpServerRequest.HttpServerRequest;
       const key = serviceApiKey(request.headers);
-      if (!key) return yield* new HttpApiError.Unauthorized({});
+      if (!key) {
+        return yield* new ServiceApiKeyUnauthorized({
+          message: "A service API key is required.",
+        });
+      }
 
       const betterAuth = yield* BetterAuthRequest.pipe(
         Effect.provide(BetterAuthRequest.make(request)),
@@ -80,7 +89,24 @@ export const serviceApiKeyMiddlewareLayer = Layer.succeed(
         catch: internalServerError,
       });
 
-      if (!result.valid) return yield* new HttpApiError.Unauthorized({});
+      if (!result.valid || !result.key) {
+        return yield* new ServiceApiKeyUnauthorized({
+          message: "The service API key is invalid, disabled, or expired.",
+        });
+      }
+
+      const allowedOrigins = apiKeyAllowedOrigins(result.key.metadata);
+      const origin = Option.getOrUndefined(
+        Headers.get(request.headers, "origin"),
+      );
+      const referrer = Option.getOrUndefined(
+        Headers.get(request.headers, "referer"),
+      );
+      if (!requestMatchesAllowedOrigins(origin, referrer, allowedOrigins)) {
+        return yield* new ServiceApiKeyUnauthorized({
+          message: "The API key is not allowed from this referrer.",
+        });
+      }
 
       return yield* effect;
     }),

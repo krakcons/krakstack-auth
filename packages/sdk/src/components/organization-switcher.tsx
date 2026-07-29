@@ -5,6 +5,7 @@ import { type ColumnDef } from "@tanstack/react-table";
 import { Effect, Option, Schema } from "effect";
 import { AsyncResult, Atom } from "effect/unstable/reactivity";
 import {
+  ArrowLeft,
   Building2,
   Check,
   ChevronsUpDown,
@@ -41,6 +42,7 @@ import {
   SelectField,
   SubmitButton,
   SubmitError,
+  TextAreaField,
   TextField,
 } from "@/components/ui/effect-form";
 import { EditingLocaleSwitcher } from "@/components/ui/editing-locale-switcher";
@@ -49,6 +51,7 @@ import { Field, FieldLabel, FieldSet } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { CopyButton } from "@/components/ui/copy-button";
 import {
   Dialog,
   DialogContent,
@@ -102,7 +105,10 @@ import {
 import type { AuthUiClient } from "./auth-client";
 import { authClientApi } from "./auth-client-api";
 import { useKrakstackAuth } from "./auth-provider";
-import { createApiKey } from "./api-key";
+import { createApiKey, parseApiKeyReferrers } from "./api-key";
+import { ApiKeyEditForm } from "./api-key-edit-form";
+import { ApiKeyRateLimit, apiKeyUsagePercent } from "./api-key-rate-limit";
+import { ApiKeyReferrers } from "./api-key-referrers";
 import { useOpenedOnce } from "./hooks";
 import {
   invitationDisplayStatus,
@@ -116,8 +122,7 @@ type Locale = "en" | "fr";
 
 const messages = {
   en: {
-    api_key_rate_limit_notice:
-      "API keys are subject to the same rate limits as your account.",
+    organization_back: "Back",
     organization_contact: "Contact methods",
     organization_contact_add_email: "Add email",
     organization_contact_add_phone: "Add phone",
@@ -198,6 +203,8 @@ const messages = {
     organization_member_user: "User",
     organization_members_description:
       "Review active members, update roles, and remove access when needed.",
+    organization_members_dialog_description:
+      "Manage members and invitations for {name}.",
     organization_members_empty: "No members found.",
     organization_members_heading: "Organization members",
     organization_members_load_error: "Could not load organization members.",
@@ -219,26 +226,53 @@ const messages = {
     organization_translation_name: "Name",
     organization_update_error: "Could not update the organization.",
     table_empty: "No results.",
+    user_api_key_back: "Back",
+    user_api_key_create_description:
+      "Configure a new API key for this organization.",
     user_api_key_create_error: "Could not create the API key.",
+    user_api_key_create_title: "Create API key",
+    user_api_key_copied: "Copied",
+    user_api_key_copy: "Copy",
     user_api_key_created_description:
       "Copy this key now. You will not be able to see it again.",
     user_api_key_created_title: "API key created",
     user_api_key_delete_error: "Could not delete the API key.",
     user_api_key_disabled: "Disabled",
+    user_api_key_edit_description:
+      "Update the key name, status, and allowed referrers.",
+    user_api_key_edit_title: "Edit API key",
     user_api_key_enabled: "Enabled",
     user_api_key_hidden: "Secret hidden",
     user_api_key_name: "Key name",
+    user_api_key_rate_limit: "Rate limit",
+    user_api_key_referrers: "Allowed referrers (optional)",
+    user_api_key_referrers_any: "Any referrer",
+    user_api_key_referrers_column: "Referrers",
+    user_api_key_referrers_description:
+      "Enter any number of URLs, separated by commas or new lines. Leave empty to allow any referrer.",
+    user_api_key_referrers_error: "{referrer} is not a valid HTTP(S) URL.",
+    user_api_key_referrers_placeholder:
+      "https://app.example.com\nhttps://admin.example.com",
     user_api_key_starts_with: "Starts with {start}",
     user_api_key_status: "Status",
+    user_api_key_unlimited: "Unlimited",
+    user_api_key_update_error: "Could not update the API key.",
+    user_api_key_usage: "API key usage",
+    user_api_key_window_days: "{count}d",
+    user_api_key_window_hours: "{count}h",
+    user_api_key_window_minutes: "{count}m",
+    user_api_key_window_none: "None",
+    user_api_key_window_seconds: "{count}s",
     user_api_keys_load_error: "Could not load API keys.",
+    user_api_keys_organization_description:
+      "Create and manage API keys for {name}.",
     user_api_keys_title: "API keys",
     user_button_api_keys: "API keys",
     user_delete: "Delete",
     user_loading: "Loading...",
   },
   fr: {
-    api_key_rate_limit_notice:
-      "Les clés API sont soumises aux mêmes limites de débit que votre compte.",
+    organization_back: "Retour",
     organization_contact: "Moyens de contact",
     organization_contact_add_email: "Ajouter un courriel",
     organization_contact_add_phone: "Ajouter un téléphone",
@@ -321,6 +355,8 @@ const messages = {
     organization_member_user: "Utilisateur",
     organization_members_description:
       "Consultez les membres actifs, modifiez les rôles et retirez les accès au besoin.",
+    organization_members_dialog_description:
+      "Gérez les membres et les invitations de {name}.",
     organization_members_empty: "Aucun membre trouvé.",
     organization_members_heading: "Membres de l'organisation",
     organization_members_load_error:
@@ -345,18 +381,47 @@ const messages = {
     organization_translation_name: "Nom",
     organization_update_error: "Impossible de mettre à jour l'organisation.",
     table_empty: "Aucun résultat.",
+    user_api_key_back: "Retour",
+    user_api_key_create_description:
+      "Configurez une nouvelle clé API pour cette organisation.",
     user_api_key_create_error: "Impossible de créer la clé API.",
+    user_api_key_create_title: "Créer une clé API",
+    user_api_key_copied: "Copié",
+    user_api_key_copy: "Copier",
     user_api_key_created_description:
       "Copiez cette clé maintenant. Vous ne pourrez plus la voir.",
     user_api_key_created_title: "Clé API créée",
     user_api_key_delete_error: "Impossible de supprimer la clé API.",
     user_api_key_disabled: "Désactivée",
+    user_api_key_edit_description:
+      "Mettez à jour le nom, le statut et les référents autorisés de la clé.",
+    user_api_key_edit_title: "Modifier la clé API",
     user_api_key_enabled: "Activée",
     user_api_key_hidden: "Secret masqué",
     user_api_key_name: "Nom de la clé",
+    user_api_key_rate_limit: "Limite de débit",
+    user_api_key_referrers: "Référents autorisés (facultatifs)",
+    user_api_key_referrers_any: "Tout référent",
+    user_api_key_referrers_column: "Référents",
+    user_api_key_referrers_description:
+      "Saisissez autant d'URL que nécessaire, séparées par des virgules ou des sauts de ligne. Laissez vide pour autoriser tout référent.",
+    user_api_key_referrers_error:
+      "{referrer} n'est pas une URL HTTP(S) valide.",
+    user_api_key_referrers_placeholder:
+      "https://app.example.com\nhttps://admin.example.com",
     user_api_key_starts_with: "Commence par {start}",
     user_api_key_status: "Statut",
+    user_api_key_unlimited: "Illimitée",
+    user_api_key_update_error: "Impossible de mettre à jour la clé API.",
+    user_api_key_usage: "Utilisation de la clé API",
+    user_api_key_window_days: "{count} j",
+    user_api_key_window_hours: "{count} h",
+    user_api_key_window_minutes: "{count} min",
+    user_api_key_window_none: "Aucune",
+    user_api_key_window_seconds: "{count} s",
     user_api_keys_load_error: "Impossible de charger les clés API.",
+    user_api_keys_organization_description:
+      "Créez et gérez les clés API de {name}.",
     user_api_keys_title: "Clés API",
     user_button_api_keys: "Clés API",
     user_delete: "Supprimer",
@@ -1123,10 +1188,9 @@ const inviteMemberFormBuilder = FormBuilder.empty
   .addField("email", Schema.NonEmptyString)
   .addField("role", Schema.String);
 
-const apiKeyFormBuilder = FormBuilder.empty.addField(
-  "name",
-  Schema.NonEmptyString,
-);
+const apiKeyFormBuilder = FormBuilder.empty
+  .addField("name", Schema.NonEmptyString)
+  .addField("referrers", Schema.String);
 
 const slugify = (value: string) =>
   value
@@ -1913,15 +1977,6 @@ export function OrganizationSwitcher({
         }}
       >
         <DialogContent className="max-h-[85vh] overflow-y-auto sm:max-w-4xl">
-          <DialogHeader>
-            <DialogTitle className="text-2xl">
-              {m.organization_members_title()}
-            </DialogTitle>
-            <DialogDescription>
-              {activeOrganization.data?.name}
-            </DialogDescription>
-          </DialogHeader>
-          <Separator />
           {activeOrganization.data ? (
             <OrganizationMembersManager
               authClient={authClient}
@@ -1948,16 +2003,7 @@ export function OrganizationSwitcher({
           );
         }}
       >
-        <DialogContent className="max-h-[85vh] overflow-y-auto sm:max-w-3xl">
-          <DialogHeader>
-            <DialogTitle className="text-2xl">
-              {m.user_api_keys_title()}
-            </DialogTitle>
-            <DialogDescription>
-              {activeOrganization.data?.name}
-            </DialogDescription>
-          </DialogHeader>
-          <Separator />
+        <DialogContent className="max-h-[85vh] min-w-0 overflow-x-hidden overflow-y-auto sm:max-w-3xl">
           {activeOrganization.data ? (
             <OrganizationApiKeyManager
               authClient={authClient}
@@ -2644,6 +2690,7 @@ function OrganizationMembersManager({
     : emptyOrganizationMembersAtom;
   const membersResult = useAtomValue(membersAtom);
   const refreshMembers = useAtomRefresh(membersAtom);
+  const [inviting, setInviting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [cancellingInvitationId, setCancellingInvitationId] = useState<
     string | null
@@ -2722,7 +2769,9 @@ function OrganizationMembersManager({
   const inviteResult = useAtomValue(inviteForm.submit);
 
   useEffect(() => {
-    if (AsyncResult.isSuccess(inviteResult)) resetInvitation();
+    if (!AsyncResult.isSuccess(inviteResult)) return;
+    resetInvitation();
+    setInviting(false);
   }, [inviteResult, resetInvitation]);
 
   const updateRole = async (
@@ -2811,9 +2860,44 @@ function OrganizationMembersManager({
   };
 
   return (
-    <div className="flex min-w-0 flex-col gap-5">
-      {canInviteMembers ? (
-        <div className="min-h-40 rounded-lg border p-4">
+    <>
+      <DialogHeader>
+        <DialogTitle className="text-2xl">
+          {inviting
+            ? m.organization_invite_member_title()
+            : m.organization_members_title()}
+        </DialogTitle>
+        <DialogDescription>
+          {inviting
+            ? m.organization_invite_member_description()
+            : m.organization_members_dialog_description({
+                name: organization.name,
+              })}
+        </DialogDescription>
+        {inviting ? (
+          <Button
+            className="mt-2 w-fit"
+            onClick={() => setInviting(false)}
+            type="button"
+            variant="secondary"
+          >
+            <ArrowLeft />
+            {m.organization_back()}
+          </Button>
+        ) : canInviteMembers ? (
+          <Button
+            className="mt-2 w-fit"
+            onClick={() => setInviting(true)}
+            type="button"
+          >
+            <UserPlus />
+            {m.organization_invite_member_title()}
+          </Button>
+        ) : null}
+      </DialogHeader>
+      <Separator />
+      <div className="flex min-w-0 flex-col gap-5">
+        {inviting ? (
           <inviteForm.Initialize defaultValues={{ email: "", role: "member" }}>
             <form
               className="grid gap-4 sm:grid-cols-[minmax(0,1fr)_12rem_auto] sm:items-end"
@@ -2823,15 +2907,6 @@ function OrganizationMembersManager({
                 submitInvitation();
               }}
             >
-              <div className="sm:col-span-3">
-                <div className="flex items-center gap-2 font-medium">
-                  <UserPlus className="size-4" />
-                  {m.organization_invite_member_title()}
-                </div>
-                <p className="text-muted-foreground text-sm">
-                  {m.organization_invite_member_description()}
-                </p>
-              </div>
               <inviteForm.email
                 label={m.organization_member_email()}
                 placeholder="teammate@example.com"
@@ -2851,80 +2926,88 @@ function OrganizationMembersManager({
               <SubmitError result={inviteResult} />
             </form>
           </inviteForm.Initialize>
-        </div>
-      ) : null}
-      {membersError ? (
-        <p className="text-destructive text-sm">{membersError}</p>
-      ) : null}
-      {error ? <p className="text-destructive text-sm">{error}</p> : null}
-      <section className="flex min-w-0 flex-col gap-3">
-        <div>
-          <h3 className="font-medium">{m.organization_members_heading()}</h3>
-          <p className="text-muted-foreground text-sm">
-            {m.organization_members_description()}
-          </p>
-        </div>
-        <div className="-m-1 min-w-0 overflow-x-auto p-1">
-          <DataTable
-            columns={memberColumns({
-              m,
-              baseUrl,
-              canChangeRoles: canManageMembers,
-              onRoleChange: updateRole,
-            })}
-            data={displayedMembers}
-            features={{
-              export: { baseName: `${organization.slug}-members` },
-              gallery: false,
-              rowActions: {
-                items: memberRowActions({
+        ) : null}
+        {!inviting && membersError ? (
+          <p className="text-destructive text-sm">{membersError}</p>
+        ) : null}
+        {!inviting && error ? (
+          <p className="text-destructive text-sm">{error}</p>
+        ) : null}
+        {!inviting ? (
+          <section className="flex min-w-0 flex-col gap-3">
+            <div>
+              <h3 className="font-medium">
+                {m.organization_members_heading()}
+              </h3>
+              <p className="text-muted-foreground text-sm">
+                {m.organization_members_description()}
+              </p>
+            </div>
+            <div className="-m-1 min-w-0 overflow-x-auto p-1">
+              <DataTable
+                columns={memberColumns({
                   m,
-                  canRemoveMembers,
-                  currentUserId,
-                  leavingOrganization,
-                  onLeave: leaveOrganization,
-                  onRemove: removeMember,
-                }),
-              },
-            }}
-            searchState="local"
-            state={{ empty: m.organization_members_empty(), loading }}
-          />
-        </div>
-      </section>
-      <section className="flex min-w-0 flex-col gap-3">
-        <div>
-          <h3 className="font-medium">
-            {m.organization_invitations_heading()}
-          </h3>
-          <p className="text-muted-foreground text-sm">
-            {m.organization_invitations_description()}
-          </p>
-        </div>
-        <div className="-m-1 min-w-0 overflow-x-auto p-1">
-          <DataTable
-            columns={invitationColumns({
-              m,
-              now: invitationNow,
-            })}
-            data={invitations}
-            features={{
-              export: { baseName: `${organization.slug}-invitations` },
-              gallery: false,
-              rowActions: {
-                items: invitationRowActions({
+                  baseUrl,
+                  canChangeRoles: canManageMembers,
+                  onRoleChange: updateRole,
+                })}
+                data={displayedMembers}
+                features={{
+                  export: { baseName: `${organization.slug}-members` },
+                  gallery: false,
+                  rowActions: {
+                    items: memberRowActions({
+                      m,
+                      canRemoveMembers,
+                      currentUserId,
+                      leavingOrganization,
+                      onLeave: leaveOrganization,
+                      onRemove: removeMember,
+                    }),
+                  },
+                }}
+                searchState="local"
+                state={{ empty: m.organization_members_empty(), loading }}
+              />
+            </div>
+          </section>
+        ) : null}
+        {!inviting ? (
+          <section className="flex min-w-0 flex-col gap-3">
+            <div>
+              <h3 className="font-medium">
+                {m.organization_invitations_heading()}
+              </h3>
+              <p className="text-muted-foreground text-sm">
+                {m.organization_invitations_description()}
+              </p>
+            </div>
+            <div className="-m-1 min-w-0 overflow-x-auto p-1">
+              <DataTable
+                columns={invitationColumns({
                   m,
-                  cancellingInvitationId,
-                  onCancel: cancelInvitation,
-                }),
-              },
-            }}
-            searchState="local"
-            state={{ empty: m.organization_invitations_empty(), loading }}
-          />
-        </div>
-      </section>
-    </div>
+                  now: invitationNow,
+                })}
+                data={invitations}
+                features={{
+                  export: { baseName: `${organization.slug}-invitations` },
+                  gallery: false,
+                  rowActions: {
+                    items: invitationRowActions({
+                      m,
+                      cancellingInvitationId,
+                      onCancel: cancelInvitation,
+                    }),
+                  },
+                }}
+                searchState="local"
+                state={{ empty: m.organization_invitations_empty(), loading }}
+              />
+            </div>
+          </section>
+        ) : null}
+      </div>
+    </>
   );
 }
 
@@ -3134,6 +3217,8 @@ function OrganizationApiKeyManager({
   const keysResult = useAtomValue(keysAtom);
   const refreshKeys = useAtomRefresh(keysAtom);
   const [createdKey, setCreatedKey] = useState<string | null>(null);
+  const [creating, setCreating] = useState(false);
+  const [editingKey, setEditingKey] = useState<ApiKeySummary | null>(null);
   const [error, setError] = useState<string | null>(null);
   const keys = AsyncResult.match(keysResult, {
     onInitial: () => [],
@@ -3149,7 +3234,7 @@ function OrganizationApiKeyManager({
 
   const [createForm] = useState(() =>
     FormReact.make(apiKeyFormBuilder, {
-      fields: { name: TextField },
+      fields: { name: TextField, referrers: TextAreaField },
       onSubmit: (_, { decoded: value }) =>
         Effect.tryPromise({
           try: async () => {
@@ -3159,6 +3244,10 @@ function OrganizationApiKeyManager({
                 configId: "organization",
                 organizationId: organization.id,
                 name: value.name.trim(),
+                referrers: parseApiKeyReferrers(
+                  value.referrers,
+                  m.user_api_key_referrers_error(),
+                ),
               },
               m.user_api_key_create_error(),
             );
@@ -3197,60 +3286,153 @@ function OrganizationApiKeyManager({
   };
 
   return (
-    <div className="flex flex-col gap-5">
-      <createForm.Initialize defaultValues={{ name: "" }}>
-        <form
-          className="flex max-w-xl flex-col gap-4"
-          onSubmit={(event) => {
-            event.preventDefault();
-            event.stopPropagation();
-            submitApiKey();
-          }}
-        >
-          <p className="text-muted-foreground text-sm">
-            {m.api_key_rate_limit_notice()}
-          </p>
-          <createForm.name label={m.user_api_key_name()} required />
-          <SubmitError result={createResult} />
-          <SubmitButton form={createForm} />
-        </form>
-      </createForm.Initialize>
-      {createdKey ? (
-        <div className="flex flex-col gap-2 rounded-lg border p-4">
-          <div className="flex items-center gap-2 font-medium">
-            <KeyRound />
-            {m.user_api_key_created_title()}
-          </div>
-          <p className="text-muted-foreground text-sm">
-            {m.user_api_key_created_description()}
-          </p>
-          <code className="bg-muted overflow-x-auto rounded-md p-3 text-sm">
-            {createdKey}
-          </code>
-        </div>
-      ) : null}
-      {keysError ? (
-        <p className="text-destructive text-sm">{keysError}</p>
-      ) : null}
-      {error ? <p className="text-destructive text-sm">{error}</p> : null}
+    <>
+      <DialogHeader>
+        <DialogTitle className="text-2xl">
+          {editingKey
+            ? m.user_api_key_edit_title()
+            : createdKey
+              ? m.user_api_key_created_title()
+              : creating
+                ? m.user_api_key_create_title()
+                : m.user_api_keys_title()}
+        </DialogTitle>
+        <DialogDescription>
+          {editingKey
+            ? m.user_api_key_edit_description()
+            : createdKey
+              ? m.user_api_key_created_description()
+              : creating
+                ? m.user_api_key_create_description()
+                : m.user_api_keys_organization_description({
+                    name: organization.name,
+                  })}
+        </DialogDescription>
+        {creating || editingKey ? (
+          <Button
+            className="mt-2 w-fit"
+            onClick={() => {
+              setCreating(false);
+              setCreatedKey(null);
+              setEditingKey(null);
+            }}
+            type="button"
+            variant="secondary"
+          >
+            <ArrowLeft />
+            {m.user_api_key_back()}
+          </Button>
+        ) : (
+          <Button
+            className="mt-2 w-fit"
+            onClick={() => {
+              setCreatedKey(null);
+              setCreating(true);
+            }}
+            type="button"
+          >
+            <Plus />
+            {m.user_api_key_create_title()}
+          </Button>
+        )}
+      </DialogHeader>
       <Separator />
-      <DataTable
-        columns={apiKeyColumns({ m })}
-        data={keys}
-        features={{
-          export: { baseName: `${organization.slug}-api-keys` },
-          gallery: false,
-          rowActions: {
-            items: apiKeyRowActions({ m, onDelete: deleteKey }),
-          },
-        }}
-        searchState="local"
-        state={{
-          empty: loading ? m.user_loading() : m.table_empty(),
-          loading,
-        }}
-      />
-    </div>
+      <div className="flex min-w-0 flex-col gap-5">
+        {creating && !createdKey ? (
+          <section className="w-full">
+            <createForm.Initialize defaultValues={{ name: "", referrers: "" }}>
+              <form
+                className="flex flex-col gap-4"
+                onSubmit={(event) => {
+                  event.preventDefault();
+                  event.stopPropagation();
+                  submitApiKey();
+                }}
+              >
+                <createForm.name label={m.user_api_key_name()} required />
+                <createForm.referrers
+                  label={m.user_api_key_referrers()}
+                  description={m.user_api_key_referrers_description()}
+                  placeholder={m.user_api_key_referrers_placeholder()}
+                  rows={3}
+                />
+                <SubmitError result={createResult} />
+                <SubmitButton form={createForm} />
+              </form>
+            </createForm.Initialize>
+          </section>
+        ) : null}
+        {creating && createdKey ? (
+          <div className="flex min-w-0 flex-col gap-3">
+            <div className="bg-muted/50 flex min-w-0 items-center justify-between gap-3 rounded-md border px-3 py-2">
+              <code className="block min-w-0 flex-1 overflow-x-auto text-sm whitespace-nowrap">
+                {createdKey}
+              </code>
+              <CopyButton
+                className="shrink-0"
+                messages={{
+                  copied: m.user_api_key_copied(),
+                  copy: m.user_api_key_copy(),
+                }}
+                value={createdKey}
+                variant="ghost"
+              />
+            </div>
+          </div>
+        ) : null}
+        {!creating && !editingKey && keysError ? (
+          <p className="text-destructive text-sm">{keysError}</p>
+        ) : null}
+        {!creating && !editingKey && error ? (
+          <p className="text-destructive text-sm">{error}</p>
+        ) : null}
+        {!creating && !editingKey ? (
+          <div className="max-w-full min-w-0 overflow-x-hidden">
+            <DataTable
+              columns={apiKeyColumns({ m })}
+              data={keys}
+              features={{
+                export: { baseName: `${organization.slug}-api-keys` },
+                gallery: false,
+                rowActions: {
+                  items: apiKeyRowActions({
+                    m,
+                    onDelete: deleteKey,
+                    onEdit: (key) => setEditingKey(key),
+                  }),
+                },
+              }}
+              searchState="local"
+              state={{
+                empty: loading ? m.user_loading() : m.table_empty(),
+                loading,
+              }}
+            />
+          </div>
+        ) : null}
+        {editingKey ? (
+          <ApiKeyEditForm
+            key={editingKey.id}
+            authClient={authClient}
+            configId="organization"
+            keyData={editingKey}
+            messages={{
+              enabled: m.user_api_key_enabled(),
+              name: m.user_api_key_name(),
+              referrers: m.user_api_key_referrers(),
+              referrersDescription: m.user_api_key_referrers_description(),
+              referrersError: m.user_api_key_referrers_error(),
+              referrersPlaceholder: m.user_api_key_referrers_placeholder(),
+              updateError: m.user_api_key_update_error(),
+            }}
+            onSaved={() => {
+              refreshKeys();
+              setEditingKey(null);
+            }}
+          />
+        ) : null}
+      </div>
+    </>
   );
 }
 
@@ -3284,15 +3466,53 @@ const apiKeyColumns = ({
       </Badge>
     ),
   },
+  {
+    id: "referrers",
+    accessorFn: (keyData) => keyData.metadata,
+    header: m.user_api_key_referrers_column(),
+    cell: ({ row }) => (
+      <ApiKeyReferrers
+        metadata={row.original.metadata}
+        unrestrictedLabel={m.user_api_key_referrers_any()}
+      />
+    ),
+  },
+  {
+    id: "rateLimit",
+    accessorFn: apiKeyUsagePercent,
+    header: m.user_api_key_rate_limit(),
+    cell: ({ row }) => (
+      <ApiKeyRateLimit
+        keyData={row.original}
+        messages={{
+          disabled: m.user_api_key_disabled(),
+          none: m.user_api_key_window_none(),
+          unlimited: m.user_api_key_unlimited(),
+          usage: m.user_api_key_usage(),
+          windowDays: (count) => m.user_api_key_window_days({ count }),
+          windowHours: (count) => m.user_api_key_window_hours({ count }),
+          windowMinutes: (count) => m.user_api_key_window_minutes({ count }),
+          windowSeconds: (count) => m.user_api_key_window_seconds({ count }),
+        }}
+      />
+    ),
+  },
 ];
 
 const apiKeyRowActions = ({
   m,
   onDelete,
+  onEdit,
 }: {
   m: ReturnType<typeof organizationMessageFns>;
   onDelete: (key: ApiKeySummary) => void;
+  onEdit: (key: ApiKeySummary) => void;
 }) => [
+  {
+    name: m.user_api_key_edit_title(),
+    icon: <PencilIcon />,
+    onClick: onEdit,
+  },
   {
     name: m.user_delete(),
     icon: <Trash2 />,

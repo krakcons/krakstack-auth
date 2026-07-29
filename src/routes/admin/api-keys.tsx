@@ -36,12 +36,14 @@ import {
   CheckboxField,
   SubmitButton,
   SubmitError,
+  TextAreaField,
   TextField,
 } from "@/components/ui/effect-form";
 import { Separator } from "@/components/ui/separator";
 import { AdminApiClient } from "@/lib/admin-api-client";
 import { ApiClient } from "@/lib/api-client";
 import { m } from "@/paraglide/messages";
+import { parseApiKeyReferrers } from "@/services/auth/api-key-referrers";
 
 export const Route = createFileRoute("/admin/api-keys")({
   validateSearch: TableSearchSchema,
@@ -317,6 +319,7 @@ type ApiKeyFormValues = {
   rateLimitEnabled: boolean;
   rateLimitMax: string;
   rateLimitTimeWindowMinutes: string;
+  referrers: string;
 };
 
 const apiKeyFormBuilder = FormBuilder.empty
@@ -324,7 +327,8 @@ const apiKeyFormBuilder = FormBuilder.empty
   .addField("enabled", Schema.Boolean)
   .addField("rateLimitEnabled", Schema.Boolean)
   .addField("rateLimitMax", Schema.String)
-  .addField("rateLimitTimeWindowMinutes", Schema.String);
+  .addField("rateLimitTimeWindowMinutes", Schema.String)
+  .addField("referrers", Schema.String);
 
 const apiKeyFormDefaults = (apiKey: ApiKeySummary | null): ApiKeyFormValues =>
   apiKey
@@ -336,6 +340,7 @@ const apiKeyFormDefaults = (apiKey: ApiKeySummary | null): ApiKeyFormValues =>
         rateLimitTimeWindowMinutes: apiKey.rateLimitTimeWindow
           ? Math.round(apiKey.rateLimitTimeWindow / 60000).toString()
           : "",
+        referrers: apiKey.referrers.join("\n"),
       }
     : {
         name: "",
@@ -343,6 +348,7 @@ const apiKeyFormDefaults = (apiKey: ApiKeySummary | null): ApiKeyFormValues =>
         rateLimitEnabled: true,
         rateLimitMax: "10000",
         rateLimitTimeWindowMinutes: "1440",
+        referrers: "",
       };
 
 const optionalNumber = (value: string, label: string) => {
@@ -365,6 +371,7 @@ const makeApiKeyForm = (apiKey: ApiKeySummary | null) =>
       rateLimitEnabled: CheckboxField,
       rateLimitMax: TextField,
       rateLimitTimeWindowMinutes: TextField,
+      referrers: TextAreaField,
     },
     onSubmit: (_, { decoded: value, get }) => {
       const name = value.name.trim();
@@ -384,6 +391,10 @@ const makeApiKeyForm = (apiKey: ApiKeySummary | null) =>
         rateLimitTimeWindow: rateLimitTimeWindowMinutes
           ? rateLimitTimeWindowMinutes * 60 * 1000
           : null,
+        referrers: parseApiKeyReferrers(
+          value.referrers,
+          m.admin_api_key_referrer_error({ referrer: "{referrer}" }),
+        ),
       };
 
       if (apiKey) {
@@ -466,6 +477,12 @@ function ApiKeyForm({
         <form.name label={m.admin_api_key_name()} />
         <form.enabled label={m.admin_api_key_enabled()} />
         <form.rateLimitEnabled label={m.admin_api_key_rate_limit_enabled()} />
+        <form.referrers
+          label={m.admin_api_key_referrers()}
+          description={m.admin_api_key_referrers_description()}
+          placeholder={m.admin_api_key_referrers_placeholder()}
+          rows={3}
+        />
         <div className="grid gap-4 sm:grid-cols-2">
           <form.rateLimitMax
             label={m.admin_api_key_max_requests()}
@@ -521,6 +538,25 @@ const apiKeyColumns = (): ColumnDef<ApiKeySummary>[] => [
           : m.admin_api_key_disabled()}
       </Badge>
     ),
+  },
+  {
+    id: "referrers",
+    accessorFn: (keyData) => keyData.referrers.join(", "),
+    header: m.admin_api_key_referrers_column(),
+    cell: ({ row }) =>
+      row.original.referrers.length > 0 ? (
+        <div className="flex max-w-sm flex-wrap gap-1.5">
+          {row.original.referrers.map((referrer) => (
+            <Badge key={referrer} variant="secondary">
+              {referrer}
+            </Badge>
+          ))}
+        </div>
+      ) : (
+        <span className="text-muted-foreground text-sm">
+          {m.admin_api_key_referrers_any()}
+        </span>
+      ),
   },
   {
     id: "rateLimit",

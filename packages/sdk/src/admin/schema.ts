@@ -156,6 +156,7 @@ export const AdminApiKey = Schema.Struct({
   remaining: Schema.NullOr(Schema.Number),
   lastRequest: Schema.NullOr(Schema.Date),
   expiresAt: Schema.NullOr(Schema.Date),
+  referrers: Schema.Array(Schema.String),
   createdAt: Schema.Date,
   updatedAt: Schema.Date,
 }).annotate({
@@ -178,6 +179,7 @@ export const AdminApiKey = Schema.Struct({
       remaining: null,
       lastRequest: null,
       expiresAt: null,
+      referrers: ["https://app.example.com"],
       createdAt: new Date("2026-01-01T00:00:00.000Z"),
       updatedAt: new Date("2026-01-01T00:00:00.000Z"),
     },
@@ -190,6 +192,7 @@ export const AdminUpdateApiKeyPayload = Schema.Struct({
   rateLimitEnabled: Schema.optional(Schema.Boolean),
   rateLimitMax: Schema.optional(Schema.NullOr(Schema.Number)),
   rateLimitTimeWindow: Schema.optional(Schema.NullOr(Schema.Number)),
+  referrers: Schema.optional(Schema.Array(Schema.String)),
 }).annotate({
   identifier: "AdminUpdateApiKeyPayload",
   title: "Update API key payload",
@@ -202,6 +205,7 @@ export const AdminUpdateApiKeyPayload = Schema.Struct({
       rateLimitEnabled: true,
       rateLimitMax: 10000,
       rateLimitTimeWindow: 86400000,
+      referrers: ["https://app.example.com"],
     },
   ],
 });

@@ -70,6 +70,7 @@ export const ExtraCreateApiKeyPayload = Schema.Struct({
   name: Schema.optional(Schema.NonEmptyString),
   organizationId: Schema.optional(Schema.String),
   permissions: Schema.optional(ExtraApiKeyPermissions),
+  referrers: Schema.optional(Schema.Array(Schema.String)),
 }).annotate({
   identifier: "ExtraCreateApiKeyPayload",
   title: "Extra create API key payload",
@@ -80,6 +81,7 @@ export const ExtraCreateApiKeyPayload = Schema.Struct({
       configId: "user",
       name: "Production key",
       permissions: { projects: ["read"] },
+      referrers: ["https://app.example.com"],
     },
   ],
 });

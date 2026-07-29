@@ -492,18 +492,21 @@ const createAuth = ({
           configId: "user",
           defaultPrefix: "user_",
           references: "user",
+          enableMetadata: true,
           rateLimit: apiKeyRateLimit,
         },
         {
           configId: "organization",
           defaultPrefix: "org_",
           references: "organization",
+          enableMetadata: true,
           rateLimit: apiKeyRateLimit,
         },
         {
           configId: "service",
           defaultPrefix: "svc_",
           references: "user",
+          enableMetadata: true,
           rateLimit: {
             enabled: true,
             timeWindow: 1000 * 60 * 60 * 24,

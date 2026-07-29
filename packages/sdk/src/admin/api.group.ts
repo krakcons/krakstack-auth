@@ -98,7 +98,7 @@ export const AdminApiGroup = HttpApiGroup.make("admin")
         title: "Update API key",
         summary: "Update an API key",
         description:
-          "Updates API key metadata and rate-limit settings for authenticated administrators.",
+          "Updates API key metadata, referrer restrictions, and rate-limit settings for authenticated administrators.",
       }),
     ),
   )

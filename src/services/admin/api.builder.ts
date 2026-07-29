@@ -22,6 +22,10 @@ import {
 import { AdminApi } from "@/api";
 import { BetterAuthRequest } from "@/services/auth/better-auth-request";
 import {
+  apiKeyAllowedOrigins,
+  encodeApiKeyAllowedOrigins,
+} from "@/services/auth/api-key-referrers";
+import {
   apikey,
   domains,
   oauthClient,
@@ -179,6 +183,7 @@ const serviceApiKeyRow = (value: typeof apikey.$inferSelect) => ({
   remaining: value.remaining,
   lastRequest: value.lastRequest,
   expiresAt: value.expiresAt,
+  referrers: apiKeyAllowedOrigins(value.metadata),
   createdAt: value.createdAt,
   updatedAt: value.updatedAt,
 });
@@ -365,6 +370,18 @@ export const adminApiHandler = HttpApiBuilder.group(
         Effect.gen(function* () {
           const db = yield* DB;
           const name = payload.name?.trim() || null;
+          const existing =
+            payload.referrers === undefined
+              ? undefined
+              : yield* db.query.apikey
+                  .findFirst({
+                    columns: { metadata: true },
+                    where: { id: params.id },
+                  })
+                  .pipe(Effect.mapError(internalServerError));
+          if (payload.referrers !== undefined && !existing) {
+            return yield* new HttpApiError.NotFound({});
+          }
           const [key] = yield* db
             .update(apikey)
             .set({
@@ -380,6 +397,14 @@ export const adminApiHandler = HttpApiBuilder.group(
                 : {}),
               ...(payload.rateLimitTimeWindow !== undefined
                 ? { rateLimitTimeWindow: payload.rateLimitTimeWindow }
+                : {}),
+              ...(payload.referrers !== undefined
+                ? {
+                    metadata: encodeApiKeyAllowedOrigins(
+                      existing?.metadata,
+                      payload.referrers,
+                    ),
+                  }
                 : {}),
               updatedAt: new Date(),
             })

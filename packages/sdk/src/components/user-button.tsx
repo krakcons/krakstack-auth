@@ -10,12 +10,13 @@ import {
 import { Effect, Schema } from "effect";
 import { AsyncResult, Atom } from "effect/unstable/reactivity";
 import {
-  Check,
-  Copy,
+  ArrowLeft,
   Building2,
   KeyRound,
   Loader2,
   LogOutIcon,
+  Pencil,
+  Plus,
   ShieldCheck,
   StopCircle,
   Trash2,
@@ -40,11 +41,13 @@ import {
   ImageField,
   SubmitButton,
   SubmitError,
+  TextAreaField,
   TextField,
 } from "@/components/ui/effect-form";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
+import { CopyButton } from "@/components/ui/copy-button";
 import {
   Dialog,
   DialogContent,
@@ -75,7 +78,10 @@ import { Separator } from "@/components/ui/separator";
 import type { AuthUiClient } from "./auth-client";
 import { authClientApi } from "./auth-client-api";
 import { useKrakstackAuth } from "./auth-provider";
-import { createApiKey } from "./api-key";
+import { createApiKey, parseApiKeyReferrers } from "./api-key";
+import { ApiKeyEditForm } from "./api-key-edit-form";
+import { ApiKeyRateLimit, apiKeyUsagePercent } from "./api-key-rate-limit";
+import { ApiKeyReferrers } from "./api-key-referrers";
 import { useOpenedOnce } from "./hooks";
 import { ExtraUploadedAsset } from "../extra/schema";
 import { assetPath, assetUrl } from "./utils";
@@ -84,8 +90,6 @@ import { AdminUsersTable } from "./admin-users";
 
 const messages = {
   en: {
-    api_key_rate_limit_notice:
-      "API keys are subject to the same rate limits as your account.",
     table_empty: "No results.",
     user_account_cancel: "Cancel",
     user_account_confirm_revoke: "Revoke account",
@@ -123,12 +127,19 @@ const messages = {
     user_accounts_title: "Accounts",
     user_api_key_copied: "Copied",
     user_api_key_copy: "Copy",
+    user_api_key_back: "Back",
+    user_api_key_create_description:
+      "Configure a new API key for your user account.",
     user_api_key_create_error: "Could not create the API key.",
+    user_api_key_create_title: "Create API key",
     user_api_key_created_description:
       "Copy this key now. You will not be able to see it again.",
     user_api_key_created_title: "API key created",
     user_api_key_delete_error: "Could not delete the API key.",
     user_api_key_disabled: "Disabled",
+    user_api_key_edit_description:
+      "Update the key name, status, and allowed referrers.",
+    user_api_key_edit_title: "Edit API key",
     user_api_key_enabled: "Enabled",
     user_api_key_hidden: "Secret hidden",
     user_api_key_name: "Key name",
@@ -136,7 +147,24 @@ const messages = {
     user_api_key_permissions: "Permissions",
     user_api_key_permissions_description:
       "Choose the permissions this API key should receive.",
+    user_api_key_rate_limit: "Rate limit",
+    user_api_key_referrers: "Allowed referrers (optional)",
+    user_api_key_referrers_any: "Any referrer",
+    user_api_key_referrers_column: "Referrers",
+    user_api_key_referrers_description:
+      "Enter any number of URLs, separated by commas or new lines. Leave empty to allow any referrer.",
+    user_api_key_referrers_error: "{referrer} is not a valid HTTP(S) URL.",
+    user_api_key_referrers_placeholder:
+      "https://app.example.com\nhttps://admin.example.com",
     user_api_key_status: "Status",
+    user_api_key_unlimited: "Unlimited",
+    user_api_key_update_error: "Could not update the API key.",
+    user_api_key_usage: "API key usage",
+    user_api_key_window_days: "{count}d",
+    user_api_key_window_hours: "{count}h",
+    user_api_key_window_minutes: "{count}m",
+    user_api_key_window_none: "None",
+    user_api_key_window_seconds: "{count}s",
     user_api_keys_description:
       "Create and manage API keys for your user account.",
     user_api_keys_export_file_name: "api-keys.csv",
@@ -189,8 +217,6 @@ const messages = {
     user_two_factor_verify_error: "Could not verify the code.",
   },
   fr: {
-    api_key_rate_limit_notice:
-      "Les clés API sont soumises aux mêmes limites de débit que votre compte.",
     table_empty: "Aucun résultat.",
     user_account_cancel: "Annuler",
     user_account_confirm_revoke: "Révoquer le compte",
@@ -232,12 +258,19 @@ const messages = {
     user_accounts_title: "Comptes",
     user_api_key_copied: "Copié",
     user_api_key_copy: "Copier",
+    user_api_key_back: "Retour",
+    user_api_key_create_description:
+      "Configurez une nouvelle clé API pour votre compte utilisateur.",
     user_api_key_create_error: "Impossible de créer la clé API.",
+    user_api_key_create_title: "Créer une clé API",
     user_api_key_created_description:
       "Copiez cette clé maintenant. Vous ne pourrez plus la voir.",
     user_api_key_created_title: "Clé API créée",
     user_api_key_delete_error: "Impossible de supprimer la clé API.",
     user_api_key_disabled: "Désactivée",
+    user_api_key_edit_description:
+      "Mettez à jour le nom, le statut et les référents autorisés de la clé.",
+    user_api_key_edit_title: "Modifier la clé API",
     user_api_key_enabled: "Activée",
     user_api_key_hidden: "Secret masqué",
     user_api_key_name: "Nom de la clé",
@@ -245,7 +278,25 @@ const messages = {
     user_api_key_permissions: "Autorisations",
     user_api_key_permissions_description:
       "Choisissez les autorisations que cette clé API doit recevoir.",
+    user_api_key_rate_limit: "Limite de débit",
+    user_api_key_referrers: "Référents autorisés (facultatifs)",
+    user_api_key_referrers_any: "Tout référent",
+    user_api_key_referrers_column: "Référents",
+    user_api_key_referrers_description:
+      "Saisissez autant d'URL que nécessaire, séparées par des virgules ou des sauts de ligne. Laissez vide pour autoriser tout référent.",
+    user_api_key_referrers_error:
+      "{referrer} n'est pas une URL HTTP(S) valide.",
+    user_api_key_referrers_placeholder:
+      "https://app.example.com\nhttps://admin.example.com",
     user_api_key_status: "Statut",
+    user_api_key_unlimited: "Illimitée",
+    user_api_key_update_error: "Impossible de mettre à jour la clé API.",
+    user_api_key_usage: "Utilisation de la clé API",
+    user_api_key_window_days: "{count} j",
+    user_api_key_window_hours: "{count} h",
+    user_api_key_window_minutes: "{count} min",
+    user_api_key_window_none: "Aucune",
+    user_api_key_window_seconds: "{count} s",
     user_api_keys_description:
       "Créez et gérez des clés API pour votre compte utilisateur.",
     user_api_keys_export_file_name: "cles-api.csv",
@@ -390,10 +441,9 @@ const totpCodeFormBuilder = FormBuilder.empty.addField(
   Schema.NonEmptyString,
 );
 
-const apiKeyFormBuilder = FormBuilder.empty.addField(
-  "name",
-  Schema.NonEmptyString,
-);
+const apiKeyFormBuilder = FormBuilder.empty
+  .addField("name", Schema.NonEmptyString)
+  .addField("referrers", Schema.String);
 
 const isFile = (value: unknown): value is File => value instanceof File;
 
@@ -758,7 +808,7 @@ export const UserButton = ({
           );
         }}
       >
-        <DialogContent className="max-h-[85vh] overflow-y-auto sm:max-w-3xl">
+        <DialogContent className="max-h-[85vh] min-w-0 overflow-x-hidden overflow-y-auto sm:max-w-3xl">
           <DialogHeader>
             <DialogTitle className="text-2xl">
               {m.user_form_title()}
@@ -841,16 +891,7 @@ export const UserButton = ({
           );
         }}
       >
-        <DialogContent className="max-h-[85vh] overflow-y-auto sm:max-w-3xl">
-          <DialogHeader>
-            <DialogTitle className="text-2xl">
-              {m.user_api_keys_title()}
-            </DialogTitle>
-            <DialogDescription>
-              {m.user_api_keys_description()}
-            </DialogDescription>
-          </DialogHeader>
-          <Separator />
+        <DialogContent className="max-h-[85vh] min-w-0 overflow-x-hidden overflow-y-auto sm:max-w-3xl">
           <ApiKeyManager
             authClient={authClient}
             active={settingsDialog === "apiKeys"}
@@ -1873,7 +1914,8 @@ function ApiKeyManager({
   const keysResult = useAtomValue(keysAtom);
   const refreshKeys = useAtomRefresh(keysAtom);
   const [createdKey, setCreatedKey] = useState<string | null>(null);
-  const [copiedKey, setCopiedKey] = useState(false);
+  const [creating, setCreating] = useState(false);
+  const [editingKey, setEditingKey] = useState<ApiKeySummary | null>(null);
   const [error, setError] = useState<string | null>(null);
   const permissionOptions = getPermissionOptions(permissions);
   const [selectedPermissions, setSelectedPermissions] = useState<
@@ -1896,13 +1938,12 @@ function ApiKeyManager({
   selectedPermissionsRef.current = selectedPermissions;
   const [createForm] = useState(() =>
     FormReact.make(apiKeyFormBuilder, {
-      fields: { name: TextField },
+      fields: { name: TextField, referrers: TextAreaField },
       mode: { validation: "onSubmit" },
       onSubmit: (_, { decoded }) =>
         Effect.tryPromise({
           try: async () => {
             setCreatedKey(null);
-            setCopiedKey(false);
             const created = await createApiKey(
               {
                 configId: "user",
@@ -1910,6 +1951,10 @@ function ApiKeyManager({
                 permissions: getSelectedPermissionObject(
                   permissionOptionsRef.current,
                   selectedPermissionsRef.current,
+                ),
+                referrers: parseApiKeyReferrers(
+                  decoded.referrers,
+                  m.user_api_key_referrers_error(),
                 ),
               },
               m.user_api_key_create_error(),
@@ -1934,14 +1979,6 @@ function ApiKeyManager({
     setSelectedPermissions((current) => ({ ...current, [id]: checked }));
   };
 
-  const copyCreatedKey = async () => {
-    if (!createdKey) return;
-
-    await navigator.clipboard.writeText(createdKey);
-    setCopiedKey(true);
-    window.setTimeout(() => setCopiedKey(false), 2000);
-  };
-
   const deleteKey = async (key: ApiKeySummary) => {
     const result = await authClient.apiKey.delete({
       configId: "user",
@@ -1957,97 +1994,179 @@ function ApiKeyManager({
   };
 
   return (
-    <div className="flex flex-col gap-5">
-      <createForm.Initialize defaultValues={{ name: "" }}>
-        <form
-          className="flex max-w-xl flex-col gap-4"
-          onSubmit={(event) => {
-            event.preventDefault();
-            event.stopPropagation();
-            submitCreateForm();
-          }}
-        >
-          <p className="text-muted-foreground text-sm">
-            {m.api_key_rate_limit_notice()}
-          </p>
-          <createForm.name label={m.user_api_key_name()} required />
-          {permissionOptions.length > 0 ? (
-            <FieldSet>
-              <FieldLegend>{m.user_api_key_permissions()}</FieldLegend>
-              <FieldDescription>
-                {m.user_api_key_permissions_description()}
-              </FieldDescription>
-              <FieldGroup data-slot="checkbox-group" className="gap-3">
-                {permissionOptions.map((permission) => (
-                  <Field key={permission.id} orientation="horizontal">
-                    <Checkbox
-                      id={permission.id}
-                      checked={selectedPermissions[permission.id] ?? false}
-                      onCheckedChange={(checked: boolean) =>
-                        togglePermission(permission.id, checked)
-                      }
-                    />
-                    <FieldContent>
-                      <FieldLabel htmlFor={permission.id}>
-                        {permission.id}
-                      </FieldLabel>
-                    </FieldContent>
-                  </Field>
-                ))}
-              </FieldGroup>
-            </FieldSet>
-          ) : null}
-          <SubmitError result={createSubmitResult} />
-          <SubmitButton form={createForm} />
-        </form>
-      </createForm.Initialize>
-      {createdKey ? (
-        <div className="flex flex-col gap-2 rounded-lg border p-4">
-          <div className="flex items-center gap-2 font-medium">
-            <KeyRound />
-            {m.user_api_key_created_title()}
-          </div>
-          <p className="text-muted-foreground text-sm">
-            {m.user_api_key_created_description()}
-          </p>
-          <div className="grid min-w-0 gap-2 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center">
-            <code className="bg-muted block max-w-full overflow-x-auto rounded-md p-3 text-sm whitespace-nowrap">
-              {createdKey}
-            </code>
-            <Button
-              type="button"
-              variant="outline"
-              onClick={copyCreatedKey}
-              className="self-start sm:self-auto"
-            >
-              {copiedKey ? <Check /> : <Copy />}
-              {copiedKey ? m.user_api_key_copied() : m.user_api_key_copy()}
-            </Button>
-          </div>
-        </div>
-      ) : null}
-      {keysError ? (
-        <p className="text-destructive text-sm">{keysError}</p>
-      ) : null}
-      {error ? <p className="text-destructive text-sm">{error}</p> : null}
+    <>
+      <DialogHeader>
+        <DialogTitle className="text-2xl">
+          {editingKey
+            ? m.user_api_key_edit_title()
+            : createdKey
+              ? m.user_api_key_created_title()
+              : creating
+                ? m.user_api_key_create_title()
+                : m.user_api_keys_title()}
+        </DialogTitle>
+        <DialogDescription>
+          {editingKey
+            ? m.user_api_key_edit_description()
+            : createdKey
+              ? m.user_api_key_created_description()
+              : creating
+                ? m.user_api_key_create_description()
+                : m.user_api_keys_description()}
+        </DialogDescription>
+        {creating || editingKey ? (
+          <Button
+            className="mt-2 w-fit"
+            onClick={() => {
+              setCreating(false);
+              setCreatedKey(null);
+              setEditingKey(null);
+            }}
+            type="button"
+            variant="secondary"
+          >
+            <ArrowLeft />
+            {m.user_api_key_back()}
+          </Button>
+        ) : (
+          <Button
+            className="mt-2 w-fit"
+            onClick={() => {
+              setCreatedKey(null);
+              setCreating(true);
+            }}
+            type="button"
+          >
+            <Plus />
+            {m.user_api_key_create_title()}
+          </Button>
+        )}
+      </DialogHeader>
       <Separator />
-      <DataTable
-        columns={apiKeyColumns({ m })}
-        data={keys}
-        features={{
-          export: { baseName: m.user_api_keys_export_file_name() },
-          gallery: false,
-          rowActions: {
-            items: apiKeyRowActions({ m, onDelete: deleteKey }),
-          },
-        }}
-        searchState="local"
-        state={{
-          empty: loading ? m.user_loading() : m.table_empty(),
-          loading,
-        }}
-      />
-    </div>
+      <div className="flex min-w-0 flex-col gap-5">
+        {creating && !createdKey ? (
+          <section className="w-full">
+            <createForm.Initialize defaultValues={{ name: "", referrers: "" }}>
+              <form
+                className="flex flex-col gap-4"
+                onSubmit={(event) => {
+                  event.preventDefault();
+                  event.stopPropagation();
+                  submitCreateForm();
+                }}
+              >
+                <createForm.name label={m.user_api_key_name()} required />
+                <createForm.referrers
+                  label={m.user_api_key_referrers()}
+                  description={m.user_api_key_referrers_description()}
+                  placeholder={m.user_api_key_referrers_placeholder()}
+                  rows={3}
+                />
+                {permissionOptions.length > 0 ? (
+                  <FieldSet>
+                    <FieldLegend>{m.user_api_key_permissions()}</FieldLegend>
+                    <FieldDescription>
+                      {m.user_api_key_permissions_description()}
+                    </FieldDescription>
+                    <FieldGroup data-slot="checkbox-group" className="gap-3">
+                      {permissionOptions.map((permission) => (
+                        <Field key={permission.id} orientation="horizontal">
+                          <Checkbox
+                            id={permission.id}
+                            checked={
+                              selectedPermissions[permission.id] ?? false
+                            }
+                            onCheckedChange={(checked: boolean) =>
+                              togglePermission(permission.id, checked)
+                            }
+                          />
+                          <FieldContent>
+                            <FieldLabel htmlFor={permission.id}>
+                              {permission.id}
+                            </FieldLabel>
+                          </FieldContent>
+                        </Field>
+                      ))}
+                    </FieldGroup>
+                  </FieldSet>
+                ) : null}
+                <SubmitError result={createSubmitResult} />
+                <SubmitButton form={createForm} />
+              </form>
+            </createForm.Initialize>
+          </section>
+        ) : null}
+        {creating && createdKey ? (
+          <div className="flex min-w-0 flex-col gap-3">
+            <div className="bg-muted/50 flex min-w-0 items-center justify-between gap-3 rounded-md border px-3 py-2">
+              <code className="block min-w-0 flex-1 overflow-x-auto text-sm whitespace-nowrap">
+                {createdKey}
+              </code>
+              <CopyButton
+                className="shrink-0"
+                messages={{
+                  copied: m.user_api_key_copied(),
+                  copy: m.user_api_key_copy(),
+                }}
+                value={createdKey}
+                variant="ghost"
+              />
+            </div>
+          </div>
+        ) : null}
+        {!creating && !editingKey && keysError ? (
+          <p className="text-destructive text-sm">{keysError}</p>
+        ) : null}
+        {!creating && !editingKey && error ? (
+          <p className="text-destructive text-sm">{error}</p>
+        ) : null}
+        {!creating && !editingKey ? (
+          <div className="max-w-full min-w-0 overflow-x-hidden">
+            <DataTable
+              columns={apiKeyColumns({ m })}
+              data={keys}
+              features={{
+                export: { baseName: m.user_api_keys_export_file_name() },
+                gallery: false,
+                rowActions: {
+                  items: apiKeyRowActions({
+                    m,
+                    onDelete: deleteKey,
+                    onEdit: (key) => setEditingKey(key),
+                  }),
+                },
+              }}
+              searchState="local"
+              state={{
+                empty: loading ? m.user_loading() : m.table_empty(),
+                loading,
+              }}
+            />
+          </div>
+        ) : null}
+        {editingKey ? (
+          <ApiKeyEditForm
+            key={editingKey.id}
+            authClient={authClient}
+            configId="user"
+            keyData={editingKey}
+            messages={{
+              enabled: m.user_api_key_enabled(),
+              name: m.user_api_key_name(),
+              referrers: m.user_api_key_referrers(),
+              referrersDescription: m.user_api_key_referrers_description(),
+              referrersError: m.user_api_key_referrers_error(),
+              referrersPlaceholder: m.user_api_key_referrers_placeholder(),
+              updateError: m.user_api_key_update_error(),
+            }}
+            onSaved={() => {
+              refreshKeys();
+              setEditingKey(null);
+            }}
+          />
+        ) : null}
+      </div>
+    </>
   );
 }
 
@@ -2076,6 +2195,37 @@ const apiKeyColumns = ({
           ? m.user_api_key_enabled()
           : m.user_api_key_disabled()}
       </Badge>
+    ),
+  },
+  {
+    id: "referrers",
+    accessorFn: (keyData) => keyData.metadata,
+    header: m.user_api_key_referrers_column(),
+    cell: ({ row }) => (
+      <ApiKeyReferrers
+        metadata={row.original.metadata}
+        unrestrictedLabel={m.user_api_key_referrers_any()}
+      />
+    ),
+  },
+  {
+    id: "rateLimit",
+    accessorFn: apiKeyUsagePercent,
+    header: m.user_api_key_rate_limit(),
+    cell: ({ row }) => (
+      <ApiKeyRateLimit
+        keyData={row.original}
+        messages={{
+          disabled: m.user_api_key_disabled(),
+          none: m.user_api_key_window_none(),
+          unlimited: m.user_api_key_unlimited(),
+          usage: m.user_api_key_usage(),
+          windowDays: (count) => m.user_api_key_window_days({ count }),
+          windowHours: (count) => m.user_api_key_window_hours({ count }),
+          windowMinutes: (count) => m.user_api_key_window_minutes({ count }),
+          windowSeconds: (count) => m.user_api_key_window_seconds({ count }),
+        }}
+      />
     ),
   },
   {
@@ -2108,10 +2258,17 @@ const apiKeyColumns = ({
 const apiKeyRowActions = ({
   m,
   onDelete,
+  onEdit,
 }: {
   m: ReturnType<typeof userButtonMessageFns>;
   onDelete: (key: ApiKeySummary) => void;
+  onEdit: (key: ApiKeySummary) => void;
 }) => [
+  {
+    name: m.user_api_key_edit_title(),
+    icon: <Pencil />,
+    onClick: onEdit,
+  },
   {
     name: m.user_delete(),
     icon: <Trash2 />,

@@ -1,6 +1,6 @@
 import { ExtraBadRequest } from "@krak-stack/auth/extra";
 import { Effect, Option, Schema } from "effect";
-import { HttpServerRequest } from "effect/unstable/http";
+import { Headers, HttpServerRequest } from "effect/unstable/http";
 import { HttpApiBuilder, HttpApiError } from "effect/unstable/httpapi";
 import { eq } from "drizzle-orm";
 
@@ -12,6 +12,10 @@ import {
 } from "@/lib/localization";
 import { organization } from "@/db/schema";
 import { BetterAuthRequest } from "@/services/auth/better-auth-request";
+import {
+  apiKeyAllowedOrigins,
+  requestMatchesAllowedOrigins,
+} from "@/services/auth/api-key-referrers";
 import { db } from "@/services/database";
 import {
   EmailAddress,
@@ -274,6 +278,13 @@ export const authApiHandler = HttpApiBuilder.group(
                     ? { organizationId: payload.organizationId }
                     : {}),
                   ...(permissions ? { permissions } : {}),
+                  ...(payload.referrers
+                    ? {
+                        metadata: {
+                          allowedOrigins: Array.from(payload.referrers),
+                        },
+                      }
+                    : {}),
                 },
               }),
             catch: authError("Could not create API key"),
@@ -301,11 +312,35 @@ export const authApiHandler = HttpApiBuilder.group(
             ...(permissions ? { permissions } : {}),
           };
 
-          return yield* Effect.tryPromise({
+          const result = yield* Effect.tryPromise({
             try: () =>
               client.api.verifyApiKey({ body, headers: client.headers }),
             catch: authError("Could not verify API key"),
           });
+
+          if (result.valid && result.key) {
+            const allowedOrigins = apiKeyAllowedOrigins(result.key.metadata);
+            const origin = Option.getOrUndefined(
+              Headers.get(request.headers, "origin"),
+            );
+            const referrer = Option.getOrUndefined(
+              Headers.get(request.headers, "referer"),
+            );
+            if (
+              !requestMatchesAllowedOrigins(origin, referrer, allowedOrigins)
+            ) {
+              return {
+                valid: false,
+                error: {
+                  code: "INVALID_REFERRER",
+                  message: "The API key is not allowed from this referrer.",
+                },
+                key: null,
+              };
+            }
+          }
+
+          return result;
         }).pipe(
           Effect.map((result) => ({
             valid: result.valid,
