@@ -1,0 +1,55 @@
+---
+slug: troubleshooting
+path: /docs/troubleshooting
+title: Dépannage
+description: Diagnostiquez les échecs de proxy, origine, session, OAuth, courriel, stockage, domaine et migration à partir des symptômes.
+icon: lucide:wrench
+order: 54
+locale: fr
+section: operations
+type: how-to
+---
+
+# Dépannage
+
+Commencez par la frontière défaillante. Notez l'origine, l'hôte, le chemin, le statut, l'artefact déployé et les journaux structurés pertinents. Retirez témoins, jetons, codes et clés brutes avant de partager un diagnostic.
+
+## Échecs du proxy et des sessions
+
+| Symptôme                                         | Vérification                                                                                            |
+| ------------------------------------------------ | ------------------------------------------------------------------------------------------------------- |
+| `/api/auth/ok` retourne 502 ou 500               | Validez `KRAKSTACK_AUTH_URL` côté serveur, l'accès amont et les journaux du proxy                       |
+| Connexion réussie mais actualisation déconnectée | Confirmez l'origine des témoins, les requêtes avec identifiants et le proxy du chemin générique complet |
+| Origine refusée                                  | Ajoutez l'origine HTTPS exacte à `BETTER_AUTH_TRUSTED_ORIGINS`; évitez les jokers larges                |
+| Mauvais hôte auth dans le navigateur             | Vérifiez les valeurs `VITE_*` de compilation, pas seulement celles du conteneur à l'exécution           |
+
+## Échecs OAuth
+
+Utilisez les métadonnées réelles au lieu de deviner les chemins. Comparez l'émetteur, les points d'autorisation et de jeton et l'URI JWKS avec la configuration du client.
+
+| Symptôme                    | Vérification                                                                                                   |
+| --------------------------- | -------------------------------------------------------------------------------------------------------------- |
+| URI de redirection refusée  | Faites correspondre exactement schéma, hôte, port, chemin et barre finale                                      |
+| Échange du code refusé      | Utilisez un client Web confidentiel, `client_secret_basic`, le vérificateur PKCE original et la même URI       |
+| État ou nonce différent     | Une seule transaction navigateur courte doit posséder le rappel et les valeurs ne doivent pas être réutilisées |
+| Audience ou émetteur refusé | Validez les métadonnées réelles et les audiences configurées                                                   |
+
+Le modèle d'administration actuel n'inscrit pas de clients publics ou natifs.
+
+## Échecs du courriel et du stockage
+
+En production, un flux courriel exige les identifiants SES. Vérifiez la région, l'identité d'expéditeur, les droits et les journaux de livraison. Les réponses de récupération doivent rester génériques.
+
+La couche API actuelle fournit toujours le stockage S3. Vérifiez le compartiment, les identifiants, le point ou la région facultatif, le réseau et le comportement du fournisseur.
+
+## Échecs des domaines
+
+Pour un domaine géré, demandez les enregistrements DNS et listez le domaine afin d'actualiser l'état Cloudflare. L'inscription ne publie pas le DNS. Pour un domaine non géré, confirmez TLS, le routage et la préservation de l'hôte et du protocole.
+
+La création par service utilise `POST /api/domains`, pas `/api/server/domains`. L'API de confiance n'offre actuellement aucune mise à jour.
+
+## Échecs du démarrage et des migrations
+
+La commande de production exécute les migrations avant le serveur. Examinez d'abord leur sortie. Ne redémarrez pas plusieurs répliques contre une base partiellement migrée. Suivez la [procédure de mise à jour et récupération](/docs/operations).
+
+Si `/api/auth/ok` réussit mais les sessions échouent, examinez PostgreSQL séparément car ce point de disponibilité n'interroge pas la base.

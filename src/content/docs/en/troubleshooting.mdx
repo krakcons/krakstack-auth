@@ -1,0 +1,55 @@
+---
+slug: troubleshooting
+path: /docs/troubleshooting
+title: Troubleshooting
+description: Diagnose proxy, origin, session, OAuth, email, storage, domain, and migration failures from observable symptoms.
+icon: lucide:wrench
+order: 54
+locale: en
+section: operations
+type: how-to
+---
+
+# Troubleshooting
+
+Start from the failing boundary. Record the request origin, host, path, status, active deployment artifact, and relevant structured logs. Remove cookies, tokens, codes, and raw keys before sharing diagnostics.
+
+## Proxy and session failures
+
+| Symptom                                     | Check                                                                                                                 |
+| ------------------------------------------- | --------------------------------------------------------------------------------------------------------------------- |
+| `/api/auth/ok` returns 502 or 500           | Validate server-only `KRAKSTACK_AUTH_URL`, upstream reachability, and proxy logs                                      |
+| Sign-in succeeds but refresh is signed out  | Confirm cookies belong to the application origin, requests include credentials, and the full wildcard path is proxied |
+| Origin rejected                             | Add the exact HTTPS origin to `BETTER_AUTH_TRUSTED_ORIGINS`; do not use broad wildcard origins                        |
+| Wrong auth host appears in browser requests | Check build-time `VITE_*` values, not only runtime container variables                                                |
+
+## OAuth failures
+
+Use the metadata response rather than guessing endpoint paths. Compare its exact issuer, authorization endpoint, token endpoint, and JWKS URI with the client configuration.
+
+| Symptom                    | Check                                                                                                       |
+| -------------------------- | ----------------------------------------------------------------------------------------------------------- |
+| Redirect URI rejected      | Match scheme, host, port, path, and trailing slash exactly                                                  |
+| Token exchange rejected    | Use a confidential Web client, `client_secret_basic`, the original PKCE verifier, and the same redirect URI |
+| State or nonce mismatch    | Ensure one short-lived browser transaction owns the callback and values are not reused                      |
+| Audience or issuer failure | Validate against actual metadata and configured valid audiences                                             |
+
+The current admin client model does not register public/native clients.
+
+## Email and storage failures
+
+Production email requires SES credentials when an email flow runs. Verify region, sender identity, credential permissions, and delivery logs. Keep password-reset and verification responses generic even while diagnosing.
+
+The API runtime currently provides S3 storage unconditionally. Verify the required bucket and credentials, optional endpoint/region, network access, and provider-specific path behavior.
+
+## Domain failures
+
+For managed domains, request DNS records and list the domain to refresh Cloudflare status. Registration alone does not publish DNS. For unmanaged domains, confirm TLS termination, routing, and preservation of the original host and protocol.
+
+Trusted service domain creation uses `POST /api/domains`, not `/api/server/domains`. The trusted API does not currently provide an update operation.
+
+## Startup and migration failures
+
+The production start command runs migrations before the server. Inspect migration output first. Do not repeatedly restart multiple replicas against a partially migrated database. Follow the [upgrade and recovery runbook](/docs/operations).
+
+If `/api/auth/ok` succeeds while sessions fail, investigate PostgreSQL and auth configuration separately because the liveness endpoint does not query the database.

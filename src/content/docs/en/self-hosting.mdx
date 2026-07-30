@@ -2,28 +2,37 @@
 slug: self-hosting
 path: /docs/self-hosting
 title: Self-hosting
-description: Run the published GHCR image with PostgreSQL, secure runtime configuration, automatic migrations, and durable operations.
-icon: server
-order: 11
+description: Build and run Krakstack Auth with PostgreSQL while accounting for its current build-time configuration and service dependencies.
+icon: lucide:server-cog
+order: 51
 locale: en
+section: operations
+type: tutorial
 ---
 
 # Self-hosting
 
-Krakstack Auth publishes a ready-to-run OCI image to GitHub Container Registry. Self-host the published image rather than cloning the repository or maintaining a custom build pipeline.
+Krakstack Auth runs as a Bun application backed by PostgreSQL. The current deployment model is not yet a generic pull-and-configure container: Vite public values and the administration organization ID are compiled into browser assets.
 
-## Published image
+## Published image status
+
+The GitHub Container Registry package is the artifact used by the official deployment. Its build receives official-instance URLs and an organization ID. Runtime `VITE_*` variables cannot replace values already embedded by Vite.
+
+Do not deploy `ghcr.io/krakcons/krakstack-auth:latest` as a differently configured auth service until a generic image pipeline or runtime public configuration is available. Build a deployment-specific image from a reviewed source revision instead.
+
+## Build-time prerequisites
+
+The current admin route requires `VITE_KRAKSTACK_AUTH_ORGANIZATION_ID`. Establishing that organization for a new database is deployment-specific and not yet covered by an automated first-admin bootstrap. Resolve this bootstrap before exposing the service.
+
+Build with the public origin and administration organization that belong to the deployment:
 
 ```bash
-docker pull ghcr.io/krakcons/krakstack-auth:latest
+docker build \
+  --build-arg VITE_SITE_URL=https://auth.example.com \
+  --build-arg VITE_KRAKSTACK_AUTH_URL=https://auth.example.com \
+  --build-arg VITE_KRAKSTACK_AUTH_ORGANIZATION_ID=organization_id \
+  -t krakstack-auth:local .
 ```
-
-The deployment workflow publishes two tags on every successful `main` build:
-
-- `latest` tracks the newest successful build.
-- A full Git commit SHA identifies an immutable release, for example `ghcr.io/krakcons/krakstack-auth:COMMIT_SHA`.
-
-Use `latest` to evaluate updates. Pin the full SHA in production so restarts cannot silently change the running version. Available tags and digests are listed in the [GitHub package](https://github.com/krakcons/krakstack-auth/pkgs/container/krakstack-auth). The current workflow publishes `linux/amd64` images.
 
 ## Docker Compose
 
@@ -32,7 +41,7 @@ The application listens on port `3000`. Its start command applies Drizzle migrat
 ```yaml
 services:
   auth:
-    image: ghcr.io/krakcons/krakstack-auth:latest
+    image: krakstack-auth:local
     restart: unless-stopped
     ports:
       - "3000:3000"
@@ -40,9 +49,10 @@ services:
       DATABASE_URL: postgres://krakstack:${POSTGRES_PASSWORD}@postgres:5432/krakstack_auth
       BETTER_AUTH_SECRET: ${BETTER_AUTH_SECRET}
       BETTER_AUTH_URL: https://auth.example.com
-      VITE_SITE_URL: https://auth.example.com
       BETTER_AUTH_TRUSTED_ORIGINS: https://auth.example.com,https://app.example.com
-      BETTER_AUTH_VALID_AUDIENCES: https://auth.example.com,https://app.example.com
+      S3_ACCESS_KEY_ID: ${S3_ACCESS_KEY_ID}
+      S3_SECRET_ACCESS_KEY: ${S3_SECRET_ACCESS_KEY}
+      S3_BUCKET: ${S3_BUCKET}
     depends_on:
       postgres:
         condition: service_healthy
@@ -66,51 +76,24 @@ volumes:
   postgres-data:
 ```
 
-Place `POSTGRES_PASSWORD` and `BETTER_AUTH_SECRET` in the deployment platform's secret store or a Compose `.env` file that is excluded from version control. Generate the auth secret with `openssl rand -base64 32`.
+Generate `BETTER_AUTH_SECRET` with `openssl rand -base64 32` and keep every secret outside version control. The current API layer requires S3 configuration. Production email flows require SES credentials when they run. See [configuration](/docs/configuration) for the complete categories.
 
-## Required environment
-
-```env
-DATABASE_URL=postgres://user:password@db/krakstack_auth
-BETTER_AUTH_SECRET=long_random_secret
-BETTER_AUTH_URL=https://auth.example.com
-VITE_SITE_URL=https://auth.example.com
-BETTER_AUTH_TRUSTED_ORIGINS=https://auth.example.com,https://app.example.com
-BETTER_AUTH_VALID_AUDIENCES=https://auth.example.com,https://app.example.com
-```
-
-Do not reuse database, OAuth, or API-key secrets. `BETTER_AUTH_URL` is the stable public HTTPS issuer, not the container's internal address.
-
-## Optional services
-
-- Set `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET` to enable Google sign-in.
-- Configure SES credentials and `AUTH_EMAIL_FROM` for verification, password reset, and two-factor email.
-- Configure `AUTH_CLOUDFLARE_ZONE_ID`, Cloudflare credentials, and `AUTH_DOMAIN_CNAME_TARGET` for managed custom hostnames.
-- Add `BETTER_AUTH_ADDITIONAL_HOSTS` when the deployment has fixed additional public hosts.
-
-## Start and update
+## Start and validate
 
 ```bash
 docker compose up -d
 docker compose logs -f auth
 ```
 
-To update, select a tested commit SHA in the Compose file, pull it, and recreate the service:
-
-```bash
-docker compose pull auth
-docker compose up -d auth
-```
-
-The container applies migrations at startup. Avoid starting several new replicas simultaneously during an upgrade; run one updated instance first so migrations complete once.
+Validate more than `/api/auth/ok`: test a database-backed session, enabled email flow, asset operation, OAuth callback, and administrative access. The `ok` endpoint is liveness only.
 
 ## Production checklist
 
 - Terminate TLS and redirect HTTP to HTTPS.
-- Back up PostgreSQL and test restores.
-- Keep the auth origin stable; changing issuer URLs invalidates consumer assumptions.
-- Restrict admin access and rotate service API keys.
-- Configure email deliverability records and monitor bounces.
-- Add health checks for `/api/auth/ok` and monitor database latency.
-- Review trusted origins and OAuth redirect URIs after every deployment change.
-- Record the deployed image SHA and keep a rollback SHA available.
+- Back up PostgreSQL and test restoration.
+- Keep the public auth origin stable.
+- Restrict the administration organization and rotate service keys.
+- Configure SES deliverability and S3 durability.
+- Monitor database latency and dependency failures separately from liveness.
+- Review trusted origins and OAuth redirect URIs after deployment changes.
+- Follow the [upgrade and recovery runbook](/docs/operations); an older image is not guaranteed to support a forward-migrated database.

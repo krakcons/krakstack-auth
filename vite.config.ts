@@ -99,6 +99,7 @@ const config = defineConfig({
       routeStrategies: [
         { match: "/api/:path(.*)?", exclude: true },
         { match: "/.well-known/:path(.*)?", exclude: true },
+        { match: "/sitemap.xml", exclude: true },
       ],
     }),
     tailwindcss(),

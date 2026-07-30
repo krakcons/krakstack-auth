@@ -3,9 +3,11 @@ slug: setup
 path: /docs/setup
 title: Méthodes de configuration
 description: Comparez les intégrations par proxy, OAuth et sous-domaine pour choisir la bonne frontière applicative.
-icon: network
-order: 2
+icon: lucide:network
+order: 3
 locale: fr
+section: start
+type: concept
 ---
 
 # Méthodes de configuration
@@ -16,7 +18,7 @@ Installez le SDK dans l'application cliente :
 bun add @krak-stack/auth effect
 ```
 
-Créez d'abord un projet dans **Administration > Projets**. Le projet contrôle la marque, les méthodes de connexion et l'expérience partagée par les clients OAuth ou domaines.
+Créez un projet dans **Administration > Projets** si vous avez besoin d'une marque et de méthodes de connexion partagées. Le projet est recommandé, mais toutes les charges utiles ne l'exigent pas.
 
 ## 1. Proxy (recommandé)
 
@@ -24,12 +26,10 @@ Relayez `/api/auth/*` de votre application vers Krakstack Auth. Les témoins du 
 
 ```env
 KRAKSTACK_AUTH_URL=https://auth.example.com
-VITE_KRAKSTACK_AUTH_URL=https://auth.example.com
 VITE_KRAKSTACK_AUTH_PROJECT_ID=project_id
-KRAKSTACK_AUTH_SERVICE_API_KEY=secret_serveur
 ```
 
-`KRAKSTACK_AUTH_URL` et la clé de service sont réservés au serveur. L'URL `VITE_*` et l'identifiant de projet sont des paramètres publics.
+`KRAKSTACK_AUTH_URL` reste côté serveur. L'ID de projet est public et facultatif. Ajoutez `KRAKSTACK_AUTH_SERVICE_API_KEY` séparément uniquement pour les API de confiance ou `AuthMiddleware`.
 
 Consultez le [guide du proxy](/docs/proxy).
 
@@ -37,11 +37,9 @@ Consultez le [guide du proxy](/docs/proxy).
 
 Enregistrez un client OAuth et utilisez le flux par code d'autorisation avec PKCE. Cette méthode fonctionne avec les bibliothèques OAuth et OIDC standard, sans dépendre du client Better Auth dans le navigateur.
 
-Utilisez OAuth pour les intégrations tierces, les applications exploitées séparément, les clients natifs ou les systèmes déjà compatibles OIDC.
+Les clients créés actuellement sont des clients Web confidentiels utilisant `client_secret_basic` et PKCE obligatoire. Utilisez OAuth pour les applications séparées avec backend ou les systèmes compatibles avec ce modèle OIDC.
 
-```text
-https://auth.example.com/.well-known/openid-configuration
-```
+Lisez les métadonnées du service et utilisez l'émetteur et les points exacts retournés. L'émetteur Better Auth peut inclure `/api/auth`; ne le déduisez pas de l'origine publique seule.
 
 Consultez le [guide OAuth](/docs/oauth).
 

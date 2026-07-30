@@ -3,9 +3,11 @@ slug: setup
 path: /docs/setup
 title: Setup methods
 description: Compare proxy, OAuth, and auth-subdomain integrations and choose the right boundary for your application.
-icon: network
-order: 2
+icon: lucide:network
+order: 3
 locale: en
+section: start
+type: concept
 ---
 
 # Setup methods
@@ -16,7 +18,7 @@ Install the SDK in consumer applications:
 bun add @krak-stack/auth effect
 ```
 
-Create a project in **Admin > Projects** first. A project controls branding, enabled sign-in methods, and the auth experience shared by one or more OAuth clients or domains.
+Create a project in **Admin > Projects** when you need shared branding and enabled sign-in methods. Projects are recommended for a consistent auth experience but are not required by every API payload.
 
 ## 1. Proxy (recommended)
 
@@ -26,12 +28,10 @@ Use this for first-party TanStack Start applications unless you need a standards
 
 ```env
 KRAKSTACK_AUTH_URL=https://auth.example.com
-VITE_KRAKSTACK_AUTH_URL=https://auth.example.com
 VITE_KRAKSTACK_AUTH_PROJECT_ID=project_id
-KRAKSTACK_AUTH_SERVICE_API_KEY=server_only_secret
 ```
 
-`KRAKSTACK_AUTH_URL` and the service key are server-only. `VITE_KRAKSTACK_AUTH_URL` and the project ID are public configuration.
+`KRAKSTACK_AUTH_URL` is server-only. The project ID is public and optional. Add `KRAKSTACK_AUTH_SERVICE_API_KEY` separately only when the application uses trusted service APIs or `AuthMiddleware`.
 
 Continue with the complete [proxy guide](/docs/proxy).
 
@@ -39,13 +39,9 @@ Continue with the complete [proxy guide](/docs/proxy).
 
 Register an OAuth client and use authorization code flow with PKCE. This method works with standard OAuth and OIDC libraries and keeps the consumer independent of Better Auth's browser client.
 
-Use OAuth for third-party integrations, separately operated applications, native clients, or systems that already support OIDC.
+Current admin-created OAuth clients are confidential Web clients using `client_secret_basic` and required PKCE. Use this method for separately operated server-backed applications or systems that support this OIDC client model.
 
-Discovery is available at:
-
-```text
-https://auth.example.com/.well-known/openid-configuration
-```
+Read the service metadata and use its exact issuer and endpoint values. Better Auth's effective issuer can include `/api/auth`; do not infer it from the bare public origin.
 
 Continue with the [OAuth guide](/docs/oauth).
 

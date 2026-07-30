@@ -1,0 +1,56 @@
+---
+slug: configuration
+path: /docs/configuration
+title: Référence de configuration
+description: Distinguez les valeurs publiques de compilation, les secrets d'exécution requis et la configuration propre aux fonctionnalités.
+icon: lucide:settings
+order: 50
+locale: fr
+section: operations
+type: reference
+---
+
+# Référence de configuration
+
+Krakstack Auth mélange actuellement des valeurs Vite définies à la compilation et la configuration serveur d'exécution. Une valeur `VITE_*` modifiée après la construction du client ne met pas à jour le code navigateur.
+
+## Valeurs publiques de compilation
+
+| Variable                              | Usage                                                |
+| ------------------------------------- | ---------------------------------------------------- |
+| `VITE_SITE_URL`                       | Origine publique intégrée aux ressources navigateur  |
+| `VITE_KRAKSTACK_AUTH_URL`             | Origine auth navigateur pour un accès central direct |
+| `VITE_KRAKSTACK_AUTH_ORGANIZATION_ID` | Organisation qui protège la route admin              |
+| `VITE_ANALYTICS_WEBSITE_ID`           | ID de site analytique facultatif                     |
+
+Le workflow officiel fournit les valeurs de l'instance officielle. L'image publiée n'est donc pas actuellement démontrée comme artefact générique configurable uniquement à l'exécution. Construisez une image propre au déploiement jusqu'à la disponibilité d'une configuration publique dynamique.
+
+## Valeurs principales d'exécution
+
+| Variable                       | Exigence                                                                  |
+| ------------------------------ | ------------------------------------------------------------------------- |
+| `DATABASE_URL`                 | Connexion PostgreSQL requise                                              |
+| `BETTER_AUTH_SECRET`           | Secret auth stable et aléatoire requis                                    |
+| `BETTER_AUTH_URL`              | Origine HTTPS publique stable; localhost sert uniquement au développement |
+| `BETTER_AUTH_TRUSTED_ORIGINS`  | Origines navigateur exactes séparées par des virgules                     |
+| `BETTER_AUTH_VALID_AUDIENCES`  | Audiences OAuth acceptées facultatives                                    |
+| `BETTER_AUTH_ADDITIONAL_HOSTS` | Hôtes publics fixes facultatifs                                           |
+| `PORT`                         | Port du serveur, `3000` par défaut                                        |
+
+## Stockage
+
+La couche API actuelle fournit toujours `S3Service`. Configurez `S3_ACCESS_KEY_ID`, `S3_SECRET_ACCESS_KEY` et `S3_BUCKET`. `S3_REGION`, `S3_ENDPOINT` et `S3_SESSION_TOKEN` sont facultatifs. Vérifiez le démarrage et les opérations de ressources avec le fournisseur compatible S3 choisi.
+
+## Courriel et connexion sociale
+
+En production, les flux courriel utilisent SES. Configurez `SES_REGION`, `SES_ACCESS_KEY_ID` et `SES_SECRET_ACCESS_KEY`. Définissez `AUTH_EMAIL_FROM` ou `NOTIFICATION_EMAIL_FROM`; `AUTH_EMAIL_NAME` change le nom affiché.
+
+Définissez `GOOGLE_CLIENT_ID` et `GOOGLE_CLIENT_SECRET` ensemble. Une option de projet ne peut pas activer un fournisseur non configuré.
+
+## Domaines gérés
+
+Utilisez `AUTH_CLOUDFLARE_ZONE_ID` ou `CLOUDFLARE_ZONE_ID` avec `CLOUDFLARE_API_TOKEN` ou la paire clé API/courriel. `AUTH_DOMAIN_CNAME_TARGET` remplace la cible CNAME générée.
+
+## Télémétrie
+
+Définissez `OTEL_SERVICE_NAME` et `OTEL_EXPORTER_OTLP_ENDPOINT` pour OTLP. `OTEL_TRACES_EXPORTER` peut inclure `console` pendant un diagnostic. N'envoyez jamais identifiants, témoins, jetons, codes courriel ou clés API brutes dans la télémétrie.

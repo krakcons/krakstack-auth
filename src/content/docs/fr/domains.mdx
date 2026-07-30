@@ -3,9 +3,11 @@ slug: domains
 path: /docs/domains
 title: Enregistrer des domaines
 description: Enregistrez les hôtes auth et racine approuvés, configurez le DNS et automatisez leur cycle de vie.
-icon: globe
-order: 10
+icon: lucide:globe-2
+order: 41
 locale: fr
+section: administration
+type: how-to
 ---
 
 # Enregistrer des domaines
@@ -27,7 +29,7 @@ Saisissez uniquement des noms d'hôte, sans `https://`, chemin, port ou barre fi
 ## Enregistrement par API serveur
 
 ```http
-POST /api/server/domains
+POST /api/domains
 x-api-key: SERVICE_API_KEY
 content-type: application/json
 
@@ -40,12 +42,14 @@ content-type: application/json
 }
 ```
 
-L'API permet aussi la recherche par identifiant ou hôte, la récupération des enregistrements DNS, la mise à jour et la suppression. Gardez la clé de service dans un coffre serveur.
+L'API de confiance permet aussi la recherche par identifiant ou hôte, la récupération des enregistrements DNS et la suppression. La mise à jour appartient uniquement à l'API administrative authentifiée par témoin. Gardez la clé de service dans un coffre serveur.
 
 ## DNS et activation
 
-Pour un domaine géré, publiez les enregistrements demandés auprès du fournisseur DNS. Le service actualise le statut Cloudflare. Le contexte du domaine n'est résolu que lorsque l'enregistrement unique est actif.
+Pour un domaine géré, publiez les enregistrements demandés auprès du fournisseur DNS. Le statut Cloudflare est actualisé lors de la liste des domaines ou de la demande des enregistrements DNS. Le contexte n'est résolu que lorsque l'enregistrement unique est actif.
 
 Pour un domaine non géré, routez vous-même l'hôte vers le service et préservez correctement l'hôte et le protocole d'origine au niveau du proxy TLS.
 
-La suppression d'un domaine géré retire aussi l'hôte Cloudflare. Retirez d'abord les références et rappels OAuth, puis les enregistrements DNS après la fin du trafic.
+## Suppression
+
+La suppression du dernier enregistrement lié à un hôte Cloudflare géré retire aussi cet hôte. Un hôte partagé avec un autre domaine est conservé. Retirez d'abord les références et rappels OAuth, puis les enregistrements DNS après la fin du trafic.

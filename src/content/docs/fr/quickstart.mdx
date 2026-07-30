@@ -1,0 +1,82 @@
+---
+slug: quickstart
+path: /docs/quickstart
+title: Démarrage rapide d'une application
+description: Connectez une application TanStack Start à une instance Krakstack Auth existante avec le proxy de même origine recommandé.
+icon: lucide:terminal
+order: 2
+locale: fr
+section: start
+type: tutorial
+---
+
+# Démarrage rapide d'une application
+
+Ce tutoriel vérifie la frontière entre l'application et le service auth avant d'ajouter les pages de connexion ou les API protégées. Il suppose qu'une instance Krakstack Auth est déjà accessible par HTTPS.
+
+## Prérequis
+
+- Une origine Krakstack Auth comme `https://auth.example.com`
+- Une application TanStack Start
+- Bun et un stockage sûr pour les variables serveur
+- Un ID de projet facultatif pour une marque ou des méthodes de connexion propres au projet
+
+Le conteneur publié actuel est construit pour l'instance officielle et contient une configuration `VITE_*` définie à la compilation. Consultez la [configuration](/docs/configuration) avant de l'utiliser pour une autre origine.
+
+## Installer le paquet serveur
+
+```bash
+bun add @krak-stack/auth effect
+```
+
+Ce démarrage utilise uniquement l'export serveur du proxy. La distribution des composants React possède des exigences supplémentaires décrites dans [Composants React et CSS](/docs/components).
+
+## Configurer le service amont
+
+```env
+KRAKSTACK_AUTH_URL=https://auth.example.com
+```
+
+`KRAKSTACK_AUTH_URL` reste côté serveur. Ne créez pas de copie `VITE_*` pour le flux par proxy.
+
+## Ajouter le proxy auth
+
+Créez `src/routes/api/auth.$.tsx` :
+
+```tsx
+import { proxyAuthRequest } from "@krak-stack/auth/server";
+import { createFileRoute } from "@tanstack/react-router";
+
+const authUrl = process.env.KRAKSTACK_AUTH_URL;
+if (!authUrl) throw new Error("KRAKSTACK_AUTH_URL is required");
+
+const proxyAuth = (request: Request) => proxyAuthRequest(request, authUrl);
+
+export const Route = createFileRoute("/api/auth/$")({
+  server: {
+    handlers: {
+      GET: ({ request }) => proxyAuth(request),
+      HEAD: ({ request }) => proxyAuth(request),
+      POST: ({ request }) => proxyAuth(request),
+      PUT: ({ request }) => proxyAuth(request),
+      PATCH: ({ request }) => proxyAuth(request),
+      DELETE: ({ request }) => proxyAuth(request),
+      OPTIONS: ({ request }) => proxyAuth(request),
+    },
+  },
+});
+```
+
+La cible provient uniquement de la configuration serveur de confiance. Ne transformez jamais cette route en proxy ouvert contrôlé par l'appelant.
+
+## Vérifier la frontière
+
+Démarrez l'application et ouvrez :
+
+```text
+https://app.example.com/api/auth/ok
+```
+
+Une réponse positive confirme que l'application atteint l'API auth par sa propre origine. Ce point vérifie la disponibilité du processus; il ne valide pas PostgreSQL, le courriel, le stockage ou les autres dépendances.
+
+Continuez avec le [guide complet du proxy](/docs/proxy), puis ajoutez les [pages d'authentification](/docs/auth-pages).

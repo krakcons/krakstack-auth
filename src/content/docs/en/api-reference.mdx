@@ -1,0 +1,48 @@
+---
+slug: api-reference
+path: /docs/api-reference
+title: API reference
+description: Locate generated OpenAPI contracts, Better Auth operations, trusted service endpoints, and discovery metadata.
+icon: lucide:file-json
+order: 60
+locale: en
+section: reference
+type: reference
+---
+
+# API reference
+
+Use the generated contracts for exact methods, paths, schemas, and responses. This page explains which contract to open and the authentication boundary around it.
+
+## Interactive explorer
+
+Open the [Scalar API explorer](/api/docs). It currently includes:
+
+- `Auth API` from `/api/auth-openapi.json`, combining Krakstack service and administrative contracts
+- `Better Auth` from `/api/auth/open-api/generate-schema`
+- `Trusted Backend API` from `/api/backend-openapi.json`
+
+Treat runtime middleware as authoritative when a generated contract does not display security consistently.
+
+## Authentication boundaries
+
+| Boundary                                         | Credential                                                      |
+| ------------------------------------------------ | --------------------------------------------------------------- |
+| Browser auth routes under `/api/auth/*`          | Session cookie and Better Auth flow credentials                 |
+| Cookie-admin routes                              | Signed-in platform administrator session                        |
+| Trusted users, organizations, and domains routes | Service key through `Authorization: Bearer` or `x-api-key`      |
+| Consumer application APIs                        | Consumer-defined session or key middleware and project policies |
+
+Trusted domain creation is `POST /api/domains`. Trusted domain endpoints support create, lookup by ID or hostname, DNS record retrieval, and deletion. Updates are currently administrative only.
+
+## Discovery and liveness
+
+The service exposes root well-known routes and Better Auth metadata routes. Read the returned JSON and configure clients from its exact `issuer`, endpoints, and JWKS URI. Do not infer an issuer solely from the public origin because Better Auth's effective base path can be part of it.
+
+`GET /api/auth/ok` returns API liveness. It does not check PostgreSQL or optional service dependencies.
+
+## Error semantics
+
+Use `401 Unauthorized` when authentication is absent or invalid. Use `403 Forbidden` when a known actor lacks permission. Validation errors describe malformed path, query, or payload data. Consumer services should preserve these distinctions and avoid broad exception wrappers that hide typed Effect errors.
+
+See [SDK exports](/docs/sdk), [API middleware](/docs/middleware), and [RBAC](/docs/rbac) for integration examples.

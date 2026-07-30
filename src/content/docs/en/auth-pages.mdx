@@ -3,9 +3,11 @@ slug: auth-pages
 path: /docs/auth-pages
 title: Auth pages
 description: Add application-owned sign-in, sign-up, verification, password reset, and two-factor routes around the packaged forms.
-icon: boxes
-order: 7
+icon: lucide:boxes
+order: 20
 locale: en
+section: frontend
+type: how-to
 ---
 
 # Auth pages
@@ -50,12 +52,23 @@ const AuthSearch = Schema.toStandardSchemaV1(
   }).annotate({ identifier: "AuthSearch" }),
 );
 
+const safeReturnPath = (value: string | undefined) => {
+  if (!value?.startsWith("/") || value.startsWith("//")) return "/";
+
+  const url = new URL(value, "https://app.invalid");
+  if (url.origin !== "https://app.invalid") return "/";
+  return `${url.pathname}${url.search}${url.hash}`;
+};
+
 export const Route = createFileRoute("/_auth")({
   validateSearch: AuthSearch,
   beforeLoad: async ({ search }) => {
     const session = await authClient.getSession();
     if (session.data) {
-      throw redirect({ href: search.redirect ?? "/", reloadDocument: true });
+      throw redirect({
+        href: safeReturnPath(search.redirect),
+        reloadDocument: true,
+      });
     }
   },
   component: () => (
@@ -65,6 +78,8 @@ export const Route = createFileRoute("/_auth")({
   ),
 });
 ```
+
+The schema validates the search shape; `safeReturnPath` enforces the security boundary. Never send an untrusted absolute or protocol-relative URL to `redirect({ href })`.
 
 ## Add the form routes
 

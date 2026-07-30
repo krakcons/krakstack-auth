@@ -3,9 +3,11 @@ slug: proxy
 path: /docs/proxy
 title: Proxy setup
 description: Run the recommended same-origin integration with a hardened server proxy and packaged React client.
-icon: network
-order: 3
+icon: lucide:network
+order: 10
 locale: en
+section: integration
+type: how-to
 ---
 
 # Proxy setup
@@ -27,10 +29,12 @@ export const Route = createFileRoute("/api/auth/$")({
   server: {
     handlers: {
       GET: ({ request }) => proxyAuth(request),
+      HEAD: ({ request }) => proxyAuth(request),
       POST: ({ request }) => proxyAuth(request),
       PUT: ({ request }) => proxyAuth(request),
       PATCH: ({ request }) => proxyAuth(request),
       DELETE: ({ request }) => proxyAuth(request),
+      OPTIONS: ({ request }) => proxyAuth(request),
     },
   },
 });

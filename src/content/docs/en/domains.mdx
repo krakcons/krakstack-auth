@@ -3,9 +3,11 @@ slug: domains
 path: /docs/domains
 title: Register domains
 description: Register trusted auth and root hostnames, provision DNS, and automate domain lifecycle through the server API.
-icon: globe
-order: 10
+icon: lucide:globe-2
+order: 41
 locale: en
+section: administration
+type: how-to
 ---
 
 # Register domains
@@ -29,7 +31,7 @@ Use hostnames only. Do not include `https://`, paths, ports, query strings, or t
 Trusted provisioning services can automate domain lifecycle with a service API key:
 
 ```http
-POST /api/server/domains
+POST /api/domains
 x-api-key: SERVICE_API_KEY
 content-type: application/json
 
@@ -42,14 +44,14 @@ content-type: application/json
 }
 ```
 
-The server API also supports lookup by ID or hostname, DNS record retrieval, updates, and deletion. Keep the service key in server-side secret storage and restrict which systems can provision domains.
+The trusted server API also supports lookup by ID or hostname, DNS record retrieval, and deletion. Updates are available only through the cookie-authenticated administrative API. Keep the service key in server-side secret storage and restrict which systems can provision domains.
 
 ## DNS and activation
 
-For managed domains, retrieve the requested records and publish them at the DNS provider. The auth service periodically refreshes Cloudflare status. Requests only resolve domain context after a unique registered domain is active.
+For managed domains, retrieve the requested records and publish them at the DNS provider. Cloudflare status is refreshed when domains are listed or DNS records are requested. Requests only resolve domain context after a unique registered domain is active.
 
 For unmanaged domains, route the hostname to the auth deployment yourself and ensure your TLS proxy preserves the original host and protocol correctly.
 
 ## Deletion
 
-Deleting a managed domain also removes its Cloudflare custom hostname. Remove application references and OAuth callbacks first, then delete DNS records after traffic has drained.
+Deleting the final domain record for a managed Cloudflare hostname also removes that hostname. A hostname shared by another domain record is retained. Remove application references and OAuth callbacks first, then delete DNS records after traffic has drained.

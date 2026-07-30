@@ -1,0 +1,51 @@
+---
+slug: administration
+path: /docs/administration
+title: Modèle d'administration
+description: Gérez les projets, utilisateurs, organisations, clients OAuth, clés API et les contraintes actuelles d'amorçage.
+icon: lucide:users
+order: 40
+locale: fr
+section: administration
+type: how-to
+---
+
+# Modèle d'administration
+
+L'interface d'administration gère l'infrastructure d'identité, pas les données métier des applications. Son accès utilise une session navigateur et les droits d'administrateur de plateforme; une clé de service n'ouvre pas l'interface.
+
+## Contrainte d'amorçage
+
+La route admin actuelle exige un utilisateur authentifié et membre de l'organisation identifiée par `VITE_KRAKSTACK_AUTH_ORGANIZATION_ID`. Cette valeur est intégrée à la compilation du client. Aucun flux générique de premier administrateur n'est actuellement disponible comme opération uniquement définie à l'exécution.
+
+Avant une compilation personnalisée, établissez l'organisation d'administration et fournissez son ID à la compilation. Modifier cette valeur `VITE_*` sur un conteneur déjà construit ne modifie pas la frontière admin.
+
+## Projets et marque
+
+Un projet contient un nom, un logo facultatif, du CSS de thème filtré et les options mot de passe, code courriel, Google, inscription et collecte du nom. Google n'est disponible que si les deux identifiants Google sont configurés sur le service.
+
+Les projets se connectent aux utilisateurs et organisations. Les clients OAuth et domaines peuvent référencer un projet. Le projet est recommandé pour une expérience cohérente, mais reste facultatif dans plusieurs charges utiles.
+
+## Utilisateurs et organisations
+
+Krakstack Auth crée une organisation personnelle pour chaque utilisateur non anonyme et répare cette organisation à la création d'une session. Une organisation personnelle ne peut pas être supprimée.
+
+Les organisations prennent en charge les rôles `owner`, `admin`, `support` et `member`, les invitations expirant après 14 jours, un maximum de 100 membres et un parent direct facultatif. Le parent doit être une organisation racine et son attribution exige les droits appropriés.
+
+## Types de clés API
+
+| Type         | Préfixe | Référence propriétaire | Limite par défaut    |
+| ------------ | ------- | ---------------------- | -------------------- |
+| Utilisateur  | `user_` | Utilisateur            | 1 000 requêtes/jour  |
+| Organisation | `org_`  | Organisation           | 1 000 requêtes/jour  |
+| Service      | `svc_`  | Utilisateur            | 10 000 requêtes/jour |
+
+Les nouvelles clés commencent sans autorisation. La valeur brute n'est retournée qu'une fois. Stockez-la immédiatement dans un gestionnaire de secrets. La création ou modification d'une clé de service par l'API personnalisée exige une session d'administrateur de plateforme.
+
+Les origines permises peuvent être stockées dans les métadonnées et vérifiées. Les autorisations de projet exigent toujours des politiques dans l'application consommatrice.
+
+## Clients OAuth
+
+Les clients créés par l'administration sont actuellement des clients Web confidentiels. Ils utilisent les flux par code et jeton de renouvellement, exigent PKCE, s'authentifient avec `client_secret_basic` et reçoivent un secret généré. L'inscription de clients publics/natifs et le consentement configurable ne sont pas exposés.
+
+Continuez avec [OAuth et OIDC](/docs/oauth), [l'enregistrement des domaines](/docs/domains) et le [RBAC](/docs/rbac).

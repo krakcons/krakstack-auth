@@ -37,14 +37,6 @@ const resolveCurrentActor = <Project extends string, Action extends string>(
         apiKey.permissions ?? {},
       ).pipe(Effect.mapError(() => new HttpApiError.Unauthorized({})));
 
-      if (apiKey.configId === "service") {
-        return access.actorForApiKey({
-          apiKeyId: apiKey.id,
-          owner: { type: "service", serviceId: apiKey.referenceId },
-          grant,
-        });
-      }
-
       const organizationId = session.session.activeOrganizationId;
       if (!organizationId) return yield* new HttpApiError.Unauthorized({});
 
@@ -128,18 +120,11 @@ class OrganizationApiKeyActorRequired extends HttpApiMiddleware.Service<
   error: [HttpApiError.Unauthorized, HttpApiError.Forbidden],
 }) {}
 
-class ServiceApiKeyActorRequired extends HttpApiMiddleware.Service<
-  ServiceApiKeyActorRequired,
-  { requires: AuthService; provides: CurrentActor }
->()("@krak-stack/auth/ActorRequired/ApiKey/Service", {
-  error: [HttpApiError.Unauthorized, HttpApiError.Forbidden],
-}) {}
-
 export type ActorConstraint =
   | { readonly type: "user" }
   | {
       readonly type: "apiKey";
-      readonly ownerType?: "user" | "organization" | "service" | undefined;
+      readonly ownerType?: "user" | "organization" | undefined;
     };
 
 const matchesConstraint = (
@@ -173,7 +158,6 @@ const actorRequired = (constraint?: ActorConstraint) => {
   if (constraint.ownerType === "organization") {
     return OrganizationApiKeyActorRequired;
   }
-  if (constraint.ownerType === "service") return ServiceApiKeyActorRequired;
   return ApiKeyActorRequired;
 };
 
@@ -219,16 +203,6 @@ const actorRequiredLayer = <Project extends string, Action extends string>(
         ),
       ),
     ),
-    Layer.succeed(ServiceApiKeyActorRequired, (httpEffect) =>
-      requiredActor(access, {
-        type: "apiKey",
-        ownerType: "service",
-      }).pipe(
-        Effect.flatMap((actor) =>
-          httpEffect.pipe(Effect.provideService(CurrentActor, actor)),
-        ),
-      ),
-    ),
   );
 
 type ActorRequiredFactory = {
@@ -242,10 +216,6 @@ type ActorRequiredFactory = {
     readonly type: "apiKey";
     readonly ownerType: "organization";
   }): typeof OrganizationApiKeyActorRequired;
-  (constraint: {
-    readonly type: "apiKey";
-    readonly ownerType: "service";
-  }): typeof ServiceApiKeyActorRequired;
   (constraint: { readonly type: "apiKey" }): typeof ApiKeyActorRequired;
   readonly layer: typeof actorRequiredLayer;
 };

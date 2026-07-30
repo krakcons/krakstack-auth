@@ -30,10 +30,6 @@ export type ApiKeyOwner =
   | {
       readonly type: "organization";
       readonly organizationId: string;
-    }
-  | {
-      readonly type: "service";
-      readonly serviceId: string;
     };
 
 export type ApiKeyActor = {
@@ -120,7 +116,6 @@ export type ProjectAccessDefinition<
   readonly apiKeys: {
     readonly user: ReadonlyArray<Action>;
     readonly organization: ReadonlyArray<Action>;
-    readonly service: ReadonlyArray<Action>;
   };
   readonly qualify: (action: Action) => ProjectPermission<Project, Action>;
   readonly permission: (action: Action) => Policy;
@@ -146,7 +141,6 @@ export type ProjectAccessDefinition<
   readonly apiKeyPermissions: {
     readonly user: ApiKeyPermissionGrant;
     readonly organization: ApiKeyPermissionGrant;
-    readonly service: ApiKeyPermissionGrant;
   };
   readonly actorForUser: (input: {
     readonly userId: string;
@@ -215,7 +209,6 @@ export type ProjectAccessConfig<
   readonly apiKeys?: {
     readonly user?: ReadonlyArray<Permissions[number]>;
     readonly organization?: ReadonlyArray<Permissions[number]>;
-    readonly service?: ReadonlyArray<Permissions[number]>;
   };
 };
 
@@ -281,10 +274,6 @@ export const defineProjectAccess = <
   const organizationApiKeyActions = (config.apiKeys?.organization ?? []).filter(
     (action) => allowedActions.has(action),
   );
-  const serviceApiKeyActions = (config.apiKeys?.service ?? []).filter(
-    (action) => allowedActions.has(action),
-  );
-
   const actorForUser = (input: {
     readonly userId: string;
     readonly organizationId: string | null;
@@ -324,15 +313,8 @@ export const defineProjectAccess = <
             permissionsForActions(organizationApiKeyActions),
             keyPermissions,
           );
-        case "service":
-          return intersection(
-            permissionsForActions(serviceApiKeyActions),
-            keyPermissions,
-          );
       }
     })();
-    const organizationId =
-      input.owner.type === "service" ? null : input.owner.organizationId;
 
     return {
       actor: {
@@ -340,7 +322,7 @@ export const defineProjectAccess = <
         apiKeyId: input.apiKeyId,
         owner: input.owner,
       },
-      organizationId,
+      organizationId: input.owner.organizationId,
       permissions,
     };
   };
@@ -352,7 +334,6 @@ export const defineProjectAccess = <
     apiKeys: {
       user: userApiKeyActions,
       organization: organizationApiKeyActions,
-      service: serviceApiKeyActions,
     },
     qualify,
     permission: (action) => permission(qualify(action)),
@@ -374,7 +355,6 @@ export const defineProjectAccess = <
     apiKeyPermissions: {
       user: encodeGrant(userApiKeyActions),
       organization: encodeGrant(organizationApiKeyActions),
-      service: encodeGrant(serviceApiKeyActions),
     },
     actorForUser,
     actorForApiKey,

@@ -1,0 +1,53 @@
+---
+slug: architecture
+path: /docs/architecture
+title: Architecture and trust boundaries
+description: Understand the identities, projects, organizations, credentials, and request boundaries that make up Krakstack Auth.
+icon: lucide:network
+order: 4
+locale: en
+section: start
+type: concept
+---
+
+# Architecture and trust boundaries
+
+Krakstack Auth centralizes credentials and sessions while consumer applications remain responsible for their own resource authorization and tenant-scoped data access.
+
+## Request paths
+
+```text
+Browser ── same-origin /api/auth/* ── Consumer proxy ── Krakstack Auth
+Browser ── authorization redirect ───────────────────── Krakstack Auth
+Backend ── service credential ───────────────────────── Krakstack Auth API
+```
+
+The proxy path is recommended for first-party web applications. OAuth/OIDC provides a protocol boundary for independently operated confidential web clients. Custom auth hostnames change branding and routing but do not remove the need to validate return URLs, origins, and authorization.
+
+## Core entities
+
+| Entity       | Responsibility                                                                          |
+| ------------ | --------------------------------------------------------------------------------------- |
+| User         | Human identity, credentials, verification, sessions, and two-factor state               |
+| Organization | Membership, roles, invitations, hierarchy, and active tenant context                    |
+| Project      | Branding, theme CSS, enabled sign-in methods, and connections to users or organizations |
+| OAuth client | Confidential web client registration, redirect URIs, scopes, and generated secret       |
+| Domain       | Auth hostname, trusted root hostname, optional project or organization, and DNS state   |
+| API key      | User, organization, or service credential with type-specific ownership and limits       |
+
+A project is recommended for shared branding and sign-in configuration, but it is not required by every protocol operation. Public project configuration resolves from an explicit project ID first, then a matching domain, then a linked OAuth client, and finally platform defaults.
+
+## Identity is not authorization
+
+Browser sessions and valid API keys establish an actor. They do not automatically authorize a consumer application's records. Backend handlers must enforce project permissions and include the actor's organization or user ID in database predicates.
+
+`AuthMiddleware` exposes session identity. `ActorRequired` resolves a project actor. Project policies decide whether that actor may perform an action. Domain services still enforce tenant, ownership, lifecycle, and attribute rules.
+
+## Credential boundaries
+
+- Browser cookies remain HttpOnly and should normally stay on the consumer origin through the proxy.
+- OAuth client secrets, service keys, database credentials, and `BETTER_AUTH_SECRET` remain server-only.
+- User and organization API-key permissions are ceilings and explicit grants, not automatic access to consumer resources.
+- Service keys authorize trusted identity-service endpoints. They are not project RBAC principals in the current SDK actor model.
+
+Review [API middleware](/docs/middleware), [RBAC](/docs/rbac), and [security](/docs/security) before exposing protected application data.

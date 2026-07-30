@@ -3,9 +3,11 @@ slug: components
 path: /docs/components
 title: React components and CSS
 description: Install the provider, forms, account controls, access guards, and Tailwind source required by the component package.
-icon: paintbrush
-order: 6
+icon: lucide:paintbrush
+order: 21
 locale: en
+section: frontend
+type: reference
 ---
 
 # React components and CSS
@@ -61,4 +63,4 @@ The package exports `Signin`, `Signup`, `VerifyEmail`, `ResetPassword`, and `Two
 
 ## Hooks and client
 
-Use `useAuthClient`, `useKrakstackAuth`, and `useKrakstackAuthProjectConfig` inside the provider. `createAuthUiClient` is available when you need to construct the Better Auth client explicitly.
+Use `useAuthClient`, `useKrakstackAuth`, and `useKrakstackAuthProjectConfig` inside the provider. Import the latter two from `@krak-stack/auth/components`; they are not currently re-exported by the package root. `createAuthUiClient` is available when you need to construct the Better Auth client explicitly.

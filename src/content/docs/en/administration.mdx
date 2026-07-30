@@ -1,0 +1,51 @@
+---
+slug: administration
+path: /docs/administration
+title: Administration model
+description: Manage projects, users, organizations, OAuth clients, API keys, and the current bootstrap constraints.
+icon: lucide:users
+order: 40
+locale: en
+section: administration
+type: how-to
+---
+
+# Administration model
+
+The administration UI manages identity infrastructure rather than consumer application data. Administrative access uses a browser session and platform-level administrator checks; service keys do not grant access to the admin UI.
+
+## Bootstrap constraint
+
+The current admin route requires an authenticated user and membership in the organization identified by `VITE_KRAKSTACK_AUTH_ORGANIZATION_ID`. That value is compiled into the client build. A generic first-administrator bootstrap flow is not currently documented or implemented as a runtime-only operation.
+
+Before deploying a custom build, establish the administration organization and supply its ID at build time. Do not assume that changing this `VITE_*` value on an already-built container changes the admin boundary.
+
+## Projects and branding
+
+A project contains a name, optional logo, sanitized theme CSS, and toggles for email/password, email OTP, Google, sign-up, and sign-up name collection. Google becomes available only when both Google credentials are configured on the service.
+
+Projects can connect to users and organizations. OAuth clients and domains can reference a project. A project is recommended for a consistent sign-in experience but remains optional in several API payloads.
+
+## Users and organizations
+
+Krakstack Auth creates a personal organization for non-anonymous users and repairs a missing personal organization during session creation. Personal organizations cannot be deleted.
+
+Regular organizations support `owner`, `admin`, `support`, and `member` roles, invitations that expire after 14 days, up to 100 members, and an optional direct parent organization. Parent assignment is limited to a root organization and requires appropriate parent access.
+
+## API key types
+
+| Type         | Prefix  | Owner reference | Default limit       |
+| ------------ | ------- | --------------- | ------------------- |
+| User         | `user_` | User            | 1,000 requests/day  |
+| Organization | `org_`  | Organization    | 1,000 requests/day  |
+| Service      | `svc_`  | User            | 10,000 requests/day |
+
+New keys start with empty permissions. The raw key is returned once. Store it immediately in a secret manager. Creating or editing a service key through the custom API requires a platform-administrator session.
+
+Allowed origins can be stored with key metadata and checked during verification. Project permissions still require consumer-side policy enforcement; a valid key does not automatically authorize domain records.
+
+## OAuth clients
+
+Current admin-created OAuth clients are confidential Web clients. They use authorization-code and refresh-token grants, require PKCE, authenticate at the token endpoint with `client_secret_basic`, and receive a generated secret. Public/native client registration and configurable consent behavior are not currently exposed by the admin model.
+
+Continue with [OAuth and OIDC](/docs/oauth), [domain registration](/docs/domains), and [RBAC](/docs/rbac).

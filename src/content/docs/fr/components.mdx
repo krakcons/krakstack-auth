@@ -3,9 +3,11 @@ slug: components
 path: /docs/components
 title: Composants React et CSS
 description: Installez le fournisseur, les formulaires, contrôles de compte, gardes d'accès et la source Tailwind du paquet.
-icon: paintbrush
-order: 6
+icon: lucide:paintbrush
+order: 21
 locale: fr
+section: frontend
+type: reference
 ---
 
 # Composants React et CSS
@@ -47,8 +49,14 @@ import { OrganizationSwitcher, UserButton } from "@krak-stack/auth";
 <UserButton signOutRedirect="/" side="bottom" />
 ```
 
-## Formulaires et accès
+## Formulaires
 
-Le paquet exporte `Signin`, `Signup`, `VerifyEmail`, `ResetPassword` et `TwoFactor`. Affichez-les dans vos propres routes. `MemberRequired` protège l'interface selon l'adhésion à une organisation, mais chaque endpoint backend doit aussi vérifier indépendamment la session, l'organisation et le rôle.
+Le paquet exporte `Signin`, `Signup`, `VerifyEmail`, `ResetPassword` et `TwoFactor`. Affichez-les dans vos propres routes afin de garder le contrôle des URL, métadonnées et limites d'erreur.
 
-Les hooks `useAuthClient`, `useKrakstackAuth` et `useKrakstackAuthProjectConfig` sont disponibles à l'intérieur du fournisseur.
+## Garde d'autorisation
+
+`MemberRequired` protège la présentation selon l'adhésion à une organisation, mais chaque endpoint backend doit aussi vérifier indépendamment la session, l'organisation et le rôle. Une garde frontend n'est jamais une frontière d'autorisation.
+
+## Hooks et client
+
+Les hooks `useAuthClient`, `useKrakstackAuth` et `useKrakstackAuthProjectConfig` sont disponibles dans le fournisseur. Importez les deux derniers depuis `@krak-stack/auth/components`; ils ne sont pas encore réexportés par la racine du paquet.

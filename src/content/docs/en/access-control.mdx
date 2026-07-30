@@ -1,20 +1,25 @@
 ---
-slug: access-control
-path: /docs/access-control
-title: Access control
-description: Define project permissions, resolve roles and API-key grants, and understand the Better Auth defaults used by Krakstack Auth.
-icon: shield
-order: 9
+slug: rbac
+path: /docs/rbac
+title: RBAC
+description: Define project roles and permissions, enforce policies, and publish a permission matrix from the same typed access catalog.
+icon: lucide:shield-check
+order: 32
 locale: en
+section: backend
+type: reference
+legacySlugs: [access-control]
 ---
 
-# Access control
+# RBAC
 
-Krakstack Auth separates authentication from application authorization. Better Auth controls global administration and organization management. Each consumer application defines its own project permissions with `defineProjectAccess` and enforces them on the backend.
+RBAC means **role-based access control**. It authorizes actions by assigning permissions to roles, then assigning those roles to users. Krakstack Auth separates this application authorization from authentication: Better Auth establishes identity and manages organizations, while each consumer application defines and enforces its own project RBAC.
 
-## Project access
+The RBAC catalog answers whether an actor's role or API-key grant permits an action. It does not replace tenant scoping, ownership checks, archive rules, or other attribute-based policies.
 
-Declare one project namespace, its complete action catalog, role grants, and the maximum actions assignable to each API-key type:
+## Define the catalog
+
+Create one shared module for the project's action catalog, role grants, and maximum assignable API-key actions. Service keys are internal infrastructure credentials and are deliberately not project RBAC principals.
 
 ```ts
 import { defineProjectAccess } from "@krak-stack/auth/access";
@@ -31,30 +36,159 @@ export const Access = defineProjectAccess({
   apiKeys: {
     user: ["records:read", "search:execute"],
     organization: ["search:execute"],
-    service: ["records:read", "records:update", "search:execute"],
   },
 });
 ```
 
-The project name qualifies every permission, so `records:read` becomes `example:records:read` in the current actor. Unknown roles, actions, and grants for other projects are ignored.
+The project name namespaces every permission: `records:read` becomes `example:records:read` in `CurrentActor`. Unknown roles, unknown actions, and grants belonging to another project are ignored. Keep this module server-safe because API handlers and UI configuration can both import it.
 
-The matrix below is generated from that same `Access` definition. Consumer projects use this pattern so their published permission reference stays aligned with code.
+## Use the functions
 
-## Effective authorization
+`defineProjectAccess` returns typed functions for the common authorization operations:
 
-Role permissions are additive when a user has multiple roles. API keys always use least-privilege intersections:
+```ts
+// Namespace one known action.
+Access.qualify("records:update"); // "example:records:update"
+
+// Combine all permissions from a user's current roles.
+Access.permissionsForRoles(["member", "support"]);
+
+// Store a validated Better Auth API-key grant.
+const grant = Access.encodeGrant(["records:read", "search:execute"]);
+
+// Resolve a user key using the role, key-type ceiling, and explicit grant.
+Access.permissionsForUserKey({ roles: ["member"], grant });
+
+// Decode an unknown grant and return only this project's known permissions.
+const decoded = Access.decodeGrant(input); // Effect<ReadonlySet<...>, SchemaError>
+```
+
+Role permissions are additive when a user has multiple roles. API keys use least-privilege intersections:
 
 - **User key:** current role permissions ∩ user-key catalog ∩ explicit key grant.
 - **Organization key:** organization-key catalog ∩ explicit key grant.
-- **Service key:** service-key catalog ∩ explicit key grant.
 
-An API-key catalog is a ceiling, not an automatic grant. Tenant checks, ownership rules, resource policies, archive rules, and other attribute-based policies can still deny an action shown as available.
+The `apiKeys` catalog is a ceiling, not an automatic grant. `encodeGrant` does not bypass that ceiling when the key is resolved.
 
-Use `Access.permission("records:update")` or compose it with `all`, `any`, and `withPolicy` on the server. Client helpers such as `useHasPermission` may hide unavailable controls, but frontend checks are never an authorization boundary.
+## Add actor middleware
+
+`ActorRequired` authenticates the request, resolves current organization roles or API-key grants against `Access`, and provides `CurrentActor` to the handler. Add it to protected endpoints and provide its layer once:
+
+```ts
+import { ActorRequired } from "@krak-stack/auth/server";
+import { HttpApiEndpoint, HttpApiGroup } from "effect/unstable/httpapi";
+
+export const RecordsApi = HttpApiGroup.make("records").add(
+  HttpApiEndpoint.patch("updateRecord", "/records/:id").middleware(
+    ActorRequired(),
+  ),
+);
+```
+
+Use a constraint only when the endpoint must reject otherwise valid project actors:
+
+```ts
+ActorRequired({ type: "user" });
+ActorRequired({ type: "apiKey", ownerType: "user" });
+ActorRequired({ type: "apiKey", ownerType: "organization" });
+```
+
+```ts
+import { ActorRequired, AuthMiddleware } from "@krak-stack/auth/server";
+import { Layer } from "effect";
+import { HttpApiBuilder } from "effect/unstable/httpapi";
+
+export const ApiLive = HttpApiBuilder.layer(AppApi).pipe(
+  Layer.provide(ActorRequired.layer(Access)),
+  Layer.provide(AuthMiddleware.layer()),
+);
+```
+
+## Enforce permissions
+
+Permission checks belong in backend handlers or domain services. `Access.permission` fails with typed `Forbidden` before protected work runs:
+
+```ts
+import { CurrentActor, withPolicy } from "@krak-stack/auth/server";
+import { Effect } from "effect";
+
+export const updateRecord = (id: string) =>
+  Effect.gen(function* () {
+    const actor = yield* CurrentActor;
+    return yield* Records.update({
+      id,
+      organizationId: actor.organizationId,
+    });
+  }).pipe(withPolicy(Access.permission("records:update")));
+```
+
+Compose requirements with `all` and `any`. Use `policy` for contextual rules that RBAC alone cannot express:
+
+```ts
+import { all, any, policy, withPolicy } from "@krak-stack/auth/server";
+import { Effect } from "effect";
+
+const belongsToOrganization = (organizationId: string) =>
+  policy((actor) => Effect.succeed(actor.organizationId === organizationId));
+
+const canRead = any(
+  Access.permission("records:read"),
+  Access.permission("records:update"),
+);
+
+const readRecord = (organizationId: string) =>
+  Records.findByOrganization(organizationId).pipe(
+    withPolicy(all(canRead, belongsToOrganization(organizationId))),
+  );
+```
+
+Frontend helpers can hide unavailable controls, but frontend checks are never an authorization boundary.
+
+## Render the matrix
+
+Use `ProjectAccessMatrix` to turn the same `Access` value into a user-facing role and API-key reference. This avoids maintaining a second, stale permission table by hand.
+
+First define labels with `defineProjectAccessLabels`. Its shape is checked against the resources, actions, and roles in `Access`:
+
+```tsx
+import { defineProjectAccessLabels } from "@krak-stack/auth/access";
+
+export const AccessLabels = defineProjectAccessLabels(Access, {
+  project: "Example",
+  roles: {
+    owner: "Owner",
+    admin: "Admin",
+    support: "Support",
+    member: "Member",
+  },
+  permissions: {
+    records: {
+      label: "Records",
+      actions: { read: "Read", update: "Update" },
+    },
+    search: {
+      label: "Search",
+      actions: { execute: "Execute" },
+    },
+  },
+});
+```
+
+Then render the component where the reference should appear:
+
+```tsx
+import { ProjectAccessMatrix } from "@krak-stack/auth/access/matrix";
+
+export const PermissionsReference = () => (
+  <ProjectAccessMatrix access={Access} labels={AccessLabels} locale="en" />
+);
+```
+
+`labels` is optional; without it, identifiers are converted to simple display labels. Set `locale` to `"fr"` for the built-in French table headings, or pass `messages` to override headings. Derive published permission references from the same `Access` value used by policies rather than maintaining a separate table.
 
 ## Better Auth layers
 
-Krakstack Auth also uses Better Auth's global administrator and organization access controls. These permissions govern identity and organization operations; they do not replace project permissions. The following references are generated from Better Auth's exported default statement catalogs and role definitions.
+Krakstack Auth also uses Better Auth's global administrator and organization access controls. These permissions govern identity and organization operations; they do not replace project permissions. Use Better Auth's exported statement catalogs and role definitions as the source of truth when publishing those references.
 
 The effective organization table includes Krakstack Auth's `support` role. It currently maps to Better Auth's default `member` access while consumer projects can assign separate project permissions to support users.
 

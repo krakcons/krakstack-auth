@@ -1,18 +1,31 @@
 ---
 slug: introduction
 path: /docs
-title: Introduction
+title: Krakstack Auth documentation
 description: Central authentication, organization membership, and identity infrastructure for every application in your stack.
-icon: book
+icon: lucide:book-open
 order: 1
 locale: en
+section: start
+type: concept
 ---
 
-# Introduction
+# Krakstack Auth documentation
 
 Krakstack Auth is a central identity service built on Better Auth. It owns credentials, sessions, OAuth clients, organizations, API keys, two-factor authentication, and OpenID Connect metadata. Your applications consume identity instead of each implementing a separate authentication system.
 
-> Krakstack Auth is currently self-hosted software only. `auth.krakstack.net` hosts these docs and the maintainer's own instance; it is not a managed multi-customer auth service. Deploy the published GHCR image with your own PostgreSQL database.
+> Krakstack Auth is currently self-hosted software only. `auth.krakstack.net` hosts these docs and the maintainer's own instance; it is not a managed multi-customer auth service. The current published image embeds official-instance build values, so custom operators must review the configuration limitations before deployment.
+
+## Start by task
+
+| Goal                                              | Start here                                                                  |
+| ------------------------------------------------- | --------------------------------------------------------------------------- |
+| Connect a first-party Web application             | [Application quickstart](/docs/quickstart)                                  |
+| Choose proxy, OAuth, or a custom hostname         | [Setup methods](/docs/setup)                                                |
+| Understand identities and trust boundaries        | [Architecture](/docs/architecture)                                          |
+| Configure the SDK and backend                     | [SDK exports](/docs/sdk) and [API middleware](/docs/middleware)             |
+| Manage projects, organizations, clients, and keys | [Administration](/docs/administration)                                      |
+| Deploy and operate the service                    | [Self-hosting](/docs/self-hosting) and [configuration](/docs/configuration) |
 
 ## What it provides
 
@@ -42,8 +55,9 @@ Never expose `KRAKSTACK_AUTH_SERVICE_API_KEY` in a `VITE_*` variable or browser 
 
 ## Next steps
 
-1. Create a project in the admin area and record its project ID.
-2. Choose one of the three setup methods.
-3. Add the React provider and CSS source when using packaged components.
-4. Register production origins, redirect URIs, or domains before launch.
-5. Review the security and deployment checklists.
+1. Confirm that the auth service and administration boundary are configured.
+2. Create a project when shared branding or sign-in configuration is required.
+3. Choose one of the three setup methods.
+4. Add the React provider and CSS source when using packaged components.
+5. Register production origins, redirect URIs, or domains before launch.
+6. Review the security and deployment checklists.

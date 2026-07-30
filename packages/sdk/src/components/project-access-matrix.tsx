@@ -7,7 +7,6 @@ export type ProjectAccessMatrixAccess<Action extends string = string> = {
   readonly apiKeys: {
     readonly user: ReadonlyArray<Action>;
     readonly organization: ReadonlyArray<Action>;
-    readonly service: ReadonlyArray<Action>;
   };
   readonly project: string;
   readonly roles: Readonly<Record<string, ReadonlyArray<Action> | undefined>>;
@@ -21,7 +20,6 @@ export type ProjectAccessMatrixMessages = {
   organizationKey: string;
   resource: string;
   rolePermissions: string;
-  serviceKey: string;
   userKey: string;
 };
 
@@ -34,7 +32,6 @@ const messages = {
     organizationKey: "Organization key",
     resource: "Resource",
     rolePermissions: "Role grants",
-    serviceKey: "Service key",
     userKey: "User key",
   },
   fr: {
@@ -45,7 +42,6 @@ const messages = {
     organizationKey: "Clé d’organisation",
     resource: "Ressource",
     rolePermissions: "Droits des rôles",
-    serviceKey: "Clé de service",
     userKey: "Clé utilisateur",
   },
 } as const satisfies Record<"en" | "fr", ProjectAccessMatrixMessages>;
@@ -87,11 +83,6 @@ export const ProjectAccessMatrix = <
       id: "organization",
       label: text.organizationKey,
       permissions: access.apiKeys.organization,
-    },
-    {
-      id: "service",
-      label: text.serviceKey,
-      permissions: access.apiKeys.service,
     },
   ];
 

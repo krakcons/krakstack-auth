@@ -3,9 +3,11 @@ slug: security
 path: /docs/security
 title: Sécurité et exploitation
 description: Renforcez les origines, témoins, secrets, rappels OAuth, autorisations, alertes et interventions.
-icon: shield
-order: 12
+icon: lucide:shield-check
+order: 53
 locale: fr
+section: operations
+type: reference
 ---
 
 # Sécurité et exploitation
@@ -29,9 +31,13 @@ L'authentification prouve l'identité, pas l'accès à une ressource. À chaque 
 
 Les API de service utilisent `x-api-key`. Ces clés privilégiées restent sur des backends de confiance, idéalement avec contrôles réseau et limites de débit.
 
-## Navigateur et surveillance
+## Sécurité du navigateur
 
-Préférez les témoins HttpOnly, Secure et SameSite à `localStorage`. Protégez les changements contre CSRF et appliquez une politique CSP restrictive. Alertez sur les échecs de connexion, réinitialisations, deuxièmes facteurs, refus de clés et activités administratives inhabituelles. Ne journalisez jamais mots de passe, codes, témoins, jetons ou secrets complets.
+Préférez les témoins HttpOnly, Secure et SameSite à `localStorage`. Protégez les changements contre CSRF, appliquez une politique CSP restrictive et n'affichez pas de HTML non approuvé dans les écrans auth.
+
+## Surveillance
+
+Alertez sur les échecs de connexion, réinitialisations, deuxièmes facteurs, refus de clés, rappels OAuth et activités administratives inhabituelles. Ne journalisez jamais mots de passe, codes, témoins, jetons ou secrets complets.
 
 ## Intervention
 

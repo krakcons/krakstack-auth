@@ -204,19 +204,25 @@ const scalarDocsConfig = {
       slug: "better-auth",
       url: "/api/auth/open-api/generate-schema",
     },
+    {
+      title: "Trusted Backend API",
+      slug: "backend-api",
+      url: "/api/backend-openapi.json",
+    },
   ],
 };
 
 const docsHtml = `<!doctype html>
-<html>
+<html lang="en">
   <head>
     <title>KrakStack Auth API Docs</title>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="description" content="Generated OpenAPI reference for Krakstack Auth, Better Auth, and trusted backend endpoints." />
   </head>
   <body>
     <div id="app"></div>
-    <script src="https://cdn.jsdelivr.net/npm/@scalar/api-reference"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@scalar/api-reference@1.63.0"></script>
     <script>
       Scalar.createApiReference('#app', ${JSON.stringify(scalarDocsConfig)})
     </script>

@@ -1,0 +1,55 @@
+---
+slug: sdk
+path: /docs/sdk
+title: SDK et exports du paquet
+description: Choisissez le bon point d'entrée pour les composants, middleware serveur, schémas, API et autorisations de projet.
+icon: lucide:code-2
+order: 30
+locale: fr
+section: backend
+type: reference
+---
+
+# SDK et exports du paquet
+
+`@krak-stack/auth` publie des points d'entrée distincts pour l'interface navigateur, les services Effect, contrats API, schémas et autorisations. Importez le point le plus étroit correspondant à la frontière d'exécution.
+
+## Carte des exports
+
+| Point d'entrée                   | Usage                                                                                         |
+| -------------------------------- | --------------------------------------------------------------------------------------------- |
+| `@krak-stack/auth/components`    | Fournisseur, formulaires auth, contrôles de compte et organisation et aides d'autorisation UI |
+| `@krak-stack/auth/server`        | Proxy, `AuthMiddleware`, `AuthService`, `ActorRequired`, acteurs et politiques                |
+| `@krak-stack/auth/access`        | Catalogues d'accès typés et construction des politiques                                       |
+| `@krak-stack/auth/access/matrix` | Tableau de référence des autorisations généré                                                 |
+| `@krak-stack/auth/api`           | Contrats Effect HttpApi combinés                                                              |
+| `@krak-stack/auth/schema`        | Schémas partagés des utilisateurs, organisations, sessions, projets et clés API               |
+| `@krak-stack/auth/query`         | Aides de requête pour les clients Effect Atom                                                 |
+| `@krak-stack/auth/admin`         | Contrat de l'API administrative                                                               |
+| `@krak-stack/auth/extra`         | Contrat de l'API navigateur supplémentaire                                                    |
+| `@krak-stack/auth/better-auth`   | Contrat Better Auth                                                                           |
+| `@krak-stack/auth/tailwind.css`  | Détection Tailwind des classes des composants                                                 |
+
+La racine réexporte plusieurs API, mais pas toutes. Importez `useKrakstackAuth`, `useKrakstackAuthProjectConfig`, `usePermissions`, `HasPermission` et `useHasPermission` depuis `@krak-stack/auth/components` jusqu'à l'unification des exports racine.
+
+## Configuration serveur
+
+`AuthClientConfig` résout l'URL depuis une option explicite, puis `KRAKSTACK_AUTH_URL` et enfin `VITE_KRAKSTACK_AUTH_URL`. Le code serveur devrait préférer `KRAKSTACK_AUTH_URL`. L'identifiant de confiance provient d'une valeur masquée explicite ou de `KRAKSTACK_AUTH_SERVICE_API_KEY`.
+
+```ts
+import { AuthClientConfig, AuthService } from "@krak-stack/auth/server";
+import { Effect } from "effect";
+
+const currentSession = Effect.gen(function* () {
+  const auth = yield* AuthService;
+  return yield* auth.getSession();
+}).pipe(Effect.provide(AuthClientConfig.layer()));
+```
+
+Utilisez le [middleware API](/docs/middleware) pour transférer la session de la requête plutôt que de construire manuellement les en-têtes.
+
+## État de la distribution des composants
+
+Le paquet React produit importe encore des alias UI Krakstack/shadcn et plusieurs paquets d'exécution depuis l'application consommatrice. Validez le paquet assemblé dans l'application cible et suivez [Composants React et CSS](/docs/components). Les sous-chemins serveur possèdent une frontière plus petite et explicite.
+
+La référence des opérations HTTP est disponible dans la [référence API](/docs/api-reference).

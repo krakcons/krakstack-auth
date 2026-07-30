@@ -1,18 +1,31 @@
 ---
 slug: introduction
 path: /docs
-title: Introduction
+title: Documentation Krakstack Auth
 description: Authentification centrale, organisations et infrastructure d'identité pour toutes les applications de votre pile.
-icon: book
+icon: lucide:book-open
 order: 1
 locale: fr
+section: start
+type: concept
 ---
 
-# Introduction
+# Documentation Krakstack Auth
 
 Krakstack Auth est un service d'identité central basé sur Better Auth. Il gère les identifiants, les sessions, les clients OAuth, les organisations, les clés API, l'authentification à deux facteurs et les métadonnées OpenID Connect. Vos applications consomment une identité commune plutôt que d'implémenter chacune leur propre système.
 
-> Krakstack Auth est actuellement un logiciel exclusivement auto-hébergé. `auth.krakstack.net` héberge cette documentation et l'instance du mainteneur; il ne s'agit pas d'un service d'authentification géré pour plusieurs clients. Déployez l'image GHCR publiée avec votre propre base PostgreSQL.
+> Krakstack Auth est actuellement un logiciel exclusivement auto-hébergé. `auth.krakstack.net` héberge cette documentation et l'instance du mainteneur; il ne s'agit pas d'un service géré. L'image publiée actuelle contient les valeurs de compilation de l'instance officielle; tout autre opérateur doit examiner les limites de configuration avant le déploiement.
+
+## Commencer par une tâche
+
+| Objectif                                      | Point de départ                                                                |
+| --------------------------------------------- | ------------------------------------------------------------------------------ |
+| Connecter une application Web interne         | [Démarrage rapide](/docs/quickstart)                                           |
+| Choisir proxy, OAuth ou un hôte personnalisé  | [Méthodes de configuration](/docs/setup)                                       |
+| Comprendre les identités et frontières        | [Architecture](/docs/architecture)                                             |
+| Configurer le SDK et le backend               | [Exports du SDK](/docs/sdk) et [middleware API](/docs/middleware)              |
+| Gérer projets, organisations, clients et clés | [Administration](/docs/administration)                                         |
+| Déployer et exploiter le service              | [Auto-hébergement](/docs/self-hosting) et [configuration](/docs/configuration) |
 
 ## Fonctionnalités
 
@@ -42,8 +55,9 @@ N'exposez jamais `KRAKSTACK_AUTH_SERVICE_API_KEY` dans une variable `VITE_*` ou 
 
 ## Étapes suivantes
 
-1. Créez un projet dans l'administration et notez son identifiant.
-2. Choisissez l'une des trois méthodes de configuration.
-3. Ajoutez le fournisseur React et la source CSS si vous utilisez les composants.
-4. Enregistrez les origines, URI de redirection ou domaines de production.
-5. Consultez les listes de contrôle de sécurité et de déploiement.
+1. Confirmez la configuration du service auth et de sa frontière d'administration.
+2. Créez un projet si vous avez besoin d'une marque ou de méthodes de connexion partagées.
+3. Choisissez l'une des trois méthodes de configuration.
+4. Ajoutez le fournisseur React et la source CSS si vous utilisez les composants.
+5. Enregistrez les origines, URI de redirection ou domaines de production.
+6. Consultez les listes de contrôle de sécurité et de déploiement.

@@ -2,28 +2,37 @@
 slug: self-hosting
 path: /docs/self-hosting
 title: Auto-hébergement
-description: Exécutez l'image GHCR publiée avec PostgreSQL, une configuration sûre, les migrations automatiques et une exploitation durable.
-icon: server
-order: 11
+description: Construisez et exécutez Krakstack Auth avec PostgreSQL en tenant compte de la configuration de compilation et des dépendances actuelles.
+icon: lucide:server-cog
+order: 51
 locale: fr
+section: operations
+type: tutorial
 ---
 
 # Auto-hébergement
 
-Krakstack Auth publie une image OCI prête à l'emploi dans GitHub Container Registry. Utilisez cette image pour l'auto-hébergement plutôt que de cloner le dépôt ou de maintenir votre propre chaîne de compilation.
+Krakstack Auth est une application Bun avec PostgreSQL. Le déploiement actuel n'est pas encore un conteneur générique à configurer après téléchargement : les valeurs publiques Vite et l'ID de l'organisation d'administration sont intégrés aux ressources navigateur.
 
-## Image publiée
+## État de l'image publiée
+
+Le paquet GitHub Container Registry sert au déploiement officiel. Sa compilation reçoit les URL et l'ID d'organisation de l'instance officielle. Les variables `VITE_*` à l'exécution ne remplacent pas les valeurs déjà intégrées par Vite.
+
+N'utilisez pas `ghcr.io/krakcons/krakstack-auth:latest` comme service configuré pour une autre origine avant la disponibilité d'une image générique ou d'une configuration publique dynamique. Construisez une image propre au déploiement depuis une révision vérifiée.
+
+## Prérequis de compilation
+
+La route admin actuelle exige `VITE_KRAKSTACK_AUTH_ORGANIZATION_ID`. L'établissement de cette organisation dans une nouvelle base dépend actuellement du déploiement; aucun amorçage automatique du premier administrateur n'est fourni. Résolvez cette étape avant d'exposer le service.
+
+Construisez avec l'origine publique et l'organisation d'administration du déploiement :
 
 ```bash
-docker pull ghcr.io/krakcons/krakstack-auth:latest
+docker build \
+  --build-arg VITE_SITE_URL=https://auth.example.com \
+  --build-arg VITE_KRAKSTACK_AUTH_URL=https://auth.example.com \
+  --build-arg VITE_KRAKSTACK_AUTH_ORGANIZATION_ID=organization_id \
+  -t krakstack-auth:local .
 ```
-
-Le déploiement publie deux étiquettes après chaque compilation réussie de `main` :
-
-- `latest` suit la dernière compilation réussie.
-- Le SHA Git complet identifie une version immuable, par exemple `ghcr.io/krakcons/krakstack-auth:COMMIT_SHA`.
-
-Utilisez `latest` pour évaluer les mises à jour. En production, fixez le SHA complet afin qu'un redémarrage ne modifie pas silencieusement la version. Les étiquettes et condensats sont disponibles dans le [paquet GitHub](https://github.com/krakcons/krakstack-auth/pkgs/container/krakstack-auth). Le workflow actuel publie des images `linux/amd64`.
 
 ## Docker Compose
 
@@ -32,7 +41,7 @@ L'application écoute sur le port `3000`. Sa commande de démarrage applique les
 ```yaml
 services:
   auth:
-    image: ghcr.io/krakcons/krakstack-auth:latest
+    image: krakstack-auth:local
     restart: unless-stopped
     ports:
       - "3000:3000"
@@ -40,9 +49,10 @@ services:
       DATABASE_URL: postgres://krakstack:${POSTGRES_PASSWORD}@postgres:5432/krakstack_auth
       BETTER_AUTH_SECRET: ${BETTER_AUTH_SECRET}
       BETTER_AUTH_URL: https://auth.example.com
-      VITE_SITE_URL: https://auth.example.com
       BETTER_AUTH_TRUSTED_ORIGINS: https://auth.example.com,https://app.example.com
-      BETTER_AUTH_VALID_AUDIENCES: https://auth.example.com,https://app.example.com
+      S3_ACCESS_KEY_ID: ${S3_ACCESS_KEY_ID}
+      S3_SECRET_ACCESS_KEY: ${S3_SECRET_ACCESS_KEY}
+      S3_BUCKET: ${S3_BUCKET}
     depends_on:
       postgres:
         condition: service_healthy
@@ -66,50 +76,24 @@ volumes:
   postgres-data:
 ```
 
-Placez `POSTGRES_PASSWORD` et `BETTER_AUTH_SECRET` dans le coffre de secrets de votre plateforme ou dans un fichier Compose `.env` exclu du contrôle de version. Générez le secret avec `openssl rand -base64 32`.
+Générez `BETTER_AUTH_SECRET` avec `openssl rand -base64 32` et gardez les secrets hors du dépôt. La couche API actuelle exige la configuration S3. Les flux courriel de production exigent SES lorsqu'ils s'exécutent. Consultez la [configuration](/docs/configuration).
 
-## Environnement requis
-
-```env
-DATABASE_URL=postgres://user:password@db/krakstack_auth
-BETTER_AUTH_SECRET=long_secret_aleatoire
-BETTER_AUTH_URL=https://auth.example.com
-VITE_SITE_URL=https://auth.example.com
-BETTER_AUTH_TRUSTED_ORIGINS=https://auth.example.com,https://app.example.com
-BETTER_AUTH_VALID_AUDIENCES=https://auth.example.com,https://app.example.com
-```
-
-Ne réutilisez pas les secrets de base, OAuth ou clés API. `BETTER_AUTH_URL` représente l'émetteur HTTPS public stable et non l'adresse interne du conteneur.
-
-## Services facultatifs
-
-- `GOOGLE_CLIENT_ID` et `GOOGLE_CLIENT_SECRET` activent Google.
-- Les identifiants SES et `AUTH_EMAIL_FROM` servent à la vérification, la réinitialisation et le deuxième facteur.
-- `AUTH_CLOUDFLARE_ZONE_ID`, les identifiants Cloudflare et `AUTH_DOMAIN_CNAME_TARGET` activent les domaines gérés.
-- `BETTER_AUTH_ADDITIONAL_HOSTS` déclare des hôtes publics fixes supplémentaires.
-
-## Démarrer et mettre à jour
+## Démarrer et valider
 
 ```bash
 docker compose up -d
 docker compose logs -f auth
 ```
 
-Pour mettre à jour, choisissez un SHA testé dans le fichier Compose, téléchargez-le et recréez le service :
+Validez davantage que `/api/auth/ok` : testez une session utilisant la base, un flux courriel activé, une ressource, un rappel OAuth et l'administration. Le point `ok` vérifie uniquement la disponibilité.
 
-```bash
-docker compose pull auth
-docker compose up -d auth
-```
+## Liste de production
 
-Le conteneur applique les migrations au démarrage. Évitez de démarrer plusieurs nouveaux réplicas simultanément pendant une mise à jour; démarrez d'abord une seule instance pour terminer les migrations.
-
-## Production
-
-- Forcez HTTPS et sauvegardez PostgreSQL avec des tests de restauration.
-- Gardez l'origine auth stable, car les clients dépendent de l'émetteur.
-- Limitez l'administration et renouvelez les clés de service.
-- Configurez la délivrabilité des courriels.
-- Surveillez `/api/auth/ok` et la latence de la base.
-- Révisez les origines et URI OAuth après chaque changement de déploiement.
-- Notez le SHA déployé et conservez un SHA de retour arrière.
+- Forcez HTTPS.
+- Sauvegardez PostgreSQL et testez la restauration.
+- Gardez l'origine auth publique stable.
+- Limitez l'organisation d'administration et renouvelez les clés de service.
+- Configurez la délivrabilité SES et la durabilité S3.
+- Surveillez la base et les dépendances séparément de la disponibilité.
+- Révisez les origines et URI OAuth après les changements.
+- Suivez la [procédure de mise à jour et récupération](/docs/operations); une ancienne image peut être incompatible avec une base migrée.

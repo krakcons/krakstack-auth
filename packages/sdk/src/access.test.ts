@@ -87,16 +87,6 @@ describe("project access", () => {
     expect(actor.permissions.size).toBe(0);
   });
 
-  it("denies service key grants outside the service key catalog", () => {
-    const actor = Access.actorForApiKey({
-      apiKeyId: "service-key-1",
-      owner: { type: "service", serviceId: "service-1" },
-      grant: { "test-project": ["search:execute"] },
-    });
-
-    expect(actor.permissions.size).toBe(0);
-  });
-
   it("intersects user key grants with live role permissions", () => {
     expect(
       Array.from(

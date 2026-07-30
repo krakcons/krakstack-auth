@@ -39,6 +39,8 @@
     "@effect/platform": "^0.96.1",
     "@effect/platform-browser": "^4.0.0-beta.93",
     "@effect/sql-pg": "^4.0.0-beta.78",
+    "@iconify-json/lucide": "^1.2.83",
+    "@iconify/react": "^6.0.2",
     "@krak-stack/auth": "workspace:*",
     "@lucas-barake/effect-form": "0.25.0-beta.6",
     "@lucas-barake/effect-form-react": "0.26.0-beta.5",

@@ -98,25 +98,6 @@ const organizationKeySession = {
   },
 } satisfies AuthSession;
 
-const serviceKeySession = {
-  session: {
-    ...session,
-    id: "service-key-session",
-    token: "service-key-1",
-    userId: "api-key:service-key-1",
-    activeOrganizationId: null,
-  },
-  user: undefined,
-  isSuperAdminImpersonation: false,
-  authMethod: {
-    type: "apiKey",
-    apiKey: apiKey({
-      configId: "service",
-      permissions: { test: ["records:update"] },
-    }),
-  },
-} satisfies AuthSession;
-
 const Access = defineProjectAccess({
   project: "test",
   permissions: ["records:read", "records:update"],
@@ -127,7 +108,6 @@ const Access = defineProjectAccess({
   apiKeys: {
     user: ["records:read", "records:update"],
     organization: ["records:read", "records:update"],
-    service: ["records:update"],
   },
 });
 
@@ -227,34 +207,6 @@ describe("ActorRequired", () => {
       Effect.provideService(
         AuthService,
         authService(organizationKeySession) as never,
-      ),
-      provideRequestContext,
-    ),
-  );
-
-  it.effect("resolves a service key through its dedicated catalog", () =>
-    Effect.gen(function* () {
-      const middleware = yield* ActorRequired({
-        type: "apiKey",
-        ownerType: "service",
-      });
-
-      return yield* middleware(
-        Effect.gen(function* () {
-          const actor = yield* CurrentActor;
-          expect(actor.actor.type).toBe("apiKey");
-          expect(actor.organizationId).toBeNull();
-          expect(actor.permissions.has("test:records:read")).toBe(false);
-          expect(actor.permissions.has("test:records:update")).toBe(true);
-          return HttpServerResponse.empty();
-        }),
-        middlewareOptions,
-      );
-    }).pipe(
-      Effect.provide(ActorRequired.layer(Access)),
-      Effect.provideService(
-        AuthService,
-        authService(serviceKeySession) as never,
       ),
       provideRequestContext,
     ),

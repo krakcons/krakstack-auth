@@ -1,0 +1,53 @@
+---
+slug: operations
+path: /docs/operations
+title: Procédure de mise à jour et récupération
+description: Sauvegardez PostgreSQL, appliquez les migrations prudemment, validez la version et récupérez sans supposer une rétrogradation du schéma.
+icon: lucide:wrench
+order: 52
+locale: fr
+section: operations
+type: runbook
+---
+
+# Procédure de mise à jour et récupération
+
+Utilisez cette procédure avant de changer l'image ou la compilation déployée. La commande de production applique les migrations Drizzle avant le démarrage du serveur. Un échec de migration empêche le démarrage.
+
+## Conditions préalables
+
+- Notez le condensat de l'image ou le commit actuel.
+- Sauvegardez PostgreSQL et vérifiez la restauration dans une base isolée.
+- Examinez les migrations en attente et leurs opérations destructrices ou longues.
+- Conservez l'artefact précédent sans supposer sa compatibilité avec un schéma migré.
+- Empêchez plusieurs nouvelles répliques d'appliquer les migrations en concurrence.
+
+## Procédure de mise à jour
+
+1. Arrêtez l'automatisation du déploiement et gardez le service actuel disponible.
+2. Créez et vérifiez une sauvegarde de la base.
+3. Démarrez une seule nouvelle instance pour exécuter les migrations une fois.
+4. Examinez les journaux de migration et configuration.
+5. Vérifiez `/api/auth/ok`, puis une session utilisant la base et un flux activé de courriel, stockage et OAuth.
+6. Ajoutez les autres répliques après validation.
+7. Notez l'artefact déployé et l'état des migrations.
+
+`/api/auth/ok` valide uniquement la disponibilité de l'API. Il n'interroge pas PostgreSQL, SES, S3 ou Cloudflare.
+
+## Réponse à un échec
+
+Si la migration échoue avant sa fin, conservez le trafic sur l'ancien service et examinez son état avant de réessayer. Si l'application échoue après une migration réussie, restaurer l'ancienne image peut être dangereux car aucun mécanisme de rétrogradation du schéma n'est fourni.
+
+Choisissez une récupération selon la migration :
+
+- Déployer un correctif vers l'avant compatible avec le nouveau schéma.
+- Restaurer la sauvegarde vérifiée et l'artefact précédent.
+- Appliquer une migration corrective révisée.
+
+N'effectuez jamais une rétrogradation manuelle non testée du schéma de production.
+
+## Exploitation courante
+
+Surveillez les échecs auth, erreurs de rappel, refus de clés API, durée des migrations, latence de la base, livraison du courriel, opérations de ressources et modifications administratives. Conservez le contexte d'audit sans enregistrer les secrets.
+
+Consultez la [configuration](/docs/configuration), la [sécurité](/docs/security) et le [dépannage](/docs/troubleshooting).

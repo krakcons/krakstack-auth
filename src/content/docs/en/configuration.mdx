@@ -1,0 +1,56 @@
+---
+slug: configuration
+path: /docs/configuration
+title: Configuration reference
+description: Separate build-time public values, required runtime secrets, and feature-specific service configuration.
+icon: lucide:settings
+order: 50
+locale: en
+section: operations
+type: reference
+---
+
+# Configuration reference
+
+Krakstack Auth currently mixes Vite build-time values with server runtime configuration. Treat these categories differently: changing a `VITE_*` value after the client bundle is built does not update browser code.
+
+## Build-time public values
+
+| Variable                              | Purpose                                                    |
+| ------------------------------------- | ---------------------------------------------------------- |
+| `VITE_SITE_URL`                       | Public application origin compiled into browser assets     |
+| `VITE_KRAKSTACK_AUTH_URL`             | Browser auth origin when direct central access is required |
+| `VITE_KRAKSTACK_AUTH_ORGANIZATION_ID` | Organization that gates the admin route                    |
+| `VITE_ANALYTICS_WEBSITE_ID`           | Optional analytics site ID                                 |
+
+The official production workflow supplies official-instance values. The published image is therefore not currently demonstrated to be a generic runtime-configurable artifact. Build a deployment-specific image until runtime public configuration or a generic image pipeline is available.
+
+## Core runtime values
+
+| Variable                       | Requirement                                                                 |
+| ------------------------------ | --------------------------------------------------------------------------- |
+| `DATABASE_URL`                 | Required PostgreSQL connection string                                       |
+| `BETTER_AUTH_SECRET`           | Required stable high-entropy auth secret                                    |
+| `BETTER_AUTH_URL`              | Stable public HTTPS auth origin; defaults to localhost only for development |
+| `BETTER_AUTH_TRUSTED_ORIGINS`  | Comma-separated exact browser origins                                       |
+| `BETTER_AUTH_VALID_AUDIENCES`  | Optional accepted OAuth audiences                                           |
+| `BETTER_AUTH_ADDITIONAL_HOSTS` | Optional fixed public hosts                                                 |
+| `PORT`                         | Server port; defaults to `3000`                                             |
+
+## Storage
+
+The current API layer provides `S3Service` unconditionally. Configure `S3_ACCESS_KEY_ID`, `S3_SECRET_ACCESS_KEY`, and `S3_BUCKET`. Optional values are `S3_REGION`, `S3_ENDPOINT`, and `S3_SESSION_TOKEN`. Verify startup and asset operations against the selected S3-compatible provider.
+
+## Email and social sign-in
+
+Production email delivery uses SES when an email flow runs. Configure `SES_REGION`, `SES_ACCESS_KEY_ID`, and `SES_SECRET_ACCESS_KEY`. Set `AUTH_EMAIL_FROM` or `NOTIFICATION_EMAIL_FROM`; `AUTH_EMAIL_NAME` changes the display name.
+
+Set both `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET` to make Google sign-in available. A project toggle alone cannot enable an unconfigured provider.
+
+## Managed domains
+
+Use `AUTH_CLOUDFLARE_ZONE_ID` or `CLOUDFLARE_ZONE_ID` plus either `CLOUDFLARE_API_TOKEN` or the API-key/email credential pair. `AUTH_DOMAIN_CNAME_TARGET` overrides the generated CNAME target.
+
+## Telemetry
+
+Set `OTEL_SERVICE_NAME` and `OTEL_EXPORTER_OTLP_ENDPOINT` for OTLP export. `OTEL_TRACES_EXPORTER` can include `console` during diagnosis. Never include credentials, cookies, tokens, email codes, or raw API keys in telemetry.

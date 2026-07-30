@@ -1,0 +1,53 @@
+---
+slug: operations
+path: /docs/operations
+title: Upgrade and recovery runbook
+description: Back up PostgreSQL, apply migrations safely, validate a release, and recover without assuming schema downgrade support.
+icon: lucide:wrench
+order: 52
+locale: en
+section: operations
+type: runbook
+---
+
+# Upgrade and recovery runbook
+
+Use this runbook before changing the deployed image or application build. The production start command applies Drizzle migrations before starting the server. A migration failure prevents startup.
+
+## Preconditions
+
+- Record the current image digest or source commit.
+- Back up PostgreSQL and verify that the backup can be restored to an isolated database.
+- Review pending migrations and identify destructive or long-running operations.
+- Keep the previous application artifact, but do not assume it can run against a forward-migrated schema.
+- Prevent multiple new replicas from racing to apply migrations.
+
+## Upgrade procedure
+
+1. Stop rollout automation and leave the current service available.
+2. Create and verify a database backup.
+3. Start one new instance against the intended database so migrations run once.
+4. Check startup logs for migration and configuration failures.
+5. Verify `/api/auth/ok`, then perform a database-backed session lookup and one enabled email, storage, and OAuth flow.
+6. Add remaining replicas only after validation.
+7. Record the deployed artifact and migration state.
+
+`/api/auth/ok` proves API liveness only. It does not query PostgreSQL, SES, S3, or Cloudflare and must not be the only readiness signal.
+
+## Failure response
+
+If migration fails before completion, keep traffic on the old service and inspect the database migration state before retrying. If the new application fails after migrations succeed, restoring the old image may be unsafe because this repository provides no schema downgrade command.
+
+Choose one recovery path based on the migration:
+
+- Deploy a forward fix compatible with the migrated schema.
+- Restore the verified pre-upgrade database backup and the previous application artifact.
+- Apply a reviewed corrective database migration.
+
+Never perform an untested manual schema rollback on the production database.
+
+## Routine operations
+
+Monitor authentication failures, callback errors, API-key rejections, migration duration, database latency, email delivery, asset operations, and administrative changes. Keep audit context sufficient for investigation without logging credentials or token material.
+
+See [configuration](/docs/configuration), [security](/docs/security), and [troubleshooting](/docs/troubleshooting).

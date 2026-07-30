@@ -1,86 +1,66 @@
 # @krak-stack/auth
 
-Effect schemas and typed HttpApi clients for KrakStack Auth.
+Typed Effect contracts, server authentication middleware, project authorization primitives, and React authentication components for Krakstack Auth.
 
 ## Install
 
-```sh
+```bash
 bun add @krak-stack/auth effect
 ```
 
-## Environment
+Choose a narrow package subpath for the runtime boundary:
 
-- `VITE_KRAKSTACK_AUTH_URL` - KrakStack Auth origin
-- `KRAKSTACK_AUTH_SERVICE_API_KEY` - service API key for server clients
+| Entry point                      | Purpose                                                               |
+| -------------------------------- | --------------------------------------------------------------------- |
+| `@krak-stack/auth/server`        | Proxy, `AuthMiddleware`, `AuthService`, `ActorRequired`, and policies |
+| `@krak-stack/auth/components`    | React provider, forms, account controls, and UI permission helpers    |
+| `@krak-stack/auth/access`        | Typed project access definitions                                      |
+| `@krak-stack/auth/access/matrix` | Generated permission matrix                                           |
+| `@krak-stack/auth/api`           | Combined Effect HttpApi contracts                                     |
+| `@krak-stack/auth/schema`        | Shared schemas                                                        |
+| `@krak-stack/auth/admin`         | Administrative API contract                                           |
+| `@krak-stack/auth/extra`         | Browser-facing extra API contract                                     |
 
-## Auth Client
+The complete export map is defined in `package.json` and documented at [auth.krakstack.net/en/docs/sdk](https://auth.krakstack.net/en/docs/sdk).
 
-Better Auth:
+## Server Configuration
 
-- `getSession({ payload: {} })` - returns the current Better Auth session and user.
+Server clients use:
 
-Users:
+```env
+KRAKSTACK_AUTH_URL=https://auth.example.com
+KRAKSTACK_AUTH_SERVICE_API_KEY=server_only_secret
+```
 
-- `server.listUsersByIds({ query: { ids } })` - returns matching users and missing IDs for a comma-separated ID list.
-- `server.getUser({ params: { id } })` - returns one user by ID.
-
-Organizations:
-
-- `server.listOrganizations({ query: { ids } })` - returns matching organizations and missing IDs for a comma-separated ID list.
-- `server.listOrganizations({ query: { userId } })` - returns organizations for one user.
-- `server.getOrganization({ params: { id } })` - returns one organization by ID.
-- `server.getUserActiveOrganization({ params: { userId } })` - returns the active organization ID for one user.
-- `extra.presign({ payload })` - returns a presigned organization logo upload URL.
-
-Members:
-
-- `server.getActiveMember({ params: { organizationId, userId } })` - returns one user's membership and role in an organization.
-- `server.listOrganizationMembers({ params: { organizationId } })` - returns organization members with user contact details.
+`AuthClientConfig` accepts explicit `baseUrl` and redacted `apiKey` overrides. Never expose the service key through a `VITE_*` variable.
 
 ```ts
+import { AuthService } from "@krak-stack/auth/server";
 import { Effect } from "effect";
-import { AuthClient } from "@krak-stack/auth";
 
-const users = await Effect.runPromise(
-  Effect.gen(function* () {
-    const auth = yield* AuthClient;
-    return yield* auth.server.listUsersByIds({
-      query: { ids: "user_1,user_2" },
-    });
-  }).pipe(Effect.provide(AuthClient.layer)),
-);
-
-const organizations = await Effect.runPromise(
-  Effect.gen(function* () {
-    const auth = yield* AuthClient;
-    return yield* auth.server.listOrganizations({
-      query: { userId: "user_1" },
-    });
-  }).pipe(Effect.provide(AuthClient.layer)),
-);
+const program = Effect.gen(function* () {
+  const auth = yield* AuthService;
+  return yield* auth.requireUserOrganization();
+});
 ```
 
-The extra subpath also exports `ExtraApiClient` for Atom-based browser state.
+Use `AuthMiddleware.layer()` to provide request headers and configuration in an Effect HttpApi application. See the [middleware guide](https://auth.krakstack.net/en/docs/middleware).
 
-## Components
+## React Components
 
-```tsx
-import { OrganizationSwitcher, UserButton } from "@krak-stack/auth";
-import { DropdownMenuItem } from "@/components/ui/dropdown-menu";
+The current emitted component bundle expects Krakstack/shadcn UI aliases and additional consumer runtime packages. Validate the packed package in the target application before adopting the UI surface. The server-only entry points have a smaller integration boundary.
 
-<OrganizationSwitcher
-  allowedOrganizationIds={["organization-id"]}
-  features={{
-    organizationCreation: false,
-    organizationSwitching: false,
-    userInvitations: false,
-  }}
-  menuActions={
-    <DropdownMenuItem render={<a href="/organization" />}>
-      Dashboard
-    </DropdownMenuItem>
-  }
-  side="bottom"
-/>
-<UserButton signOutRedirect="/" side="bottom" />
+When components are configured, register their Tailwind source:
+
+```css
+@import "tailwindcss";
+@import "@krak-stack/auth/tailwind.css";
 ```
+
+See [React components and CSS](https://auth.krakstack.net/en/docs/components) for the provider and component requirements.
+
+## Authorization
+
+Define project permissions with `defineProjectAccess`, resolve actors with `ActorRequired`, and enforce backend policies with `withPolicy`. Frontend permission helpers control presentation only.
+
+See the [RBAC guide](https://auth.krakstack.net/en/docs/rbac).

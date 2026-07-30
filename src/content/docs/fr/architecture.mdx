@@ -1,0 +1,53 @@
+---
+slug: architecture
+path: /docs/architecture
+title: Architecture et frontières de confiance
+description: Comprenez les identités, projets, organisations, identifiants et frontières de requête de Krakstack Auth.
+icon: lucide:network
+order: 4
+locale: fr
+section: start
+type: concept
+---
+
+# Architecture et frontières de confiance
+
+Krakstack Auth centralise les identifiants et sessions. Les applications consommatrices restent responsables de l'autorisation de leurs ressources et de l'isolation des données par locataire.
+
+## Chemins des requêtes
+
+```text
+Navigateur ── /api/auth/* même origine ── Proxy applicatif ── Krakstack Auth
+Navigateur ── redirection d'autorisation ──────────────────── Krakstack Auth
+Backend ── identifiant de service ─────────────────────────── Krakstack Auth API
+```
+
+Le proxy est recommandé pour les applications Web internes. OAuth/OIDC fournit une frontière standard aux clients Web confidentiels exploités séparément. Un hôte auth personnalisé modifie la marque et le routage sans supprimer la validation des retours, origines et autorisations.
+
+## Entités principales
+
+| Entité       | Responsabilité                                                                                |
+| ------------ | --------------------------------------------------------------------------------------------- |
+| Utilisateur  | Identité humaine, identifiants, vérification, sessions et deuxième facteur                    |
+| Organisation | Adhésions, rôles, invitations, hiérarchie et contexte de locataire actif                      |
+| Projet       | Marque, CSS du thème, méthodes de connexion et connexions aux utilisateurs ou organisations   |
+| Client OAuth | Client Web confidentiel, URI de redirection, portées et secret généré                         |
+| Domaine      | Hôte auth, hôte racine approuvé, projet ou organisation facultatif et état DNS                |
+| Clé API      | Identifiant utilisateur, organisation ou service avec propriétaire et limites propres au type |
+
+Un projet est recommandé pour partager la marque et les méthodes de connexion, mais toutes les opérations de protocole ne l'exigent pas. La configuration publique se résout d'abord par ID de projet explicite, puis par domaine, client OAuth lié et enfin valeurs de la plateforme.
+
+## L'identité n'est pas l'autorisation
+
+Une session ou une clé API valide établit un acteur sans autoriser automatiquement les dossiers de l'application. Les gestionnaires backend doivent appliquer les autorisations et inclure l'organisation ou l'utilisateur de l'acteur dans les prédicats de base de données.
+
+`AuthMiddleware` fournit l'identité de session. `ActorRequired` résout l'acteur du projet. Les politiques du projet déterminent ses actions. Les services métier appliquent encore les règles de locataire, propriété, cycle de vie et attributs.
+
+## Frontières des identifiants
+
+- Les témoins navigateur restent HttpOnly et devraient demeurer sur l'origine consommatrice grâce au proxy.
+- Les secrets OAuth, clés de service, identifiants de base de données et `BETTER_AUTH_SECRET` restent côté serveur.
+- Les autorisations des clés utilisateur et organisation sont des plafonds et droits explicites, pas un accès automatique aux ressources.
+- Les clés de service autorisent les points de terminaison de confiance du service d'identité. Elles ne sont pas des acteurs RBAC de projet dans le modèle SDK actuel.
+
+Consultez le [middleware API](/docs/middleware), le [RBAC](/docs/rbac) et la [sécurité](/docs/security) avant d'exposer des données protégées.

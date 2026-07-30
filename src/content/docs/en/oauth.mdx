@@ -3,9 +3,11 @@ slug: oauth
 path: /docs/oauth
 title: OAuth and OIDC
 description: Integrate through authorization code flow, PKCE, standard discovery, scopes, and secure token handling.
-icon: key
-order: 4
+icon: lucide:key-round
+order: 11
 locale: en
+section: integration
+type: how-to
 ---
 
 # OAuth and OIDC
@@ -19,20 +21,20 @@ In **Admin > Clients**, create a client and configure:
 - A recognizable display name
 - Exact redirect URIs, including scheme, hostname, path, and port
 - The minimum scopes required: `openid`, `profile`, `email`, and optionally `offline_access`
-- A linked project for branding and enabled authentication options
-- Consent behavior appropriate to whether the client is first-party
+- An optional linked project for branding and enabled authentication options
 
-Copy the client ID and secret immediately. The secret is shown once and belongs only in server-side secret storage. Public clients must use PKCE and must not ship a client secret.
+Copy the client ID and secret immediately. The secret is shown once and belongs only in server-side secret storage. Current admin-created clients are confidential Web clients using `client_secret_basic`; they also require PKCE. Public and native client registration is not currently exposed.
 
 ## Discovery
 
-Configure your OIDC library with the issuer URL and let it discover endpoints:
+Read the actual metadata before configuring a client:
 
 ```text
-Issuer: https://auth.example.com
-Discovery: https://auth.example.com/.well-known/openid-configuration
+Root OIDC metadata: https://auth.example.com/.well-known/openid-configuration
 OAuth metadata: https://auth.example.com/.well-known/oauth-authorization-server/api/auth
 ```
+
+Use the exact `issuer`, authorization endpoint, token endpoint, and JWKS URI returned by the service. Better Auth's effective issuer can include `/api/auth`; do not configure the bare origin unless the metadata reports it.
 
 ## Authorization flow
 

@@ -3,9 +3,11 @@ slug: oauth
 path: /docs/oauth
 title: OAuth et OIDC
 description: Intégrez le flux par code, PKCE, la découverte standard, les portées et une gestion sûre des jetons.
-icon: key
-order: 4
+icon: lucide:key-round
+order: 11
 locale: fr
+section: integration
+type: how-to
 ---
 
 # OAuth et OIDC
@@ -19,18 +21,18 @@ Dans **Administration > Clients**, configurez :
 - Un nom d'affichage reconnaissable
 - Des URI de redirection exactes, incluant protocole, hôte, chemin et port
 - Les portées minimales : `openid`, `profile`, `email` et éventuellement `offline_access`
-- Un projet lié pour la marque et les options de connexion
-- Un comportement de consentement adapté au statut interne ou tiers du client
+- Un projet lié facultatif pour la marque et les options de connexion
 
-Copiez immédiatement l'identifiant et le secret. Le secret n'est affiché qu'une fois et doit rester dans un coffre de secrets serveur. Les clients publics utilisent PKCE et ne distribuent jamais de secret.
+Copiez immédiatement l'identifiant et le secret. Le secret n'est affiché qu'une fois et reste dans un coffre serveur. Les clients créés actuellement sont des clients Web confidentiels utilisant `client_secret_basic` et PKCE obligatoire. Les clients publics et natifs ne sont pas exposés.
 
 ## Découverte
 
 ```text
-Émetteur : https://auth.example.com
-Découverte : https://auth.example.com/.well-known/openid-configuration
+Métadonnées OIDC racine : https://auth.example.com/.well-known/openid-configuration
 Métadonnées OAuth : https://auth.example.com/.well-known/oauth-authorization-server/api/auth
 ```
+
+Utilisez l'`issuer`, les points d'autorisation et de jeton et l'URI JWKS exacts retournés. L'émetteur Better Auth peut inclure `/api/auth`; ne configurez pas l'origine seule si les métadonnées indiquent autre chose.
 
 ## Flux d'autorisation
 
@@ -41,4 +43,10 @@ Métadonnées OAuth : https://auth.example.com/.well-known/oauth-authorization-s
 5. Échangez le code côté serveur et validez l'émetteur, l'audience, la signature, le nonce et l'expiration.
 6. Créez ou renouvelez la session de l'application.
 
-Les URI de production doivent utiliser HTTPS et une correspondance exacte. Conservez les jetons hors de `localStorage`; préférez une session serveur chiffrée ou des témoins HttpOnly.
+## Règles des URI de redirection
+
+Les URI de production utilisent HTTPS et une correspondance exacte. Enregistrez localhost séparément pour le développement et retirez les rappels inutilisés.
+
+## Jetons
+
+Conservez les jetons hors de `localStorage`; préférez une session serveur chiffrée ou des témoins HttpOnly. Demandez `offline_access` uniquement pour un accès en arrière-plan, renouvelez les jetons de renouvellement et révoquez les identifiants lors de la déconnexion du client.

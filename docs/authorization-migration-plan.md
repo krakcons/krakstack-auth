@@ -1,5 +1,7 @@
 # Cross-Project Authorization Migration
 
+> Status: In progress. The current SDK actor implementation no longer treats service keys as project RBAC principals. Where this plan conflicts with `packages/sdk/src/access.ts` or `packages/sdk/src/server/actor.ts`, the implementation and the public RBAC guide are authoritative. Update or archive this plan when the migration is complete.
+
 ## Goal
 
 Use one permission vocabulary for signed-in organization members and API keys

@@ -1,0 +1,48 @@
+---
+slug: api-reference
+path: /docs/api-reference
+title: Référence API
+description: Trouvez les contrats OpenAPI générés, opérations Better Auth, points de service de confiance et métadonnées de découverte.
+icon: lucide:file-json
+order: 60
+locale: fr
+section: reference
+type: reference
+---
+
+# Référence API
+
+Utilisez les contrats générés pour les méthodes, chemins, schémas et réponses exacts. Cette page explique le contrat à ouvrir et sa frontière d'authentification.
+
+## Explorateur interactif
+
+Ouvrez [l'explorateur API Scalar](/api/docs). Il contient actuellement :
+
+- `Auth API` depuis `/api/auth-openapi.json`, qui combine les contrats de service et d'administration
+- `Better Auth` depuis `/api/auth/open-api/generate-schema`
+- `Trusted Backend API` depuis `/api/backend-openapi.json`
+
+Le middleware d'exécution reste l'autorité si la sécurité générée est incomplète.
+
+## Frontières d'authentification
+
+| Frontière                                                   | Identifiant                                                       |
+| ----------------------------------------------------------- | ----------------------------------------------------------------- |
+| Routes navigateur `/api/auth/*`                             | Témoin de session et identifiants du flux Better Auth             |
+| Routes d'administration par témoin                          | Session d'administrateur de plateforme                            |
+| Routes utilisateurs, organisations et domaines de confiance | Clé de service par `Authorization: Bearer` ou `x-api-key`         |
+| API des applications consommatrices                         | Middleware de session ou clé et politiques du projet consommateur |
+
+La création de domaine de confiance utilise `POST /api/domains`. Ces points prennent en charge création, recherche par ID ou hôte, enregistrements DNS et suppression. Les mises à jour sont actuellement administratives.
+
+## Découverte et disponibilité
+
+Le service expose des routes well-known racine et les métadonnées Better Auth. Lisez le JSON retourné et configurez le client avec l'`issuer`, les points et l'URI JWKS exacts. Ne déduisez pas l'émetteur uniquement de l'origine publique, car le chemin de base Better Auth peut en faire partie.
+
+`GET /api/auth/ok` retourne la disponibilité de l'API. Il ne vérifie pas PostgreSQL ou les dépendances de service.
+
+## Sémantique des erreurs
+
+Utilisez `401 Unauthorized` quand l'authentification manque ou est invalide. Utilisez `403 Forbidden` lorsqu'un acteur connu n'a pas l'autorisation. Les erreurs de validation décrivent les chemins, requêtes ou charges mal formés. Les services consommateurs devraient conserver ces distinctions et les erreurs Effect typées.
+
+Consultez les [exports du SDK](/docs/sdk), le [middleware API](/docs/middleware) et le [RBAC](/docs/rbac).

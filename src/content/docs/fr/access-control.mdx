@@ -1,20 +1,25 @@
 ---
-slug: access-control
-path: /docs/access-control
-title: Contrôle d’accès
-description: Définissez les autorisations de projet, résolvez les rôles et les droits des clés API, et comprenez les valeurs par défaut de Better Auth utilisées par Krakstack Auth.
-icon: shield
-order: 9
+slug: rbac
+path: /docs/rbac
+title: RBAC
+description: Définissez les rôles et autorisations du projet, appliquez les politiques et publiez une matrice issue du même catalogue typé.
+icon: lucide:shield-check
+order: 32
 locale: fr
+section: backend
+type: reference
+legacySlugs: [access-control]
 ---
 
-# Contrôle d’accès
+# RBAC
 
-Krakstack Auth sépare l’authentification de l’autorisation applicative. Better Auth contrôle l’administration globale et la gestion des organisations. Chaque application consommatrice définit ses propres autorisations de projet avec `defineProjectAccess` et les applique côté serveur.
+RBAC signifie **contrôle d’accès basé sur les rôles** (_role-based access control_). Ce modèle autorise des actions en attribuant des autorisations aux rôles, puis ces rôles aux utilisateurs. Krakstack Auth sépare cette autorisation applicative de l’authentification : Better Auth établit l’identité et gère les organisations, tandis que chaque application définit et applique son propre RBAC de projet.
 
-## Accès au projet
+Le catalogue RBAC indique si le rôle ou le droit de clé API d’un acteur permet une action. Il ne remplace pas l’isolation des locataires, les contrôles de propriété, les règles d’archivage ou les autres politiques basées sur les attributs.
 
-Déclarez un espace de noms de projet, son catalogue complet d’actions, les droits des rôles et les actions maximales attribuables à chaque type de clé API :
+## Définir le catalogue
+
+Créez un module partagé pour le catalogue d’actions du projet, les droits des rôles et les actions maximales attribuables aux clés API. Les clés de service sont des identifiants d’infrastructure internes et ne sont volontairement pas des acteurs RBAC de projet.
 
 ```ts
 import { defineProjectAccess } from "@krak-stack/auth/access";
@@ -31,30 +36,152 @@ export const Access = defineProjectAccess({
   apiKeys: {
     user: ["records:read", "search:execute"],
     organization: ["search:execute"],
-    service: ["records:read", "records:update", "search:execute"],
   },
 });
 ```
 
-Le nom du projet qualifie chaque autorisation. Ainsi, `records:read` devient `example:records:read` dans l’acteur courant. Les rôles et actions inconnus, ainsi que les droits d’autres projets, sont ignorés.
+Le nom du projet crée l’espace de noms de chaque autorisation. Ainsi, `records:read` devient `example:records:read` dans `CurrentActor`. Les rôles et actions inconnus, ainsi que les droits d’autres projets, sont ignorés.
 
-La matrice ci-dessous est générée à partir de cette même définition `Access`. Les projets consommateurs utilisent ce modèle pour maintenir leur référence publiée en phase avec le code.
+## Utiliser les fonctions
 
-## Autorisation effective
+`defineProjectAccess` retourne des fonctions typées pour les opérations d’autorisation courantes :
 
-Les autorisations des rôles s’additionnent lorsqu’un utilisateur possède plusieurs rôles. Les clés API utilisent toujours des intersections de moindre privilège :
+```ts
+Access.qualify("records:update"); // "example:records:update"
+Access.permissionsForRoles(["member", "support"]);
+
+const grant = Access.encodeGrant(["records:read", "search:execute"]);
+Access.permissionsForUserKey({ roles: ["member"], grant });
+
+const decoded = Access.decodeGrant(input); // Effect<ReadonlySet<...>, SchemaError>
+```
+
+Les autorisations des rôles s’additionnent lorsqu’un utilisateur possède plusieurs rôles. Les clés API utilisent des intersections de moindre privilège :
 
 - **Clé utilisateur :** autorisations actuelles des rôles ∩ catalogue des clés utilisateur ∩ droit explicite de la clé.
 - **Clé d’organisation :** catalogue des clés d’organisation ∩ droit explicite de la clé.
-- **Clé de service :** catalogue des clés de service ∩ droit explicite de la clé.
 
-Un catalogue de clés API constitue un plafond et non un droit automatique. Les contrôles de locataire, les règles de propriété, les politiques de ressource, les règles d’archivage et les autres politiques basées sur les attributs peuvent toujours refuser une action indiquée comme disponible.
+Le catalogue `apiKeys` constitue un plafond et non un droit automatique. `encodeGrant` ne contourne pas ce plafond lors de la résolution de la clé.
 
-Utilisez `Access.permission("records:update")` ou composez-la avec `all`, `any` et `withPolicy` sur le serveur. Les utilitaires clients comme `useHasPermission` peuvent masquer les contrôles indisponibles, mais les vérifications frontend ne constituent jamais une frontière d’autorisation.
+## Ajouter le middleware d’acteur
+
+`ActorRequired` authentifie la requête, résout les rôles actuels ou les droits de clé API avec `Access`, puis fournit `CurrentActor` au gestionnaire :
+
+```ts
+import { ActorRequired } from "@krak-stack/auth/server";
+import { HttpApiEndpoint, HttpApiGroup } from "effect/unstable/httpapi";
+
+export const RecordsApi = HttpApiGroup.make("records").add(
+  HttpApiEndpoint.patch("updateRecord", "/records/:id").middleware(
+    ActorRequired(),
+  ),
+);
+```
+
+Ajoutez une contrainte seulement si l’endpoint doit refuser certains acteurs de projet pourtant valides :
+
+```ts
+ActorRequired({ type: "user" });
+ActorRequired({ type: "apiKey", ownerType: "user" });
+ActorRequired({ type: "apiKey", ownerType: "organization" });
+```
+
+```ts
+import { ActorRequired, AuthMiddleware } from "@krak-stack/auth/server";
+import { Layer } from "effect";
+import { HttpApiBuilder } from "effect/unstable/httpapi";
+
+export const ApiLive = HttpApiBuilder.layer(AppApi).pipe(
+  Layer.provide(ActorRequired.layer(Access)),
+  Layer.provide(AuthMiddleware.layer()),
+);
+```
+
+## Appliquer les autorisations
+
+Les contrôles appartiennent aux gestionnaires backend ou aux services métier. `Access.permission` échoue avec l’erreur typée `Forbidden` avant l’exécution du traitement protégé :
+
+```ts
+import { CurrentActor, withPolicy } from "@krak-stack/auth/server";
+import { Effect } from "effect";
+
+export const updateRecord = (id: string) =>
+  Effect.gen(function* () {
+    const actor = yield* CurrentActor;
+    return yield* Records.update({
+      id,
+      organizationId: actor.organizationId,
+    });
+  }).pipe(withPolicy(Access.permission("records:update")));
+```
+
+Composez les exigences avec `all` et `any`. Utilisez `policy` pour les règles contextuelles que le RBAC seul ne peut pas exprimer :
+
+```ts
+import { all, any, policy, withPolicy } from "@krak-stack/auth/server";
+import { Effect } from "effect";
+
+const belongsToOrganization = (organizationId: string) =>
+  policy((actor) => Effect.succeed(actor.organizationId === organizationId));
+
+const canRead = any(
+  Access.permission("records:read"),
+  Access.permission("records:update"),
+);
+
+const readRecord = (organizationId: string) =>
+  Records.findByOrganization(organizationId).pipe(
+    withPolicy(all(canRead, belongsToOrganization(organizationId))),
+  );
+```
+
+Les utilitaires frontend peuvent masquer les contrôles indisponibles, mais ils ne constituent jamais une frontière d’autorisation.
+
+## Afficher la matrice
+
+`ProjectAccessMatrix` transforme la même valeur `Access` en référence des rôles et clés API. Vous évitez ainsi de maintenir manuellement une deuxième table qui pourrait devenir obsolète.
+
+Définissez d’abord les libellés avec `defineProjectAccessLabels`. Leur structure est vérifiée avec les ressources, actions et rôles de `Access` :
+
+```tsx
+import { defineProjectAccessLabels } from "@krak-stack/auth/access";
+
+export const AccessLabels = defineProjectAccessLabels(Access, {
+  project: "Exemple",
+  roles: {
+    owner: "Propriétaire",
+    admin: "Administrateur",
+    support: "Soutien",
+    member: "Membre",
+  },
+  permissions: {
+    records: {
+      label: "Dossiers",
+      actions: { read: "Consulter", update: "Modifier" },
+    },
+    search: {
+      label: "Recherche",
+      actions: { execute: "Exécuter" },
+    },
+  },
+});
+```
+
+Affichez ensuite le composant à l’emplacement de la référence :
+
+```tsx
+import { ProjectAccessMatrix } from "@krak-stack/auth/access/matrix";
+
+export const PermissionsReference = () => (
+  <ProjectAccessMatrix access={Access} labels={AccessLabels} locale="fr" />
+);
+```
+
+`labels` est facultatif; sans cette propriété, les identifiants deviennent des libellés simples. Utilisez `locale="fr"` pour les en-têtes français intégrés ou `messages` pour les remplacer. Dérivez les références publiées de la même valeur `Access` que les politiques plutôt que de maintenir un tableau séparé.
 
 ## Couches Better Auth
 
-Krakstack Auth utilise également les contrôles d’accès d’administration globale et d’organisation de Better Auth. Ces autorisations régissent les opérations d’identité et d’organisation; elles ne remplacent pas les autorisations de projet. Les références suivantes sont générées à partir des catalogues d’instructions et des définitions de rôles exportés par Better Auth.
+Krakstack Auth utilise également les contrôles d’accès d’administration globale et d’organisation de Better Auth. Ces autorisations régissent les opérations d’identité et d’organisation; elles ne remplacent pas les autorisations de projet. Utilisez les catalogues d’instructions et définitions de rôles exportés par Better Auth comme source des références publiées.
 
 La table effective des organisations inclut le rôle `support` de Krakstack Auth. Il correspond actuellement à l’accès `member` par défaut de Better Auth, tandis que les projets consommateurs peuvent attribuer des autorisations de projet distinctes aux utilisateurs du soutien.
 

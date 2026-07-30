@@ -3,9 +3,11 @@ slug: proxy
 path: /docs/proxy
 title: Configuration du proxy
 description: Intégrez la méthode recommandée de même origine avec un proxy serveur renforcé et le client React fourni.
-icon: network
-order: 3
+icon: lucide:network
+order: 10
 locale: fr
+section: integration
+type: how-to
 ---
 
 # Configuration du proxy
@@ -27,10 +29,12 @@ export const Route = createFileRoute("/api/auth/$")({
   server: {
     handlers: {
       GET: ({ request }) => proxyAuth(request),
+      HEAD: ({ request }) => proxyAuth(request),
       POST: ({ request }) => proxyAuth(request),
       PUT: ({ request }) => proxyAuth(request),
       PATCH: ({ request }) => proxyAuth(request),
       DELETE: ({ request }) => proxyAuth(request),
+      OPTIONS: ({ request }) => proxyAuth(request),
     },
   },
 });
@@ -64,7 +68,9 @@ export const authClient = createAuthUiClient(appOrigin);
 </KrakstackAuthProvider>
 ```
 
-Ajoutez chaque origine d'application à `BETTER_AUTH_TRUSTED_ORIGINS` et `BETTER_AUTH_VALID_AUDIENCES`. Utilisez des origines HTTPS exactes en production.
+## Configurer le service central
+
+Ajoutez chaque origine d'application à `BETTER_AUTH_TRUSTED_ORIGINS`. Utilisez des origines HTTPS exactes en production. Ajoutez les audiences OAuth séparément lorsqu'elles sont requises.
 
 ## Vérifier
 
