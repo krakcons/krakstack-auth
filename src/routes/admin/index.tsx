@@ -124,6 +124,9 @@ const formatDay = (value: string) =>
     timeZone: "UTC",
   });
 
+const chartDomainMax = (dataMax: number) =>
+  Math.max(1, Math.ceil(dataMax * 1.1));
+
 function DashboardPage() {
   const [chartRange, setChartRange] = useState<ChartRange>("14");
   const { data: stats, isLoading, error } = useDashboardStats(chartRange);
@@ -269,6 +272,7 @@ function DashboardPage() {
                   />
                   <YAxis
                     allowDecimals={false}
+                    domain={[0, chartDomainMax]}
                     width={28}
                     tickLine={false}
                     axisLine={false}
@@ -319,6 +323,7 @@ function DashboardPage() {
                   />
                   <YAxis
                     allowDecimals={false}
+                    domain={[0, chartDomainMax]}
                     width={28}
                     tickLine={false}
                     axisLine={false}
@@ -369,6 +374,7 @@ function DashboardPage() {
                   />
                   <YAxis
                     allowDecimals={false}
+                    domain={[0, chartDomainMax]}
                     width={28}
                     tickLine={false}
                     axisLine={false}

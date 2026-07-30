@@ -387,8 +387,7 @@ export function Signin(props: AuthFormProps) {
               method: "password" | "emailOtp";
               otpSent: boolean;
             }
-          | { type: "sendEmailOtp" }
-          | { type: "social" },
+          | { type: "sendEmailOtp" },
         { decoded: value },
       ) =>
         Effect.tryPromise({
@@ -411,23 +410,6 @@ export function Signin(props: AuthFormProps) {
                 Date.now() + EMAIL_OTP_RESEND_COOLDOWN_SECONDS * 1000,
               );
             };
-
-            if (action.type === "social") {
-              const result = await authClient.signIn.social({
-                provider: "google",
-                callbackURL: socialRedirectTarget,
-                errorCallbackURL: "/sign-in",
-                ...(oauthQuery
-                  ? { additionalData: { query: oauthQuery } }
-                  : {}),
-                ...(oauthQuery ? { oauth_query: oauthQuery } : {}),
-              });
-              if (result.error) {
-                throw new Error(result.error.message ?? m.sign_in_error);
-              }
-              if (result.data?.url) onNavigate(result.data.url);
-              return;
-            }
 
             if (action.type === "sendEmailOtp") {
               await sendEmailOtp();
@@ -493,6 +475,29 @@ export function Signin(props: AuthFormProps) {
   );
   const submit = useAtomSet(form.submit);
   const submitResult = useAtomValue(form.submit);
+  const [socialSignIn] = useState(() =>
+    Atom.fn((provider: "google") =>
+      Effect.tryPromise({
+        try: async () => {
+          const result = await authClient.signIn.social({
+            provider,
+            callbackURL: socialRedirectTarget,
+            errorCallbackURL: "/sign-in",
+            ...(oauthQuery ? { additionalData: { query: oauthQuery } } : {}),
+            ...(oauthQuery ? { oauth_query: oauthQuery } : {}),
+          });
+          if (result.error) {
+            throw new Error(result.error.message ?? m.sign_in_error);
+          }
+          if (result.data?.url) onNavigate(result.data.url);
+        },
+        catch: (cause) =>
+          cause instanceof Error ? cause : new Error(m.sign_in_error),
+      }),
+    ),
+  );
+  const startSocialSignIn = useAtomSet(socialSignIn);
+  const socialSignInResult = useAtomValue(socialSignIn);
   const formValues = Option.getOrElse(useAtomValue(form.values), () => ({
     email: "",
     password: "",
@@ -533,7 +538,7 @@ export function Signin(props: AuthFormProps) {
     submit({ type: "sendEmailOtp" });
   };
 
-  const signInWithGoogle = () => submit({ type: "social" });
+  const signInWithGoogle = () => startSocialSignIn("google");
 
   return (
     <Card className="w-full max-w-md">
@@ -578,6 +583,11 @@ export function Signin(props: AuthFormProps) {
                   label={m.field_email}
                   type="email"
                   autoComplete="email"
+                  onKeyDown={(event) => {
+                    if (event.key !== "Enter") return;
+                    event.preventDefault();
+                    event.currentTarget.form?.requestSubmit();
+                  }}
                   required
                 />
               ) : null}
@@ -678,6 +688,7 @@ export function Signin(props: AuthFormProps) {
               <GoogleLogo />
               {m.auth_continue_with_google}
             </Button>
+            <SubmitError result={socialSignInResult} />
           </div>
         ) : null}
         {!hasPrimaryAuth && !options.google ? (
