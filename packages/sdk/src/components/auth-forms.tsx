@@ -749,22 +749,9 @@ export function Signup(props: AuthFormProps) {
     FormReact.make(signupFormBuilder, {
       fields: { name: TextField, email: TextField, password: TextField },
       mode: { validation: "onSubmit" },
-      onSubmit: (action: "email" | "social", { decoded: value }) =>
+      onSubmit: (_, { decoded: value }) =>
         Effect.tryPromise({
           try: async () => {
-            if (action === "social") {
-              const result = await authClient.signIn.social({
-                provider: "google",
-                callbackURL: redirectTarget,
-                errorCallbackURL: "/sign-up",
-              });
-              if (result.error) {
-                throw new Error(result.error.message ?? m.sign_up_error);
-              }
-              if (result.data?.url) onNavigate(result.data.url);
-              return;
-            }
-
             if (!options.signUp) {
               throw new Error(m.sign_up_disabled_description);
             }
@@ -787,8 +774,29 @@ export function Signup(props: AuthFormProps) {
   );
   const submit = useAtomSet(form.submit);
   const submitResult = useAtomValue(form.submit);
+  const [socialSignUp] = useState(() =>
+    Atom.fn((provider: "google") =>
+      Effect.tryPromise({
+        try: async () => {
+          const result = await authClient.signIn.social({
+            provider,
+            callbackURL: redirectTarget,
+            errorCallbackURL: "/sign-up",
+          });
+          if (result.error) {
+            throw new Error(result.error.message ?? m.sign_up_error);
+          }
+          if (result.data?.url) onNavigate(result.data.url);
+        },
+        catch: (cause) =>
+          cause instanceof Error ? cause : new Error(m.sign_up_error),
+      }),
+    ),
+  );
+  const startSocialSignUp = useAtomSet(socialSignUp);
+  const socialSignUpResult = useAtomValue(socialSignUp);
 
-  const signUpWithGoogle = () => submit("social");
+  const signUpWithGoogle = () => startSocialSignUp("google");
 
   if (!options.signUp) {
     return (
@@ -825,7 +833,7 @@ export function Signup(props: AuthFormProps) {
             onSubmit={(event) => {
               event.preventDefault();
               event.stopPropagation();
-              submit("email");
+              submit();
             }}
           >
             {options.signUpName ? (
@@ -866,6 +874,7 @@ export function Signup(props: AuthFormProps) {
               <GoogleLogo />
               {m.auth_continue_with_google}
             </Button>
+            <SubmitError result={socialSignUpResult} />
           </div>
         ) : null}
         <p className="text-muted-foreground mt-6 text-center text-sm">
