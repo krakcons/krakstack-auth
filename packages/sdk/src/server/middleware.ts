@@ -96,15 +96,16 @@ export const makeAuthenticationLive = (
                 return yield* new HttpApiError.Forbidden({});
               }
             }
-            return yield* httpEffect.pipe(
-              Effect.provideService(AuthService, auth),
-            );
+            return auth;
           }).pipe(
             Effect.mapError((error) =>
               error instanceof HttpApiError.Unauthorized ||
               error instanceof HttpApiError.Forbidden
                 ? error
                 : new HttpApiError.Unauthorized({}),
+            ),
+            Effect.flatMap((auth) =>
+              httpEffect.pipe(Effect.provideService(AuthService, auth)),
             ),
           ),
       };

@@ -1,9 +1,19 @@
 import { describe, expect, it } from "@effect/vitest";
 
 import {
+  apiKeyConfigIdFromKey,
   mergeApiKeyPermissions,
   organizationPublicProfile,
 } from "./api.builder";
+
+describe("apiKeyConfigIdFromKey", () => {
+  it("resolves configured key prefixes", () => {
+    expect(apiKeyConfigIdFromKey("user_secret")).toBe("user");
+    expect(apiKeyConfigIdFromKey("org_secret")).toBe("organization");
+    expect(apiKeyConfigIdFromKey("svc_secret")).toBe("service");
+    expect(apiKeyConfigIdFromKey("legacy-secret")).toBeUndefined();
+  });
+});
 
 describe("mergeApiKeyPermissions", () => {
   it("updates selected projects without removing other project grants", () => {

@@ -54,6 +54,13 @@ export const mergeApiKeyPermissions = (
   ),
 });
 
+export const apiKeyConfigIdFromKey = (key: string) => {
+  if (key.startsWith("user_")) return "user" as const;
+  if (key.startsWith("org_")) return "organization" as const;
+  if (key.startsWith("svc_")) return "service" as const;
+  return undefined;
+};
+
 const userRole = (value: unknown) => {
   if (typeof value !== "object" || value === null || !("role" in value)) {
     return undefined;
@@ -379,9 +386,11 @@ export const authApiHandler = HttpApiBuilder.group(
             request,
             "Could not verify API key",
           );
+          const configId =
+            payload.configId ?? apiKeyConfigIdFromKey(payload.key);
           const body = {
             key: payload.key,
-            ...(payload.configId ? { configId: payload.configId } : {}),
+            ...(configId ? { configId } : {}),
           };
 
           const result = yield* Effect.tryPromise({
