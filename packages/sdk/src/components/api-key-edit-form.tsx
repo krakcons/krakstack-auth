@@ -23,7 +23,33 @@ type ApiKeySummary = Omit<ApiKey, "key">;
 const editApiKeyFormBuilder = FormBuilder.empty
   .addField("name", Schema.NonEmptyString)
   .addField("enabled", Schema.Boolean)
-  .addField("referrers", Schema.String);
+  .addField("referrers", Schema.String)
+  .addField("permissions", Schema.Record(Schema.String, Schema.Boolean));
+
+type ApiKeyPermissionsFieldOptions = {
+  description: string;
+  idPrefix: string;
+  labels?: ProjectAccessLabelCatalog | undefined;
+  permissions: Readonly<Record<string, ReadonlyArray<string>>>;
+  title: string;
+};
+
+const ApiKeyPermissionsField: FormReact.FieldComponent<
+  Readonly<Record<string, boolean>>,
+  ApiKeyPermissionsFieldOptions
+> = ({ field, props }) => (
+  <ApiKeyPermissions
+    description={props.description}
+    idPrefix={props.idPrefix}
+    permissions={props.permissions}
+    labels={props.labels}
+    selected={field.value}
+    title={props.title}
+    onChange={(id, checked) =>
+      field.onChange({ ...field.value, [id]: checked })
+    }
+  />
+);
 
 export type ApiKeyEditMessages = {
   enabled: string;
@@ -71,13 +97,8 @@ export const ApiKeyEditForm = ({
       currentGrant[option.project]?.includes(option.action) ?? false,
     ]),
   );
-  const [selectedPermissions, setSelectedPermissions] = useState(
-    initialSelectedPermissions,
-  );
-  const selectedPermissionsRef = useRef(selectedPermissions);
   const permissionOptionsRef = useRef(permissionOptions);
   const permissionsRef = useRef(permissions);
-  selectedPermissionsRef.current = selectedPermissions;
   permissionOptionsRef.current = permissionOptions;
   permissionsRef.current = permissions;
   const [form] = useState(() =>
@@ -86,6 +107,7 @@ export const ApiKeyEditForm = ({
         name: TextField,
         enabled: CheckboxField,
         referrers: TextAreaField,
+        permissions: ApiKeyPermissionsField,
       },
       mode: { validation: "onSubmit" },
       onSubmit: (_, { decoded }) =>
@@ -100,7 +122,7 @@ export const ApiKeyEditForm = ({
               selectedGrant[project] = [];
             }
             for (const option of permissionOptionsRef.current) {
-              if (!selectedPermissionsRef.current[option.id]) continue;
+              if (!decoded.permissions[option.id]) continue;
               selectedGrant[option.project] = [
                 ...(selectedGrant[option.project] ?? []),
                 option.action,
@@ -135,6 +157,7 @@ export const ApiKeyEditForm = ({
           name: keyData.name ?? "",
           enabled: keyData.enabled,
           referrers: apiKeyReferrers(keyData.metadata).join("\n"),
+          permissions: initialSelectedPermissions,
         }}
       >
         <form
@@ -153,19 +176,12 @@ export const ApiKeyEditForm = ({
             placeholder={messages.referrersPlaceholder}
             rows={3}
           />
-          <ApiKeyPermissions
+          <form.permissions
             description={messages.permissionsDescription}
             idPrefix="edit"
             permissions={permissions}
             labels={permissionLabels}
-            selected={selectedPermissions}
             title={messages.permissions}
-            onChange={(id, checked) =>
-              setSelectedPermissions((current) => ({
-                ...current,
-                [id]: checked,
-              }))
-            }
           />
           <SubmitError result={submitResult} />
           <SubmitButton form={form} />
