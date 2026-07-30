@@ -143,9 +143,11 @@ export type ProjectAccessDefinition<
   readonly encodeGrant: (
     actions: ReadonlyArray<Action>,
   ) => ApiKeyPermissionGrant;
-  readonly userApiKeyPermissions: ApiKeyPermissionGrant;
-  readonly organizationApiKeyPermissions: ApiKeyPermissionGrant;
-  readonly serviceApiKeyPermissions: ApiKeyPermissionGrant;
+  readonly apiKeyPermissions: {
+    readonly user: ApiKeyPermissionGrant;
+    readonly organization: ApiKeyPermissionGrant;
+    readonly service: ApiKeyPermissionGrant;
+  };
   readonly actorForUser: (input: {
     readonly userId: string;
     readonly organizationId: string | null;
@@ -158,12 +160,47 @@ export type ProjectAccessDefinition<
   }) => CurrentActor;
 };
 
-export type ProjectAccessCatalog = {
+export type ProjectAccessCatalog = Pick<
+  ProjectAccessDefinition,
+  "project" | "roles" | "apiKeyPermissions"
+>;
+
+export type ProjectAccessLabelCatalog = {
   readonly project: string;
-  readonly roles: Readonly<Record<string, ReadonlyArray<string> | undefined>>;
-  readonly userApiKeyPermissions: ApiKeyPermissionGrant;
-  readonly organizationApiKeyPermissions: ApiKeyPermissionGrant;
-  readonly serviceApiKeyPermissions: ApiKeyPermissionGrant;
+  readonly roles: Readonly<Record<string, string | undefined>>;
+  readonly permissions: Readonly<
+    Record<
+      string,
+      {
+        readonly label: string;
+        readonly actions: Readonly<Record<string, string>>;
+      }
+    >
+  >;
+};
+
+type PermissionResource<Action extends string> =
+  Action extends `${infer Resource}:${string}` ? Resource : Action;
+
+type PermissionAction<
+  Action extends string,
+  Resource extends string,
+> = Action extends `${Resource}:${infer Value}` ? Value : never;
+
+export type ProjectAccessLabels<
+  Action extends string = string,
+  Role extends string = string,
+> = {
+  readonly project: string;
+  readonly roles: Readonly<Partial<Record<Role, string>>>;
+  readonly permissions: {
+    readonly [Resource in PermissionResource<Action>]: {
+      readonly label: string;
+      readonly actions: Readonly<
+        Record<PermissionAction<Action, Resource>, string>
+      >;
+    };
+  };
 };
 
 export type ProjectAccessConfig<
@@ -334,10 +371,23 @@ export const defineProjectAccess = <
         Effect.map(permissionsForGrant),
       ),
     encodeGrant,
-    userApiKeyPermissions: encodeGrant(userApiKeyActions),
-    organizationApiKeyPermissions: encodeGrant(organizationApiKeyActions),
-    serviceApiKeyPermissions: encodeGrant(serviceApiKeyActions),
+    apiKeyPermissions: {
+      user: encodeGrant(userApiKeyActions),
+      organization: encodeGrant(organizationApiKeyActions),
+      service: encodeGrant(serviceApiKeyActions),
+    },
     actorForUser,
     actorForApiKey,
   };
 };
+
+export const defineProjectAccessLabels = <
+  const Action extends string,
+  const Role extends string,
+>(
+  _access: {
+    readonly actions: ReadonlyArray<Action>;
+    readonly roles: Readonly<Record<Role, ReadonlyArray<Action> | undefined>>;
+  },
+  labels: ProjectAccessLabels<Action, Role>,
+) => labels;

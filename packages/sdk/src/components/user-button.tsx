@@ -78,6 +78,7 @@ import { ExtraUploadedAsset } from "../extra/schema";
 import { assetPath, assetUrl } from "./utils";
 import { AdminOrganizationsTable } from "./admin-organizations";
 import { AdminUsersTable } from "./admin-users";
+import type { ProjectAccessLabelCatalog } from "../access";
 
 const messages = {
   en: {
@@ -886,8 +887,9 @@ export const UserButton = ({
           <ApiKeyManager
             authClient={authClient}
             active={settingsDialog === "apiKeys"}
+            permissionLabels={auth?.accessLabels ?? undefined}
             permissions={
-              apiKeyPermissions ?? auth?.access?.userApiKeyPermissions ?? {}
+              apiKeyPermissions ?? auth?.access?.apiKeyPermissions.user ?? {}
             }
           />
         </DialogContent>
@@ -1895,10 +1897,12 @@ function DisableTotpForm({
 function ApiKeyManager({
   authClient,
   active,
+  permissionLabels,
   permissions = {},
 }: {
   authClient: AuthUiClient;
   active: boolean;
+  permissionLabels?: ProjectAccessLabelCatalog | undefined;
   permissions?: Readonly<Record<string, ReadonlyArray<string>>>;
 }) {
   const m = useUserButtonMessages();
@@ -2059,6 +2063,7 @@ function ApiKeyManager({
                   description={m.user_api_key_permissions_description()}
                   idPrefix="user-create"
                   permissions={permissions}
+                  labels={permissionLabels}
                   selected={selectedPermissions}
                   title={m.user_api_key_permissions()}
                   onChange={togglePermission}
@@ -2123,6 +2128,7 @@ function ApiKeyManager({
             configId="user"
             keyData={editingKey}
             permissions={permissions}
+            permissionLabels={permissionLabels}
             messages={{
               enabled: m.user_api_key_enabled(),
               name: m.user_api_key_name(),

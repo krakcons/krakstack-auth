@@ -119,6 +119,7 @@ import {
 } from "./invitation-expiration";
 import { ExtraUploadedAsset } from "../extra/schema";
 import { assetPath, assetUrl, cn } from "./utils";
+import type { ProjectAccessLabelCatalog } from "../access";
 
 type Locale = "en" | "fr";
 
@@ -2022,9 +2023,10 @@ export function OrganizationSwitcher({
               authClient={authClient}
               organization={activeOrganization.data}
               active={dialog === "apiKeys" && canManageApiKeys}
+              permissionLabels={auth?.accessLabels ?? undefined}
               permissions={
                 apiKeyPermissions ??
-                auth?.access?.organizationApiKeyPermissions ??
+                auth?.access?.apiKeyPermissions.organization ??
                 {}
               }
             />
@@ -3222,11 +3224,13 @@ function OrganizationApiKeyManager({
   authClient,
   organization,
   active,
+  permissionLabels,
   permissions,
 }: {
   authClient: AuthUiClient;
   organization: OrganizationSummary;
   active: boolean;
+  permissionLabels?: ProjectAccessLabelCatalog | undefined;
   permissions: Readonly<Record<string, ReadonlyArray<string>>>;
 }) {
   const m = useOrganizationMessages();
@@ -3397,6 +3401,7 @@ function OrganizationApiKeyManager({
                   description={m.user_api_key_permissions_description()}
                   idPrefix="organization-create"
                   permissions={permissions}
+                  labels={permissionLabels}
                   selected={selectedPermissions}
                   title={m.user_api_key_permissions()}
                   onChange={togglePermission}
@@ -3461,6 +3466,7 @@ function OrganizationApiKeyManager({
             configId="organization"
             keyData={editingKey}
             permissions={permissions}
+            permissionLabels={permissionLabels}
             messages={{
               enabled: m.user_api_key_enabled(),
               name: m.user_api_key_name(),

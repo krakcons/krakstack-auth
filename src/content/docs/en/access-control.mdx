@@ -1,0 +1,61 @@
+---
+slug: access-control
+path: /docs/access-control
+title: Access control
+description: Define project permissions, resolve roles and API-key grants, and understand the Better Auth defaults used by Krakstack Auth.
+icon: shield
+order: 9
+locale: en
+---
+
+# Access control
+
+Krakstack Auth separates authentication from application authorization. Better Auth controls global administration and organization management. Each consumer application defines its own project permissions with `defineProjectAccess` and enforces them on the backend.
+
+## Project access
+
+Declare one project namespace, its complete action catalog, role grants, and the maximum actions assignable to each API-key type:
+
+```ts
+import { defineProjectAccess } from "@krak-stack/auth/access";
+
+export const Access = defineProjectAccess({
+  project: "example",
+  permissions: ["records:read", "records:update", "search:execute"],
+  roles: {
+    owner: ["records:read", "records:update", "search:execute"],
+    admin: ["records:read", "records:update", "search:execute"],
+    support: ["records:read"],
+    member: ["records:read", "search:execute"],
+  },
+  apiKeys: {
+    user: ["records:read", "search:execute"],
+    organization: ["search:execute"],
+    service: ["records:read", "records:update", "search:execute"],
+  },
+});
+```
+
+The project name qualifies every permission, so `records:read` becomes `example:records:read` in the current actor. Unknown roles, actions, and grants for other projects are ignored.
+
+The matrix below is generated from that same `Access` definition. Consumer projects use this pattern so their published permission reference stays aligned with code.
+
+## Effective authorization
+
+Role permissions are additive when a user has multiple roles. API keys always use least-privilege intersections:
+
+- **User key:** current role permissions ∩ user-key catalog ∩ explicit key grant.
+- **Organization key:** organization-key catalog ∩ explicit key grant.
+- **Service key:** service-key catalog ∩ explicit key grant.
+
+An API-key catalog is a ceiling, not an automatic grant. Tenant checks, ownership rules, resource policies, archive rules, and other attribute-based policies can still deny an action shown as available.
+
+Use `Access.permission("records:update")` or compose it with `all`, `any`, and `withPolicy` on the server. Client helpers such as `useHasPermission` may hide unavailable controls, but frontend checks are never an authorization boundary.
+
+## Better Auth layers
+
+Krakstack Auth also uses Better Auth's global administrator and organization access controls. These permissions govern identity and organization operations; they do not replace project permissions. The following references are generated from Better Auth's exported default statement catalogs and role definitions.
+
+The effective organization table includes Krakstack Auth's `support` role. It currently maps to Better Auth's default `member` access while consumer projects can assign separate project permissions to support users.
+
+Better Auth exposes `user:impersonate-admins` as an available administrator action but does not grant it to the default `admin` role.

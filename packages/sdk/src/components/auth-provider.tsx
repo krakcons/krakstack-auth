@@ -13,7 +13,10 @@ import {
 import { createAuthUiClient, type AuthUiClient } from "./auth-client";
 import { authClientApi } from "./auth-client-api";
 import type { ExtraProjectPublicConfig } from "../extra/schema";
-import type { ProjectAccessCatalog } from "../access";
+import type {
+  ProjectAccessCatalog,
+  ProjectAccessLabelCatalog,
+} from "../access";
 import { parseRoleList } from "../roles";
 
 export type KrakstackAuthLocale = "en" | "fr";
@@ -25,6 +28,7 @@ export type KrakstackAuthProviderProps = {
   projectId?: string | null | undefined;
   authClient?: AuthUiClient | undefined;
   access?: ProjectAccessCatalog | undefined;
+  accessLabels?: ProjectAccessLabelCatalog | undefined;
 };
 
 export type KrakstackAuthContextValue = {
@@ -34,6 +38,7 @@ export type KrakstackAuthContextValue = {
   authClient: AuthUiClient;
   projectConfig: ExtraProjectPublicConfig | null;
   access: ProjectAccessCatalog | null;
+  accessLabels: ProjectAccessLabelCatalog | null;
   authRefreshVersion: number;
   refreshAuth: () => void;
 };
@@ -127,6 +132,7 @@ export function KrakstackAuthProvider({
   projectId,
   authClient,
   access,
+  accessLabels,
 }: KrakstackAuthProviderProps) {
   const searchString = useRouterState({
     select: (state) => state.location.searchStr,
@@ -155,6 +161,7 @@ export function KrakstackAuthProvider({
       projectId: resolvedProjectId,
       projectConfig,
       access: access ?? null,
+      accessLabels: accessLabels ?? null,
       authRefreshVersion,
       refreshAuth,
     }),
@@ -165,6 +172,7 @@ export function KrakstackAuthProvider({
       resolvedProjectId,
       projectConfig,
       access,
+      accessLabels,
       authRefreshVersion,
       refreshAuth,
     ],

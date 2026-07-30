@@ -1,0 +1,61 @@
+---
+slug: access-control
+path: /docs/access-control
+title: Contrôle d’accès
+description: Définissez les autorisations de projet, résolvez les rôles et les droits des clés API, et comprenez les valeurs par défaut de Better Auth utilisées par Krakstack Auth.
+icon: shield
+order: 9
+locale: fr
+---
+
+# Contrôle d’accès
+
+Krakstack Auth sépare l’authentification de l’autorisation applicative. Better Auth contrôle l’administration globale et la gestion des organisations. Chaque application consommatrice définit ses propres autorisations de projet avec `defineProjectAccess` et les applique côté serveur.
+
+## Accès au projet
+
+Déclarez un espace de noms de projet, son catalogue complet d’actions, les droits des rôles et les actions maximales attribuables à chaque type de clé API :
+
+```ts
+import { defineProjectAccess } from "@krak-stack/auth/access";
+
+export const Access = defineProjectAccess({
+  project: "example",
+  permissions: ["records:read", "records:update", "search:execute"],
+  roles: {
+    owner: ["records:read", "records:update", "search:execute"],
+    admin: ["records:read", "records:update", "search:execute"],
+    support: ["records:read"],
+    member: ["records:read", "search:execute"],
+  },
+  apiKeys: {
+    user: ["records:read", "search:execute"],
+    organization: ["search:execute"],
+    service: ["records:read", "records:update", "search:execute"],
+  },
+});
+```
+
+Le nom du projet qualifie chaque autorisation. Ainsi, `records:read` devient `example:records:read` dans l’acteur courant. Les rôles et actions inconnus, ainsi que les droits d’autres projets, sont ignorés.
+
+La matrice ci-dessous est générée à partir de cette même définition `Access`. Les projets consommateurs utilisent ce modèle pour maintenir leur référence publiée en phase avec le code.
+
+## Autorisation effective
+
+Les autorisations des rôles s’additionnent lorsqu’un utilisateur possède plusieurs rôles. Les clés API utilisent toujours des intersections de moindre privilège :
+
+- **Clé utilisateur :** autorisations actuelles des rôles ∩ catalogue des clés utilisateur ∩ droit explicite de la clé.
+- **Clé d’organisation :** catalogue des clés d’organisation ∩ droit explicite de la clé.
+- **Clé de service :** catalogue des clés de service ∩ droit explicite de la clé.
+
+Un catalogue de clés API constitue un plafond et non un droit automatique. Les contrôles de locataire, les règles de propriété, les politiques de ressource, les règles d’archivage et les autres politiques basées sur les attributs peuvent toujours refuser une action indiquée comme disponible.
+
+Utilisez `Access.permission("records:update")` ou composez-la avec `all`, `any` et `withPolicy` sur le serveur. Les utilitaires clients comme `useHasPermission` peuvent masquer les contrôles indisponibles, mais les vérifications frontend ne constituent jamais une frontière d’autorisation.
+
+## Couches Better Auth
+
+Krakstack Auth utilise également les contrôles d’accès d’administration globale et d’organisation de Better Auth. Ces autorisations régissent les opérations d’identité et d’organisation; elles ne remplacent pas les autorisations de projet. Les références suivantes sont générées à partir des catalogues d’instructions et des définitions de rôles exportés par Better Auth.
+
+La table effective des organisations inclut le rôle `support` de Krakstack Auth. Il correspond actuellement à l’accès `member` par défaut de Better Auth, tandis que les projets consommateurs peuvent attribuer des autorisations de projet distinctes aux utilisateurs du soutien.
+
+Better Auth expose `user:impersonate-admins` comme action d’administration disponible, mais ne l’accorde pas au rôle `admin` par défaut.

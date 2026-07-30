@@ -7,6 +7,7 @@ import {
   all,
   any,
   defineProjectAccess,
+  defineProjectAccessLabels,
   policy,
   withPolicy,
 } from "./access";
@@ -25,6 +26,21 @@ const Access = defineProjectAccess({
   },
 });
 
+const AccessLabels = defineProjectAccessLabels(Access, {
+  project: "Test project",
+  roles: { owner: "Owner", member: "Member", support: "Support" },
+  permissions: {
+    records: {
+      label: "Records",
+      actions: { read: "Read", update: "Update" },
+    },
+    search: {
+      label: "Search",
+      actions: { execute: "Execute" },
+    },
+  },
+});
+
 const principalLayer = (permissions: ReadonlySet<string>) =>
   Layer.succeed(CurrentActor, {
     actor: {
@@ -38,6 +54,11 @@ const principalLayer = (permissions: ReadonlySet<string>) =>
   });
 
 describe("project access", () => {
+  it("preserves localized access labels", () => {
+    expect(AccessLabels.permissions.records.label).toBe("Records");
+    expect(AccessLabels.permissions.records.actions.read).toBe("Read");
+  });
+
   it("resolves the union of organization role permissions", () => {
     expect(Array.from(Access.permissionsForRoles("member,support"))).toEqual([
       "test-project:records:read",

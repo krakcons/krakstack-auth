@@ -1,6 +1,8 @@
 import { ChevronDown } from "lucide-react";
 import { useState } from "react";
 
+import type { ProjectAccessLabelCatalog } from "../access";
+
 import { Checkbox } from "@/components/ui/checkbox";
 import {
   Collapsible,
@@ -21,6 +23,7 @@ export const ApiKeyPermissions = ({
   description,
   idPrefix,
   permissions,
+  labels,
   selected,
   title,
   onChange,
@@ -28,13 +31,46 @@ export const ApiKeyPermissions = ({
   description: string;
   idPrefix: string;
   permissions: Readonly<Record<string, ReadonlyArray<string>>>;
+  labels?: ProjectAccessLabelCatalog | undefined;
   selected: Readonly<Record<string, boolean>>;
   title: string;
   onChange: (id: string, checked: boolean) => void;
 }) => {
-  const groups = Object.entries(permissions).filter(
-    ([, actions]) => actions.length > 0,
-  );
+  const groups = Object.entries(permissions).reduce<
+    Array<{
+      resource: string;
+      label: string;
+      actions: Array<{ id: string; label: string }>;
+    }>
+  >((groups, [permissionResource, permissionActions]) => {
+    for (const permissionAction of permissionActions) {
+      const separator = permissionAction.indexOf(":");
+      const resource =
+        separator === -1
+          ? permissionResource
+          : permissionAction.slice(0, separator);
+      const label =
+        separator === -1
+          ? permissionAction
+          : permissionAction.slice(separator + 1);
+      const group = groups.find((item) => item.resource === resource);
+      const permissionLabels = labels?.permissions[resource];
+      const action = {
+        id: `${permissionResource}:${permissionAction}`,
+        label: permissionLabels?.actions[label] ?? label,
+      };
+
+      if (group) group.actions.push(action);
+      else
+        groups.push({
+          resource,
+          label: permissionLabels?.label ?? resource,
+          actions: [action],
+        });
+    }
+
+    return groups;
+  }, []);
 
   if (groups.length === 0) return null;
 
@@ -43,13 +79,13 @@ export const ApiKeyPermissions = ({
       <FieldLegend className="mb-0">{title}</FieldLegend>
       <FieldDescription>{description}</FieldDescription>
       <div className="overflow-hidden rounded-lg border">
-        {groups.map(([resource, actions], index) => (
+        {groups.map(({ resource, label, actions }, index) => (
           <PermissionGroup
             key={resource}
             actions={actions}
             className={index > 0 ? "border-t" : ""}
             idPrefix={idPrefix}
-            resource={resource}
+            resourceLabel={label}
             selected={selected}
             onChange={onChange}
           />
@@ -63,27 +99,25 @@ const PermissionGroup = ({
   actions,
   className,
   idPrefix,
-  resource,
+  resourceLabel,
   selected,
   onChange,
 }: {
-  actions: ReadonlyArray<string>;
+  actions: ReadonlyArray<{ id: string; label: string }>;
   className?: string;
   idPrefix: string;
-  resource: string;
+  resourceLabel: string;
   selected: Readonly<Record<string, boolean>>;
   onChange: (id: string, checked: boolean) => void;
 }) => {
-  const selectedCount = actions.filter(
-    (action) => selected[`${resource}:${action}`],
-  ).length;
+  const selectedCount = actions.filter((action) => selected[action.id]).length;
   const [open, setOpen] = useState(selectedCount > 0);
 
   return (
     <Collapsible className={className} open={open} onOpenChange={setOpen}>
       <CollapsibleTrigger className="hover:bg-muted/50 focus-visible:ring-ring flex w-full items-center gap-3 px-4 py-3 text-left outline-none focus-visible:ring-2 focus-visible:ring-inset">
         <span className="min-w-0 flex-1 truncate text-sm font-medium">
-          {capitalizeFirst(resource)}
+          {resourceLabel}
         </span>
         <span className="text-muted-foreground text-xs tabular-nums">
           {selectedCount}/{actions.length}
@@ -99,22 +133,19 @@ const PermissionGroup = ({
           className="grid gap-3 sm:grid-cols-2"
         >
           {actions.map((action) => {
-            const permissionId = `${resource}:${action}`;
-            const inputId = `${idPrefix}-${permissionId}`;
+            const inputId = `${idPrefix}-${action.id}`;
 
             return (
-              <Field key={permissionId} orientation="horizontal">
+              <Field key={action.id} orientation="horizontal">
                 <Checkbox
                   id={inputId}
-                  checked={selected[permissionId] ?? false}
+                  checked={selected[action.id] ?? false}
                   onCheckedChange={(checked: boolean) =>
-                    onChange(permissionId, checked)
+                    onChange(action.id, checked)
                   }
                 />
                 <FieldContent>
-                  <FieldLabel htmlFor={inputId}>
-                    {capitalizeFirst(action)}
-                  </FieldLabel>
+                  <FieldLabel htmlFor={inputId}>{action.label}</FieldLabel>
                 </FieldContent>
               </Field>
             );
@@ -124,6 +155,3 @@ const PermissionGroup = ({
     </Collapsible>
   );
 };
-
-const capitalizeFirst = (value: string) =>
-  value.charAt(0).toUpperCase() + value.slice(1);

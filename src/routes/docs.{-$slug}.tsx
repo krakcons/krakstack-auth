@@ -16,7 +16,14 @@ import { code } from "@streamdown/code";
 import { Streamdown } from "streamdown";
 import { Suspense, type ReactNode, useState } from "react";
 import {
+  adminAc as globalAdminAc,
+  defaultStatements as globalAdminStatements,
+  userAc as globalUserAc,
+} from "better-auth/plugins/admin/access";
+import { defaultStatements as organizationStatements } from "better-auth/plugins/organization/access";
+import {
   OrganizationSwitcher,
+  ProjectAccessMatrix,
   ResetPassword,
   Signin,
   Signup,
@@ -25,6 +32,10 @@ import {
   VerifyEmail,
   type OrganizationSwitcherFeatures,
 } from "@krak-stack/auth";
+import {
+  defineProjectAccess,
+  defineProjectAccessLabels,
+} from "@krak-stack/auth/access";
 
 import { ThemeToggle } from "@/components/theme-toggle";
 import { AppBrand } from "@/components/ui/app-brand";
@@ -37,10 +48,12 @@ import {
 } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
 import { FieldLabel } from "@/components/ui/field";
+import { PermissionMatrix } from "@/components/permission-matrix";
 import { LocaleSwitcher } from "@/components/ui/locale-switcher";
 import { SidebarLayout, type NavGroup } from "@/components/ui/sidebar-layout";
 import { getDocsPage, getLocalizedDocsPages } from "@/lib/docs";
 import { authBaseUrl, authClient } from "@/services/auth/client";
+import { organizationAuthRoles } from "@/services/auth/organization-access";
 import { m } from "@/paraglide/messages";
 import { getLocale } from "@/paraglide/runtime";
 
@@ -66,6 +79,45 @@ const iconForName = (name: string) => {
 };
 
 const docsLocale = () => (getLocale() === "fr" ? "fr" : "en");
+
+const exampleAccess = defineProjectAccess({
+  project: "example",
+  permissions: ["records:read", "records:update", "search:execute"],
+  roles: {
+    owner: ["records:read", "records:update", "search:execute"],
+    admin: ["records:read", "records:update", "search:execute"],
+    support: ["records:read"],
+    member: ["records:read", "search:execute"],
+  },
+  apiKeys: {
+    user: ["records:read", "search:execute"],
+    organization: ["search:execute"],
+    service: ["records:read", "records:update", "search:execute"],
+  },
+});
+
+const exampleAccessLabels = defineProjectAccessLabels(exampleAccess, {
+  project: m.docs_access_example_project(),
+  roles: {
+    owner: m.docs_access_role_owner(),
+    admin: m.docs_access_role_admin(),
+    support: m.docs_access_role_support(),
+    member: m.docs_access_role_member(),
+  },
+  permissions: {
+    records: {
+      label: m.docs_access_resource_records(),
+      actions: {
+        read: m.docs_access_action_read(),
+        update: m.docs_access_action_update(),
+      },
+    },
+    search: {
+      label: m.docs_access_resource_search(),
+      actions: { execute: m.docs_access_action_execute() },
+    },
+  },
+});
 
 export const Route = createFileRoute("/docs/{-$slug}")({
   loader: ({ params }) => {
@@ -111,7 +163,7 @@ function DocsPage() {
     },
     {
       label: () => (locale === "fr" ? "Serveur" : "Backend"),
-      items: pagesFor(new Set(["middleware", "domains"])),
+      items: pagesFor(new Set(["middleware", "access-control", "domains"])),
     },
     {
       label: () => (locale === "fr" ? "Exploitation" : "Operations"),
@@ -194,10 +246,95 @@ function DocsPage() {
             <ComponentPreviews />
           </ClientOnly>
         ) : null}
+        {page.slug === "access-control" ? <AccessControlMatrices /> : null}
       </main>
     </SidebarLayout>
   );
 }
+
+const permissionMatrixLabels = () => ({
+  action: m.docs_access_matrix_action(),
+  allowed: m.docs_access_matrix_allowed(),
+  denied: m.docs_access_matrix_denied(),
+  resource: m.docs_access_matrix_resource(),
+});
+
+function AccessControlMatrices() {
+  const organizationGrants = Object.entries(organizationAuthRoles).map(
+    ([role, access]) => ({
+      id: `organization-${role}`,
+      label: role,
+      statements: access.statements,
+    }),
+  );
+  const globalGrants = [
+    {
+      id: "global-admin",
+      label: "admin",
+      statements: globalAdminAc.statements,
+    },
+    {
+      id: "global-user",
+      label: "user",
+      statements: globalUserAc.statements,
+    },
+  ];
+
+  return (
+    <section className="mt-16 space-y-12 border-t pt-10">
+      <AccessMatrixSection
+        title={m.docs_access_project_matrix_title()}
+        description={m.docs_access_project_matrix_description()}
+      >
+        <ProjectAccessMatrix
+          access={exampleAccess}
+          labels={exampleAccessLabels}
+          locale={docsLocale()}
+        />
+      </AccessMatrixSection>
+      <AccessMatrixSection
+        title={m.docs_access_organization_matrix_title()}
+        description={m.docs_access_organization_matrix_description()}
+      >
+        <PermissionMatrix
+          grants={organizationGrants}
+          labels={permissionMatrixLabels()}
+          statements={organizationStatements}
+        />
+      </AccessMatrixSection>
+      <AccessMatrixSection
+        title={m.docs_access_admin_matrix_title()}
+        description={m.docs_access_admin_matrix_description()}
+      >
+        <PermissionMatrix
+          grants={globalGrants}
+          labels={permissionMatrixLabels()}
+          statements={globalAdminStatements}
+        />
+      </AccessMatrixSection>
+    </section>
+  );
+}
+
+const AccessMatrixSection = ({
+  children,
+  description,
+  title,
+}: {
+  children: ReactNode;
+  description: string;
+  title: string;
+}) => (
+  <div className="space-y-4">
+    <div>
+      <h2 className="text-2xl font-bold tracking-tight">{title}</h2>
+      <p className="text-muted-foreground mt-2 max-w-3xl leading-7">
+        {description}
+      </p>
+    </div>
+    {children}
+  </div>
+);
 
 function ComponentPreviews() {
   const locale = docsLocale();

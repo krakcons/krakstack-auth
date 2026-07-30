@@ -4,6 +4,8 @@ import { FormBuilder, FormReact } from "@lucas-barake/effect-form-react";
 import { Effect, Schema } from "effect";
 import { useRef, useState } from "react";
 
+import type { ProjectAccessLabelCatalog } from "../access";
+
 import {
   CheckboxField,
   SubmitButton,
@@ -40,12 +42,14 @@ export const ApiKeyEditForm = ({
   keyData,
   messages,
   permissions,
+  permissionLabels,
   onSaved,
 }: {
   configId: "organization" | "user";
   keyData: ApiKeySummary;
   messages: ApiKeyEditMessages;
   permissions: Readonly<Record<string, ReadonlyArray<string>>>;
+  permissionLabels?: ProjectAccessLabelCatalog | undefined;
   onSaved: () => void;
 }) => {
   const permissionOptions = Object.entries(permissions).flatMap(
@@ -153,6 +157,7 @@ export const ApiKeyEditForm = ({
             description={messages.permissionsDescription}
             idPrefix="edit"
             permissions={permissions}
+            labels={permissionLabels}
             selected={selectedPermissions}
             title={messages.permissions}
             onChange={(id, checked) =>

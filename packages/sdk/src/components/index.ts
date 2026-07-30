@@ -9,6 +9,7 @@ export { createAuthUiClient } from "./auth-client";
 export { OrganizationSwitcher } from "./organization-switcher";
 export { MemberRequired } from "./member-required";
 export { HasPermission, useHasPermission } from "./has-permission";
+export { ProjectAccessMatrix } from "./project-access-matrix";
 export {
   ResetPassword,
   Signin,
@@ -29,6 +30,7 @@ export {
   actorUserId,
   any,
   defineProjectAccess,
+  defineProjectAccessLabels,
   permission,
   policy,
   withPolicy,
@@ -40,9 +42,15 @@ export type {
   Policy,
   ProjectAccessConfig,
   ProjectAccessCatalog,
+  ProjectAccessLabelCatalog,
   ProjectAccessDefinition,
+  ProjectAccessLabels,
   UserActor,
 } from "../access";
+export type {
+  ProjectAccessMatrixAccess,
+  ProjectAccessMatrixMessages,
+} from "./project-access-matrix";
 export type {
   KrakstackAuthContextValue,
   KrakstackAuthLocale,

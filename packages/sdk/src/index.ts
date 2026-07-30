@@ -8,6 +8,7 @@ export { proxyAuthRequest } from "./server/proxy";
 export {
   OrganizationSwitcher,
   MemberRequired,
+  ProjectAccessMatrix,
   KrakstackAuthProvider,
   ResetPassword,
   Signin,
@@ -23,6 +24,10 @@ export {
   type AuthUiClient,
   type MemberRequiredMessages,
   type MemberRequiredProps,
+  type ProjectAccessMatrixAccess,
+  type ProjectAccessMatrixMessages,
+  type ProjectAccessLabels,
+  type ProjectAccessLabelCatalog,
   type KrakstackAuthContextValue,
   type KrakstackAuthLocale,
   type KrakstackAuthProviderProps,
