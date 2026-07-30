@@ -46,7 +46,6 @@ import {
 } from "@/components/ui/effect-form";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Checkbox } from "@/components/ui/checkbox";
 import { CopyButton } from "@/components/ui/copy-button";
 import {
   Dialog,
@@ -55,15 +54,6 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import {
-  Field,
-  FieldContent,
-  FieldDescription,
-  FieldGroup,
-  FieldLabel,
-  FieldLegend,
-  FieldSet,
-} from "@/components/ui/field";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -80,6 +70,7 @@ import { authClientApi } from "./auth-client-api";
 import { useKrakstackAuth } from "./auth-provider";
 import { createApiKey, parseApiKeyReferrers } from "./api-key";
 import { ApiKeyEditForm } from "./api-key-edit-form";
+import { ApiKeyPermissions } from "./api-key-permissions";
 import { ApiKeyRateLimit, apiKeyUsagePercent } from "./api-key-rate-limit";
 import { ApiKeyReferrers } from "./api-key-referrers";
 import { useOpenedOnce } from "./hooks";
@@ -2064,34 +2055,14 @@ function ApiKeyManager({
                   placeholder={m.user_api_key_referrers_placeholder()}
                   rows={3}
                 />
-                {permissionOptions.length > 0 ? (
-                  <FieldSet>
-                    <FieldLegend>{m.user_api_key_permissions()}</FieldLegend>
-                    <FieldDescription>
-                      {m.user_api_key_permissions_description()}
-                    </FieldDescription>
-                    <FieldGroup data-slot="checkbox-group" className="gap-3">
-                      {permissionOptions.map((permission) => (
-                        <Field key={permission.id} orientation="horizontal">
-                          <Checkbox
-                            id={permission.id}
-                            checked={
-                              selectedPermissions[permission.id] ?? false
-                            }
-                            onCheckedChange={(checked: boolean) =>
-                              togglePermission(permission.id, checked)
-                            }
-                          />
-                          <FieldContent>
-                            <FieldLabel htmlFor={permission.id}>
-                              {permission.id}
-                            </FieldLabel>
-                          </FieldContent>
-                        </Field>
-                      ))}
-                    </FieldGroup>
-                  </FieldSet>
-                ) : null}
+                <ApiKeyPermissions
+                  description={m.user_api_key_permissions_description()}
+                  idPrefix="user-create"
+                  permissions={permissions}
+                  selected={selectedPermissions}
+                  title={m.user_api_key_permissions()}
+                  onChange={togglePermission}
+                />
                 <SubmitError result={createSubmitResult} />
                 <SubmitButton form={createForm} />
               </form>

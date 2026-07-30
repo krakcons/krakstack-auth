@@ -51,7 +51,6 @@ import { Field, FieldLabel, FieldSet } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Checkbox } from "@/components/ui/checkbox";
 import { CopyButton } from "@/components/ui/copy-button";
 import {
   Dialog,
@@ -109,6 +108,7 @@ import { authClientApi } from "./auth-client-api";
 import { useKrakstackAuth } from "./auth-provider";
 import { createApiKey, parseApiKeyReferrers } from "./api-key";
 import { ApiKeyEditForm } from "./api-key-edit-form";
+import { ApiKeyPermissions } from "./api-key-permissions";
 import { ApiKeyRateLimit, apiKeyUsagePercent } from "./api-key-rate-limit";
 import { ApiKeyReferrers } from "./api-key-referrers";
 import { useOpenedOnce } from "./hooks";
@@ -3393,34 +3393,14 @@ function OrganizationApiKeyManager({
                   placeholder={m.user_api_key_referrers_placeholder()}
                   rows={3}
                 />
-                {permissionOptions.length > 0 ? (
-                  <FieldSet>
-                    <p className="font-medium">
-                      {m.user_api_key_permissions()}
-                    </p>
-                    <p className="text-muted-foreground text-sm">
-                      {m.user_api_key_permissions_description()}
-                    </p>
-                    <div className="flex flex-col gap-3">
-                      {permissionOptions.map((permission) => (
-                        <Field key={permission.id} orientation="horizontal">
-                          <Checkbox
-                            id={`organization-${permission.id}`}
-                            checked={
-                              selectedPermissions[permission.id] ?? false
-                            }
-                            onCheckedChange={(checked: boolean) =>
-                              togglePermission(permission.id, checked)
-                            }
-                          />
-                          <FieldLabel htmlFor={`organization-${permission.id}`}>
-                            {permission.resource}: {permission.action}
-                          </FieldLabel>
-                        </Field>
-                      ))}
-                    </div>
-                  </FieldSet>
-                ) : null}
+                <ApiKeyPermissions
+                  description={m.user_api_key_permissions_description()}
+                  idPrefix="organization-create"
+                  permissions={permissions}
+                  selected={selectedPermissions}
+                  title={m.user_api_key_permissions()}
+                  onChange={togglePermission}
+                />
                 <SubmitError result={createResult} />
                 <SubmitButton form={createForm} />
               </form>

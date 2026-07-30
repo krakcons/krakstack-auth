@@ -25,6 +25,11 @@ import {
 } from "@krak-stack/auth";
 
 const krakOrganizationId = import.meta.env.VITE_KRAKSTACK_AUTH_ORGANIZATION_ID;
+const testApiKeyPermissions = {
+  projects: ["read", "create", "update", "delete"],
+  users: ["read", "invite", "update"],
+  billing: ["read", "manage"],
+} as const;
 
 export const Route = createFileRoute("/admin")({
   ssr: false,
@@ -115,7 +120,13 @@ function AdminContent() {
             <>
               <ThemeToggle />
               <LocaleSwitcher />
-              <UserButton authClient={authClient} baseUrl={authBaseUrl} />
+              <UserButton
+                authClient={authClient}
+                baseUrl={authBaseUrl}
+                {...(import.meta.env.DEV
+                  ? { apiKeyPermissions: testApiKeyPermissions }
+                  : {})}
+              />
             </>
           }
           groups={adminNavGroups}
@@ -138,6 +149,9 @@ function AdminOrganizationSwitcher() {
     <OrganizationSwitcher
       authClient={authClient}
       baseUrl={authBaseUrl}
+      {...(import.meta.env.DEV
+        ? { apiKeyPermissions: testApiKeyPermissions }
+        : {})}
       features={{
         organizationCreation: false,
         organizationSwitching: false,

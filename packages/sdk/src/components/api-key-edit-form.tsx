@@ -11,18 +11,8 @@ import {
   TextAreaField,
   TextField,
 } from "@/components/ui/effect-form";
-import { Checkbox } from "@/components/ui/checkbox";
-import {
-  Field,
-  FieldContent,
-  FieldDescription,
-  FieldGroup,
-  FieldLabel,
-  FieldLegend,
-  FieldSet,
-} from "@/components/ui/field";
-
 import { parseApiKeyReferrers, updateApiKey } from "./api-key";
+import { ApiKeyPermissions } from "./api-key-permissions";
 import { apiKeyReferrers } from "./api-key-referrers";
 import { ExtraApiKeyPermissions } from "../extra/schema";
 
@@ -159,35 +149,19 @@ export const ApiKeyEditForm = ({
             placeholder={messages.referrersPlaceholder}
             rows={3}
           />
-          {permissionOptions.length > 0 ? (
-            <FieldSet>
-              <FieldLegend>{messages.permissions}</FieldLegend>
-              <FieldDescription>
-                {messages.permissionsDescription}
-              </FieldDescription>
-              <FieldGroup data-slot="checkbox-group" className="gap-3">
-                {permissionOptions.map((permission) => (
-                  <Field key={permission.id} orientation="horizontal">
-                    <Checkbox
-                      id={`edit-${permission.id}`}
-                      checked={selectedPermissions[permission.id] ?? false}
-                      onCheckedChange={(checked: boolean) =>
-                        setSelectedPermissions((current) => ({
-                          ...current,
-                          [permission.id]: checked,
-                        }))
-                      }
-                    />
-                    <FieldContent>
-                      <FieldLabel htmlFor={`edit-${permission.id}`}>
-                        {permission.id}
-                      </FieldLabel>
-                    </FieldContent>
-                  </Field>
-                ))}
-              </FieldGroup>
-            </FieldSet>
-          ) : null}
+          <ApiKeyPermissions
+            description={messages.permissionsDescription}
+            idPrefix="edit"
+            permissions={permissions}
+            selected={selectedPermissions}
+            title={messages.permissions}
+            onChange={(id, checked) =>
+              setSelectedPermissions((current) => ({
+                ...current,
+                [id]: checked,
+              }))
+            }
+          />
           <SubmitError result={submitResult} />
           <SubmitButton form={form} />
         </form>
