@@ -11,6 +11,7 @@ export { MemberRequired } from "./member-required";
 export { HasPermission, useHasPermission } from "./has-permission";
 export { ProjectAccessMatrix } from "./project-access-matrix";
 export {
+  ForgotPassword,
   ResetPassword,
   Signin,
   Signup,

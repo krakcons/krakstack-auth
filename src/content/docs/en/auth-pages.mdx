@@ -90,7 +90,7 @@ Create these public paths. The components link and redirect to one another using
 | `/sign-in`        | `Signin`        | Password, email-code, and social sign-in   |
 | `/sign-up`        | `Signup`        | Account registration                       |
 | `/verify-email`   | `VerifyEmail`   | Email verification code                    |
-| `/reset-password` | `ResetPassword` | Complete a password-reset link             |
+| `/reset-password` | `ResetPassword` | Request or complete a password reset       |
 | `/2fa`            | `TwoFactor`     | TOTP, email-code, or backup-code challenge |
 
 A minimal TanStack Router page follows the same pattern for each component:
@@ -108,9 +108,7 @@ Repeat this route with `Signup`, `VerifyEmail`, `ResetPassword`, and `TwoFactor`
 
 ## Forgot-password entry
 
-`Signin` links to `/forgot-password`. Add an application-owned page at that path that collects an email address and calls the Better Auth password-reset request method, using `/reset-password` as the callback destination. Keep the response generic so it does not disclose whether an account exists.
-
-If your application does not provide a custom forgot-password form, redirect `/forgot-password` to the central auth service's page while preserving the return destination.
+`Signin` links to `/reset-password`. Without a token, `ResetPassword` collects the email address and requests a reset link. When the user returns from that email with a token, the same component displays the new-password form. The request response stays generic so it does not disclose whether an account exists.
 
 ## Protected application routes
 

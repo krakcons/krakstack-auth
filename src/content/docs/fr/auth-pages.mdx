@@ -90,7 +90,7 @@ Créez les chemins publics suivants. Les composants utilisent ces noms pour leur
 | `/sign-in`        | `Signin`        | Mot de passe, code courriel et connexion sociale |
 | `/sign-up`        | `Signup`        | Création de compte                               |
 | `/verify-email`   | `VerifyEmail`   | Code de vérification du courriel                 |
-| `/reset-password` | `ResetPassword` | Finalisation d'un lien de réinitialisation       |
+| `/reset-password` | `ResetPassword` | Demande ou finalisation d'une réinitialisation   |
 | `/2fa`            | `TwoFactor`     | Défi TOTP, courriel ou code de secours           |
 
 Chaque route TanStack suit le même modèle :
@@ -108,9 +108,7 @@ Répétez avec `Signup`, `VerifyEmail`, `ResetPassword` et `TwoFactor`. Conserve
 
 ## Mot de passe oublié
 
-`Signin` pointe vers `/forgot-password`. Ajoutez une page applicative qui collecte le courriel et appelle la demande de réinitialisation Better Auth avec `/reset-password` comme destination. La réponse doit rester générique afin de ne pas révéler l'existence d'un compte.
-
-Sans formulaire personnalisé, redirigez `/forgot-password` vers la page du service central en conservant la destination de retour.
+`Signin` pointe vers `/reset-password`. Sans jeton, `ResetPassword` collecte le courriel et demande un lien de réinitialisation. Lorsque l'utilisateur revient depuis ce courriel avec un jeton, le même composant affiche le formulaire du nouveau mot de passe. La réponse reste générique afin de ne pas révéler l'existence d'un compte.
 
 ## Routes protégées
 

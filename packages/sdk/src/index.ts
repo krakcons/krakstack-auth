@@ -10,6 +10,7 @@ export {
   MemberRequired,
   ProjectAccessMatrix,
   KrakstackAuthProvider,
+  ForgotPassword,
   ResetPassword,
   Signin,
   Signup,

@@ -55,7 +55,7 @@ import { OrganizationSwitcher, UserButton } from "@krak-stack/auth";
 
 ## Forms
 
-The package exports `Signin`, `Signup`, `VerifyEmail`, `ResetPassword`, and `TwoFactor`. Render them in application-owned routes so URLs, page chrome, and error boundaries remain under your control.
+The package exports `Signin`, `Signup`, `VerifyEmail`, `ForgotPassword`, `ResetPassword`, and `TwoFactor`. `ResetPassword` renders the email request step without a token and the new-password step with one; `ForgotPassword` remains available when only the email step is needed. Render forms in application-owned routes so URLs, page chrome, and error boundaries remain under your control.
 
 ## Authorization guard
 

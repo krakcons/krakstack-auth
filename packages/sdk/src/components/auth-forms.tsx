@@ -55,6 +55,11 @@ const verifyEmailFormBuilder = FormBuilder.empty
   .addField("email", Schema.String)
   .addField("otp", Schema.String);
 
+const forgotPasswordFormBuilder = FormBuilder.empty.addField(
+  "email",
+  Schema.String,
+);
+
 const resetPasswordFormBuilder = FormBuilder.empty.addField(
   "password",
   Schema.String,
@@ -74,6 +79,13 @@ const defaultMessages = {
     field_name: "Name",
     field_password: "Password",
     forgot_password_back_to_sign_in: "Back to sign in",
+    forgot_password_description:
+      "Enter your email and we will send a reset link if an account exists.",
+    forgot_password_error: "Unable to send password reset email.",
+    forgot_password_submit: "Send reset link",
+    forgot_password_success:
+      "If an account exists for that email, a reset link has been sent.",
+    forgot_password_title: "Reset password",
     oauth_client_no_auth_methods:
       "No authentication methods are enabled for this application.",
     reset_password_description: "Enter a new password for your account.",
@@ -139,6 +151,14 @@ const defaultMessages = {
     field_name: "Nom",
     field_password: "Mot de passe",
     forgot_password_back_to_sign_in: "Retour à la connexion",
+    forgot_password_description:
+      "Saisissez votre courriel et nous enverrons un lien de réinitialisation si un compte existe.",
+    forgot_password_error:
+      "Impossible d'envoyer le courriel de réinitialisation.",
+    forgot_password_submit: "Envoyer le lien",
+    forgot_password_success:
+      "Si un compte existe pour ce courriel, un lien de réinitialisation a été envoyé.",
+    forgot_password_title: "Réinitialiser le mot de passe",
     oauth_client_no_auth_methods:
       "Aucune méthode d'authentification n'est activée pour cette application.",
     reset_password_description:
@@ -572,7 +592,7 @@ export function Signin(props: AuthFormProps) {
                   <div className="flex flex-wrap gap-x-4 gap-y-2 text-sm">
                     <Link
                       className={authLinkClassName}
-                      to="/forgot-password"
+                      to="/reset-password"
                       search={searchObject(searchString)}
                     >
                       {m.sign_in_forgot_password}
@@ -981,13 +1001,106 @@ export function VerifyEmail(props: AuthFormProps) {
   );
 }
 
-export function ResetPassword(props: AuthFormProps) {
+export function ForgotPassword(props: AuthFormProps) {
   const { authClient, labels: m } = useAuthFormOptions(props);
-  const navigate = useNavigate();
   const searchString = useRouterState({
     select: (state) => state.location.searchStr,
   });
-  const token = getSearchParam(searchString, "token") ?? "";
+  const [submitted, setSubmitted] = useState(false);
+  const [form] = useState(() =>
+    FormReact.make(forgotPasswordFormBuilder, {
+      fields: { email: TextField },
+      mode: { validation: "onSubmit" },
+      onSubmit: (_, { decoded: value }) =>
+        Effect.tryPromise({
+          try: async () => {
+            setSubmitted(false);
+            const result = await authClient.requestPasswordReset({
+              email: value.email.trim(),
+              redirectTo: `${window.location.origin}/reset-password`,
+            });
+            if (result.error) {
+              throw new Error(result.error.message ?? m.forgot_password_error);
+            }
+            setSubmitted(true);
+          },
+          catch: (cause) =>
+            cause instanceof Error ? cause : new Error(m.forgot_password_error),
+        }),
+    }),
+  );
+  const submit = useAtomSet(form.submit);
+  const submitResult = useAtomValue(form.submit);
+
+  return (
+    <Card className="w-full max-w-md">
+      <CardHeader>
+        <CardTitle className="text-3xl">{m.forgot_password_title}</CardTitle>
+        <CardDescription>{m.forgot_password_description}</CardDescription>
+      </CardHeader>
+      <CardContent>
+        <form.Initialize defaultValues={{ email: "" }}>
+          <form
+            className="flex flex-col gap-4"
+            onSubmit={(event) => {
+              event.preventDefault();
+              event.stopPropagation();
+              submit();
+            }}
+          >
+            <form.email
+              label={m.field_email}
+              type="email"
+              autoComplete="email"
+              required
+            />
+            <SubmitError result={submitResult} />
+            {submitted ? (
+              <p className="bg-card text-card-foreground rounded-lg border px-4 py-3 text-sm shadow-xs">
+                {m.forgot_password_success}
+              </p>
+            ) : null}
+            <Button type="submit" disabled={submitResult.waiting}>
+              {submitResult.waiting ? (
+                <Loader2 className="animate-spin" data-icon="inline-start" />
+              ) : null}
+              {m.forgot_password_submit}
+            </Button>
+          </form>
+        </form.Initialize>
+        <p className="text-muted-foreground mt-6 text-center text-sm">
+          <Link
+            className={authLinkClassName}
+            to="/sign-in"
+            search={searchObject(searchString)}
+          >
+            {m.forgot_password_back_to_sign_in}
+          </Link>
+        </p>
+      </CardContent>
+    </Card>
+  );
+}
+
+export function ResetPassword(props: AuthFormProps) {
+  const searchString = useRouterState({
+    select: (state) => state.location.searchStr,
+  });
+  const token = getSearchParam(searchString, "token");
+
+  return token ? (
+    <ResetPasswordForm {...props} token={token} />
+  ) : (
+    <ForgotPassword {...props} />
+  );
+}
+
+function ResetPasswordForm({
+  token,
+  ...props
+}: AuthFormProps & { token: string }) {
+  const { authClient, labels: m } = useAuthFormOptions(props);
+  const navigate = useNavigate();
   const onSuccess = () => navigate({ to: "/sign-in" });
   const [form] = useState(() =>
     FormReact.make(resetPasswordFormBuilder, {
@@ -996,7 +1109,6 @@ export function ResetPassword(props: AuthFormProps) {
       onSubmit: (_, { decoded: value }) =>
         Effect.tryPromise({
           try: async () => {
-            if (!token) throw new Error(m.reset_password_missing_token);
             const result = await authClient.resetPassword({
               newPassword: value.password,
               token,

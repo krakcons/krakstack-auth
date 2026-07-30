@@ -25,7 +25,6 @@ import { Route as AuthVerifyEmailRouteImport } from './routes/_auth.verify-email
 import { Route as AuthSignUpRouteImport } from './routes/_auth.sign-up'
 import { Route as AuthSignInRouteImport } from './routes/_auth.sign-in'
 import { Route as AuthResetPasswordRouteImport } from './routes/_auth.reset-password'
-import { Route as AuthForgotPasswordRouteImport } from './routes/_auth.forgot-password'
 import { Route as AuthConsentRouteImport } from './routes/_auth.consent'
 import { Route as Auth2faRouteImport } from './routes/_auth.2fa'
 import { Route as DotwellKnownOpenidConfigurationRouteImport } from './routes/[.]well-known/openid-configuration'
@@ -112,11 +111,6 @@ const AuthResetPasswordRoute = AuthResetPasswordRouteImport.update({
   path: '/reset-password',
   getParentRoute: () => AuthRoute,
 } as any)
-const AuthForgotPasswordRoute = AuthForgotPasswordRouteImport.update({
-  id: '/forgot-password',
-  path: '/forgot-password',
-  getParentRoute: () => AuthRoute,
-} as any)
 const AuthConsentRoute = AuthConsentRouteImport.update({
   id: '/consent',
   path: '/consent',
@@ -159,7 +153,6 @@ export interface FileRoutesByFullPath {
   '/.well-known/openid-configuration': typeof DotwellKnownOpenidConfigurationRoute
   '/2fa': typeof Auth2faRoute
   '/consent': typeof AuthConsentRoute
-  '/forgot-password': typeof AuthForgotPasswordRoute
   '/reset-password': typeof AuthResetPasswordRoute
   '/sign-in': typeof AuthSignInRoute
   '/sign-up': typeof AuthSignUpRoute
@@ -182,7 +175,6 @@ export interface FileRoutesByTo {
   '/.well-known/openid-configuration': typeof DotwellKnownOpenidConfigurationRoute
   '/2fa': typeof Auth2faRoute
   '/consent': typeof AuthConsentRoute
-  '/forgot-password': typeof AuthForgotPasswordRoute
   '/reset-password': typeof AuthResetPasswordRoute
   '/sign-in': typeof AuthSignInRoute
   '/sign-up': typeof AuthSignUpRoute
@@ -208,7 +200,6 @@ export interface FileRoutesById {
   '/.well-known/openid-configuration': typeof DotwellKnownOpenidConfigurationRoute
   '/_auth/2fa': typeof Auth2faRoute
   '/_auth/consent': typeof AuthConsentRoute
-  '/_auth/forgot-password': typeof AuthForgotPasswordRoute
   '/_auth/reset-password': typeof AuthResetPasswordRoute
   '/_auth/sign-in': typeof AuthSignInRoute
   '/_auth/sign-up': typeof AuthSignUpRoute
@@ -234,7 +225,6 @@ export interface FileRouteTypes {
     | '/.well-known/openid-configuration'
     | '/2fa'
     | '/consent'
-    | '/forgot-password'
     | '/reset-password'
     | '/sign-in'
     | '/sign-up'
@@ -257,7 +247,6 @@ export interface FileRouteTypes {
     | '/.well-known/openid-configuration'
     | '/2fa'
     | '/consent'
-    | '/forgot-password'
     | '/reset-password'
     | '/sign-in'
     | '/sign-up'
@@ -282,7 +271,6 @@ export interface FileRouteTypes {
     | '/.well-known/openid-configuration'
     | '/_auth/2fa'
     | '/_auth/consent'
-    | '/_auth/forgot-password'
     | '/_auth/reset-password'
     | '/_auth/sign-in'
     | '/_auth/sign-up'
@@ -424,13 +412,6 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthResetPasswordRouteImport
       parentRoute: typeof AuthRoute
     }
-    '/_auth/forgot-password': {
-      id: '/_auth/forgot-password'
-      path: '/forgot-password'
-      fullPath: '/forgot-password'
-      preLoaderRoute: typeof AuthForgotPasswordRouteImport
-      parentRoute: typeof AuthRoute
-    }
     '/_auth/consent': {
       id: '/_auth/consent'
       path: '/consent'
@@ -479,7 +460,6 @@ declare module '@tanstack/react-router' {
 interface AuthRouteChildren {
   Auth2faRoute: typeof Auth2faRoute
   AuthConsentRoute: typeof AuthConsentRoute
-  AuthForgotPasswordRoute: typeof AuthForgotPasswordRoute
   AuthResetPasswordRoute: typeof AuthResetPasswordRoute
   AuthSignInRoute: typeof AuthSignInRoute
   AuthSignUpRoute: typeof AuthSignUpRoute
@@ -489,7 +469,6 @@ interface AuthRouteChildren {
 const AuthRouteChildren: AuthRouteChildren = {
   Auth2faRoute: Auth2faRoute,
   AuthConsentRoute: AuthConsentRoute,
-  AuthForgotPasswordRoute: AuthForgotPasswordRoute,
   AuthResetPasswordRoute: AuthResetPasswordRoute,
   AuthSignInRoute: AuthSignInRoute,
   AuthSignUpRoute: AuthSignUpRoute,
