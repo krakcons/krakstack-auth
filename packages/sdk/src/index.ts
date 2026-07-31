@@ -36,6 +36,7 @@ export {
   type OrganizationSwitcherFeatures,
   type OrganizationSwitcherProps,
   type UserButtonDialog,
+  type UserButtonProps,
   useAuthClient,
   useAdminUsersTotal,
 } from "./components";

@@ -57,6 +57,22 @@ When components are configured, register their Tailwind source:
 @import "@krak-stack/auth/tailwind.css";
 ```
 
+`UserButton` accepts `menuActions` for app-owned menu items such as dashboard or workspace links:
+
+```tsx
+import { UserButton } from "@krak-stack/auth";
+import { DropdownMenuItem } from "@/components/ui/dropdown-menu";
+
+<UserButton
+  menuActions={
+    <DropdownMenuItem render={<a href="/dashboard" />}>
+      Dashboard
+    </DropdownMenuItem>
+  }
+  signOutRedirect="/"
+/>;
+```
+
 See [React components and CSS](https://auth.krakstack.net/en/docs/components) for the provider and component requirements.
 
 ## Authorization

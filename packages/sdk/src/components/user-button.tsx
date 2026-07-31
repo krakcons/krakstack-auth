@@ -522,7 +522,7 @@ const userApiKeysAtom = Atom.family((authClient: AuthUiClient) =>
 
 const emptyApiKeysAtom = Atom.make(Effect.succeed([] as ApiKeySummary[]));
 
-type UserDropdownProps = {
+export type UserButtonProps = {
   authClient?: AuthUiClient;
   baseUrl?: string | undefined;
   signOutRedirect?: string;
@@ -530,6 +530,7 @@ type UserDropdownProps = {
   defaultDialog?: UserButtonDialog | null;
   hideTrigger?: boolean;
   renderUnauthenticated?: () => ReactNode;
+  menuActions?: ReactNode;
   apiKeyPermissions?: Readonly<Record<string, ReadonlyArray<string>>>;
   messages?: UserButtonMessages;
   dialog?: UserButtonDialog | null;
@@ -551,11 +552,12 @@ export const UserButton = ({
   defaultDialog = null,
   hideTrigger = false,
   renderUnauthenticated,
+  menuActions,
   apiKeyPermissions,
   messages,
   dialog: controlledDialog,
   onDialogChange,
-}: UserDropdownProps) => {
+}: UserButtonProps) => {
   const auth = useKrakstackAuth();
   const authClient = providedAuthClient ?? auth?.authClient;
 
@@ -729,6 +731,12 @@ export const UserButton = ({
                   {...(displayImage ? { imageSrc: displayImage } : {})}
                 />
               </DropdownMenuLabel>
+              {menuActions ? (
+                <>
+                  <DropdownMenuSeparator />
+                  {menuActions}
+                </>
+              ) : null}
               <DropdownMenuSeparator />
               {canManageUserSettings ? (
                 <>

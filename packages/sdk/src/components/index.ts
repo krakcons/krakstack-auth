@@ -62,7 +62,7 @@ export type {
   OrganizationSwitcherFeatures,
   OrganizationSwitcherProps,
 } from "./organization-switcher";
-export type { UserButtonDialog } from "./user-button";
+export type { UserButtonDialog, UserButtonProps } from "./user-button";
 export type { AuthUiClient } from "./auth-client";
 export type {
   MemberRequiredMessages,
