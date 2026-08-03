@@ -1,4 +1,5 @@
 import { apiKeyClient } from "@better-auth/api-key/client";
+import type { BetterAuthClientOptions } from "@better-auth/core";
 import {
   adminClient,
   anonymousClient,
@@ -62,15 +63,25 @@ const authUiClientPlugins: AuthUiClientPlugins = [
   genericOAuthClient(),
 ];
 
-type AuthUiClientOptions = {
+type AuthUiClientOptions = BetterAuthClientOptions & {
   baseURL?: string | undefined;
   plugins: AuthUiClientPlugins;
 };
 
+type CreateAuthUiClientOptions = {
+  credentials?: RequestCredentials | undefined;
+};
+
 export type AuthUiClient = ReactAuthClient<AuthUiClientOptions>;
 
-export const createAuthUiClient = (baseUrl?: string | undefined) =>
+export const createAuthUiClient = (
+  baseUrl?: string | undefined,
+  options?: CreateAuthUiClientOptions,
+) =>
   createAuthClient<AuthUiClientOptions>({
     ...(baseUrl ? { baseURL: baseUrl } : {}),
+    fetchOptions: {
+      credentials: options?.credentials ?? "include",
+    },
     plugins: authUiClientPlugins,
   });

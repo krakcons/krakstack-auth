@@ -57,6 +57,8 @@ When components are configured, register their Tailwind source:
 @import "@krak-stack/auth/tailwind.css";
 ```
 
+`createAuthUiClient` sends credentials by default so hosted KrakStack Auth UI can resolve sessions when embedded in consumer apps on a different origin. Pass `{ credentials: "omit" }` only for intentionally anonymous or custom clients.
+
 `UserButton` accepts `menuActions` for app-owned menu items such as dashboard or workspace links:
 
 ```tsx
