@@ -267,8 +267,8 @@ const text = (value: string, params?: Record<string, string>) =>
   );
 
 const authLinkClassName = cn(
-  buttonVariants({ variant: "link" }),
-  "h-auto px-0 align-baseline",
+  buttonVariants({ variant: "link", size: null }),
+  "h-auto align-baseline",
 );
 
 const searchObject = (searchString: string) =>
