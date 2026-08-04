@@ -22,7 +22,6 @@ import { Route as AdminOrganizationsRouteImport } from './routes/admin/organizat
 import { Route as AdminDomainsRouteImport } from './routes/admin/domains'
 import { Route as AdminApiKeysRouteImport } from './routes/admin/api-keys'
 import { Route as AuthVerifyEmailRouteImport } from './routes/_auth.verify-email'
-import { Route as AuthSignUpRouteImport } from './routes/_auth.sign-up'
 import { Route as AuthSignInRouteImport } from './routes/_auth.sign-in'
 import { Route as AuthResetPasswordRouteImport } from './routes/_auth.reset-password'
 import { Route as AuthConsentRouteImport } from './routes/_auth.consent'
@@ -96,11 +95,6 @@ const AuthVerifyEmailRoute = AuthVerifyEmailRouteImport.update({
   path: '/verify-email',
   getParentRoute: () => AuthRoute,
 } as any)
-const AuthSignUpRoute = AuthSignUpRouteImport.update({
-  id: '/sign-up',
-  path: '/sign-up',
-  getParentRoute: () => AuthRoute,
-} as any)
 const AuthSignInRoute = AuthSignInRouteImport.update({
   id: '/sign-in',
   path: '/sign-in',
@@ -155,7 +149,6 @@ export interface FileRoutesByFullPath {
   '/consent': typeof AuthConsentRoute
   '/reset-password': typeof AuthResetPasswordRoute
   '/sign-in': typeof AuthSignInRoute
-  '/sign-up': typeof AuthSignUpRoute
   '/verify-email': typeof AuthVerifyEmailRoute
   '/admin/api-keys': typeof AdminApiKeysRoute
   '/admin/domains': typeof AdminDomainsRoute
@@ -177,7 +170,6 @@ export interface FileRoutesByTo {
   '/consent': typeof AuthConsentRoute
   '/reset-password': typeof AuthResetPasswordRoute
   '/sign-in': typeof AuthSignInRoute
-  '/sign-up': typeof AuthSignUpRoute
   '/verify-email': typeof AuthVerifyEmailRoute
   '/admin/api-keys': typeof AdminApiKeysRoute
   '/admin/domains': typeof AdminDomainsRoute
@@ -202,7 +194,6 @@ export interface FileRoutesById {
   '/_auth/consent': typeof AuthConsentRoute
   '/_auth/reset-password': typeof AuthResetPasswordRoute
   '/_auth/sign-in': typeof AuthSignInRoute
-  '/_auth/sign-up': typeof AuthSignUpRoute
   '/_auth/verify-email': typeof AuthVerifyEmailRoute
   '/admin/api-keys': typeof AdminApiKeysRoute
   '/admin/domains': typeof AdminDomainsRoute
@@ -227,7 +218,6 @@ export interface FileRouteTypes {
     | '/consent'
     | '/reset-password'
     | '/sign-in'
-    | '/sign-up'
     | '/verify-email'
     | '/admin/api-keys'
     | '/admin/domains'
@@ -249,7 +239,6 @@ export interface FileRouteTypes {
     | '/consent'
     | '/reset-password'
     | '/sign-in'
-    | '/sign-up'
     | '/verify-email'
     | '/admin/api-keys'
     | '/admin/domains'
@@ -273,7 +262,6 @@ export interface FileRouteTypes {
     | '/_auth/consent'
     | '/_auth/reset-password'
     | '/_auth/sign-in'
-    | '/_auth/sign-up'
     | '/_auth/verify-email'
     | '/admin/api-keys'
     | '/admin/domains'
@@ -391,13 +379,6 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthVerifyEmailRouteImport
       parentRoute: typeof AuthRoute
     }
-    '/_auth/sign-up': {
-      id: '/_auth/sign-up'
-      path: '/sign-up'
-      fullPath: '/sign-up'
-      preLoaderRoute: typeof AuthSignUpRouteImport
-      parentRoute: typeof AuthRoute
-    }
     '/_auth/sign-in': {
       id: '/_auth/sign-in'
       path: '/sign-in'
@@ -462,7 +443,6 @@ interface AuthRouteChildren {
   AuthConsentRoute: typeof AuthConsentRoute
   AuthResetPasswordRoute: typeof AuthResetPasswordRoute
   AuthSignInRoute: typeof AuthSignInRoute
-  AuthSignUpRoute: typeof AuthSignUpRoute
   AuthVerifyEmailRoute: typeof AuthVerifyEmailRoute
 }
 
@@ -471,7 +451,6 @@ const AuthRouteChildren: AuthRouteChildren = {
   AuthConsentRoute: AuthConsentRoute,
   AuthResetPasswordRoute: AuthResetPasswordRoute,
   AuthSignInRoute: AuthSignInRoute,
-  AuthSignUpRoute: AuthSignUpRoute,
   AuthVerifyEmailRoute: AuthVerifyEmailRoute,
 }
 

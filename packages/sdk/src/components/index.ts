@@ -14,7 +14,6 @@ export {
   ForgotPassword,
   ResetPassword,
   Signin,
-  Signup,
   TwoFactor,
   VerifyEmail,
 } from "./auth-forms";

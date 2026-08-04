@@ -37,8 +37,6 @@ type ProjectFormValues = {
   emailPassword: boolean;
   emailOtp: boolean;
   google: boolean;
-  signUp: boolean;
-  signUpName: boolean;
 };
 
 const projectFormBuilder = FormBuilder.empty
@@ -55,9 +53,7 @@ const projectFormBuilder = FormBuilder.empty
   .addField("themeCss", Schema.String)
   .addField("emailPassword", Schema.Boolean)
   .addField("emailOtp", Schema.Boolean)
-  .addField("google", Schema.Boolean)
-  .addField("signUp", Schema.Boolean)
-  .addField("signUpName", Schema.Boolean);
+  .addField("google", Schema.Boolean);
 
 const isFile = (value: unknown): value is File => value instanceof File;
 
@@ -68,8 +64,6 @@ const valuesToData = (value: ProjectFormValues) =>
       emailPassword: value.emailPassword,
       emailOtp: value.emailOtp,
       google: value.google,
-      signUp: value.signUp,
-      signUpName: value.signUpName,
     },
   });
 
@@ -82,8 +76,6 @@ const makeProjectForm = (project?: Project) =>
       emailPassword: CheckboxField,
       emailOtp: CheckboxField,
       google: CheckboxField,
-      signUp: CheckboxField,
-      signUpName: CheckboxField,
     },
     onSubmit: (_, { decoded: value, get }) => {
       let logo = assetPath(isFile(value.logo) ? null : value.logo);
@@ -139,8 +131,6 @@ export function ProjectForm({
     emailPassword: project?.data.authOptions?.emailPassword ?? true,
     emailOtp: project?.data.authOptions?.emailOtp ?? true,
     google: project?.data.authOptions?.google ?? true,
-    signUp: project?.data.authOptions?.signUp ?? true,
-    signUpName: project?.data.authOptions?.signUpName ?? true,
   } satisfies ProjectFormValues;
 
   return (
@@ -177,14 +167,12 @@ export function ProjectForm({
               rows={12}
               spellCheck={false}
             />
-            <div className="grid gap-3 rounded-lg border p-4 md:grid-cols-5">
+            <div className="grid gap-3 rounded-lg border p-4 md:grid-cols-3">
               <form.emailPassword
                 label={m.oauth_client_auth_email_password()}
               />
               <form.emailOtp label={m.oauth_client_auth_email_otp()} />
               <form.google label={m.oauth_client_auth_google()} />
-              <form.signUp label={m.oauth_client_auth_sign_up()} />
-              <form.signUpName label={m.oauth_client_auth_sign_up_name()} />
             </div>
             <SubmitError result={submitResult} />
             <SubmitButton form={form}>{m.form_submit()}</SubmitButton>

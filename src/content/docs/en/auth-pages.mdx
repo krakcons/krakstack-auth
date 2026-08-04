@@ -2,7 +2,7 @@
 slug: auth-pages
 path: /docs/auth-pages
 title: Auth pages
-description: Add application-owned sign-in, sign-up, verification, password reset, and two-factor routes around the packaged forms.
+description: Add application-owned sign-in, verification, password reset, and two-factor routes around the packaged forms.
 icon: lucide:boxes
 order: 20
 locale: en
@@ -88,7 +88,6 @@ Create these public paths. The components link and redirect to one another using
 | Route             | Component       | Purpose                                    |
 | ----------------- | --------------- | ------------------------------------------ |
 | `/sign-in`        | `Signin`        | Password, email-code, and social sign-in   |
-| `/sign-up`        | `Signup`        | Account registration                       |
 | `/verify-email`   | `VerifyEmail`   | Email verification code                    |
 | `/reset-password` | `ResetPassword` | Request or complete a password reset       |
 | `/2fa`            | `TwoFactor`     | TOTP, email-code, or backup-code challenge |
@@ -104,7 +103,7 @@ export const Route = createFileRoute("/_auth/sign-in")({
 });
 ```
 
-Repeat this route with `Signup`, `VerifyEmail`, `ResetPassword`, and `TwoFactor`. Use the exact public paths above unless you also customize every link and callback that refers to them.
+Repeat this route with `VerifyEmail`, `ResetPassword`, and `TwoFactor`. There is no `/sign-up` route or `Signup` component. Email OTP and Google create an account when the identity does not exist, directly from the sign-in flow; password authentication is sign-in only. Use the exact public paths above unless you also customize every link and callback that refers to them.
 
 ## Forgot-password entry
 

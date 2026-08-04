@@ -158,12 +158,6 @@ const projectColumns = (): ColumnDef<Project>[] => [
         {row.original.data.authOptions?.google !== false ? (
           <Badge variant="secondary">{m.oauth_client_auth_google()}</Badge>
         ) : null}
-        {row.original.data.authOptions?.signUp !== false ? (
-          <Badge variant="outline">{m.oauth_client_auth_sign_up()}</Badge>
-        ) : null}
-        {row.original.data.authOptions?.signUpName !== false ? (
-          <Badge variant="outline">{m.oauth_client_auth_sign_up_name()}</Badge>
-        ) : null}
       </div>
     ),
   },

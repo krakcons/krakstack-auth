@@ -22,7 +22,7 @@ Before deploying a custom build, establish the administration organization and s
 
 ## Projects and branding
 
-A project contains a name, optional logo, sanitized theme CSS, and toggles for email/password, email OTP, Google, sign-up, and sign-up name collection. Google becomes available only when both Google credentials are configured on the service.
+A project contains a name, optional logo, sanitized theme CSS, and toggles for email/password, email OTP, and Google. Google becomes available only when both Google credentials are configured on the service. Account creation is not project-configurable: email OTP and Google can create an account from the sign-in flow, while password authentication is sign-in only. There is no separate sign-up route or component.
 
 Projects can connect to users and organizations. OAuth clients and domains can reference a project. A project is recommended for a consistent sign-in experience but remains optional in several API payloads.
 

@@ -2,7 +2,7 @@
 slug: auth-pages
 path: /docs/auth-pages
 title: Pages d'authentification
-description: Ajoutez les routes de connexion, inscription, vérification, réinitialisation et deuxième facteur autour des formulaires fournis.
+description: Ajoutez les routes de connexion, vérification, réinitialisation et deuxième facteur autour des formulaires fournis.
 icon: lucide:boxes
 order: 20
 locale: fr
@@ -88,7 +88,6 @@ Créez les chemins publics suivants. Les composants utilisent ces noms pour leur
 | Route             | Composant       | Fonction                                         |
 | ----------------- | --------------- | ------------------------------------------------ |
 | `/sign-in`        | `Signin`        | Mot de passe, code courriel et connexion sociale |
-| `/sign-up`        | `Signup`        | Création de compte                               |
 | `/verify-email`   | `VerifyEmail`   | Code de vérification du courriel                 |
 | `/reset-password` | `ResetPassword` | Demande ou finalisation d'une réinitialisation   |
 | `/2fa`            | `TwoFactor`     | Défi TOTP, courriel ou code de secours           |
@@ -104,7 +103,7 @@ export const Route = createFileRoute("/_auth/sign-in")({
 });
 ```
 
-Répétez avec `Signup`, `VerifyEmail`, `ResetPassword` et `TwoFactor`. Conservez les chemins publics exacts sauf si vous personnalisez aussi tous les liens et rappels.
+Répétez avec `VerifyEmail`, `ResetPassword` et `TwoFactor`. Il n'existe ni route `/sign-up` ni composant `Signup`. Le code à usage unique par courriel et Google créent un compte lorsque l'identité n'existe pas, directement depuis le flux de connexion; l'authentification par mot de passe sert uniquement à se connecter. Conservez les chemins publics exacts sauf si vous personnalisez aussi tous les liens et rappels.
 
 ## Mot de passe oublié
 

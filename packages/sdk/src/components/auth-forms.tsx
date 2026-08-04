@@ -46,11 +46,6 @@ const signinFormBuilder = FormBuilder.empty
   .addField("password", Schema.String)
   .addField("otp", Schema.String);
 
-const signupFormBuilder = FormBuilder.empty
-  .addField("name", Schema.String)
-  .addField("email", Schema.String)
-  .addField("password", Schema.String);
-
 const verifyEmailFormBuilder = FormBuilder.empty
   .addField("email", Schema.String)
   .addField("otp", Schema.String);
@@ -74,9 +69,7 @@ const defaultMessages = {
     auth_continue_with_google: "Continue with Google",
     auth_or_continue_with: "or continue with",
     auth_sign_in: "Sign in",
-    auth_sign_up: "Sign up",
     field_email: "Email",
-    field_name: "Name",
     field_password: "Password",
     forgot_password_back_to_sign_in: "Back to sign in",
     forgot_password_description:
@@ -105,16 +98,8 @@ const defaultMessages = {
     sign_in_email_otp_verify: "Verify code",
     sign_in_error: "Unable to sign in.",
     sign_in_forgot_password: "Forgot your password?",
-    sign_in_need_account: "Need an account?",
     sign_in_use_email_otp: "Use email code instead",
-    sign_in_use_password: "Use password instead",
-    sign_up_description: "Enter your details to create an account.",
-    sign_up_disabled_description:
-      "New account registration is currently disabled for this project.",
-    sign_up_disabled_title: "Sign-up is unavailable",
-    sign_up_error: "Unable to create account.",
-    sign_up_have_account: "Already have an account?",
-    sign_up_title: "Create account",
+    sign_in_use_password: "Use an existing password",
     two_factor_backup_code: "Backup code",
     two_factor_code: "Authentication code",
     two_factor_email_code: "Email verification code",
@@ -146,9 +131,7 @@ const defaultMessages = {
     auth_continue_with_google: "Continuer avec Google",
     auth_or_continue_with: "ou continuez avec",
     auth_sign_in: "Se connecter",
-    auth_sign_up: "S'inscrire",
     field_email: "Courriel",
-    field_name: "Nom",
     field_password: "Mot de passe",
     forgot_password_back_to_sign_in: "Retour à la connexion",
     forgot_password_description:
@@ -180,16 +163,8 @@ const defaultMessages = {
     sign_in_email_otp_verify: "Vérifier le code",
     sign_in_error: "Impossible de se connecter.",
     sign_in_forgot_password: "Mot de passe oublié?",
-    sign_in_need_account: "Besoin d'un compte?",
     sign_in_use_email_otp: "Utiliser un code courriel",
-    sign_in_use_password: "Utiliser le mot de passe",
-    sign_up_description: "Saisissez vos informations pour créer un compte.",
-    sign_up_disabled_description:
-      "Les nouvelles inscriptions sont actuellement désactivées pour ce projet.",
-    sign_up_disabled_title: "L'inscription est indisponible",
-    sign_up_error: "Impossible de créer le compte.",
-    sign_up_have_account: "Vous avez déjà un compte?",
-    sign_up_title: "Créer un compte",
+    sign_in_use_password: "Utiliser un mot de passe existant",
     two_factor_backup_code: "Code de secours",
     two_factor_code: "Code d'authentification",
     two_factor_email_code: "Code de vérification par courriel",
@@ -296,11 +271,20 @@ const authLinkClassName = cn(
   "h-auto px-0 align-baseline",
 );
 
-const lastLoginMethodToAuthMethod = (method: string | null | undefined) =>
-  method === "email" ? "password" : "emailOtp";
-
 const searchObject = (searchString: string) =>
   Object.fromEntries(new URLSearchParams(searchString));
+
+const authMethodSearch = (
+  searchString: string,
+  method: "password" | "emailOtp",
+  email?: string,
+) => {
+  const search = new URLSearchParams(searchString);
+  search.set("method", method);
+  if (email?.trim()) search.set("email", email.trim());
+  else if (email !== undefined) search.delete("email");
+  return Object.fromEntries(search);
+};
 
 export function Signin(props: AuthFormProps) {
   const {
@@ -328,6 +312,7 @@ export function Signin(props: AuthFormProps) {
     projectConfig?.authDomain,
     projectConfig?.rootDomain,
   );
+  const initialEmail = getSearchParam(searchString, "email")?.trim() ?? "";
   const oauthQuery = getOAuthQuery(searchString);
   const authOptions = projectConfig?.authOptions;
   const onNavigate = (target: string) => navigateTarget(target, navigate);
@@ -336,13 +321,25 @@ export function Signin(props: AuthFormProps) {
     emailPassword: authOptions?.emailPassword ?? true,
     emailOtp: authOptions?.emailOtp ?? true,
     google: authOptions?.google ?? true,
-    signUp: authOptions?.signUp ?? true,
   };
-  const [emailSubmitted, setEmailSubmitted] = useState(false);
-  const [authMethod, setAuthMethod] = useState<"password" | "emailOtp">(() =>
-    lastLoginMethodToAuthMethod(authClient.getLastUsedLoginMethod?.()),
+  const requestedMethod = getSearchParam(searchString, "method");
+  const initialAuthMethod =
+    requestedMethod === "password" && options.emailPassword
+      ? "password"
+      : requestedMethod === "emailOtp" && options.emailOtp
+        ? "emailOtp"
+        : options.emailOtp
+          ? "emailOtp"
+          : "password";
+  const initialMethodStep =
+    Boolean(initialEmail) && requestedMethod === initialAuthMethod;
+  const [emailSubmitted, setEmailSubmitted] = useState(initialMethodStep);
+  const [authMethod, setAuthMethod] = useState<"password" | "emailOtp">(
+    initialAuthMethod,
   );
-  const [otpSentTo, setOtpSentTo] = useState("");
+  const [otpSentTo, setOtpSentTo] = useState(
+    initialMethodStep && initialAuthMethod === "emailOtp" ? initialEmail : "",
+  );
   const [emailOtpResendAvailableAt, setEmailOtpResendAvailableAt] = useState(0);
   const [emailOtpResendSeconds, setEmailOtpResendSeconds] = useState(0);
   const selectedAuthMethod =
@@ -406,6 +403,11 @@ export function Signin(props: AuthFormProps) {
               setAuthMethod("emailOtp");
               setEmailSubmitted(true);
               setOtpSentTo(email);
+              navigate({
+                to: "/sign-in",
+                search: authMethodSearch(searchString, "emailOtp", email),
+                replace: true,
+              });
               setEmailOtpResendAvailableAt(
                 Date.now() + EMAIL_OTP_RESEND_COOLDOWN_SECONDS * 1000,
               );
@@ -418,7 +420,14 @@ export function Signin(props: AuthFormProps) {
 
             if (!action.emailSubmitted) {
               if (action.method === "emailOtp") await sendEmailOtp();
-              else setEmailSubmitted(true);
+              else {
+                setEmailSubmitted(true);
+                navigate({
+                  to: "/sign-in",
+                  search: authMethodSearch(searchString, "password", email),
+                  replace: true,
+                });
+              }
               return;
             }
 
@@ -430,6 +439,7 @@ export function Signin(props: AuthFormProps) {
               const result = await authClient.signIn.emailOtp({
                 email,
                 otp: value.otp.trim(),
+                name: nameFromEmail(email),
               });
               if (result.error) {
                 throw new Error(
@@ -517,6 +527,11 @@ export function Signin(props: AuthFormProps) {
     setEmailSubmitted(false);
     setOtpSentTo("");
     setEmailOtpResendAvailableAt(0);
+    navigate({
+      to: "/sign-in",
+      search: authMethodSearch(searchString, selectedAuthMethod, ""),
+      replace: true,
+    });
   };
 
   const switchAuthMethod = () => {
@@ -528,6 +543,15 @@ export function Signin(props: AuthFormProps) {
       setAuthMethod("password");
       setOtpSentTo("");
       setEmailOtpResendAvailableAt(0);
+      navigate({
+        to: "/sign-in",
+        search: authMethodSearch(
+          searchString,
+          "password",
+          formValues.email,
+        ),
+        replace: true,
+      });
       return;
     }
     submit({ type: "sendEmailOtp" });
@@ -564,7 +588,9 @@ export function Signin(props: AuthFormProps) {
       </CardHeader>
       <CardContent>
         {hasPrimaryAuth ? (
-          <form.Initialize defaultValues={{ email: "", password: "", otp: "" }}>
+          <form.Initialize
+            defaultValues={{ email: initialEmail, password: "", otp: "" }}
+          >
             <form
               className="flex flex-col gap-4"
               onSubmit={(event) => {
@@ -603,7 +629,11 @@ export function Signin(props: AuthFormProps) {
                     <Link
                       className={authLinkClassName}
                       to="/reset-password"
-                      search={searchObject(searchString)}
+                      search={authMethodSearch(
+                        searchString,
+                        "password",
+                        formValues.email.trim(),
+                      )}
                     >
                       {m.sign_in_forgot_password}
                     </Link>
@@ -696,196 +726,6 @@ export function Signin(props: AuthFormProps) {
             {m.oauth_client_no_auth_methods}
           </p>
         ) : null}
-        {options.signUp ? (
-          <p className="text-muted-foreground mt-6 text-center text-sm">
-            <Link
-              className={authLinkClassName}
-              to="/sign-up"
-              search={searchObject(searchString)}
-            >
-              {m.sign_in_need_account} {m.auth_sign_up}
-            </Link>
-          </p>
-        ) : null}
-      </CardContent>
-    </Card>
-  );
-}
-
-export function Signup(props: AuthFormProps) {
-  const {
-    authClient,
-    baseUrl,
-    labels: m,
-    projectConfig: providedProjectConfig,
-  } = useAuthFormOptions(props);
-  const navigate = useNavigate();
-  const searchString = useRouterState({
-    select: (state) => state.location.searchStr,
-  });
-  const projectConfig = useAuthProjectConfig(
-    baseUrl,
-    searchString,
-    providedProjectConfig,
-  );
-  const redirectTarget = getRedirectTarget(
-    searchString,
-    projectConfig?.authDomain,
-    projectConfig?.rootDomain,
-  );
-  const authOptions = projectConfig?.authOptions;
-  const onNavigate = (target: string) => navigate({ href: target });
-  const onVerifyEmail = (email: string) =>
-    navigate({
-      to: "/verify-email",
-      search: { ...searchObject(searchString), email },
-    });
-  const options = {
-    google: authOptions?.google ?? true,
-    signUp: authOptions?.signUp ?? true,
-    signUpName: authOptions?.signUpName ?? true,
-  };
-  const [form] = useState(() =>
-    FormReact.make(signupFormBuilder, {
-      fields: { name: TextField, email: TextField, password: TextField },
-      mode: { validation: "onSubmit" },
-      onSubmit: (_, { decoded: value }) =>
-        Effect.tryPromise({
-          try: async () => {
-            if (!options.signUp) {
-              throw new Error(m.sign_up_disabled_description);
-            }
-            const result = await authClient.signUp.email({
-              name: options.signUpName
-                ? value.name.trim()
-                : nameFromEmail(value.email),
-              email: value.email.trim(),
-              password: value.password,
-            });
-            if (result.error) {
-              throw new Error(result.error.message ?? m.sign_up_error);
-            }
-            onVerifyEmail(value.email.trim());
-          },
-          catch: (cause) =>
-            cause instanceof Error ? cause : new Error(m.sign_up_error),
-        }),
-    }),
-  );
-  const submit = useAtomSet(form.submit);
-  const submitResult = useAtomValue(form.submit);
-  const [socialSignUp] = useState(() =>
-    Atom.fn((provider: "google") =>
-      Effect.tryPromise({
-        try: async () => {
-          const result = await authClient.signIn.social({
-            provider,
-            callbackURL: redirectTarget,
-            errorCallbackURL: "/sign-up",
-          });
-          if (result.error) {
-            throw new Error(result.error.message ?? m.sign_up_error);
-          }
-          if (result.data?.url) onNavigate(result.data.url);
-        },
-        catch: (cause) =>
-          cause instanceof Error ? cause : new Error(m.sign_up_error),
-      }),
-    ),
-  );
-  const startSocialSignUp = useAtomSet(socialSignUp);
-  const socialSignUpResult = useAtomValue(socialSignUp);
-
-  const signUpWithGoogle = () => startSocialSignUp("google");
-
-  if (!options.signUp) {
-    return (
-      <Card className="w-full max-w-md">
-        <CardHeader>
-          <CardTitle className="text-3xl">{m.sign_up_disabled_title}</CardTitle>
-          <CardDescription>{m.sign_up_disabled_description}</CardDescription>
-        </CardHeader>
-        <CardContent>
-          <p className="text-muted-foreground text-center text-sm">
-            <Link
-              className={authLinkClassName}
-              to="/sign-in"
-              search={searchObject(searchString)}
-            >
-              {m.sign_up_have_account} {m.auth_sign_in}
-            </Link>
-          </p>
-        </CardContent>
-      </Card>
-    );
-  }
-
-  return (
-    <Card className="w-full max-w-md">
-      <CardHeader>
-        <CardTitle className="text-3xl">{m.sign_up_title}</CardTitle>
-        <CardDescription>{m.sign_up_description}</CardDescription>
-      </CardHeader>
-      <CardContent>
-        <form.Initialize defaultValues={{ name: "", email: "", password: "" }}>
-          <form
-            className="flex flex-col gap-4"
-            onSubmit={(event) => {
-              event.preventDefault();
-              event.stopPropagation();
-              submit();
-            }}
-          >
-            {options.signUpName ? (
-              <form.name label={m.field_name} autoComplete="name" required />
-            ) : null}
-            <form.email
-              label={m.field_email}
-              type="email"
-              autoComplete="email"
-              required
-            />
-            <form.password
-              label={m.field_password}
-              type="password"
-              autoComplete="new-password"
-              minLength={8}
-              required
-            />
-            <SubmitError result={submitResult} />
-            <Button type="submit" disabled={submitResult.waiting}>
-              {submitResult.waiting ? (
-                <Loader2 className="animate-spin" data-icon="inline-start" />
-              ) : null}
-              {effectFormMessages().submit}
-            </Button>
-          </form>
-        </form.Initialize>
-        {options.google ? (
-          <div className="mt-4 flex flex-col gap-3">
-            <Divider label={m.auth_or_continue_with} />
-            <Button
-              type="button"
-              variant="outline"
-              className="w-full"
-              disabled={submitResult.waiting}
-              onClick={signUpWithGoogle}
-            >
-              <GoogleLogo />
-              {m.auth_continue_with_google}
-            </Button>
-            <SubmitError result={socialSignUpResult} />
-          </div>
-        ) : null}
-        <p className="text-muted-foreground mt-6 text-center text-sm">
-          <Link
-            className={authLinkClassName}
-            to="/sign-in"
-            search={searchObject(searchString)}
-          >
-            {m.sign_up_have_account} {m.auth_sign_in}
-          </Link>
-        </p>
       </CardContent>
     </Card>
   );
@@ -1026,6 +866,7 @@ export function ForgotPassword(props: AuthFormProps) {
   const searchString = useRouterState({
     select: (state) => state.location.searchStr,
   });
+  const initialEmail = getSearchParam(searchString, "email")?.trim() ?? "";
   const [submitted, setSubmitted] = useState(false);
   const [form] = useState(() =>
     FormReact.make(forgotPasswordFormBuilder, {
@@ -1059,7 +900,7 @@ export function ForgotPassword(props: AuthFormProps) {
         <CardDescription>{m.forgot_password_description}</CardDescription>
       </CardHeader>
       <CardContent>
-        <form.Initialize defaultValues={{ email: "" }}>
+        <form.Initialize defaultValues={{ email: initialEmail }}>
           <form
             className="flex flex-col gap-4"
             onSubmit={(event) => {

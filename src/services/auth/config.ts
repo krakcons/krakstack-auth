@@ -266,6 +266,7 @@ const createAuth = ({
     },
     emailAndPassword: {
       enabled: true,
+      disableSignUp: true,
       requireEmailVerification: true,
       revokeSessionsOnPasswordReset: true,
       resetPasswordTokenExpiresIn: 60 * 60,
@@ -355,8 +356,7 @@ const createAuth = ({
       jwt(),
       emailOTP({
         overrideDefaultEmailVerification: true,
-        sendVerificationOnSignUp: true,
-        disableSignUp: true,
+        disableSignUp: false,
         storeOTP: "encrypted",
         allowedAttempts: 5,
         sendVerificationOTP: async ({ email, otp, type }, context) => {

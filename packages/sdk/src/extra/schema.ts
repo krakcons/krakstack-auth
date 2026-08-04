@@ -216,8 +216,6 @@ export const ExtraProjectAuthOptions = Schema.Struct({
   emailPassword: Schema.Boolean,
   emailOtp: Schema.Boolean,
   google: Schema.Boolean,
-  signUp: Schema.Boolean,
-  signUpName: Schema.Boolean,
 }).annotate({
   identifier: "ExtraProjectAuthOptions",
   title: "Extra project authentication options",
@@ -227,8 +225,6 @@ export const ExtraProjectAuthOptions = Schema.Struct({
       emailPassword: true,
       emailOtp: true,
       google: true,
-      signUp: true,
-      signUpName: true,
     },
   ],
 });
@@ -259,8 +255,6 @@ export const ExtraProjectPublicConfig = Schema.Struct({
         emailPassword: true,
         emailOtp: true,
         google: true,
-        signUp: false,
-        signUpName: true,
       },
     },
   ],

@@ -13,7 +13,6 @@ export {
   ForgotPassword,
   ResetPassword,
   Signin,
-  Signup,
   TwoFactor,
   VerifyEmail,
   AdminOrganizationForm,
