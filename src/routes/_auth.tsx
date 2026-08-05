@@ -13,6 +13,7 @@ import { authClient } from "@/services/auth/client";
 import { AuthBrandingProvider } from "@/services/auth/client/branding";
 
 export const Route = createFileRoute("/_auth")({
+  ssr: false,
   component: AuthLayout,
 });
 

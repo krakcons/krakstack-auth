@@ -608,6 +608,7 @@ export function Signin(props: AuthFormProps) {
                 <form.email
                   label={m.field_email}
                   type="email"
+                  autoFocus
                   autoComplete="email"
                   onKeyDown={(event) => {
                     if (event.key !== "Enter") return;
