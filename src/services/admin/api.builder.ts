@@ -780,12 +780,11 @@ export const adminApiHandler = HttpApiBuilder.group(
             .pipe(Effect.mapError(internalServerError));
         }),
       )
-      .handle("updateOrganization", ({ params, payload, request }) =>
+      .handle("updateOrganization", ({ params, payload }) =>
         Effect.gen(function* () {
           const service = yield* Organizations;
           const organization = yield* service
             .update({ id: params.id, payload })
-            .pipe(Effect.provide(BetterAuthRequest.make(request)))
             .pipe(Effect.mapError(internalServerError));
 
           if (!organization) return yield* new HttpApiError.NotFound({});

@@ -43,27 +43,39 @@ export class Organizations extends Context.Service<Organizations>()(
         id: string;
         payload: AdminUpdateOrganizationPayload;
       }) {
-        const betterAuth = yield* BetterAuthRequest;
-        const { parentId, ...data } = payload;
-        const updated = yield* Effect.promise(() =>
-          betterAuth.api.updateOrganization({
-            body: {
-              organizationId: id,
-              data: { ...data, ...(parentId ? { parentId } : {}) },
-            },
-            headers: betterAuth.headers,
-          }),
-        );
-
-        if (parentId !== null || !updated) return updated;
-
         const database = yield* DB;
-        yield* database
-          .update(organization)
-          .set({ parentId: null })
-          .where(eq(organization.id, id));
+        if (payload.parentId) {
+          if (payload.parentId === id) {
+            return yield* Effect.fail(
+              new Error("An organization cannot be its own parent"),
+            );
+          }
 
-        return { ...updated, parentId: null };
+          const parent = yield* database.query.organization.findFirst({
+            where: { id: payload.parentId },
+            columns: { parentId: true },
+          });
+          if (!parent || parent.parentId) {
+            return yield* Effect.fail(
+              new Error("Parent organization must be a root organization"),
+            );
+          }
+        }
+
+        const [updated] = yield* database
+          .update(organization)
+          .set({
+            ...(payload.name !== undefined ? { name: payload.name } : {}),
+            ...(payload.slug !== undefined ? { slug: payload.slug } : {}),
+            ...(payload.logo !== undefined ? { logo: payload.logo } : {}),
+            ...(payload.parentId !== undefined
+              ? { parentId: payload.parentId }
+              : {}),
+          })
+          .where(eq(organization.id, id))
+          .returning();
+
+        return updated ?? null;
       });
 
       const _delete = Effect.fn("Organizations.delete")(function* ({
