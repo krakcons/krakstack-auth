@@ -12,6 +12,7 @@ export {
   ServerUsersApiGroup,
 } from "./api.group";
 export { proxyAuthRequest } from "./proxy";
+export type { ProxyAuthRequestOptions } from "./proxy";
 export { ActorRequired } from "./actor";
 export type { ActorConstraint } from "./actor";
 export {

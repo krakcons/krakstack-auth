@@ -37,4 +37,117 @@ describe("proxyAuthRequest", () => {
     );
     expect(forwardedRequest.headers.get("x-forwarded-proto")).toBe("http");
   });
+
+  it("returns upstream cookies as host-only cookies", async () => {
+    const previousFetch = globalThis.fetch;
+
+    globalThis.fetch = ((_request: RequestInfo | URL) => {
+      const headers = new Headers();
+      headers.append(
+        "set-cookie",
+        "session=one; Domain=krakstack.net; Path=/; HttpOnly; Secure",
+      );
+      headers.append(
+        "set-cookie",
+        "context=two; domain=.krakstack.net; Path=/; Secure",
+      );
+      return Promise.resolve(new Response(null, { status: 204, headers }));
+    }) as typeof fetch;
+
+    try {
+      const response = await proxyAuthRequest(
+        new Request("https://dev.kokobi.org/api/auth/get-session"),
+        "https://auth.krakstack.net",
+      );
+
+      expect(response.headers.getSetCookie()).toEqual([
+        "session=one; Path=/; HttpOnly; Secure",
+        "context=two; Path=/; Secure",
+      ]);
+    } finally {
+      globalThis.fetch = previousFetch;
+    }
+  });
+
+  it("shares cookies across matching root-domain hosts", async () => {
+    const previousFetch = globalThis.fetch;
+
+    globalThis.fetch = ((_request: RequestInfo | URL) => {
+      const headers = new Headers();
+      headers.append(
+        "set-cookie",
+        "session=one; Domain=auth.kokobi.org; Path=/; HttpOnly; Secure",
+      );
+      headers.append(
+        "set-cookie",
+        "__Host-csrf=two; Domain=auth.kokobi.org; Path=/; Secure",
+      );
+      return Promise.resolve(new Response(null, { status: 204, headers }));
+    }) as typeof fetch;
+
+    try {
+      const response = await proxyAuthRequest(
+        new Request("https://learning.kokobi.org/api/auth/get-session"),
+        "https://auth.kokobi.org",
+        { cookieDomain: ".Kokobi.org." },
+      );
+
+      expect(response.headers.getSetCookie()).toEqual([
+        "session=one; Path=/; HttpOnly; Secure; Domain=kokobi.org",
+        "__Host-csrf=two; Path=/; Secure",
+      ]);
+    } finally {
+      globalThis.fetch = previousFetch;
+    }
+  });
+
+  it("keeps cookies host-only on unrelated tenant domains", async () => {
+    const previousFetch = globalThis.fetch;
+
+    globalThis.fetch = ((_request: RequestInfo | URL) => {
+      const headers = new Headers({
+        "set-cookie":
+          "session=one; Domain=auth.kokobi.org; Path=/; HttpOnly; Secure",
+      });
+      return Promise.resolve(new Response(null, { status: 204, headers }));
+    }) as typeof fetch;
+
+    try {
+      const response = await proxyAuthRequest(
+        new Request("https://learn.customer.com/api/auth/get-session"),
+        "https://auth.kokobi.org",
+        { cookieDomain: "kokobi.org" },
+      );
+
+      expect(response.headers.getSetCookie()).toEqual([
+        "session=one; Path=/; HttpOnly; Secure",
+      ]);
+    } finally {
+      globalThis.fetch = previousFetch;
+    }
+  });
+
+  it("does not request compressed upstream responses", async () => {
+    const previousFetch = globalThis.fetch;
+    const captured: { request?: Request } = {};
+
+    globalThis.fetch = ((request: RequestInfo | URL) => {
+      captured.request =
+        request instanceof Request ? request : new Request(request);
+      return Promise.resolve(new Response(null, { status: 204 }));
+    }) as typeof fetch;
+
+    try {
+      await proxyAuthRequest(
+        new Request("https://dev.kokobi.org/api/auth/get-session", {
+          headers: { "accept-encoding": "gzip, br" },
+        }),
+        "https://auth.krakstack.net",
+      );
+    } finally {
+      globalThis.fetch = previousFetch;
+    }
+
+    expect(captured.request?.headers.has("accept-encoding")).toBe(false);
+  });
 });
