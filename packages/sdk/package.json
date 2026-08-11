@@ -1,6 +1,6 @@
 {
   "name": "@krak-stack/auth",
-  "version": "0.1.67",
+  "version": "0.1.68",
   "description": "Effect HttpApi clients and schemas for KrakStack Auth.",
   "license": "MIT",
   "files": [
@@ -75,6 +75,7 @@
     "type:check": "tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {
+    "@krak-stack/registry": "^0.1.1",
     "react-qr-code": "^2.2.0"
   },
   "peerDependencies": {

@@ -12,7 +12,7 @@ import {
   SubmitError,
   TextAreaField,
   TextField,
-} from "@/components/ui/effect-form";
+} from "@krak-stack/registry/effect-form";
 import { parseApiKeyReferrers, updateApiKey } from "./api-key";
 import { ApiKeyPermissions } from "./api-key-permissions";
 import { apiKeyReferrers } from "./api-key-referrers";

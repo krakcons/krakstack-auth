@@ -34,8 +34,8 @@ import {
   useState,
 } from "react";
 
-import { DataTable } from "@/components/ui/data-table";
-import { AppBrand } from "@/components/ui/app-brand";
+import { DataTable } from "@krak-stack/registry/data-table";
+import { AppBrand } from "@krak-stack/registry/app-brand";
 import {
   effectFormMessages,
   ImageField,
@@ -43,10 +43,10 @@ import {
   SubmitError,
   TextAreaField,
   TextField,
-} from "@/components/ui/effect-form";
+} from "@krak-stack/registry/effect-form";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { CopyButton } from "@/components/ui/copy-button";
+import { CopyButton } from "@krak-stack/registry/copy-button";
 import {
   Dialog,
   DialogContent,

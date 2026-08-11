@@ -35,7 +35,7 @@ import {
 import {
   DataTable,
   DataTableRelationshipCell,
-} from "@/components/ui/data-table";
+} from "@krak-stack/registry/data-table";
 import {
   ErrorMessage,
   ImageField,
@@ -44,14 +44,14 @@ import {
   SubmitError,
   TextAreaField,
   TextField,
-} from "@/components/ui/effect-form";
-import { EditingLocaleSwitcher } from "@/components/ui/editing-locale-switcher";
-import { AppBrand } from "@/components/ui/app-brand";
+} from "@krak-stack/registry/effect-form";
+import { EditingLocaleSwitcher } from "@krak-stack/registry/editing-locale-switcher";
+import { AppBrand } from "@krak-stack/registry/app-brand";
 import { Field, FieldLabel, FieldSet } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { CopyButton } from "@/components/ui/copy-button";
+import { CopyButton } from "@krak-stack/registry/copy-button";
 import {
   Dialog,
   DialogContent,

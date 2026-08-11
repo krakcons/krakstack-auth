@@ -10,9 +10,9 @@ import {
   DataTable,
   DataTableListSummary,
   type TableParams,
-} from "@/components/ui/data-table";
-import { ErrorMessage } from "@/components/ui/effect-form";
-import { AppBrand } from "@/components/ui/app-brand";
+} from "@krak-stack/registry/data-table";
+import { ErrorMessage } from "@krak-stack/registry/effect-form";
+import { AppBrand } from "@krak-stack/registry/app-brand";
 import {
   AlertDialog,
   AlertDialogAction,

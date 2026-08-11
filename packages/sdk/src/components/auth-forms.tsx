@@ -21,7 +21,7 @@ import {
   SubmitError,
   TextField,
   effectFormMessages,
-} from "@/components/ui/effect-form";
+} from "@krak-stack/registry/effect-form";
 import { Field, FieldLabel } from "@/components/ui/field";
 import {
   InputOTP,

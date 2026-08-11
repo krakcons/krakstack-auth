@@ -11,7 +11,7 @@ import {
   SubmitButton,
   SubmitError,
   TextField,
-} from "@/components/ui/effect-form";
+} from "@krak-stack/registry/effect-form";
 import {
   Dialog,
   DialogContent,

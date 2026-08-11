@@ -5,7 +5,7 @@ import { Check, Loader2, Mail, ShieldAlert } from "lucide-react";
 import { type ReactNode, useEffect, useState } from "react";
 
 import { Button } from "@/components/ui/button";
-import { CopyButton } from "@/components/ui/copy-button";
+import { CopyButton } from "@krak-stack/registry/copy-button";
 import {
   Card,
   CardContent,
