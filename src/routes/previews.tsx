@@ -14,7 +14,7 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { LocaleSwitcher } from "@/components/ui/locale-switcher";
+import { LocaleSwitcher } from "@krak-stack/registry/locale-switcher";
 import { m } from "@/paraglide/messages";
 import { authBaseUrl, authClient } from "@/services/auth/client";
 

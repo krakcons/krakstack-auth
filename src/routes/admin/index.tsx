@@ -20,8 +20,8 @@ import {
 import { useState } from "react";
 
 import { m } from "@/paraglide/messages";
-import { SidebarPageHeader } from "@/components/ui/sidebar-layout";
-import { StatsCard } from "@/components/ui/stats-card";
+import { SidebarPageHeader } from "@krak-stack/registry/sidebar-layout";
+import { StatsCard } from "@krak-stack/registry/stats-card";
 import {
   Card,
   CardContent,

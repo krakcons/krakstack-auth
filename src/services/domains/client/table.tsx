@@ -8,15 +8,15 @@ import { useState } from "react";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
-import { DataTable } from "@/components/ui/data-table";
+import { DataTable } from "@krak-stack/registry/data-table";
 import {
   CheckboxField,
   ErrorMessage,
   SubmitButton,
   SubmitError,
   TextField,
-} from "@/components/ui/effect-form";
-import { AppBrand } from "@/components/ui/app-brand";
+} from "@krak-stack/registry/effect-form";
+import { AppBrand } from "@krak-stack/registry/app-brand";
 import {
   AlertDialog,
   AlertDialogAction,

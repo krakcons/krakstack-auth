@@ -1,8 +1,8 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { AdminUsersTable, useAdminUsersTotal } from "@krak-stack/auth";
 
-import { TableSearchSchemaStandard as TableSearchSchema } from "@/components/ui/data-table";
-import { SidebarPageHeader } from "@/components/ui/sidebar-layout";
+import { TableSearchSchemaStandard as TableSearchSchema } from "@krak-stack/registry/data-table";
+import { SidebarPageHeader } from "@krak-stack/registry/sidebar-layout";
 import { m } from "@/paraglide/messages";
 
 export const Route = createFileRoute("/admin/users")({

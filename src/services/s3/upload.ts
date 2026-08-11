@@ -1,7 +1,7 @@
 import { Array as Arr, Effect, Stream } from "effect";
 import { Multipart } from "effect/unstable/http";
+import { S3Service } from "@krak-stack/registry/service-s3";
 
-import { S3Service } from "@/services/s3";
 import { s3AssetUrl } from "@/services/s3/asset-url";
 
 const safeFileName = (name: string, fallback: string) =>

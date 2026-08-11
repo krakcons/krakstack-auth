@@ -8,7 +8,7 @@ import { useState } from "react";
 
 import { m } from "@/paraglide/messages";
 import { authClient } from "@/services/auth/client";
-import { SubmitError } from "@/components/ui/effect-form";
+import { SubmitError } from "@krak-stack/registry/effect-form";
 import { Button } from "@/components/ui/button";
 import {
   Card,

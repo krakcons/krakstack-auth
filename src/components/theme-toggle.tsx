@@ -1,4 +1,4 @@
-import { ThemeSwitcher, useTheme } from "@/components/ui/theme-switcher";
+import { ThemeSwitcher, useTheme } from "@krak-stack/registry/theme-switcher";
 
 export function ThemeToggle() {
   const { theme, setTheme } = useTheme();

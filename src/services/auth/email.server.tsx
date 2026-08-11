@@ -1,6 +1,8 @@
 import * as AwsCredentials from "@distilled.cloud/aws/Credentials";
 import * as AwsRegion from "@distilled.cloud/aws/Region";
 import * as Sesv2 from "@distilled.cloud/aws/sesv2";
+import { NotificationService } from "@krak-stack/registry/service-notification";
+import type { SesEmailNotification } from "@krak-stack/registry/notification-channel-email-ses/schema";
 import { render } from "@react-email/components";
 import { Effect, Layer } from "effect";
 import * as FetchHttpClient from "effect/unstable/http/FetchHttpClient";
@@ -11,18 +13,8 @@ import { assetUrl } from "@/lib/assets";
 import { db } from "@/services/database";
 import { hostFromRequest } from "@/services/domains";
 import { m } from "@/paraglide/messages";
-import { NotificationService } from "@/services/notification";
-import { localNotificationServiceLayer } from "@/services/notification/channels/local";
-import { sesNotificationServiceLayer } from "@/services/notification/channels/ses";
+import { notificationLayer } from "@/services/auth/notification.server";
 import { organizationBranding } from "@/services/organizations/branding";
-import type { SesEmailNotification } from "@/services/notification/channels/ses/schema";
-
-const notificationLayer =
-  process.env.NODE_ENV === "test"
-    ? NotificationService.noopLayer
-    : process.env.NODE_ENV === "development"
-      ? localNotificationServiceLayer
-      : sesNotificationServiceLayer;
 
 const fallbackAppName = process.env.AUTH_EMAIL_NAME ?? "Krakstack Auth";
 const fallbackFrom =

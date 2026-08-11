@@ -21,8 +21,8 @@ import { toast } from "sonner";
 import {
   DataTable,
   TableSearchSchemaStandard as TableSearchSchema,
-} from "@/components/ui/data-table";
-import { SidebarPageHeader } from "@/components/ui/sidebar-layout";
+} from "@krak-stack/registry/data-table";
+import { SidebarPageHeader } from "@krak-stack/registry/sidebar-layout";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -38,7 +38,7 @@ import {
   SubmitError,
   TextAreaField,
   TextField,
-} from "@/components/ui/effect-form";
+} from "@krak-stack/registry/effect-form";
 import { Separator } from "@/components/ui/separator";
 import { AdminApiClient } from "@/lib/admin-api-client";
 import { ApiClient } from "@/lib/api-client";

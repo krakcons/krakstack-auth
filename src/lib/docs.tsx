@@ -15,14 +15,14 @@ import {
 import { Streamdown, type Components, type ExtraProps } from "streamdown";
 import { parse } from "yaml";
 
-import { AppBrand } from "@/components/ui/app-brand";
+import { AppBrand } from "@krak-stack/registry/app-brand";
 import {
   Collapsible,
   CollapsibleContent,
   CollapsibleTrigger,
 } from "@/components/ui/collapsible";
-import { SearchMenu, type SearchMenuGroup } from "@/components/ui/search-menu";
-import { SidebarLayout, type NavGroup } from "@/components/ui/sidebar-layout";
+import { SearchMenu, type SearchMenuGroup } from "@krak-stack/registry/search-menu";
+import { SidebarLayout, type NavGroup } from "@krak-stack/registry/sidebar-layout";
 import { createSeo } from "@/lib/seo";
 
 addCollection(lucideIcons);

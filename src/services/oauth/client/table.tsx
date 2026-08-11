@@ -5,9 +5,9 @@ import { FolderKanban, KeyRound, Pencil, Trash2 } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
 
-import { DataTable } from "@/components/ui/data-table";
-import { ErrorMessage } from "@/components/ui/effect-form";
-import { AppBrand } from "@/components/ui/app-brand";
+import { DataTable } from "@krak-stack/registry/data-table";
+import { ErrorMessage } from "@krak-stack/registry/effect-form";
+import { AppBrand } from "@krak-stack/registry/app-brand";
 import {
   AlertDialog,
   AlertDialogAction,

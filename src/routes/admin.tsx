@@ -12,10 +12,13 @@ import { Suspense } from "react";
 
 import { m } from "@/paraglide/messages";
 import { ThemeToggle } from "@/components/theme-toggle";
-import { LocaleSwitcher } from "@/components/ui/locale-switcher";
-import { Loading } from "@/components/ui/loading";
-import { useSidebar } from "@/components/ui/sidebar";
-import { SidebarLayout, type NavGroup } from "@/components/ui/sidebar-layout";
+import { LocaleSwitcher } from "@krak-stack/registry/locale-switcher";
+import { Loading } from "@krak-stack/registry/loading";
+import {
+  SidebarLayout,
+  type NavGroup,
+  useSidebarLayout,
+} from "@krak-stack/registry/sidebar-layout";
 import { authBaseUrl, authClient } from "@/services/auth/client";
 import {
   MemberRequired,
@@ -146,7 +149,7 @@ function AdminAccessLoading() {
 }
 
 function AdminOrganizationSwitcher() {
-  const { isMobile } = useSidebar();
+  const { isMobile } = useSidebarLayout();
 
   return (
     <OrganizationSwitcher

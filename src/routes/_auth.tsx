@@ -5,8 +5,8 @@ import {
 } from "@krak-stack/auth";
 import { Users } from "lucide-react";
 
-import { AppBrand } from "@/components/ui/app-brand";
-import { LocaleSwitcher } from "@/components/ui/locale-switcher";
+import { AppBrand } from "@krak-stack/registry/app-brand";
+import { LocaleSwitcher } from "@krak-stack/registry/locale-switcher";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { m } from "@/paraglide/messages";
 import { authClient } from "@/services/auth/client";

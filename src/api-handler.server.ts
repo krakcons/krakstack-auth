@@ -40,14 +40,14 @@ import {
   adminOAuthClientsApiHandler,
   publicOAuthClientsApiHandler,
 } from "@/services/oauth/api.builder";
-import { OpenTelemetry } from "@/services/opentelemetry";
+import { OpenTelemetry } from "@krak-stack/registry/service-opentelemetry";
 import { Organizations } from "@/services/organizations";
 import { Projects } from "@/services/projects";
 import {
   adminProjectsApiHandler,
   publicProjectsApiHandler,
 } from "@/services/projects/api.builder";
-import { S3Service } from "@/services/s3";
+import { S3Service } from "@krak-stack/registry/service-s3";
 
 const fileSystemLayer = FileSystem.layerNoop({});
 const httpPlatformLayer = HttpPlatform.layer.pipe(
