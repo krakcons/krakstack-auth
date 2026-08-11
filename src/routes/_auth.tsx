@@ -14,6 +14,9 @@ import { AuthBrandingProvider } from "@/services/auth/client/branding";
 
 export const Route = createFileRoute("/_auth")({
   ssr: false,
+  head: () => ({
+    meta: [{ name: "robots", content: "noindex,nofollow" }],
+  }),
   component: AuthLayout,
 });
 

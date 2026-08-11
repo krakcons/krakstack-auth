@@ -13,14 +13,15 @@ const escapeXml = (value: string) =>
 
 const sitemap = () => {
   const pages = docsSource.getPages("en");
-  const urls = pages.flatMap((page) =>
+  const paths = ["/", ...pages.map((page) => page.path)];
+  const urls = paths.flatMap((path) =>
     (["en", "fr"] as const).map((locale) => {
-      const location = `${origin}/${locale}${page.path}`;
+      const location = `${origin}/${locale}${path}`;
       return `  <url>
     <loc>${escapeXml(location)}</loc>
-    <xhtml:link rel="alternate" hreflang="en" href="${escapeXml(`${origin}/en${page.path}`)}" />
-    <xhtml:link rel="alternate" hreflang="fr" href="${escapeXml(`${origin}/fr${page.path}`)}" />
-    <xhtml:link rel="alternate" hreflang="x-default" href="${escapeXml(`${origin}/en${page.path}`)}" />
+    <xhtml:link rel="alternate" hreflang="en" href="${escapeXml(`${origin}/en${path}`)}" />
+    <xhtml:link rel="alternate" hreflang="fr" href="${escapeXml(`${origin}/fr${path}`)}" />
+    <xhtml:link rel="alternate" hreflang="x-default" href="${escapeXml(`${origin}/en${path}`)}" />
   </url>`;
     }),
   );

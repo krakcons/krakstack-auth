@@ -1,5 +1,24 @@
 # https://www.robotstxt.org/robotstxt.html
 User-agent: *
-Disallow:
+Allow: /en/
+Allow: /fr/
+Disallow: /api/
+Disallow: /.well-known/
+Disallow: /admin
+Disallow: /en/admin
+Disallow: /fr/admin
+Disallow: /sign-in
+Disallow: /en/sign-in
+Disallow: /fr/sign-in
+Disallow: /reset-password
+Disallow: /en/reset-password
+Disallow: /fr/reset-password
+Disallow: /verify-email
+Disallow: /en/verify-email
+Disallow: /fr/verify-email
+Disallow: /consent
+Disallow: /en/consent
+Disallow: /fr/consent
+Disallow: /previews
 
 Sitemap: https://auth.krakstack.net/sitemap.xml

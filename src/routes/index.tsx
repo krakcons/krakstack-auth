@@ -27,8 +27,28 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { LocaleSwitcher } from "@/components/ui/locale-switcher";
 import { m } from "@/paraglide/messages";
+import { getLocale } from "@/paraglide/runtime";
+import { createSeo } from "@/lib/seo";
+
+const siteOrigin = "https://auth.krakstack.net";
+const siteSeo = createSeo({
+  origin: siteOrigin,
+  locales: ["en", "fr"],
+  siteName: "Krakstack Auth",
+  sameAs: ["https://github.com/krakcons/krakstack-auth"],
+});
 
 export const Route = createFileRoute("/")({
+  head: () => {
+    const locale = getLocale() === "fr" ? "fr" : "en";
+    const title = `${m.home_heading()} | ${m.app_name()}`;
+    const description = m.home_description();
+    return siteSeo({
+      title,
+      description,
+      locale,
+    });
+  },
   component: Home,
 });
 

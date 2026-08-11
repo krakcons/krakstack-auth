@@ -30,11 +30,24 @@ export const Route = createRootRouteWithContext<{
       {
         title: m.app_name(),
       },
+      {
+        name: "application-name",
+        content: m.app_name(),
+      },
+      {
+        name: "theme-color",
+        content: "#6f5c51",
+      },
     ],
     links: [
       {
         rel: "stylesheet",
         href: appCss,
+      },
+      {
+        rel: "icon",
+        href: "/favicon.svg",
+        type: "image/svg+xml",
       },
       {
         rel: "manifest",

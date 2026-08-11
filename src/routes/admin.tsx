@@ -33,6 +33,9 @@ const testApiKeyPermissions = {
 
 export const Route = createFileRoute("/admin")({
   ssr: false,
+  head: () => ({
+    meta: [{ name: "robots", content: "noindex,nofollow" }],
+  }),
   beforeLoad: async () => {
     const session = await authClient.getSession({
       query: { disableCookieCache: true },

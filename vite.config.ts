@@ -100,6 +100,7 @@ const config = defineConfig({
         { match: "/api/:path(.*)?", exclude: true },
         { match: "/.well-known/:path(.*)?", exclude: true },
         { match: "/sitemap.xml", exclude: true },
+        { match: "/llms.txt", exclude: true },
       ],
     }),
     tailwindcss(),
