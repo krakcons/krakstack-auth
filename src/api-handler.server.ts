@@ -40,7 +40,7 @@ import {
   adminOAuthClientsApiHandler,
   publicOAuthClientsApiHandler,
 } from "@/services/oauth/api.builder";
-import { OpenTelemetry } from "@krak-stack/registry/service-opentelemetry";
+import { OpenTelemetry } from "@/services/opentelemetry";
 import { Organizations } from "@/services/organizations";
 import { Projects } from "@/services/projects";
 import {
