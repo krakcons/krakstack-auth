@@ -1694,6 +1694,7 @@ export function OrganizationSwitcher({
         (organization) => organization.id !== active?.id,
       )
     : [];
+  const scrollOrganizationList = selectableOrganizations.length > 5;
   const hasOrganizationListItems =
     organizations.isPending ||
     Boolean(organizations.error) ||
@@ -1759,7 +1760,7 @@ export function OrganizationSwitcher({
             }
           />
           <DropdownMenuContent
-            className="min-w-64 rounded-lg"
+            className="max-w-[calc(100vw-1rem)] min-w-64 rounded-lg"
             side={side}
             align="end"
             sideOffset={4}
@@ -1796,37 +1797,51 @@ export function OrganizationSwitcher({
                 </DropdownMenuItem>
               ) : null}
               {canSwitchOrganizations && selectableOrganizations.length ? (
-                selectableOrganizations.map((organization) => {
-                  const display = organizationDisplay(organization, m, baseUrl);
+                <div
+                  className={cn(
+                    scrollOrganizationList &&
+                      "max-h-64 overflow-y-auto overscroll-contain",
+                  )}
+                >
+                  {selectableOrganizations.map((organization) => {
+                    const display = organizationDisplay(
+                      organization,
+                      m,
+                      baseUrl,
+                    );
 
-                  return (
-                    <DropdownMenuItem
-                      key={organization.id}
-                      onClick={async () => {
-                        const result = await authClient.organization.setActive({
-                          organizationId: organization.id,
-                        });
-                        if (!result.error) {
-                          await refresh();
-                          onChange?.(organization);
-                        }
-                      }}
-                    >
-                      <AppBrand
-                        to={null}
-                        label={display.name}
-                        subtitle={organizationSwitcherSubtitle(
-                          organization,
-                          display.subtitle,
-                          m,
-                        )}
-                        icon={Building2}
-                        className="w-full text-left [&>div:first-child]:size-7"
-                        {...(display.image ? { imageSrc: display.image } : {})}
-                      />
-                    </DropdownMenuItem>
-                  );
-                })
+                    return (
+                      <DropdownMenuItem
+                        key={organization.id}
+                        onClick={async () => {
+                          const result =
+                            await authClient.organization.setActive({
+                              organizationId: organization.id,
+                            });
+                          if (!result.error) {
+                            await refresh();
+                            onChange?.(organization);
+                          }
+                        }}
+                      >
+                        <AppBrand
+                          to={null}
+                          label={display.name}
+                          subtitle={organizationSwitcherSubtitle(
+                            organization,
+                            display.subtitle,
+                            m,
+                          )}
+                          icon={Building2}
+                          className="w-full text-left [&>div:first-child]:size-7"
+                          {...(display.image
+                            ? { imageSrc: display.image }
+                            : {})}
+                        />
+                      </DropdownMenuItem>
+                    );
+                  })}
+                </div>
               ) : canSwitchOrganizations && !organizations.isPending ? (
                 <DropdownMenuItem disabled>
                   {active
@@ -2041,7 +2056,7 @@ export function OrganizationSwitcher({
           );
         }}
       >
-        <DialogContent className="max-h-[85vh] overflow-y-auto sm:max-w-4xl">
+        <DialogContent className="max-h-[85vh] min-w-0 overflow-x-hidden overflow-y-auto sm:max-w-4xl">
           <DialogHeader>
             <DialogTitle className="text-2xl">
               {m.organization_user_invitations_title()}
@@ -2135,39 +2150,41 @@ function UserInvitationsManager({
   };
 
   return (
-    <section className="flex flex-col gap-4">
+    <section className="flex min-w-0 flex-col gap-4">
       {error ? <p className="text-destructive text-sm">{error}</p> : null}
       {actionError ? (
         <p className="text-destructive text-sm">{actionError}</p>
       ) : null}
-      <DataTable
-        columns={userInvitationColumns({
-          baseUrl,
-          m,
-          now: invitationNow,
-        })}
-        data={invitations}
-        features={{
-          export: { baseName: "organization-invitations" },
-          gallery: false,
-          rowActions: {
-            items: userInvitationRowActions({
-              m,
-              actingInvitationId,
-              now: invitationNow,
-              onAccept: acceptInvitation,
-              onReject: rejectInvitation,
-            }),
-          },
-        }}
-        searchState="local"
-        state={{
-          empty: loading
-            ? m.user_loading()
-            : m.organization_user_invitations_empty(),
-          loading,
-        }}
-      />
+      <div className="-m-1 min-w-0 overflow-x-auto p-1">
+        <DataTable
+          columns={userInvitationColumns({
+            baseUrl,
+            m,
+            now: invitationNow,
+          })}
+          data={invitations}
+          features={{
+            export: { baseName: "organization-invitations" },
+            gallery: false,
+            rowActions: {
+              items: userInvitationRowActions({
+                m,
+                actingInvitationId,
+                now: invitationNow,
+                onAccept: acceptInvitation,
+                onReject: rejectInvitation,
+              }),
+            },
+          }}
+          searchState="local"
+          state={{
+            empty: loading
+              ? m.user_loading()
+              : m.organization_user_invitations_empty(),
+            loading,
+          }}
+        />
+      </div>
     </section>
   );
 }

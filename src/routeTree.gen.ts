@@ -10,6 +10,7 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as SitemapDotxmlRouteImport } from './routes/sitemap[.]xml'
+import { Route as PreviewsRouteImport } from './routes/previews'
 import { Route as AdminRouteImport } from './routes/admin'
 import { Route as AuthRouteImport } from './routes/_auth'
 import { Route as IndexRouteImport } from './routes/index'
@@ -34,6 +35,11 @@ import { Route as DotwellKnownOauthAuthorizationServerApiAuthRouteImport } from 
 const SitemapDotxmlRoute = SitemapDotxmlRouteImport.update({
   id: '/sitemap.xml',
   path: '/sitemap.xml',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const PreviewsRoute = PreviewsRouteImport.update({
+  id: '/previews',
+  path: '/previews',
   getParentRoute: () => rootRouteImport,
 } as any)
 const AdminRoute = AdminRouteImport.update({
@@ -142,6 +148,7 @@ const DotwellKnownOauthAuthorizationServerApiAuthRoute =
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/admin': typeof AdminRouteWithChildren
+  '/previews': typeof PreviewsRoute
   '/sitemap.xml': typeof SitemapDotxmlRoute
   '/.well-known/oauth-authorization-server': typeof DotwellKnownOauthAuthorizationServerRouteWithChildren
   '/.well-known/openid-configuration': typeof DotwellKnownOpenidConfigurationRoute
@@ -163,6 +170,7 @@ export interface FileRoutesByFullPath {
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/previews': typeof PreviewsRoute
   '/sitemap.xml': typeof SitemapDotxmlRoute
   '/.well-known/oauth-authorization-server': typeof DotwellKnownOauthAuthorizationServerRouteWithChildren
   '/.well-known/openid-configuration': typeof DotwellKnownOpenidConfigurationRoute
@@ -187,6 +195,7 @@ export interface FileRoutesById {
   '/': typeof IndexRoute
   '/_auth': typeof AuthRouteWithChildren
   '/admin': typeof AdminRouteWithChildren
+  '/previews': typeof PreviewsRoute
   '/sitemap.xml': typeof SitemapDotxmlRoute
   '/.well-known/oauth-authorization-server': typeof DotwellKnownOauthAuthorizationServerRouteWithChildren
   '/.well-known/openid-configuration': typeof DotwellKnownOpenidConfigurationRoute
@@ -211,6 +220,7 @@ export interface FileRouteTypes {
   fullPaths:
     | '/'
     | '/admin'
+    | '/previews'
     | '/sitemap.xml'
     | '/.well-known/oauth-authorization-server'
     | '/.well-known/openid-configuration'
@@ -232,6 +242,7 @@ export interface FileRouteTypes {
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
+    | '/previews'
     | '/sitemap.xml'
     | '/.well-known/oauth-authorization-server'
     | '/.well-known/openid-configuration'
@@ -255,6 +266,7 @@ export interface FileRouteTypes {
     | '/'
     | '/_auth'
     | '/admin'
+    | '/previews'
     | '/sitemap.xml'
     | '/.well-known/oauth-authorization-server'
     | '/.well-known/openid-configuration'
@@ -279,6 +291,7 @@ export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   AuthRoute: typeof AuthRouteWithChildren
   AdminRoute: typeof AdminRouteWithChildren
+  PreviewsRoute: typeof PreviewsRoute
   SitemapDotxmlRoute: typeof SitemapDotxmlRoute
   DotwellKnownOauthAuthorizationServerRoute: typeof DotwellKnownOauthAuthorizationServerRouteWithChildren
   DotwellKnownOpenidConfigurationRoute: typeof DotwellKnownOpenidConfigurationRoute
@@ -293,6 +306,13 @@ declare module '@tanstack/react-router' {
       path: '/sitemap.xml'
       fullPath: '/sitemap.xml'
       preLoaderRoute: typeof SitemapDotxmlRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/previews': {
+      id: '/previews'
+      path: '/previews'
+      fullPath: '/previews'
+      preLoaderRoute: typeof PreviewsRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/admin': {
@@ -497,6 +517,7 @@ const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   AuthRoute: AuthRouteWithChildren,
   AdminRoute: AdminRouteWithChildren,
+  PreviewsRoute: PreviewsRoute,
   SitemapDotxmlRoute: SitemapDotxmlRoute,
   DotwellKnownOauthAuthorizationServerRoute:
     DotwellKnownOauthAuthorizationServerRouteWithChildren,
