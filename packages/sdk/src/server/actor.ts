@@ -173,6 +173,7 @@ const withCurrentActor = <A, E, R>(
       httpEffect.pipe(
         Effect.provideService(CurrentActor, actor),
         Effect.annotateSpans(attributes),
+        Effect.annotateLogs(attributes),
       ),
     ),
   );

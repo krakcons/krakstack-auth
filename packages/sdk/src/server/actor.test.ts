@@ -1,5 +1,5 @@
 import { describe, expect, it } from "@effect/vitest";
-import { Effect } from "effect";
+import { Effect, Logger, References } from "effect";
 import {
   HttpRouter,
   HttpServerRequest,
@@ -146,7 +146,32 @@ const expectActorSpanAttributes = ({
     );
     expect(childSpan.attributes.get("organization.id")).toBe(organizationId);
     expect(childSpan.attributes.get("user.id")).toBe(userId);
+  }).pipe(Effect.orDie);
+
+const expectActorLogAttributes = ({
+  organizationId,
+  userId,
+}: {
+  organizationId: string;
+  userId?: string;
+}) => {
+  const annotations: Array<Record<string, unknown>> = [];
+  const logger = Logger.make((options) => {
+    annotations.push(options.fiber.getRef(References.CurrentLogAnnotations));
   });
+
+  return Effect.log("authenticated event").pipe(
+    Effect.withLogger(logger),
+    Effect.andThen(
+      Effect.sync(() => {
+        expect(annotations).toHaveLength(1);
+        expect(annotations[0]?.["organization.id"]).toBe(organizationId);
+        expect(annotations[0]?.["user.id"]).toBe(userId);
+      }),
+    ),
+    Effect.orDie,
+  );
+};
 
 const authService = (authSession: AuthSession) => ({
   requireSession: () => Effect.succeed(authSession),
@@ -167,6 +192,10 @@ const runAnyActorMiddleware = (authSession: AuthSession) =>
         expect(actor.permissions.has("test:records:read")).toBe(true);
         expect(actor.permissions.has("test:records:update")).toBe(false);
         yield* expectActorSpanAttributes({
+          organizationId: "org-1",
+          userId: "user-1",
+        });
+        yield* expectActorLogAttributes({
           organizationId: "org-1",
           userId: "user-1",
         });
@@ -202,6 +231,10 @@ describe("ActorRequired", () => {
             organizationId: "org-1",
             userId: "user-1",
           });
+          yield* expectActorLogAttributes({
+            organizationId: "org-1",
+            userId: "user-1",
+          });
           return HttpServerResponse.empty();
         }),
         middlewareOptions,
@@ -227,6 +260,7 @@ describe("ActorRequired", () => {
           expect(actor.permissions.has("test:records:read")).toBe(false);
           expect(actor.permissions.has("test:records:update")).toBe(true);
           yield* expectActorSpanAttributes({ organizationId: "org-1" });
+          yield* expectActorLogAttributes({ organizationId: "org-1" });
           return HttpServerResponse.empty();
         }),
         middlewareOptions,
