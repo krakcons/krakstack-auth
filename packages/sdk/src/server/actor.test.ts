@@ -126,7 +126,27 @@ const provideRequestContext = <A, E, R>(effect: Effect.Effect<A, E, R>) =>
     Effect.provideService(HttpServerRequest.HttpServerRequest, request),
     Effect.provideService(HttpServerRequest.ParsedSearchParams, {}),
     Effect.provideService(HttpRouter.RouteContext, routeContext),
+    Effect.withSpan("http.server GET"),
   );
+
+const expectActorSpanAttributes = ({
+  organizationId,
+  userId,
+}: {
+  organizationId: string;
+  userId?: string;
+}) =>
+  Effect.gen(function* () {
+    const requestSpan = yield* Effect.currentSpan;
+    expect(requestSpan.attributes.get("organization.id")).toBe(organizationId);
+    expect(requestSpan.attributes.get("user.id")).toBe(userId);
+
+    const childSpan = yield* Effect.currentSpan.pipe(
+      Effect.withSpan("authenticated-child"),
+    );
+    expect(childSpan.attributes.get("organization.id")).toBe(organizationId);
+    expect(childSpan.attributes.get("user.id")).toBe(userId);
+  });
 
 const authService = (authSession: AuthSession) => ({
   requireSession: () => Effect.succeed(authSession),
@@ -146,6 +166,10 @@ const runAnyActorMiddleware = (authSession: AuthSession) =>
         expect(actor.actor.type).toBe("user");
         expect(actor.permissions.has("test:records:read")).toBe(true);
         expect(actor.permissions.has("test:records:update")).toBe(false);
+        yield* expectActorSpanAttributes({
+          organizationId: "org-1",
+          userId: "user-1",
+        });
         return HttpServerResponse.empty();
       }),
       middlewareOptions,
@@ -174,6 +198,10 @@ describe("ActorRequired", () => {
           expect(actor.actor.type).toBe("apiKey");
           expect(actor.permissions.has("test:records:read")).toBe(true);
           expect(actor.permissions.has("test:records:update")).toBe(false);
+          yield* expectActorSpanAttributes({
+            organizationId: "org-1",
+            userId: "user-1",
+          });
           return HttpServerResponse.empty();
         }),
         middlewareOptions,
@@ -198,6 +226,7 @@ describe("ActorRequired", () => {
           expect(actor.actor.type).toBe("apiKey");
           expect(actor.permissions.has("test:records:read")).toBe(false);
           expect(actor.permissions.has("test:records:update")).toBe(true);
+          yield* expectActorSpanAttributes({ organizationId: "org-1" });
           return HttpServerResponse.empty();
         }),
         middlewareOptions,

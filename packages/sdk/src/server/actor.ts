@@ -151,6 +151,33 @@ const requiredActor = <Project extends string, Action extends string>(
     ),
   );
 
+const withCurrentActor = <A, E, R>(
+  httpEffect: Effect.Effect<A, E, R | CurrentActor>,
+  actor: CurrentActor,
+) => {
+  const userId =
+    actor.actor.type === "user"
+      ? actor.actor.userId
+      : actor.actor.owner.type === "user"
+        ? actor.actor.owner.userId
+        : undefined;
+  const attributes = {
+    ...(actor.organizationId
+      ? { "organization.id": actor.organizationId }
+      : {}),
+    ...(userId ? { "user.id": userId } : {}),
+  };
+
+  return Effect.annotateCurrentSpan(attributes).pipe(
+    Effect.andThen(
+      httpEffect.pipe(
+        Effect.provideService(CurrentActor, actor),
+        Effect.annotateSpans(attributes),
+      ),
+    ),
+  );
+};
+
 const actorRequired = (constraint?: ActorConstraint) => {
   if (!constraint) return AnyActorRequired;
   if (constraint.type === "user") return UserActorRequired;
@@ -167,41 +194,29 @@ const actorRequiredLayer = <Project extends string, Action extends string>(
   Layer.mergeAll(
     Layer.succeed(AnyActorRequired, (httpEffect) =>
       requiredActor(access).pipe(
-        Effect.flatMap((actor) =>
-          httpEffect.pipe(Effect.provideService(CurrentActor, actor)),
-        ),
+        Effect.flatMap((actor) => withCurrentActor(httpEffect, actor)),
       ),
     ),
     Layer.succeed(UserActorRequired, (httpEffect) =>
       requiredActor(access, { type: "user" }).pipe(
-        Effect.flatMap((actor) =>
-          httpEffect.pipe(Effect.provideService(CurrentActor, actor)),
-        ),
+        Effect.flatMap((actor) => withCurrentActor(httpEffect, actor)),
       ),
     ),
     Layer.succeed(ApiKeyActorRequired, (httpEffect) =>
       requiredActor(access, { type: "apiKey" }).pipe(
-        Effect.flatMap((actor) =>
-          httpEffect.pipe(Effect.provideService(CurrentActor, actor)),
-        ),
+        Effect.flatMap((actor) => withCurrentActor(httpEffect, actor)),
       ),
     ),
     Layer.succeed(UserApiKeyActorRequired, (httpEffect) =>
       requiredActor(access, { type: "apiKey", ownerType: "user" }).pipe(
-        Effect.flatMap((actor) =>
-          httpEffect.pipe(Effect.provideService(CurrentActor, actor)),
-        ),
+        Effect.flatMap((actor) => withCurrentActor(httpEffect, actor)),
       ),
     ),
     Layer.succeed(OrganizationApiKeyActorRequired, (httpEffect) =>
       requiredActor(access, {
         type: "apiKey",
         ownerType: "organization",
-      }).pipe(
-        Effect.flatMap((actor) =>
-          httpEffect.pipe(Effect.provideService(CurrentActor, actor)),
-        ),
-      ),
+      }).pipe(Effect.flatMap((actor) => withCurrentActor(httpEffect, actor))),
     ),
   );
 
