@@ -286,6 +286,26 @@ const authMethodSearch = (
   return Object.fromEntries(search);
 };
 
+type AuthMethod = "password" | "emailOtp";
+
+export const resolveInitialAuthMethod = ({
+  requestedMethod,
+  lastLoginMethod,
+  emailPassword,
+  emailOtp,
+}: {
+  requestedMethod: string | null;
+  lastLoginMethod: string | null | undefined;
+  emailPassword: boolean;
+  emailOtp: boolean;
+}): AuthMethod => {
+  if (requestedMethod === "password" && emailPassword) return "password";
+  if (requestedMethod === "emailOtp" && emailOtp) return "emailOtp";
+  if (lastLoginMethod === "email" && emailPassword) return "password";
+  if (lastLoginMethod === "email-otp" && emailOtp) return "emailOtp";
+  return emailOtp ? "emailOtp" : "password";
+};
+
 export function Signin(props: AuthFormProps) {
   const {
     authClient,
@@ -323,20 +343,18 @@ export function Signin(props: AuthFormProps) {
     google: authOptions?.google ?? true,
   };
   const requestedMethod = getSearchParam(searchString, "method");
-  const initialAuthMethod =
-    requestedMethod === "password" && options.emailPassword
-      ? "password"
-      : requestedMethod === "emailOtp" && options.emailOtp
-        ? "emailOtp"
-        : options.emailOtp
-          ? "emailOtp"
-          : "password";
+  const [initialAuthMethod] = useState(() =>
+    resolveInitialAuthMethod({
+      requestedMethod,
+      lastLoginMethod: authClient.getLastUsedLoginMethod?.(),
+      emailPassword: options.emailPassword,
+      emailOtp: options.emailOtp,
+    }),
+  );
   const initialMethodStep =
     Boolean(initialEmail) && requestedMethod === initialAuthMethod;
   const [emailSubmitted, setEmailSubmitted] = useState(initialMethodStep);
-  const [authMethod, setAuthMethod] = useState<"password" | "emailOtp">(
-    initialAuthMethod,
-  );
+  const [authMethod, setAuthMethod] = useState<AuthMethod>(initialAuthMethod);
   const [otpSentTo, setOtpSentTo] = useState(
     initialMethodStep && initialAuthMethod === "emailOtp" ? initialEmail : "",
   );
@@ -545,11 +563,7 @@ export function Signin(props: AuthFormProps) {
       setEmailOtpResendAvailableAt(0);
       navigate({
         to: "/sign-in",
-        search: authMethodSearch(
-          searchString,
-          "password",
-          formValues.email,
-        ),
+        search: authMethodSearch(searchString, "password", formValues.email),
         replace: true,
       });
       return;
