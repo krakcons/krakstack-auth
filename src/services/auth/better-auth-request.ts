@@ -16,6 +16,19 @@ const toWebRequest = (request: HttpServerRequest.HttpServerRequest | Request) =>
     ? Effect.succeed(request)
     : HttpServerRequest.toWeb(request);
 
+export const restoreProxyAuthOrigin = (request: Request) => {
+  const host = request.headers.get("x-krakstack-forwarded-host");
+  const protocol = request.headers.get("x-krakstack-forwarded-proto");
+  if (!host || (protocol !== "http" && protocol !== "https")) return request;
+
+  const headers = new Headers(request.headers);
+  headers.set("x-forwarded-host", host);
+  headers.set("x-forwarded-proto", protocol);
+  headers.delete("x-krakstack-forwarded-host");
+  headers.delete("x-krakstack-forwarded-proto");
+  return new Request(request, { headers });
+};
+
 export class BetterAuthRequest extends Context.Service<
   BetterAuthRequest,
   BetterAuthRequestShape
@@ -26,7 +39,7 @@ export class BetterAuthRequest extends Context.Service<
     Layer.effect(
       this,
       Effect.gen(function* () {
-        const webRequest = yield* toWebRequest(request);
+        const webRequest = restoreProxyAuthOrigin(yield* toWebRequest(request));
         const auth = yield* Effect.promise(() => authForRequest(webRequest));
 
         return {

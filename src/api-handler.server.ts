@@ -113,7 +113,7 @@ export const authWebHandler = async (request: Request) => {
   const authRequest = await Effect.runPromise(
     BetterAuthRequest.pipe(Effect.provide(BetterAuthRequest.make(request))),
   );
-  return await authRequest.handler(request);
+  return await authRequest.handler(authRequest.request);
 };
 
 const authHandlerEffect = HttpEffect.fromWebHandler((request) =>

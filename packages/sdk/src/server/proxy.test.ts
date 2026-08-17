@@ -36,6 +36,44 @@ describe("proxyAuthRequest", () => {
       "localhost:3000",
     );
     expect(forwardedRequest.headers.get("x-forwarded-proto")).toBe("http");
+    expect(forwardedRequest.headers.get("x-krakstack-forwarded-host")).toBe(
+      "localhost:3000",
+    );
+    expect(forwardedRequest.headers.get("x-krakstack-forwarded-proto")).toBe(
+      "http",
+    );
+  });
+
+  it("replaces untrusted KrakStack forwarding headers", async () => {
+    const previousFetch = globalThis.fetch;
+    const captured: { request?: Request } = {};
+
+    globalThis.fetch = ((request: RequestInfo | URL) => {
+      captured.request =
+        request instanceof Request ? request : new Request(request);
+      return Promise.resolve(new Response(null, { status: 204 }));
+    }) as typeof fetch;
+
+    try {
+      await proxyAuthRequest(
+        new Request("https://template.krakstack.net/api/auth/get-session", {
+          headers: {
+            "x-krakstack-forwarded-host": "attacker.example.com",
+            "x-krakstack-forwarded-proto": "http",
+          },
+        }),
+        "https://auth.krakstack.net",
+      );
+    } finally {
+      globalThis.fetch = previousFetch;
+    }
+
+    expect(captured.request?.headers.get("x-krakstack-forwarded-host")).toBe(
+      "template.krakstack.net",
+    );
+    expect(captured.request?.headers.get("x-krakstack-forwarded-proto")).toBe(
+      "https",
+    );
   });
 
   it("returns upstream cookies as host-only cookies", async () => {

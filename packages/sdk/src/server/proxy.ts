@@ -12,6 +12,8 @@ const blockedRequestHeaders = [
   "transfer-encoding",
   "upgrade",
   "cdn-loop",
+  "x-krakstack-forwarded-host",
+  "x-krakstack-forwarded-proto",
 ] as const;
 
 const hostOnlyCookie = (cookie: string) =>
@@ -22,7 +24,10 @@ export interface ProxyAuthRequestOptions {
 }
 
 const normalizedCookieDomain = (domain: string) =>
-  domain.trim().toLowerCase().replace(/^\.+|\.+$/g, "");
+  domain
+    .trim()
+    .toLowerCase()
+    .replace(/^\.+|\.+$/g, "");
 
 const sharedCookieDomain = (
   request: Request,
@@ -87,6 +92,8 @@ const proxyHeaders = (request: Request) => {
 
   headers.set("x-forwarded-host", url.host);
   headers.set("x-forwarded-proto", url.protocol.replace(":", ""));
+  headers.set("x-krakstack-forwarded-host", url.host);
+  headers.set("x-krakstack-forwarded-proto", url.protocol.replace(":", ""));
 
   return headers;
 };
