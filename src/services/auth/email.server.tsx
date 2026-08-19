@@ -9,6 +9,7 @@ import * as FetchHttpClient from "effect/unstable/http/FetchHttpClient";
 
 import { OTPEmail } from "@/emails/OTP";
 import { ResetPasswordEmail } from "@/emails/ResetPassword";
+import type { EmailTheme } from "@/emails/Tailwind";
 import { assetUrl } from "@/lib/assets";
 import { db } from "@/services/database";
 import { hostFromRequest } from "@/services/domains";
@@ -21,12 +22,59 @@ const fallbackFrom =
   process.env.AUTH_EMAIL_FROM ??
   process.env.NOTIFICATION_EMAIL_FROM ??
   `${fallbackAppName} <no-reply@krakstack.local>`;
+const projectContextCookie = "krakstack-auth.project_context";
 
 const sesConfigured = Boolean(
   process.env.SES_ACCESS_KEY_ID &&
   process.env.SES_SECRET_ACCESS_KEY &&
   process.env.SES_REGION,
 );
+
+const emailThemeVariables: ReadonlyArray<readonly [string, keyof EmailTheme]> =
+  [
+    ["--background", "background"],
+    ["--foreground", "foreground"],
+    ["--card", "card"],
+    ["--primary", "primary"],
+    ["--primary-foreground", "primaryForeground"],
+    ["--secondary", "secondary"],
+    ["--secondary-foreground", "secondaryForeground"],
+    ["--muted", "muted"],
+    ["--muted-foreground", "mutedForeground"],
+    ["--border", "border"],
+  ];
+
+const unsafeEmailThemeValue = /[{};@]|url\s*\(|expression\s*\(/i;
+
+const projectThemeCss = (data: unknown) => {
+  if (typeof data !== "object" || data === null) return undefined;
+  const branding = "branding" in data ? data.branding : undefined;
+  if (typeof branding !== "object" || branding === null) return undefined;
+  const themeCss = "themeCss" in branding ? branding.themeCss : undefined;
+  return typeof themeCss === "string" ? themeCss : undefined;
+};
+
+const emailThemeFromCss = (css: string | undefined) => {
+  if (!css?.trim()) return undefined;
+
+  const rootMatch = css.match(/:root\s*\{([^}]*)\}/);
+  if (!rootMatch?.[1]) return undefined;
+
+  const theme: EmailTheme = {};
+  for (const declaration of rootMatch[1].split(";")) {
+    const separator = declaration.indexOf(":");
+    if (separator === -1) continue;
+
+    const name = declaration.slice(0, separator).trim();
+    const value = declaration.slice(separator + 1).trim();
+    if (!value || unsafeEmailThemeValue.test(value)) continue;
+
+    const variable = emailThemeVariables.find(([key]) => key === name);
+    if (variable) theme[variable[1]] = value;
+  }
+
+  return Object.keys(theme).length ? theme : undefined;
+};
 
 const SesLive = Layer.mergeAll(
   FetchHttpClient.layer,
@@ -76,6 +124,28 @@ const isVerifiedEmailIdentity = (domain: string) => {
 const firstForwardedValue = (value: string | null) =>
   value?.split(",")[0]?.trim() || null;
 
+const cookieValue = (headers: Headers, name: string) => {
+  const cookie = headers.get("cookie");
+  if (!cookie) return null;
+
+  return (
+    cookie
+      .split(";")
+      .map((part) => part.trim())
+      .find((part) => part.startsWith(`${name}=`))
+      ?.slice(name.length + 1) ?? null
+  );
+};
+
+const decodeCookieValue = (value: string | null) => {
+  if (!value) return null;
+  try {
+    return decodeURIComponent(value);
+  } catch {
+    return null;
+  }
+};
+
 const originFromRequest = (request: Request | undefined) => {
   if (!request) return undefined;
   const host = hostFromRequest(request);
@@ -95,22 +165,44 @@ const resolveEmailIdentity = async (
     appName: fallbackAppName,
     from: fallbackFrom,
     logo: undefined,
+    theme: undefined,
   };
-  if (!request || !sesConfigured) return fallback;
+  if (!request) return fallback;
+
+  const origin = originFromRequest(request);
+  const contextProjectId = decodeCookieValue(
+    cookieValue(request.headers, projectContextCookie),
+  );
+  const contextProject = contextProjectId
+    ? await db.query.project.findFirst({ where: { id: contextProjectId } })
+    : null;
 
   const host = hostFromRequest(request);
-  if (!host) return fallback;
+  if (!host) {
+    return {
+      appName: contextProject?.name ?? fallbackAppName,
+      from: fallbackFrom,
+      logo: assetUrl(contextProject?.logo, origin) || undefined,
+      theme: emailThemeFromCss(projectThemeCss(contextProject?.data)),
+    };
+  }
 
   const domain = await db.query.domains.findFirst({
     where: { hostname: host, active: true },
   });
-  if (!domain) return fallback;
+  if (!domain) {
+    return {
+      appName: contextProject?.name ?? fallbackAppName,
+      from: fallbackFrom,
+      logo: assetUrl(contextProject?.logo, origin) || undefined,
+      theme: emailThemeFromCss(projectThemeCss(contextProject?.data)),
+    };
+  }
 
   const senderDomain = domain.rootHostname || domain.hostname;
   const verified = await isVerifiedEmailIdentity(senderDomain);
-  if (!verified) return fallback;
 
-  const [organization, project] = await Promise.all([
+  const [organization, domainProject] = await Promise.all([
     domain.organizationId
       ? db.query.organization.findFirst({
           where: { id: domain.organizationId },
@@ -120,18 +212,22 @@ const resolveEmailIdentity = async (
       ? db.query.project.findFirst({ where: { id: domain.projectId } })
       : Promise.resolve(null),
   ]);
+  const project = domainProject ?? contextProject;
   const organizationDisplay = organizationBranding(
     organization ?? null,
     locale,
   );
   const appName = organizationDisplay?.name ?? project?.name ?? fallbackAppName;
+  const theme = emailThemeFromCss(projectThemeCss(project?.data));
   const logo =
-    assetUrl(
-      organizationDisplay?.logo ?? project?.logo,
-      originFromRequest(request),
-    ) || undefined;
+    assetUrl(organizationDisplay?.logo ?? project?.logo, origin) || undefined;
 
-  return { appName, from: fromAddress(appName, senderDomain), logo };
+  return {
+    appName,
+    from: verified ? fromAddress(appName, senderDomain) : fallbackFrom,
+    logo,
+    theme,
+  };
 };
 
 const localeFromRequest = (request?: Request | undefined) => {
@@ -169,6 +265,7 @@ export const sendResetPasswordEmail = async ({
       <ResetPasswordEmail
         appName={identity.appName}
         logo={identity.logo ?? null}
+        theme={identity.theme}
         url={url}
         title={m.reset_password_title({}, { locale })}
         description={m.email_reset_password_description({}, { locale })}
@@ -202,6 +299,7 @@ export const sendTwoFactorOtpEmail = async ({
       <OTPEmail
         appName={identity.appName}
         logo={identity.logo ?? null}
+        theme={identity.theme}
         code={otp}
         title={m.verify_email_title({}, { locale })}
         description={m.email_otp_verification_description({}, { locale })}
@@ -248,6 +346,7 @@ export const sendEmailVerificationOtpEmail = async ({
       <OTPEmail
         appName={identity.appName}
         logo={identity.logo ?? null}
+        theme={identity.theme}
         code={otp}
         title={
           isPasswordReset

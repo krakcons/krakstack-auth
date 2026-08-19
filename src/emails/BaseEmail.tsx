@@ -10,6 +10,7 @@ import {
 } from "@react-email/components";
 
 import { Tailwind } from "./Tailwind";
+import type { EmailTheme } from "./Tailwind";
 
 export const markdownStyles = {
   markdownContainerStyles: {
@@ -17,14 +18,17 @@ export const markdownStyles = {
   },
   markdownCustomStyles: {
     h1: {
-      fontSize: "1.5rem",
-      fontWeight: 600,
-      marginTop: "2rem",
+      fontSize: "32px",
+      fontWeight: 900,
+      marginTop: "10px",
       marginBottom: "1rem",
+      lineHeight: "1.25",
     },
     p: {
       marginTop: "1rem",
       marginBottom: "1rem",
+      fontSize: "16px",
+      lineHeight: "22px",
     },
   },
 };
@@ -36,6 +40,7 @@ export interface BaseEmailContent {
   readonly appName: string;
   readonly logo?: string | null | undefined;
   readonly action?: React.ReactNode;
+  readonly theme?: EmailTheme | undefined;
 }
 
 export const BaseEmail = ({
@@ -46,13 +51,13 @@ export const BaseEmail = ({
   readonly content: BaseEmailContent;
 }) => (
   <Html>
-    <Tailwind>
+    <Tailwind theme={content.theme}>
       <Head />
       <Preview>{preview}</Preview>
-      <Body className="mx-auto my-auto bg-white px-4 font-sans">
-        <Container className="border-border text-foreground mx-auto my-10 max-w-[465px] rounded border border-solid p-8">
+      <Body className="bg-background mx-auto my-auto px-4 font-sans">
+        <Container className="border-border bg-card text-foreground mx-auto my-10 max-w-[600px] border border-solid p-8">
           {content.logo ? (
-            <Img src={content.logo} alt="logo" height={100} />
+            <Img src={content.logo} alt="logo" width={267} />
           ) : null}
           <Markdown {...markdownStyles}>{"# " + content.title}</Markdown>
           <Markdown {...markdownStyles}>{content.description}</Markdown>
@@ -61,7 +66,9 @@ export const BaseEmail = ({
             <Markdown {...markdownStyles}>{content.extra}</Markdown>
           ) : null}
           <strong>
-            <Text>{content.appName}</Text>
+            <Text className="text-muted-foreground text-xs">
+              {content.appName}
+            </Text>
           </strong>
         </Container>
       </Body>

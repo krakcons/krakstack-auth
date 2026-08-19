@@ -3,6 +3,7 @@ import { Container, Text } from "@react-email/components";
 import { m } from "@/paraglide/messages";
 
 import { BaseEmail } from "./BaseEmail";
+import type { EmailTheme } from "./Tailwind";
 
 export const OTPEmail = ({
   appName = m.app_name(),
@@ -11,6 +12,7 @@ export const OTPEmail = ({
   description = m.email_otp_verification_description(),
   extra,
   logo = "/favicon.ico",
+  theme,
 }: {
   readonly appName?: string | undefined;
   readonly code?: string | undefined;
@@ -18,6 +20,7 @@ export const OTPEmail = ({
   readonly description?: string | undefined;
   readonly extra?: string | undefined;
   readonly logo?: string | null | undefined;
+  readonly theme?: EmailTheme | undefined;
 }) => (
   <BaseEmail
     preview={description}
@@ -27,8 +30,9 @@ export const OTPEmail = ({
       title,
       description,
       extra,
+      theme,
       action: (
-        <Container className="mx-0 rounded-lg bg-gray-100 px-4 py-1">
+        <Container className="bg-muted mx-0 rounded-lg px-4 py-1">
           <Text className="text-foreground text-3xl font-bold tracking-widest">
             {code}
           </Text>
