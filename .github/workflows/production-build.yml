@@ -23,7 +23,4 @@ jobs:
       vite_krakstack_auth_organization_id: SFriMuzEgwvtPV0acbQMLMmCW7pOIMGV
       vite_analytics_website_id: e0a42c9b-917b-4eb5-9645-599d6bcda74e
     secrets:
-      KRAK_ADMIN_URL: ${{ secrets.KRAK_ADMIN_URL }}
       KRAK_RELEASE_TOKEN: ${{ secrets.KRAK_RELEASE_TOKEN }}
-      TS_OAUTH_CLIENT_ID: ${{ secrets.TS_OAUTH_CLIENT_ID }}
-      TS_OAUTH_SECRET: ${{ secrets.TS_OAUTH_SECRET }}
