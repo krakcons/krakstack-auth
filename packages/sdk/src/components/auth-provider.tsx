@@ -6,6 +6,7 @@ import {
   useCallback,
   useContext,
   useEffect,
+  useEffectEvent,
   useMemo,
   useState,
 } from "react";
@@ -48,6 +49,20 @@ const KrakstackAuthContext = createContext<KrakstackAuthContextValue | null>(
 );
 
 const PROJECT_CONTEXT_COOKIE = "krakstack-auth.project_context";
+export const listenForSessionRevalidation = (
+  target: EventTarget,
+  revalidate: () => void,
+) => {
+  const onPageShow = (event: Event) => {
+    if ("persisted" in event && event.persisted === true) revalidate();
+  };
+
+  target.addEventListener("pageshow", onPageShow);
+
+  return () => {
+    target.removeEventListener("pageshow", onPageShow);
+  };
+};
 
 const setProjectContextCookie = (projectId: string | null | undefined) => {
   if (typeof document === "undefined") return;
@@ -148,10 +163,23 @@ export function KrakstackAuthProvider({
   const refreshAuth = useCallback(() => {
     setAuthRefreshVersion((current) => current + 1);
   }, []);
+  const session = resolvedAuthClient.useSession();
+  const revalidateSession = useEffectEvent(async () => {
+    await session.refetch();
+    refreshAuth();
+  });
 
   useEffect(() => {
     setProjectContextCookie(resolvedProjectId);
   }, [resolvedProjectId]);
+
+  useEffect(
+    () =>
+      listenForSessionRevalidation(window, () => {
+        void revalidateSession();
+      }),
+    [],
+  );
 
   const value = useMemo(
     () => ({

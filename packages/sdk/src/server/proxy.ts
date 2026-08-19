@@ -79,6 +79,10 @@ const forwardedUrl = (request: Request) => {
   return new URL(request.url);
 };
 
+const preservesOAuthOrigin = (pathname: string) =>
+  pathname === "/api/auth/sign-in/social" ||
+  pathname.startsWith("/api/auth/callback/");
+
 const proxyHeaders = (request: Request) => {
   const headers = new Headers(request.headers);
   const url = forwardedUrl(request);
@@ -92,8 +96,10 @@ const proxyHeaders = (request: Request) => {
 
   headers.set("x-forwarded-host", url.host);
   headers.set("x-forwarded-proto", url.protocol.replace(":", ""));
-  headers.set("x-krakstack-forwarded-host", url.host);
-  headers.set("x-krakstack-forwarded-proto", url.protocol.replace(":", ""));
+  if (preservesOAuthOrigin(url.pathname)) {
+    headers.set("x-krakstack-forwarded-host", url.host);
+    headers.set("x-krakstack-forwarded-proto", url.protocol.replace(":", ""));
+  }
 
   return headers;
 };

@@ -31,4 +31,26 @@ describe("restoreProxyAuthOrigin", () => {
 
     expect(restoreProxyAuthOrigin(request)).toBe(request);
   });
+
+  it("preserves the method and body of proxied mutations", async () => {
+    const request = restoreProxyAuthOrigin(
+      new Request(
+        "https://auth.krakstack.net/api/auth/organization/set-active",
+        {
+          method: "POST",
+          headers: {
+            "content-type": "application/json",
+            "x-krakstack-forwarded-host": "courses.kokobi.org",
+            "x-krakstack-forwarded-proto": "https",
+          },
+          body: JSON.stringify({ organizationId: "organization-id" }),
+        },
+      ),
+    );
+
+    expect(request.method).toBe("POST");
+    await expect(request.json()).resolves.toEqual({
+      organizationId: "organization-id",
+    });
+  });
 });

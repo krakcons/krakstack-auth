@@ -26,7 +26,7 @@ export const restoreProxyAuthOrigin = (request: Request) => {
   headers.set("x-forwarded-proto", protocol);
   headers.delete("x-krakstack-forwarded-host");
   headers.delete("x-krakstack-forwarded-proto");
-  return new Request(request, { headers });
+  return new Request(request, { headers, method: request.method });
 };
 
 export class BetterAuthRequest extends Context.Service<

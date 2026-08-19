@@ -56,7 +56,7 @@ describe("proxyAuthRequest", () => {
 
     try {
       await proxyAuthRequest(
-        new Request("https://template.krakstack.net/api/auth/get-session", {
+        new Request("https://template.krakstack.net/api/auth/sign-in/social", {
           headers: {
             "x-krakstack-forwarded-host": "attacker.example.com",
             "x-krakstack-forwarded-proto": "http",
@@ -73,6 +73,42 @@ describe("proxyAuthRequest", () => {
     );
     expect(captured.request?.headers.get("x-krakstack-forwarded-proto")).toBe(
       "https",
+    );
+  });
+
+  it("does not add OAuth origin headers to organization mutations", async () => {
+    const previousFetch = globalThis.fetch;
+    const captured: { request?: Request } = {};
+
+    globalThis.fetch = ((request: RequestInfo | URL) => {
+      captured.request =
+        request instanceof Request ? request : new Request(request);
+      return Promise.resolve(new Response(null, { status: 204 }));
+    }) as typeof fetch;
+
+    try {
+      await proxyAuthRequest(
+        new Request("http://localhost:3002/api/auth/organization/set-active", {
+          method: "POST",
+          headers: {
+            "x-krakstack-forwarded-host": "attacker.example.com",
+            "x-krakstack-forwarded-proto": "https",
+          },
+        }),
+        "http://localhost:3001",
+      );
+    } finally {
+      globalThis.fetch = previousFetch;
+    }
+
+    expect(captured.request?.headers.get("x-forwarded-host")).toBe(
+      "localhost:3002",
+    );
+    expect(captured.request?.headers.get("x-krakstack-forwarded-host")).toBe(
+      null,
+    );
+    expect(captured.request?.headers.get("x-krakstack-forwarded-proto")).toBe(
+      null,
     );
   });
 
