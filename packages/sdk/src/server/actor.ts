@@ -89,35 +89,55 @@ class AnyActorRequired extends HttpApiMiddleware.Service<
     provides: CurrentActor;
   }
 >()("@krak-stack/auth/ActorRequired", {
-  error: [HttpApiError.Unauthorized, HttpApiError.Forbidden],
+  error: [
+    HttpApiError.Unauthorized,
+    HttpApiError.Forbidden,
+    HttpApiError.ServiceUnavailable,
+  ],
 }) {}
 
 class UserActorRequired extends HttpApiMiddleware.Service<
   UserActorRequired,
   { requires: AuthService; provides: CurrentActor }
 >()("@krak-stack/auth/ActorRequired/User", {
-  error: [HttpApiError.Unauthorized, HttpApiError.Forbidden],
+  error: [
+    HttpApiError.Unauthorized,
+    HttpApiError.Forbidden,
+    HttpApiError.ServiceUnavailable,
+  ],
 }) {}
 
 class ApiKeyActorRequired extends HttpApiMiddleware.Service<
   ApiKeyActorRequired,
   { requires: AuthService; provides: CurrentActor }
 >()("@krak-stack/auth/ActorRequired/ApiKey", {
-  error: [HttpApiError.Unauthorized, HttpApiError.Forbidden],
+  error: [
+    HttpApiError.Unauthorized,
+    HttpApiError.Forbidden,
+    HttpApiError.ServiceUnavailable,
+  ],
 }) {}
 
 class UserApiKeyActorRequired extends HttpApiMiddleware.Service<
   UserApiKeyActorRequired,
   { requires: AuthService; provides: CurrentActor }
 >()("@krak-stack/auth/ActorRequired/ApiKey/User", {
-  error: [HttpApiError.Unauthorized, HttpApiError.Forbidden],
+  error: [
+    HttpApiError.Unauthorized,
+    HttpApiError.Forbidden,
+    HttpApiError.ServiceUnavailable,
+  ],
 }) {}
 
 class OrganizationApiKeyActorRequired extends HttpApiMiddleware.Service<
   OrganizationApiKeyActorRequired,
   { requires: AuthService; provides: CurrentActor }
 >()("@krak-stack/auth/ActorRequired/ApiKey/Organization", {
-  error: [HttpApiError.Unauthorized, HttpApiError.Forbidden],
+  error: [
+    HttpApiError.Unauthorized,
+    HttpApiError.Forbidden,
+    HttpApiError.ServiceUnavailable,
+  ],
 }) {}
 
 export type ActorConstraint =

@@ -100,6 +100,7 @@ const headerValue = (headers: Record<string, string>, name: string) => {
 };
 
 const unauthorized = () => new HttpApiError.Unauthorized({});
+const serviceUnavailable = () => new HttpApiError.ServiceUnavailable({});
 
 const withRequiredOrganization = <A extends AuthSession>(
   authSession: A,
@@ -166,17 +167,21 @@ export class AuthService extends Context.Service<AuthService>()(
         });
         const sessionCacheKey = getSessionCacheKey(headers);
         const apiKey = headerValue(headers, "x-api-key")?.trim();
+        const organizationId = headerValue(
+          headers,
+          "x-organization-id",
+        )?.trim();
 
         const getCookieSession = (): Effect.Effect<
           AuthSession | null,
-          HttpApiError.Unauthorized,
+          HttpApiError.ServiceUnavailable,
           never
         > =>
           Cache.get(sessionCache, sessionCacheKey).pipe(
             Effect.provideService(SessionLookup, {
               getSession: api.auth.getSession,
             }),
-            Effect.mapError(unauthorized),
+            Effect.mapError(serviceUnavailable),
             Effect.map((authSession) =>
               authSession
                 ? ({
@@ -190,34 +195,43 @@ export class AuthService extends Context.Service<AuthService>()(
 
         const userForApiKey = (
           verifiedKey: ExtraVerifiedApiKeyType,
-        ): Effect.Effect<User | undefined, HttpApiError.Unauthorized> => {
+        ): Effect.Effect<User | undefined, HttpApiError.ServiceUnavailable> => {
           if (verifiedKey.configId === "organization") {
             return Effect.succeed(undefined);
           }
 
           return api.users
             .getUser({ params: { id: verifiedKey.referenceId } })
-            .pipe(Effect.mapError(unauthorized));
+            .pipe(Effect.mapError(serviceUnavailable));
         };
 
         const activeOrganizationIdForApiKey = (
           verifiedKey: ExtraVerifiedApiKeyType,
           user: User | undefined,
-        ): Effect.Effect<{ id: string | null }, never> => {
+        ): Effect.Effect<
+          { id: string | null },
+          HttpApiError.ServiceUnavailable
+        > => {
           if (verifiedKey.configId === "organization") {
             return Effect.succeed({ id: verifiedKey.referenceId });
           }
+
+          if (organizationId) return Effect.succeed({ id: organizationId });
 
           if (!user) return Effect.succeed({ id: null });
 
           return api.users
             .getUserActiveOrganization({ params: { userId: user.id } })
-            .pipe(Effect.catch(() => Effect.succeed({ id: null })));
+            .pipe(Effect.mapError(serviceUnavailable));
         };
 
         const getApiKeySession = (
           key: string,
-        ): Effect.Effect<AuthSession, HttpApiError.Unauthorized, never> =>
+        ): Effect.Effect<
+          AuthSession,
+          HttpApiError.Unauthorized | HttpApiError.ServiceUnavailable,
+          never
+        > =>
           Effect.gen(function* () {
             const verified = yield* api.authExtra
               .verifyApiKey({
@@ -226,7 +240,7 @@ export class AuthService extends Context.Service<AuthService>()(
                   ...(apiKeyConfigId ? { configId: apiKeyConfigId } : {}),
                 },
               })
-              .pipe(Effect.mapError(unauthorized));
+              .pipe(Effect.mapError(serviceUnavailable));
 
             if (!verified.valid || !verified.key) {
               return yield* Effect.fail(unauthorized());
@@ -259,12 +273,14 @@ export class AuthService extends Context.Service<AuthService>()(
             } satisfies AuthSession;
           });
 
-        const getSession = () =>
-          apiKey ? getApiKeySession(apiKey) : getCookieSession();
+        const getSession = (): Effect.Effect<
+          AuthSession | null,
+          HttpApiError.Unauthorized | HttpApiError.ServiceUnavailable
+        > => (apiKey ? getApiKeySession(apiKey) : getCookieSession());
 
         const requireSession = (): Effect.Effect<
           AuthSession,
-          HttpApiError.Unauthorized
+          HttpApiError.Unauthorized | HttpApiError.ServiceUnavailable
         > =>
           getSession().pipe(
             Effect.flatMap((authSession) =>
@@ -276,7 +292,7 @@ export class AuthService extends Context.Service<AuthService>()(
 
         const requireUser = (): Effect.Effect<
           AuthSessionWithUser,
-          HttpApiError.Unauthorized
+          HttpApiError.Unauthorized | HttpApiError.ServiceUnavailable
         > =>
           requireSession().pipe(
             Effect.flatMap((authSession) =>
@@ -288,12 +304,12 @@ export class AuthService extends Context.Service<AuthService>()(
 
         const requireOrganization = (): Effect.Effect<
           AuthSessionWithOrganization,
-          HttpApiError.Unauthorized
+          HttpApiError.Unauthorized | HttpApiError.ServiceUnavailable
         > => requireSession().pipe(Effect.flatMap(withRequiredOrganization));
 
         const requireUserOrganization = (): Effect.Effect<
           AuthSessionWithUserAndOrganization,
-          HttpApiError.Unauthorized
+          HttpApiError.Unauthorized | HttpApiError.ServiceUnavailable
         > => requireUser().pipe(Effect.flatMap(withRequiredOrganization));
 
         return {

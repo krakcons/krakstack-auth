@@ -22,7 +22,11 @@ export class AuthMiddleware extends HttpApiMiddleware.Service<
     };
   }
 >()("@krak-stack/auth/AuthMiddleware", {
-  error: [HttpApiError.Unauthorized, HttpApiError.Forbidden],
+  error: [
+    HttpApiError.Unauthorized,
+    HttpApiError.Forbidden,
+    HttpApiError.ServiceUnavailable,
+  ],
   security: {
     apiKey: ApiKeySecurity,
   },
@@ -81,7 +85,7 @@ export const makeAuthenticationLive = (
                   Cause.pretty(cause),
                 ),
               ),
-              Effect.mapError(() => new HttpApiError.Unauthorized({})),
+              Effect.mapError(() => new HttpApiError.ServiceUnavailable({})),
             );
             if (
               !isAllowedRoute(allowedOrganizationImpersonationRoutes, request)
@@ -100,9 +104,10 @@ export const makeAuthenticationLive = (
           }).pipe(
             Effect.mapError((error) =>
               error instanceof HttpApiError.Unauthorized ||
-              error instanceof HttpApiError.Forbidden
+              error instanceof HttpApiError.Forbidden ||
+              error instanceof HttpApiError.ServiceUnavailable
                 ? error
-                : new HttpApiError.Unauthorized({}),
+                : new HttpApiError.ServiceUnavailable({}),
             ),
             Effect.flatMap((auth) =>
               httpEffect.pipe(Effect.provideService(AuthService, auth)),

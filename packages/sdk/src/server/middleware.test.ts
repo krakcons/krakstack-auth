@@ -149,6 +149,11 @@ const rejectedAuthClient = {
   requireUserOrganization: () => Effect.fail(new HttpApiError.Unauthorized({})),
 };
 
+const unavailableAuthClient = {
+  ...rejectedAuthClient,
+  getSession: () => Effect.fail(new HttpApiError.ServiceUnavailable({})),
+};
+
 const userApiKeySession = {
   session: {
     id: "api-key:user-key-1",
@@ -229,6 +234,10 @@ const organizationImpersonationAuthClientLayer = Layer.succeed(
 const rejectedAuthClientLayer = Layer.succeed(
   AuthService,
   rejectedAuthClient as never,
+);
+const unavailableAuthClientLayer = Layer.succeed(
+  AuthService,
+  unavailableAuthClient as never,
 );
 const userApiKeyAuthClientLayer = Layer.succeed(
   AuthService,
@@ -337,6 +346,46 @@ describe("AuthenticationLive", () => {
         expect(response.status).toBe(200);
       }),
     ).pipe(Effect.provide(makeAuthenticationLive(rejectedAuthClientLayer))),
+  );
+
+  it.effect(
+    "maps auth client initialization failures to ServiceUnavailable",
+    () =>
+      provideRequestContext(
+        Effect.gen(function* () {
+          const middleware = yield* AuthMiddleware;
+          const error = yield* middleware
+            .apiKey(Effect.succeed(HttpServerResponse.text("ok")), {
+              ...middlewareOptions,
+              credential: Redacted.make(""),
+            })
+            .pipe(Effect.flip);
+
+          expect(error).toBeInstanceOf(HttpApiError.ServiceUnavailable);
+        }),
+      ).pipe(
+        Effect.provide(
+          makeAuthenticationLive(
+            Layer.effect(AuthService, Effect.fail("auth unavailable")),
+          ),
+        ),
+      ),
+  );
+
+  it.effect("preserves session upstream ServiceUnavailable failures", () =>
+    provideRequestContext(
+      Effect.gen(function* () {
+        const middleware = yield* AuthMiddleware;
+        const error = yield* middleware
+          .apiKey(Effect.succeed(HttpServerResponse.text("ok")), {
+            ...middlewareOptions,
+            credential: Redacted.make(""),
+          })
+          .pipe(Effect.flip);
+
+        expect(error).toBeInstanceOf(HttpApiError.ServiceUnavailable);
+      }),
+    ).pipe(Effect.provide(makeAuthenticationLive(unavailableAuthClientLayer))),
   );
 
   it.effect("authenticates user API keys", () =>
