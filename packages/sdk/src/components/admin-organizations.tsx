@@ -1,6 +1,5 @@
 import { useAtomSet, useAtomValue } from "@effect/atom-react";
 import type { ValidateFromPath } from "@tanstack/react-router";
-import { type ColumnDef } from "@tanstack/react-table";
 import { Atom, AsyncResult } from "effect/unstable/reactivity";
 import { Building2, Pencil, Trash2 } from "lucide-react";
 import { useState } from "react";
@@ -8,6 +7,7 @@ import { toast } from "sonner";
 
 import {
   DataTable,
+  type DataTableColumnDef,
   DataTableListSummary,
   type TableParams,
 } from "@krak-stack/registry/data-table";
@@ -253,7 +253,7 @@ const organizationColumns = (
   m: AdminOrganizationsLabels,
   locale: KrakstackAuthLocale,
   baseUrl?: string | undefined,
-): ColumnDef<AdminOrganization>[] => [
+): DataTableColumnDef<AdminOrganization>[] => [
   {
     accessorKey: "id",
     header: m.admin_column_id,

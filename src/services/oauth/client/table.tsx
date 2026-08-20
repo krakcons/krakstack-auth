@@ -1,11 +1,13 @@
 import { useAtomSet, useAtomValue } from "@effect/atom-react";
-import { type ColumnDef } from "@tanstack/react-table";
 import { Atom, AsyncResult } from "effect/unstable/reactivity";
 import { FolderKanban, KeyRound, Pencil, Trash2 } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
 
-import { DataTable } from "@krak-stack/registry/data-table";
+import {
+  DataTable,
+  type DataTableColumnDef,
+} from "@krak-stack/registry/data-table";
 import { ErrorMessage } from "@krak-stack/registry/effect-form";
 import { AppBrand } from "@krak-stack/registry/app-brand";
 import {
@@ -122,7 +124,7 @@ export function OAuthClientsTable({ reloadKey = 0 }: { reloadKey?: number }) {
   );
 }
 
-const clientColumns = (): ColumnDef<OAuthClientAdmin>[] => [
+const clientColumns = (): DataTableColumnDef<OAuthClientAdmin>[] => [
   {
     accessorKey: "name",
     header: m.admin_column_client(),

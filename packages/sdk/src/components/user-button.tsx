@@ -1,7 +1,6 @@
 import type { ApiKey } from "@better-auth/api-key/client";
 import { useAtomRefresh, useAtomSet, useAtomValue } from "@effect/atom-react";
 import { FormBuilder, FormReact } from "@lucas-barake/effect-form-react";
-import { type ColumnDef } from "@tanstack/react-table";
 import {
   type UseNavigateResult,
   useNavigate,
@@ -34,7 +33,10 @@ import {
   useState,
 } from "react";
 
-import { DataTable } from "@krak-stack/registry/data-table";
+import {
+  DataTable,
+  type DataTableColumnDef,
+} from "@krak-stack/registry/data-table";
 import { AppBrand } from "@krak-stack/registry/app-brand";
 import {
   effectFormMessages,
@@ -2163,7 +2165,7 @@ const apiKeyColumns = ({
   m,
 }: {
   m: ReturnType<typeof userButtonMessageFns>;
-}): ColumnDef<ApiKeySummary>[] => [
+}): DataTableColumnDef<ApiKeySummary>[] => [
   {
     accessorKey: "name",
     header: m.user_api_key_name(),

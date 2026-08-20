@@ -1,6 +1,10 @@
 import { Context, Effect, FileSystem, Layer, Path, Redacted } from "effect";
 import { CredentialsFromEnv } from "@distilled.cloud/cloudflare";
 import { AuthMiddleware, AuthService } from "@krak-stack/auth/server";
+import {
+  healthHandler,
+  HealthService,
+} from "@krak-stack/registry/service-health";
 import * as FetchHttpClient from "effect/unstable/http/FetchHttpClient";
 import {
   Etag,
@@ -241,6 +245,27 @@ const authDocsOpenApiLayer = HttpRouter.add(
   Effect.succeed(HttpServerResponse.jsonUnsafe(OpenApi.fromApi(AuthDocsApi))),
 );
 
+const frontendHealthHandler = HttpApiBuilder.group(
+  FrontendApi,
+  "health",
+  healthHandler,
+);
+
+const healthServiceLayer = HealthService.layerWith({
+  checks: {
+    ready: [
+      {
+        name: "database",
+        check: Effect.gen(function* () {
+          const db = yield* DB;
+          yield* db.$client`SELECT 1`;
+          return HealthService.up();
+        }).pipe(Effect.timeout("2 seconds")),
+      },
+    ],
+  },
+});
+
 const apiLayer = Layer.mergeAll(
   HttpApiBuilder.layer(AdminApi).pipe(
     Layer.provide(adminApiHandler),
@@ -252,6 +277,7 @@ const apiLayer = Layer.mergeAll(
     Layer.provide(authApiHandler),
     Layer.provide(publicOAuthClientsApiHandler),
     Layer.provide(publicProjectsApiHandler),
+    Layer.provide(frontendHealthHandler),
     Layer.provide(LocaleMiddlewareLive),
   ),
   HttpApiBuilder.layer(BackendAuthApi, {
@@ -275,16 +301,24 @@ const appServicesLayer = Layer.mergeAll(
   Organizations.layer,
   Projects.layer,
   S3Service.layer,
+  healthServiceLayer,
   CloudflareLive,
 ).pipe(Layer.provideMerge(DB.layer));
 
 const apiWebHandler = HttpEffect.toWebHandlerLayerWith(appServicesLayer, {
   middleware: HttpMiddleware.logger,
-  toHandler: (context) =>
-    HttpRouter.toHttpEffect(apiLayer).pipe(
+  toHandler: (context) => {
+    const handler = HttpRouter.toHttpEffect(apiLayer).pipe(
       Effect.provide(context),
       Effect.scoped,
-    ),
+    );
+
+    // SAFETY: appServicesLayer provides HealthService before the router is built.
+    return handler as Effect.Effect<
+      Effect.Success<typeof handler>,
+      Effect.Error<typeof handler>
+    >;
+  },
 });
 const emptyHandlerContext = Context.empty() as Context.Context<unknown>;
 

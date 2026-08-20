@@ -4,7 +4,6 @@ import {
   useRouter,
   type ValidateFromPath,
 } from "@tanstack/react-router";
-import { type ColumnDef } from "@tanstack/react-table";
 import { Atom, AsyncResult } from "effect/unstable/reactivity";
 import {
   Ban,
@@ -18,6 +17,7 @@ import { useState } from "react";
 
 import {
   DataTable,
+  type DataTableColumnDef,
   DataTableListSummary,
   type TableParams,
 } from "@krak-stack/registry/data-table";
@@ -455,7 +455,7 @@ export function useAdminUsersTotal(search: TableParams) {
 const userColumns = (
   m: AdminUsersLabels,
   baseUrl?: string | undefined,
-): ColumnDef<User>[] => [
+): DataTableColumnDef<User>[] => [
   {
     accessorKey: "id",
     header: m.admin_column_id,

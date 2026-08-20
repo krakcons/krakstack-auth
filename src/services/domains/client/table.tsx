@@ -1,6 +1,5 @@
 import { useAtomSet, useAtomSubscribe, useAtomValue } from "@effect/atom-react";
 import { FormBuilder, FormReact } from "@lucas-barake/effect-form-react";
-import { type ColumnDef } from "@tanstack/react-table";
 import { Effect, Schema } from "effect";
 import { Atom, AsyncResult } from "effect/unstable/reactivity";
 import { Building2, FolderKanban, Pencil, Trash2 } from "lucide-react";
@@ -8,7 +7,10 @@ import { useState } from "react";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
-import { DataTable } from "@krak-stack/registry/data-table";
+import {
+  DataTable,
+  type DataTableColumnDef,
+} from "@krak-stack/registry/data-table";
 import {
   CheckboxField,
   ErrorMessage,
@@ -309,7 +311,7 @@ function DomainDialog({
   );
 }
 
-const domainColumns = (): ColumnDef<ServerDomain>[] => [
+const domainColumns = (): DataTableColumnDef<ServerDomain>[] => [
   {
     accessorKey: "hostname",
     header: m.domain_hostname(),

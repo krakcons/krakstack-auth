@@ -1,7 +1,6 @@
 import { useAtomSet, useAtomSubscribe, useAtomValue } from "@effect/atom-react";
 import type { AdminApiKey } from "@krak-stack/auth/admin";
 import { FormBuilder, FormReact } from "@lucas-barake/effect-form-react";
-import { type ColumnDef } from "@tanstack/react-table";
 import { createFileRoute } from "@tanstack/react-router";
 import { Effect, Schema } from "effect";
 import { Atom, AsyncResult } from "effect/unstable/reactivity";
@@ -20,6 +19,7 @@ import { toast } from "sonner";
 
 import {
   DataTable,
+  type DataTableColumnDef,
   TableSearchSchemaStandard as TableSearchSchema,
 } from "@krak-stack/registry/data-table";
 import { SidebarPageHeader } from "@krak-stack/registry/sidebar-layout";
@@ -502,7 +502,7 @@ function ApiKeyForm({
   );
 }
 
-const apiKeyColumns = (): ColumnDef<ApiKeySummary>[] => [
+const apiKeyColumns = (): DataTableColumnDef<ApiKeySummary>[] => [
   {
     accessorKey: "name",
     header: m.admin_api_key_name(),

@@ -1,11 +1,13 @@
 import { useAtomSet, useAtomValue } from "@effect/atom-react";
-import { type ColumnDef } from "@tanstack/react-table";
 import { Atom, AsyncResult } from "effect/unstable/reactivity";
 import { Eye, FolderKanban, Pencil, Trash2 } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
 
-import { DataTable } from "@krak-stack/registry/data-table";
+import {
+  DataTable,
+  type DataTableColumnDef,
+} from "@krak-stack/registry/data-table";
 import { ErrorMessage } from "@krak-stack/registry/effect-form";
 import { AppBrand } from "@krak-stack/registry/app-brand";
 import {
@@ -123,7 +125,7 @@ export function ProjectsTable({ reloadKey = 0 }: { reloadKey?: number }) {
   );
 }
 
-const projectColumns = (): ColumnDef<Project>[] => [
+const projectColumns = (): DataTableColumnDef<Project>[] => [
   {
     accessorKey: "name",
     header: m.project(),

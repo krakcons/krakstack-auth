@@ -1,4 +1,5 @@
 import { ExtraApiGroup } from "@krak-stack/auth/extra";
+import { HealthApiGroup } from "@krak-stack/registry/service-health";
 import { HttpApi, OpenApi } from "effect/unstable/httpapi";
 
 import { LocaleMiddleware } from "@/lib/localization";
@@ -38,4 +39,5 @@ export const FrontendApi = HttpApi.make("FrontendApi")
   .add(ExtraApiGroup)
   .add(PublicOAuthClientsApiGroup)
   .add(PublicProjectsApiGroup)
+  .add(HealthApiGroup)
   .prefix("/api");

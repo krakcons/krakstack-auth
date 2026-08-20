@@ -1,7 +1,6 @@
 import type { ApiKey } from "@better-auth/api-key/client";
 import { useAtomRefresh, useAtomSet, useAtomValue } from "@effect/atom-react";
 import { FormBuilder, FormReact } from "@lucas-barake/effect-form-react";
-import { type ColumnDef } from "@tanstack/react-table";
 import { Effect, Option, Schema } from "effect";
 import { AsyncResult, Atom } from "effect/unstable/reactivity";
 import {
@@ -34,6 +33,7 @@ import {
 
 import {
   DataTable,
+  type DataTableColumnDef,
   DataTableRelationshipCell,
 } from "@krak-stack/registry/data-table";
 import {
@@ -2197,7 +2197,7 @@ const userInvitationColumns = ({
   baseUrl?: string | undefined;
   m: ReturnType<typeof organizationMessageFns>;
   now: number;
-}): ColumnDef<UserInvitationSummary>[] => [
+}): DataTableColumnDef<UserInvitationSummary>[] => [
   {
     accessorKey: "organizationName",
     header: m.organization_invitation_organization(),
@@ -3061,7 +3061,7 @@ const memberColumns = ({
     member: OrganizationMemberRow,
     role: OrganizationRole | OrganizationRole[],
   ) => void;
-}): ColumnDef<OrganizationMemberRow>[] => [
+}): DataTableColumnDef<OrganizationMemberRow>[] => [
   {
     id: "user",
     header: m.organization_member_user(),
@@ -3177,7 +3177,7 @@ const invitationColumns = ({
 }: {
   m: ReturnType<typeof organizationMessageFns>;
   now: number;
-}): ColumnDef<OrganizationInvitationSummary>[] => [
+}): DataTableColumnDef<OrganizationInvitationSummary>[] => [
   {
     accessorKey: "email",
     header: m.organization_member_email(),
@@ -3510,7 +3510,7 @@ const apiKeyColumns = ({
   m,
 }: {
   m: ReturnType<typeof organizationMessageFns>;
-}): ColumnDef<ApiKeySummary>[] => [
+}): DataTableColumnDef<ApiKeySummary>[] => [
   {
     accessorKey: "name",
     header: m.user_api_key_name(),
