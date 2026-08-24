@@ -1,14 +1,11 @@
+import { Option, Schema } from "effect";
+
+const Metadata = Schema.Record(Schema.String, Schema.Unknown);
+
 export const mergeOrganizationMetadata = <T extends object>(
-  current: unknown,
+  current: typeof Schema.Unknown.Type,
   incoming: T,
 ): T => {
-  if (
-    typeof current !== "object" ||
-    current === null ||
-    Array.isArray(current)
-  ) {
-    return incoming;
-  }
-
-  return { ...current, ...incoming };
+  const decoded = Schema.decodeUnknownOption(Metadata)(current);
+  return Option.isSome(decoded) ? { ...decoded.value, ...incoming } : incoming;
 };

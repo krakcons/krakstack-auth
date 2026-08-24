@@ -2,7 +2,7 @@ import { useAtomSet, useAtomSubscribe, useAtomValue } from "@effect/atom-react";
 import { FormBuilder, FormReact } from "@lucas-barake/effect-form-react";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
-import { Effect } from "effect";
+import { Effect, Option, Schema } from "effect";
 import { AsyncResult } from "effect/unstable/reactivity";
 import { useState } from "react";
 
@@ -21,13 +21,15 @@ import {
 import { useAuthBrandingConfig } from "@/services/auth/client/branding";
 
 export const Route = createFileRoute("/_auth/consent")({
-  validateSearch: (search: Record<string, unknown>) => ({
-    clientId:
-      typeof search.client_id === "string"
-        ? search.client_id
-        : m.consent_connected_application(),
-    scope:
-      typeof search.scope === "string" ? search.scope : "openid profile email",
+  validateSearch: (search) => ({
+    clientId: Option.getOrElse(
+      Schema.decodeUnknownOption(Schema.String)(search.client_id),
+      () => m.consent_connected_application(),
+    ),
+    scope: Option.getOrElse(
+      Schema.decodeUnknownOption(Schema.String)(search.scope),
+      () => "openid profile email",
+    ),
   }),
   component: Consent,
 });
@@ -134,14 +136,16 @@ const useOAuthClientName = (clientId: string) => {
   return data ?? clientId;
 };
 
-const getOAuthClientDisplayName = (data: unknown, fallback: string) => {
-  if (typeof data !== "object" || data === null) return fallback;
+const OAuthClientDisplay = Schema.Struct({
+  client_name: Schema.optional(Schema.String),
+  client_id: Schema.optional(Schema.String),
+});
 
-  const clientName = "client_name" in data ? data.client_name : undefined;
-  if (typeof clientName === "string" && clientName) return clientName;
-
-  const clientId = "client_id" in data ? data.client_id : undefined;
-  if (typeof clientId === "string" && clientId) return clientId;
-
-  return fallback;
-};
+const getOAuthClientDisplayName = (
+  data: typeof Schema.Unknown.Type,
+  fallback: string,
+) =>
+  Option.match(Schema.decodeUnknownOption(OAuthClientDisplay)(data), {
+    onNone: () => fallback,
+    onSome: (client) => client.client_name || client.client_id || fallback,
+  });

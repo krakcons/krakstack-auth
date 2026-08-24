@@ -154,16 +154,18 @@ const makeOrganizationForm = ({
           logo = assetPath(uploaded.url);
         }
 
-        const payload = Schema.decodeUnknownSync(
-          AdminCreateOrganizationPayload,
-        )({
+        const input = {
           name: decoded.name.trim(),
           slug: slugify(decoded.slug || decoded.name),
           logo: logo ?? undefined,
-          ...(decoded.parentId === noParentOrganization
-            ? {}
-            : { parentId: decoded.parentId }),
-        });
+        };
+        const payload = Schema.decodeUnknownSync(
+          AdminCreateOrganizationPayload,
+        )(
+          decoded.parentId === noParentOrganization
+            ? input
+            : { ...input, parentId: decoded.parentId },
+        );
         const saved = organization
           ? yield* get.setResult(updateOrganizationAtom(baseUrl), {
               params: { id: organization.id },

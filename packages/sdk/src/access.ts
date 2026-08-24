@@ -120,17 +120,17 @@ export type ProjectAccessDefinition<
   readonly qualify: (action: Action) => ProjectPermission<Project, Action>;
   readonly permission: (action: Action) => Policy;
   readonly permissionsForRoles: (
-    roles: unknown,
+    roles: typeof Schema.Unknown.Type,
   ) => ReadonlySet<ProjectPermission<Project, Action>>;
   readonly permissionsForGrant: (
     grant: ApiKeyPermissionGrant | null | undefined,
   ) => ReadonlySet<ProjectPermission<Project, Action>>;
   readonly permissionsForUserKey: (input: {
     readonly grant: ApiKeyPermissionGrant | null | undefined;
-    readonly roles: unknown;
+    readonly roles: typeof Schema.Unknown.Type;
   }) => ReadonlySet<ProjectPermission<Project, Action>>;
   readonly decodeGrant: (
-    input: unknown,
+    input: typeof Schema.Unknown.Type,
   ) => Effect.Effect<
     ReadonlySet<ProjectPermission<Project, Action>>,
     Schema.SchemaError
@@ -145,7 +145,7 @@ export type ProjectAccessDefinition<
   readonly actorForUser: (input: {
     readonly userId: string;
     readonly organizationId: string | null;
-    readonly roles: unknown;
+    readonly roles: typeof Schema.Unknown.Type;
   }) => CurrentActor;
   readonly actorForApiKey: (input: {
     readonly apiKeyId: string;
@@ -218,7 +218,7 @@ const intersection = <A>(
 ): ReadonlySet<A> =>
   new Set(Array.from(left).filter((item) => right.has(item)));
 
-const roleList = (input: unknown): ReadonlyArray<string> =>
+const roleList = (input: typeof Schema.Unknown.Type): ReadonlyArray<string> =>
   Array.isArray(input)
     ? input.flatMap((role) => parseRoleList(role))
     : parseRoleList(input);
@@ -233,8 +233,17 @@ export const defineProjectAccess = <
   type QualifiedPermission = ProjectPermission<Project, Action>;
 
   const allowedActions = new Set<Action>(config.permissions);
-  const qualify = (action: Action) =>
-    `${config.project}:${action}` as QualifiedPermission;
+  const isAction = (action: string): action is Action =>
+    config.permissions.some((allowed) => allowed === action);
+  const QualifiedPermissionSchema = Schema.TemplateLiteral([
+    Schema.Literal(config.project),
+    Schema.Literal(":"),
+    Schema.Literals(config.permissions),
+  ]);
+  const qualify = (action: Action): QualifiedPermission =>
+    Schema.decodeUnknownSync(QualifiedPermissionSchema)(
+      `${config.project}:${action}`,
+    );
 
   const permissionsForActions = (
     actions: Iterable<Action>,
@@ -242,7 +251,7 @@ export const defineProjectAccess = <
     new Set(Array.from(actions, (action) => qualify(action)));
 
   const permissionsForRoles = (
-    input: unknown,
+    input: typeof Schema.Unknown.Type,
   ): ReadonlySet<QualifiedPermission> => {
     const actions = new Set<Action>();
     for (const role of roleList(input)) {
@@ -256,9 +265,7 @@ export const defineProjectAccess = <
   const permissionsForGrant = (
     grant: ApiKeyPermissionGrant | null | undefined,
   ): ReadonlySet<QualifiedPermission> => {
-    const actions = (grant?.[config.project] ?? []).filter((action) =>
-      allowedActions.has(action as Action),
-    ) as Array<Action>;
+    const actions = (grant?.[config.project] ?? []).filter(isAction);
     return permissionsForActions(actions);
   };
 

@@ -67,6 +67,7 @@ describe("organization contact schemas", () => {
     });
 
     expect(metadata.emails).toBeUndefined();
+    expect(metadata).not.toHaveProperty("emails");
     expect(metadata.phones).toHaveLength(1);
   });
 

@@ -74,14 +74,20 @@ export const searchDocumentation = Effect.fn("ChatDocumentation.search")(
     readonly locale: DocsLocale;
     readonly query: string;
   }) {
-    return docs
-      .search(query, locale, { limit: 8 })
-      .map(({ page, heading }) => ({
-        path: page.path,
-        title: heading?.title ?? page.title,
-        description: heading ? page.title : page.description,
-        ...(heading ? { heading: heading.id } : {}),
-      }));
+    return docs.search(query, locale, { limit: 8 }).map(({ page, heading }) =>
+      heading
+        ? {
+            path: page.path,
+            title: heading.title,
+            description: page.title,
+            heading: heading.id,
+          }
+        : {
+            path: page.path,
+            title: page.title,
+            description: page.description,
+          },
+    );
   },
 );
 

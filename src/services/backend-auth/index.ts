@@ -1,4 +1,4 @@
-import { Context, Effect, Layer } from "effect";
+import { Context, Effect, Layer, Option, Schema } from "effect";
 import { and, desc, eq, gt, inArray, isNotNull } from "drizzle-orm";
 
 import {
@@ -35,14 +35,14 @@ type MemberRow = {
   userUpdatedAt: Date;
 };
 
-const parseMetadata = (value: string | null): unknown | null => {
+const parseMetadata = (
+  value: string | null,
+): typeof Schema.Json.Type | string | null => {
   if (!value) return null;
-
-  try {
-    return JSON.parse(value);
-  } catch {
-    return value;
-  }
+  return Option.getOrElse(
+    Schema.decodeUnknownOption(Schema.fromJsonString(Schema.Json))(value),
+    () => value,
+  );
 };
 
 const uniqueIds = (ids: ReadonlyArray<string>) =>

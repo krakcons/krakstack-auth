@@ -223,6 +223,12 @@ const useAuthFormOptions = ({ authClient, baseUrl, locale }: AuthFormProps) => {
   };
 };
 
+interface AuthProjectConfigQuery {
+  projectId?: string;
+  clientId?: string;
+  host?: string;
+}
+
 const useAuthProjectConfig = (
   baseUrl: string | undefined,
   searchString: string,
@@ -231,14 +237,14 @@ const useAuthProjectConfig = (
   const projectId = getSearchParam(searchString, "projectId");
   const clientId = getSearchParam(searchString, "client_id");
   const host = getBrowserAuthHost();
+  let query: AuthProjectConfigQuery = {};
+  if (projectId) query = { ...query, projectId };
+  if (clientId) query = { ...query, clientId };
+  if (host) query = { ...query, host };
   const atom =
     projectConfig === undefined
       ? authClientApi(baseUrl).query("authExtra", "getProjectPublicConfig", {
-          query: {
-            ...(projectId ? { projectId } : {}),
-            ...(clientId ? { clientId } : {}),
-            ...(host ? { host } : {}),
-          },
+          query,
           timeToLive: "5 minutes",
           reactivityKeys: [
             "project-public-config",
@@ -468,12 +474,15 @@ export function Signin(props: AuthFormProps) {
               return;
             }
 
-            const result = await authClient.signIn.email({
+            const credentials: Parameters<typeof authClient.signIn.email>[0] & {
+              oauth_query?: string;
+            } = {
               email,
               password: value.password,
               callbackURL: redirectTarget,
-              ...(oauthQuery ? { oauth_query: oauthQuery } : {}),
-            });
+            };
+            if (oauthQuery) credentials.oauth_query = oauthQuery;
+            const result = await authClient.signIn.email(credentials);
             if (result.error) {
               throw new Error(result.error.message ?? m.sign_in_error);
             }
@@ -507,13 +516,20 @@ export function Signin(props: AuthFormProps) {
     Atom.fn((provider: "google") =>
       Effect.tryPromise({
         try: async () => {
-          const result = await authClient.signIn.social({
+          const socialOptions: Parameters<
+            typeof authClient.signIn.social
+          >[0] & {
+            oauth_query?: string;
+          } = {
             provider,
             callbackURL: socialRedirectTarget,
             errorCallbackURL: "/sign-in",
-            ...(oauthQuery ? { additionalData: { query: oauthQuery } } : {}),
-            ...(oauthQuery ? { oauth_query: oauthQuery } : {}),
-          });
+          };
+          if (oauthQuery) {
+            socialOptions.additionalData = { query: oauthQuery };
+            socialOptions.oauth_query = oauthQuery;
+          }
+          const result = await authClient.signIn.social(socialOptions);
           if (result.error) {
             throw new Error(result.error.message ?? m.sign_in_error);
           }
@@ -1091,24 +1107,19 @@ export function TwoFactor(props: AuthFormProps) {
             }
 
             const code = value.code.trim();
+            const verification = oauthQuery
+              ? {
+                  code,
+                  trustDevice: value.trustDevice,
+                  oauth_query: oauthQuery,
+                }
+              : { code, trustDevice: value.trustDevice };
             const result =
               action.mode === "backup"
-                ? await authClient.twoFactor.verifyBackupCode({
-                    code,
-                    trustDevice: value.trustDevice,
-                    ...(oauthQuery ? { oauth_query: oauthQuery } : {}),
-                  })
+                ? await authClient.twoFactor.verifyBackupCode(verification)
                 : action.mode === "email"
-                  ? await authClient.twoFactor.verifyOtp({
-                      code,
-                      trustDevice: value.trustDevice,
-                      ...(oauthQuery ? { oauth_query: oauthQuery } : {}),
-                    })
-                  : await authClient.twoFactor.verifyTotp({
-                      code,
-                      trustDevice: value.trustDevice,
-                      ...(oauthQuery ? { oauth_query: oauthQuery } : {}),
-                    });
+                  ? await authClient.twoFactor.verifyOtp(verification)
+                  : await authClient.twoFactor.verifyTotp(verification);
             if (result.error) {
               throw new Error(
                 result.error.message ?? m.two_factor_verify_error,
@@ -1294,18 +1305,20 @@ const GoogleLogo = () => (
   </svg>
 );
 
-const hasTwoFactorRedirect = (data: unknown) =>
-  typeof data === "object" &&
-  data !== null &&
-  "twoFactorRedirect" in data &&
-  data.twoFactorRedirect === true;
+const TwoFactorRedirect = Schema.Struct({ twoFactorRedirect: Schema.Boolean });
+const RedirectResult = Schema.Struct({ url: Schema.String });
 
-const getResultRedirectUrl = (data: unknown) => {
-  if (typeof data !== "object" || data === null || !("url" in data))
-    return null;
-  const url = data.url;
-  return typeof url === "string" ? url : null;
-};
+const hasTwoFactorRedirect = (data: typeof Schema.Unknown.Type) =>
+  Option.exists(
+    Schema.decodeUnknownOption(TwoFactorRedirect)(data),
+    (result) => result.twoFactorRedirect,
+  );
+
+const getResultRedirectUrl = (data: typeof Schema.Unknown.Type) =>
+  Option.map(
+    Schema.decodeUnknownOption(RedirectResult)(data),
+    (result) => result.url,
+  ).pipe(Option.getOrNull);
 
 const getRedirectTarget = (
   searchString: string,
@@ -1395,8 +1408,7 @@ const getDefaultAuthRedirectTarget = (
 const getSearchParam = (searchString: string, key: string) =>
   new URLSearchParams(searchString).get(key);
 
-const getBrowserAuthHost = () =>
-  typeof window === "undefined" ? null : window.location.host;
+const getBrowserAuthHost = () => globalThis.window?.location.host ?? null;
 
 const navigateTarget = (
   target: string,

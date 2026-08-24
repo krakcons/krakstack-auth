@@ -122,18 +122,18 @@ const provideRequestContextWith = <A, E, R>(
   );
 
 const authClient = {
-  auth: { getSession: () => Effect.succeed(authSession) },
-  getSession: () => Effect.succeed(authSession),
-  requireSession: () => Effect.succeed(authSession),
+  getSession: () => Effect.succeed<AuthSession>(authSession),
+  requireSession: () => Effect.succeed<AuthSession>(authSession),
   requireUser: () => Effect.succeed(authSession),
   requireOrganization: () => Effect.succeed(authSession),
   requireUserOrganization: () => Effect.succeed(authSession),
 };
 
 const organizationImpersonationAuthClient = {
-  auth: { getSession: () => Effect.succeed(organizationImpersonationSession) },
-  getSession: () => Effect.succeed(organizationImpersonationSession),
-  requireSession: () => Effect.succeed(organizationImpersonationSession),
+  getSession: () =>
+    Effect.succeed<AuthSession>(organizationImpersonationSession),
+  requireSession: () =>
+    Effect.succeed<AuthSession>(organizationImpersonationSession),
   requireUser: () => Effect.succeed(organizationImpersonationSession),
   requireOrganization: () => Effect.succeed(organizationImpersonationSession),
   requireUserOrganization: () =>
@@ -141,8 +141,7 @@ const organizationImpersonationAuthClient = {
 };
 
 const rejectedAuthClient = {
-  auth: { getSession: () => Effect.succeed(null) },
-  getSession: () => Effect.succeed(null),
+  getSession: () => Effect.succeed<AuthSession | null>(null),
   requireSession: () => Effect.fail(new HttpApiError.Unauthorized({})),
   requireUser: () => Effect.fail(new HttpApiError.Unauthorized({})),
   requireOrganization: () => Effect.fail(new HttpApiError.Unauthorized({})),
@@ -185,68 +184,96 @@ const organizationApiKeySession = {
 } satisfies AuthSession;
 
 const userApiKeyAuthClient = {
-  auth: { getSession: () => Effect.succeed(null) },
-  getSession: () => Effect.succeed(userApiKeySession),
-  requireSession: () => Effect.succeed(userApiKeySession),
+  getSession: () => Effect.succeed<AuthSession>(userApiKeySession),
+  requireSession: () => Effect.succeed<AuthSession>(userApiKeySession),
   requireUser: () => Effect.succeed(userApiKeySession),
   requireOrganization: () => Effect.succeed(userApiKeySession),
   requireUserOrganization: () => Effect.succeed(userApiKeySession),
-  authExtra: {
-    verifyApiKey: ({ payload }: { payload: { configId?: string } }) =>
-      Effect.succeed({
-        valid: payload.configId === "user",
-        error: null,
-        key: payload.configId === "user" ? userApiKey : null,
-      }),
-  },
-  users: {
-    getUser: () => Effect.succeed(user),
-    getUserActiveOrganization: () => Effect.succeed({ id: "org-1" }),
-  },
 };
 
 const organizationApiKeyAuthClient = {
-  auth: { getSession: () => Effect.succeed(null) },
-  getSession: () => Effect.succeed(organizationApiKeySession),
-  requireSession: () => Effect.succeed(organizationApiKeySession),
+  getSession: () => Effect.succeed<AuthSession>(organizationApiKeySession),
+  requireSession: () => Effect.succeed<AuthSession>(organizationApiKeySession),
   requireUser: () => Effect.fail(new HttpApiError.Unauthorized({})),
   requireOrganization: () => Effect.succeed(organizationApiKeySession),
   requireUserOrganization: () => Effect.fail(new HttpApiError.Unauthorized({})),
-  authExtra: {
-    verifyApiKey: ({ payload }: { payload: { configId?: string } }) =>
-      Effect.succeed({
-        valid: payload.configId === "organization",
-        error: null,
-        key: payload.configId === "organization" ? organizationApiKey : null,
-      }),
-  },
-  users: {
-    getUser: () => Effect.fail("organization keys do not require a user"),
-    getUserActiveOrganization: () => Effect.succeed({ id: null }),
-  },
 };
 
-const authClientLayer = Layer.succeed(AuthService, authClient as never);
-const organizationImpersonationAuthClientLayer = Layer.succeed(
+const baseAuthServiceLayer = AuthService.layer({
+  baseUrl: "http://localhost",
+  apiKey: Redacted.make("test-service-key"),
+});
+const authClientLayer = Layer.effect(
   AuthService,
-  organizationImpersonationAuthClient as never,
-);
-const rejectedAuthClientLayer = Layer.succeed(
+  Effect.map(AuthService, (service) => ({
+    ...service,
+    ...authClient,
+  })),
+).pipe(Layer.provide(baseAuthServiceLayer));
+const organizationImpersonationAuthClientLayer = Layer.effect(
   AuthService,
-  rejectedAuthClient as never,
-);
-const unavailableAuthClientLayer = Layer.succeed(
+  Effect.map(AuthService, (service) => ({
+    ...service,
+    ...organizationImpersonationAuthClient,
+  })),
+).pipe(Layer.provide(baseAuthServiceLayer));
+const rejectedAuthClientLayer = Layer.effect(
   AuthService,
-  unavailableAuthClient as never,
-);
-const userApiKeyAuthClientLayer = Layer.succeed(
+  Effect.map(AuthService, (service) => ({
+    ...service,
+    ...rejectedAuthClient,
+  })),
+).pipe(Layer.provide(baseAuthServiceLayer));
+const unavailableAuthClientLayer = Layer.effect(
   AuthService,
-  userApiKeyAuthClient as never,
-);
-const organizationApiKeyAuthClientLayer = Layer.succeed(
+  Effect.map(AuthService, (service) => ({
+    ...service,
+    ...unavailableAuthClient,
+  })),
+).pipe(Layer.provide(baseAuthServiceLayer));
+const userApiKeyAuthClientLayer = Layer.effect(
   AuthService,
-  organizationApiKeyAuthClient as never,
-);
+  Effect.map(AuthService, (service) => ({
+    ...service,
+    ...userApiKeyAuthClient,
+  })),
+).pipe(Layer.provide(baseAuthServiceLayer));
+const organizationApiKeyAuthClientLayer = Layer.effect(
+  AuthService,
+  Effect.map(AuthService, (service) => ({
+    ...service,
+    ...organizationApiKeyAuthClient,
+  })),
+).pipe(Layer.provide(baseAuthServiceLayer));
+
+const requiredOrganizationLayer = Layer.effect(
+  AuthService,
+  Effect.map(AuthService, (service) => ({
+    ...service,
+    getSession: () => Effect.succeed(authSession),
+    requireOrganization: () => Effect.succeed(authSession),
+  })),
+).pipe(Layer.provide(baseAuthServiceLayer));
+const missingOrganizationLayer = Layer.effect(
+  AuthService,
+  Effect.map(AuthService, (service) => ({
+    ...service,
+    getSession: () =>
+      Effect.succeed({
+        ...authSession,
+        session: { ...authSession.session, activeOrganizationId: null },
+      }),
+    requireOrganization: () => Effect.fail(new HttpApiError.Unauthorized({})),
+  })),
+).pipe(Layer.provide(baseAuthServiceLayer));
+const missingSessionLayer = Layer.effect(
+  AuthService,
+  Effect.map(AuthService, (service) => ({
+    ...service,
+    getSession: () => Effect.succeed(null),
+    requireSession: () => Effect.fail(new HttpApiError.Unauthorized({})),
+  })),
+).pipe(Layer.provide(baseAuthServiceLayer));
 
 describe("SessionContext", () => {
   it.effect("can require an active organization", () =>
@@ -255,12 +282,7 @@ describe("SessionContext", () => {
       const session = yield* auth.requireOrganization();
 
       expect(session.session.activeOrganizationId).toBe("org-1");
-    }).pipe(
-      Effect.provideService(AuthService, {
-        getSession: () => Effect.succeed(authSession),
-        requireOrganization: () => Effect.succeed(authSession),
-      } as never),
-    ),
+    }).pipe(Effect.provide(requiredOrganizationLayer)),
   );
 
   it.effect("rejects a missing required active organization", () =>
@@ -269,17 +291,7 @@ describe("SessionContext", () => {
       const error = yield* auth.requireOrganization().pipe(Effect.flip);
 
       expect(error).toBeInstanceOf(HttpApiError.Unauthorized);
-    }).pipe(
-      Effect.provideService(AuthService, {
-        getSession: () =>
-          Effect.succeed({
-            ...authSession,
-            session: { ...authSession.session, activeOrganizationId: null },
-          }),
-        requireOrganization: () =>
-          Effect.fail(new HttpApiError.Unauthorized({})),
-      } as never),
-    ),
+    }).pipe(Effect.provide(missingOrganizationLayer)),
   );
 
   it.effect("rejects missing auth when a session is required", () =>
@@ -288,12 +300,7 @@ describe("SessionContext", () => {
       const error = yield* auth.requireSession().pipe(Effect.flip);
 
       expect(error).toBeInstanceOf(HttpApiError.Unauthorized);
-    }).pipe(
-      Effect.provideService(AuthService, {
-        getSession: () => Effect.succeed(null),
-        requireSession: () => Effect.fail(new HttpApiError.Unauthorized({})),
-      } as never),
-    ),
+    }).pipe(Effect.provide(missingSessionLayer)),
   );
 });
 
@@ -312,8 +319,6 @@ describe("AuthenticationLive", () => {
             if (!session) return HttpServerResponse.text("missing session");
             expect(session.session.id).toBe("session-1");
             expect(session.authMethod.type).toBe("cookie");
-            expect(auth).toBe(authClient);
-
             return HttpServerResponse.text("ok");
           }),
           { ...middlewareOptions, credential: Redacted.make("") },
@@ -409,8 +414,6 @@ describe("AuthenticationLive", () => {
                 ? session.authMethod.apiKey.id
                 : null,
             ).toBe("user-key-1");
-            expect(auth).toBe(userApiKeyAuthClient);
-
             return HttpServerResponse.text("ok");
           }),
           { ...middlewareOptions, credential: Redacted.make("user_secret") },
@@ -443,8 +446,6 @@ describe("AuthenticationLive", () => {
                 ? session.authMethod.apiKey.id
                 : null,
             ).toBe("org-key-1");
-            expect(auth).toBe(organizationApiKeyAuthClient);
-
             return HttpServerResponse.text("ok");
           }),
           { ...middlewareOptions, credential: Redacted.make("org_secret") },

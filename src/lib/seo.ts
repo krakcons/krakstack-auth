@@ -112,8 +112,8 @@ export const seo = ({
   const publisher = {
     "@type": "Organization",
     name: siteName,
-    ...(siteUrl ? { url: siteUrl } : {}),
-    ...(sameAs?.length ? { sameAs } : {}),
+    url: siteUrl || undefined,
+    sameAs: sameAs?.length ? sameAs : undefined,
   };
   const structuredData =
     type === "article"
@@ -121,15 +121,15 @@ export const seo = ({
           "@type": "Article",
           headline: title,
           description,
-          ...(canonical ? { url: canonical } : {}),
-          ...(locale ? { inLanguage: locale } : {}),
-          ...(image ? { image } : {}),
+          url: canonical || undefined,
+          inLanguage: locale || undefined,
+          image: image || undefined,
           publisher,
         }
       : {
           "@type": "WebSite",
           name: siteName,
-          ...(siteUrl ? { url: siteUrl } : {}),
+          url: siteUrl || undefined,
           publisher,
         };
   const scripts = [

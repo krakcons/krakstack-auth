@@ -65,9 +65,10 @@ export const listenForSessionRevalidation = (
 };
 
 const setProjectContextCookie = (projectId: string | null | undefined) => {
-  if (typeof document === "undefined") return;
+  if (!globalThis.document) return;
 
-  const secure = window.location.protocol === "https:" ? "; Secure" : "";
+  const secure =
+    globalThis.window.location.protocol === "https:" ? "; Secure" : "";
   if (!projectId) {
     document.cookie = `${PROJECT_CONTEXT_COOKIE}=; Path=/; Max-Age=0; SameSite=Lax${secure}`;
     return;
@@ -82,8 +83,7 @@ const getSearchParam = (searchString: string, key: string) => {
   return new URLSearchParams(searchString).get(key);
 };
 
-const getBrowserAuthHost = () =>
-  typeof window === "undefined" ? null : window.location.host;
+const getBrowserAuthHost = () => globalThis.window?.location.host ?? null;
 
 const getRedirectHost = (searchString: string) => {
   if (!searchString) return null;
@@ -104,6 +104,13 @@ const getRedirectHost = (searchString: string) => {
   }
 };
 
+interface ProjectConfigQuery {
+  projectId?: string;
+  clientId?: string;
+  host?: string;
+  rootHost?: string;
+}
+
 const useProjectConfig = (
   baseUrl: string | undefined,
   providedProjectId: string | null | undefined,
@@ -116,14 +123,14 @@ const useProjectConfig = (
   const clientId = getSearchParam(searchString, "client_id");
   const host = getBrowserAuthHost();
   const rootHost = getRedirectHost(searchString);
+  const query: ProjectConfigQuery = {};
+  if (projectId) query.projectId = projectId;
+  if (clientId) query.clientId = clientId;
+  if (host) query.host = host;
+  if (rootHost) query.rootHost = rootHost;
   const result = useAtomSuspense(
     authClientApi(baseUrl).query("authExtra", "getProjectPublicConfig", {
-      query: {
-        ...(projectId ? { projectId } : {}),
-        ...(clientId ? { clientId } : {}),
-        ...(host ? { host } : {}),
-        ...(rootHost ? { rootHost } : {}),
-      },
+      query,
       timeToLive: "5 minutes",
       reactivityKeys: [
         "project-public-config",

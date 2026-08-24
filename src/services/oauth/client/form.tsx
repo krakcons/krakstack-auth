@@ -130,8 +130,8 @@ export function OAuthClientForm({
 }) {
   const projectsResult = useAtomValue(projectsAtom);
   const projects = AsyncResult.match(projectsResult, {
-    onInitial: () => [] as Project[],
-    onFailure: () => [] as Project[],
+    onInitial: () => Array<Project>(),
+    onFailure: () => Array<Project>(),
     onSuccess: ({ value }) => Array.from(value),
   });
   const isEditing = Boolean(client);

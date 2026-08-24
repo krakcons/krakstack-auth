@@ -5,6 +5,7 @@ import {
   type ValidateFromPath,
 } from "@tanstack/react-router";
 import { Atom, AsyncResult } from "effect/unstable/reactivity";
+import { Option, Schema } from "effect";
 import {
   Ban,
   Building2,
@@ -152,14 +153,23 @@ type User = {
   projects: ReadonlyArray<AdminProjectPreview>;
 };
 
+interface AdminUsersQuery {
+  page: number;
+  pageSize: number;
+  globalFilter?: string;
+  sort?: string;
+  projectId?: string;
+}
+
 const adminUsersQuery = (search: TableParams, projectId?: string | null) => {
-  const query = {
+  let query: AdminUsersQuery = {
     page: search.page ?? 0,
     pageSize: search.pageSize ?? 10,
-    ...(search.globalFilter ? { globalFilter: search.globalFilter } : {}),
-    ...(search.sort ? { sort: search.sort } : {}),
-    ...(projectId ? { projectId } : {}),
   };
+  if (search.globalFilter)
+    query = { ...query, globalFilter: search.globalFilter };
+  if (search.sort) query = { ...query, sort: search.sort };
+  if (projectId) query = { ...query, projectId };
 
   return {
     query,
@@ -223,14 +233,16 @@ const impersonateUser = async (
 };
 
 type SessionWithActiveOrganization = {
-  session?: { activeOrganizationId?: unknown };
+  session?: { activeOrganizationId?: typeof Schema.Unknown.Type };
 };
 
 const activeOrganizationId = (
   session: SessionWithActiveOrganization | null,
 ) => {
   const value = session?.session?.activeOrganizationId;
-  return typeof value === "string" && value ? value : null;
+  return Option.getOrNull(
+    Schema.decodeUnknownOption(Schema.NonEmptyString)(value),
+  );
 };
 
 export function AdminUsersTable({

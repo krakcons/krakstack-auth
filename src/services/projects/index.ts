@@ -30,18 +30,18 @@ const StoredProjectData = Schema.Struct({
   authOptions: ProjectData.fields.authOptions,
 });
 
-export const decodeProjectData = (value: unknown) => {
+export const decodeProjectData = (value: typeof Schema.Unknown.Type) => {
   const stored = Schema.decodeUnknownSync(StoredProjectData)(
     value ?? emptyData,
   );
 
-  return Schema.decodeUnknownSync(ProjectData)({
-    ...(stored.branding ? { branding: stored.branding } : {}),
-    ...(stored.authOptions ? { authOptions: stored.authOptions } : {}),
-  });
+  let data: ProjectData = {};
+  if (stored.branding) data = { ...data, branding: stored.branding };
+  if (stored.authOptions) data = { ...data, authOptions: stored.authOptions };
+  return Schema.decodeUnknownSync(ProjectData)(data);
 };
 
-export const decodeProjectDataOrEmpty = (value: unknown) => {
+export const decodeProjectDataOrEmpty = (value: typeof Schema.Unknown.Type) => {
   try {
     return decodeProjectData(value);
   } catch {
@@ -227,14 +227,16 @@ export class Projects extends Context.Service<Projects>()("Projects", {
       id: string;
       payload: UpdateProjectPayload;
     }) {
+      const updates: Partial<typeof project.$inferInsert> = {
+        data: decodeProjectData(payload.data),
+        updatedAt: new Date(),
+      };
+      if (payload.name !== undefined) updates.name = payload.name.trim();
+      if (payload.logo !== undefined) updates.logo = payload.logo;
+
       const [value] = yield* db
         .update(project)
-        .set({
-          ...(payload.name !== undefined ? { name: payload.name.trim() } : {}),
-          ...(payload.logo !== undefined ? { logo: payload.logo } : {}),
-          data: decodeProjectData(payload.data),
-          updatedAt: new Date(),
-        })
+        .set(updates)
         .where(eq(project.id, id))
         .returning();
 

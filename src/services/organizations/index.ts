@@ -30,7 +30,7 @@ export class Organizations extends Context.Service<Organizations>()(
         const { parentId, ...data } = payload;
         return yield* Effect.promise(() =>
           betterAuth.api.createOrganization({
-            body: { ...data, ...(parentId ? { parentId } : {}) },
+            body: parentId === undefined ? data : { ...data, parentId },
             headers: betterAuth.headers,
           }),
         );
@@ -62,16 +62,15 @@ export class Organizations extends Context.Service<Organizations>()(
           }
         }
 
+        const updates: Partial<typeof organization.$inferInsert> = {};
+        if (payload.name !== undefined) updates.name = payload.name;
+        if (payload.slug !== undefined) updates.slug = payload.slug;
+        if (payload.logo !== undefined) updates.logo = payload.logo;
+        if (payload.parentId !== undefined) updates.parentId = payload.parentId;
+
         const [updated] = yield* database
           .update(organization)
-          .set({
-            ...(payload.name !== undefined ? { name: payload.name } : {}),
-            ...(payload.slug !== undefined ? { slug: payload.slug } : {}),
-            ...(payload.logo !== undefined ? { logo: payload.logo } : {}),
-            ...(payload.parentId !== undefined
-              ? { parentId: payload.parentId }
-              : {}),
-          })
+          .set(updates)
           .where(eq(organization.id, id))
           .returning();
 

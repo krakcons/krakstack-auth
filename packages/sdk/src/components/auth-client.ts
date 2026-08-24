@@ -77,11 +77,14 @@ export type AuthUiClient = ReactAuthClient<AuthUiClientOptions>;
 export const createAuthUiClient = (
   baseUrl?: string | undefined,
   options?: CreateAuthUiClientOptions,
-) =>
-  createAuthClient<AuthUiClientOptions>({
-    ...(baseUrl ? { baseURL: baseUrl } : {}),
+) => {
+  const config = {
     fetchOptions: {
       credentials: options?.credentials ?? "include",
     },
     plugins: authUiClientPlugins,
-  });
+  };
+  return createAuthClient<AuthUiClientOptions>(
+    baseUrl ? { ...config, baseURL: baseUrl } : config,
+  );
+};

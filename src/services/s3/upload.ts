@@ -22,7 +22,7 @@ export const uploadImageFromMultipart = <BadRequest, InternalServerError>({
   prefix: string;
   fallbackFileName: string;
   badRequest: (message: string) => BadRequest;
-  internalServerError: (error: unknown) => InternalServerError;
+  internalServerError: (cause: unknown) => InternalServerError;
 }) =>
   Effect.gen(function* () {
     const [upload] = yield* payload.pipe(

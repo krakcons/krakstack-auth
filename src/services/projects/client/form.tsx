@@ -55,7 +55,8 @@ const projectFormBuilder = FormBuilder.empty
   .addField("emailOtp", Schema.Boolean)
   .addField("google", Schema.Boolean);
 
-const isFile = (value: unknown): value is File => value instanceof File;
+const isFile = (value: typeof Schema.Unknown.Type): value is File =>
+  value instanceof File;
 
 const valuesToData = (value: ProjectFormValues) =>
   Schema.decodeUnknownSync(ProjectData)({

@@ -1,5 +1,5 @@
 import { useAtomSuspense } from "@effect/atom-react";
-import { Effect } from "effect";
+import { Effect, Schema } from "effect";
 import { Atom } from "effect/unstable/reactivity";
 import { Check, Loader2, Mail, ShieldAlert } from "lucide-react";
 import { type ReactNode, useEffect, useState } from "react";
@@ -17,7 +17,7 @@ import {
 
 import type { AuthUiClient } from "./auth-client";
 import { type KrakstackAuthLocale, useKrakstackAuth } from "./auth-provider";
-import type { OrganizationEmail } from "../schema";
+import { OrganizationEmail } from "../schema";
 import {
   isInvitationExpired,
   useInvitationExpirationClock,
@@ -98,18 +98,18 @@ type FullOrganization = {
   icon: string | null;
 };
 
-const isFullOrganization = (value: unknown): value is FullOrganization => {
-  if (typeof value !== "object" || value === null) return false;
-  if (!("id" in value) || typeof value.id !== "string") return false;
-  if (!("name" in value) || typeof value.name !== "string") return false;
-  if (!("slug" in value) || typeof value.slug !== "string") return false;
-  if (!("displayName" in value) || typeof value.displayName !== "string") {
-    return false;
-  }
-  if ("emails" in value && !Array.isArray(value.emails)) return false;
+const FullOrganizationSchema = Schema.Struct({
+  id: Schema.String,
+  name: Schema.String,
+  slug: Schema.String,
+  displayName: Schema.String,
+  contactEmail: Schema.optional(Schema.NullOr(Schema.String)),
+  emails: Schema.optional(Schema.Array(OrganizationEmail)),
+  logo: Schema.NullOr(Schema.String),
+  icon: Schema.NullOr(Schema.String),
+});
 
-  return true;
-};
+const isFullOrganization = Schema.is(FullOrganizationSchema);
 
 const interpolate = (value: string, params?: Record<string, string>) =>
   Object.entries(params ?? {}).reduce(
@@ -154,9 +154,7 @@ const organizationProfileUrl = (
   organizationId: string,
   locale: KrakstackAuthLocale | undefined,
 ) => {
-  const root =
-    baseUrl?.trim() ||
-    (typeof window === "undefined" ? "" : window.location.origin);
+  const root = baseUrl?.trim() || globalThis.window?.location.origin || "";
   const url = new URL("/api/auth/organization-profile", root);
   url.searchParams.set("organizationId", organizationId);
   if (locale) url.searchParams.set("locale", locale);
@@ -176,7 +174,7 @@ const getOrganizationPublicProfile = async (
   );
 
   if (!response.ok) return null;
-  const body: unknown = await response.json();
+  const body = await response.json();
   return isFullOrganization(body) ? body : null;
 };
 
@@ -190,12 +188,16 @@ type AccessResult =
 
 const accessAtom = Atom.family((authClient: AuthUiClient) =>
   Atom.family((key: string) => {
-    const { baseUrl, locale, organizationId } = JSON.parse(key) as {
-      baseUrl?: string | undefined;
-      locale?: KrakstackAuthLocale | undefined;
-      organizationId: string;
-      userId?: string | undefined;
-    };
+    const AccessKey = Schema.fromJsonString(
+      Schema.Struct({
+        baseUrl: Schema.optional(Schema.String),
+        locale: Schema.optional(Schema.Literals(["en", "fr"])),
+        organizationId: Schema.String,
+        userId: Schema.optional(Schema.String),
+      }),
+    );
+    const { baseUrl, locale, organizationId } =
+      Schema.decodeUnknownSync(AccessKey)(key);
 
     return Atom.keepAlive(
       Atom.make(

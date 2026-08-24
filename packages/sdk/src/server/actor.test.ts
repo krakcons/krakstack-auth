@@ -1,5 +1,5 @@
 import { describe, expect, it } from "@effect/vitest";
-import { Effect, Logger, References } from "effect";
+import { Effect, Layer, Logger, Redacted, References, Schema } from "effect";
 import {
   HttpRouter,
   HttpServerRequest,
@@ -12,7 +12,11 @@ import {
 } from "effect/unstable/httpapi";
 
 import { CurrentActor, defineProjectAccess } from "../access";
-import { AuthService, type AuthSession } from "../service";
+import {
+  AuthService,
+  type AuthSession,
+  type AuthSessionWithOrganization,
+} from "../service";
 import { ActorRequired } from "./actor";
 
 const now = new Date("2026-01-01T00:00:00.000Z");
@@ -155,7 +159,7 @@ const expectActorLogAttributes = ({
   organizationId: string;
   userId?: string;
 }) => {
-  const annotations: Array<Record<string, unknown>> = [];
+  const annotations: Array<Record<string, typeof Schema.Unknown.Type>> = [];
   const logger = Logger.make((options) => {
     annotations.push(options.fiber.getRef(References.CurrentLogAnnotations));
   });
@@ -174,12 +178,34 @@ const expectActorLogAttributes = ({
 };
 
 const authService = (authSession: AuthSession) => ({
-  requireSession: () => Effect.succeed(authSession),
-  requireOrganization: () => Effect.succeed(authSession),
-  organizations: {
-    getActiveMember: () => Effect.succeed({ role: "member" }),
-  },
+  requireSession: () => Effect.succeed<AuthSession>(authSession),
+  requireOrganization: () =>
+    Effect.succeed<AuthSessionWithOrganization>({
+      ...authSession,
+      session: {
+        ...authSession.session,
+        activeOrganizationId:
+          authSession.session.activeOrganizationId ?? "org-1",
+      },
+    }),
+  getActiveMemberRole: () => Effect.succeed("member"),
 });
+
+const authServiceLayer = (authSession: AuthSession) =>
+  Layer.effect(
+    AuthService,
+    Effect.map(AuthService, (service) => ({
+      ...service,
+      ...authService(authSession),
+    })),
+  ).pipe(
+    Layer.provide(
+      AuthService.layer({
+        baseUrl: "http://localhost",
+        apiKey: Redacted.make("test-service-key"),
+      }),
+    ),
+  );
 
 const runAnyActorMiddleware = (authSession: AuthSession) =>
   Effect.gen(function* () {
@@ -205,7 +231,7 @@ const runAnyActorMiddleware = (authSession: AuthSession) =>
     );
   }).pipe(
     Effect.provide(ActorRequired.layer(Access)),
-    Effect.provideService(AuthService, authService(authSession) as never),
+    Effect.provide(authServiceLayer(authSession)),
     provideRequestContext,
   );
 
@@ -241,7 +267,7 @@ describe("ActorRequired", () => {
       );
     }).pipe(
       Effect.provide(ActorRequired.layer(Access)),
-      Effect.provideService(AuthService, authService(userKeySession) as never),
+      Effect.provide(authServiceLayer(userKeySession)),
       provideRequestContext,
     ),
   );
@@ -267,10 +293,7 @@ describe("ActorRequired", () => {
       );
     }).pipe(
       Effect.provide(ActorRequired.layer(Access)),
-      Effect.provideService(
-        AuthService,
-        authService(organizationKeySession) as never,
-      ),
+      Effect.provide(authServiceLayer(organizationKeySession)),
       provideRequestContext,
     ),
   );
@@ -284,10 +307,7 @@ describe("ActorRequired", () => {
       );
     }).pipe(
       Effect.provide(ActorRequired.layer(Access)),
-      Effect.provideService(
-        AuthService,
-        authService(organizationKeySession) as never,
-      ),
+      Effect.provide(authServiceLayer(organizationKeySession)),
       provideRequestContext,
       Effect.flip,
       Effect.map((error) => {
@@ -308,7 +328,7 @@ describe("ActorRequired", () => {
       );
     }).pipe(
       Effect.provide(ActorRequired.layer(Access)),
-      Effect.provideService(AuthService, authService(userKeySession) as never),
+      Effect.provide(authServiceLayer(userKeySession)),
       provideRequestContext,
       Effect.flip,
       Effect.map((error) => {

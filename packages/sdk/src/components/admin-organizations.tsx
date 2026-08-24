@@ -86,14 +86,23 @@ const organizationDisplay = (
   };
 };
 
+interface AdminOrganizationsQuery {
+  page: number;
+  pageSize: number;
+  globalFilter?: string;
+  sort?: string;
+  projectId?: string;
+}
+
 const organizationsQuery = (search: TableParams, projectId?: string | null) => {
-  const query = {
+  let query: AdminOrganizationsQuery = {
     page: search.page ?? 0,
     pageSize: search.pageSize ?? 10,
-    ...(search.globalFilter ? { globalFilter: search.globalFilter } : {}),
-    ...(search.sort ? { sort: search.sort } : {}),
-    ...(projectId ? { projectId } : {}),
   };
+  if (search.globalFilter)
+    query = { ...query, globalFilter: search.globalFilter };
+  if (search.sort) query = { ...query, sort: search.sort };
+  if (projectId) query = { ...query, projectId };
 
   return {
     query,

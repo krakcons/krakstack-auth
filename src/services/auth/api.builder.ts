@@ -29,9 +29,9 @@ import {
 import { Projects } from "@/services/projects";
 import { uploadImageFromMultipart } from "@/services/s3/upload";
 
-const authError = (fallback: string) => (error: unknown) =>
+const authError = (fallback: string) => (cause: unknown) =>
   new ExtraBadRequest({
-    message: error instanceof Error ? error.message : fallback,
+    message: cause instanceof Error ? cause.message : fallback,
   });
 
 const internalServerError = () => new HttpApiError.InternalServerError({});
@@ -61,16 +61,21 @@ export const apiKeyConfigIdFromKey = (key: string) => {
   return undefined;
 };
 
-const userRole = (value: unknown) => {
-  if (typeof value !== "object" || value === null || !("role" in value)) {
-    return undefined;
-  }
-  return Reflect.get(value, "role");
-};
+const UserRole = Schema.Struct({ role: Schema.String });
 
-const hasAdminRole = (role: unknown) =>
-  typeof role === "string" &&
-  role.split(",").some((item) => item.trim() === "admin");
+const userRole = (value: typeof Schema.Unknown.Type) =>
+  Option.map(
+    Schema.decodeUnknownOption(UserRole)(value),
+    (user) => user.role,
+  ).pipe(Option.getOrUndefined);
+
+const hasAdminRole = (role: typeof Schema.Unknown.Type) => {
+  const decoded = Schema.decodeUnknownOption(Schema.String)(role);
+  return (
+    Option.isSome(decoded) &&
+    decoded.value.split(",").some((item) => item.trim() === "admin")
+  );
+};
 
 export const organizationPublicProfile = (
   record: {
@@ -138,7 +143,7 @@ export const organizationPublicProfile = (
       localize(localeContext, {
         ...email,
         translations: Array.from(email.translations),
-      }).locale === localeContext.locale,
+      })?.locale === localeContext.locale,
   );
   const contactEmail =
     localizedEmail?.email ??
@@ -296,26 +301,25 @@ export const authApiHandler = HttpApiBuilder.group(
                 ),
               )
             : undefined;
+          let body: NonNullable<
+            Parameters<typeof client.api.createApiKey>[0]
+          >["body"] = {
+            configId: payload.configId,
+            userId: session.user.id,
+          };
+          if (payload.name) body = { ...body, name: payload.name };
+          if (payload.organizationId) {
+            body = { ...body, organizationId: payload.organizationId };
+          }
+          if (permissions) body = { ...body, permissions };
+          if (payload.referrers) {
+            body = {
+              ...body,
+              metadata: { allowedOrigins: Array.from(payload.referrers) },
+            };
+          }
           const result = yield* Effect.tryPromise({
-            try: () =>
-              client.api.createApiKey({
-                body: {
-                  configId: payload.configId,
-                  userId: session.user.id,
-                  ...(payload.name ? { name: payload.name } : {}),
-                  ...(payload.organizationId
-                    ? { organizationId: payload.organizationId }
-                    : {}),
-                  ...(permissions ? { permissions } : {}),
-                  ...(payload.referrers
-                    ? {
-                        metadata: {
-                          allowedOrigins: Array.from(payload.referrers),
-                        },
-                      }
-                    : {}),
-                },
-              }),
+            try: () => client.api.createApiKey({ body }),
             catch: authError("Could not create API key"),
           });
 
@@ -388,10 +392,9 @@ export const authApiHandler = HttpApiBuilder.group(
           );
           const configId =
             payload.configId ?? apiKeyConfigIdFromKey(payload.key);
-          const body = {
-            key: payload.key,
-            ...(configId ? { configId } : {}),
-          };
+          const body = configId
+            ? { key: payload.key, configId }
+            : { key: payload.key };
 
           const result = yield* Effect.tryPromise({
             try: () =>

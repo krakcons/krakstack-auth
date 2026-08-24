@@ -2,16 +2,32 @@ import { describe, expect, it } from "@effect/vitest";
 
 import { proxyAuthRequest } from "./proxy";
 
+interface CapturedRequest {
+  request?: Request;
+}
+
+type FetchHandler = (
+  request: RequestInfo | URL,
+  init?: RequestInit,
+) => Promise<Response>;
+
+const mockFetch = (handler: FetchHandler): typeof fetch => {
+  const implementation = (request: RequestInfo | URL, init?: RequestInit) =>
+    handler(request, init);
+  implementation.preconnect = globalThis.fetch.preconnect;
+  return implementation;
+};
+
 describe("proxyAuthRequest", () => {
   it("forwards the proxied request host instead of the OAuth referer", async () => {
     const previousFetch = globalThis.fetch;
-    const captured: { request?: Request } = {};
+    const captured: CapturedRequest = {};
 
-    globalThis.fetch = ((request: RequestInfo | URL) => {
+    globalThis.fetch = mockFetch((request) => {
       captured.request =
         request instanceof Request ? request : new Request(request);
       return Promise.resolve(new Response(null, { status: 204 }));
-    }) as typeof fetch;
+    });
 
     try {
       await proxyAuthRequest(
@@ -46,13 +62,13 @@ describe("proxyAuthRequest", () => {
 
   it("replaces untrusted KrakStack forwarding headers", async () => {
     const previousFetch = globalThis.fetch;
-    const captured: { request?: Request } = {};
+    const captured: CapturedRequest = {};
 
-    globalThis.fetch = ((request: RequestInfo | URL) => {
+    globalThis.fetch = mockFetch((request) => {
       captured.request =
         request instanceof Request ? request : new Request(request);
       return Promise.resolve(new Response(null, { status: 204 }));
-    }) as typeof fetch;
+    });
 
     try {
       await proxyAuthRequest(
@@ -78,13 +94,13 @@ describe("proxyAuthRequest", () => {
 
   it("does not add OAuth origin headers to organization mutations", async () => {
     const previousFetch = globalThis.fetch;
-    const captured: { request?: Request } = {};
+    const captured: CapturedRequest = {};
 
-    globalThis.fetch = ((request: RequestInfo | URL) => {
+    globalThis.fetch = mockFetch((request) => {
       captured.request =
         request instanceof Request ? request : new Request(request);
       return Promise.resolve(new Response(null, { status: 204 }));
-    }) as typeof fetch;
+    });
 
     try {
       await proxyAuthRequest(
@@ -115,7 +131,7 @@ describe("proxyAuthRequest", () => {
   it("returns upstream cookies as host-only cookies", async () => {
     const previousFetch = globalThis.fetch;
 
-    globalThis.fetch = ((_request: RequestInfo | URL) => {
+    globalThis.fetch = mockFetch(() => {
       const headers = new Headers();
       headers.append(
         "set-cookie",
@@ -126,7 +142,7 @@ describe("proxyAuthRequest", () => {
         "context=two; domain=.krakstack.net; Path=/; Secure",
       );
       return Promise.resolve(new Response(null, { status: 204, headers }));
-    }) as typeof fetch;
+    });
 
     try {
       const response = await proxyAuthRequest(
@@ -146,7 +162,7 @@ describe("proxyAuthRequest", () => {
   it("shares cookies across matching root-domain hosts", async () => {
     const previousFetch = globalThis.fetch;
 
-    globalThis.fetch = ((_request: RequestInfo | URL) => {
+    globalThis.fetch = mockFetch(() => {
       const headers = new Headers();
       headers.append(
         "set-cookie",
@@ -157,7 +173,7 @@ describe("proxyAuthRequest", () => {
         "__Host-csrf=two; Domain=auth.kokobi.org; Path=/; Secure",
       );
       return Promise.resolve(new Response(null, { status: 204, headers }));
-    }) as typeof fetch;
+    });
 
     try {
       const response = await proxyAuthRequest(
@@ -178,13 +194,13 @@ describe("proxyAuthRequest", () => {
   it("keeps cookies host-only on unrelated tenant domains", async () => {
     const previousFetch = globalThis.fetch;
 
-    globalThis.fetch = ((_request: RequestInfo | URL) => {
+    globalThis.fetch = mockFetch(() => {
       const headers = new Headers({
         "set-cookie":
           "session=one; Domain=auth.kokobi.org; Path=/; HttpOnly; Secure",
       });
       return Promise.resolve(new Response(null, { status: 204, headers }));
-    }) as typeof fetch;
+    });
 
     try {
       const response = await proxyAuthRequest(
@@ -203,13 +219,13 @@ describe("proxyAuthRequest", () => {
 
   it("does not request compressed upstream responses", async () => {
     const previousFetch = globalThis.fetch;
-    const captured: { request?: Request } = {};
+    const captured: CapturedRequest = {};
 
-    globalThis.fetch = ((request: RequestInfo | URL) => {
+    globalThis.fetch = mockFetch((request) => {
       captured.request =
         request instanceof Request ? request : new Request(request);
       return Promise.resolve(new Response(null, { status: 204 }));
-    }) as typeof fetch;
+    });
 
     try {
       await proxyAuthRequest(

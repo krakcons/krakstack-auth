@@ -1,6 +1,6 @@
 import { Check, Minus } from "lucide-react";
 
-import type { ProjectAccessLabels } from "../access";
+import type { ProjectAccessLabelCatalog, ProjectAccessLabels } from "../access";
 
 export type ProjectAccessMatrixAccess<Action extends string = string> = {
   readonly actions: ReadonlyArray<Action>;
@@ -62,11 +62,11 @@ export const ProjectAccessMatrix = <
 }) => {
   const language = locale === "fr" ? "fr" : "en";
   const text = { ...messages[language], ...messageOverrides };
+  const roleLabels: Readonly<Record<string, string | undefined>> =
+    labels?.roles ?? {};
   const roleLabel = (id: string) => {
-    const label = Object.entries(labels?.roles ?? {}).find(
-      ([role]) => role === id,
-    )?.[1];
-    return typeof label === "string" ? label : capitalizeFirst(id);
+    const label = roleLabels[id];
+    return label ?? capitalizeFirst(id);
   };
   const roleColumns = Object.entries(access.roles).map(([id, permissions]) => ({
     id,
@@ -226,26 +226,19 @@ const permissionLabels = <Action extends string, Role extends string>(
   resource: string,
   action: string,
 ) => {
-  const group = Reflect.get(labels?.permissions ?? {}, resource);
-  if (typeof group !== "object" || group === null) {
+  const permissionGroups: ProjectAccessLabelCatalog["permissions"] =
+    labels?.permissions ?? {};
+  const group = permissionGroups[resource];
+  if (!group) {
     return {
       resource: capitalizeFirst(resource),
       action: capitalizeFirst(action),
     };
   }
 
-  const resourceLabel = Reflect.get(group, "label");
-  const actions = Reflect.get(group, "actions");
-  const actionLabel =
-    typeof actions === "object" && actions !== null
-      ? Reflect.get(actions, action)
-      : undefined;
+  const actionLabel = group.actions[action];
   return {
-    resource:
-      typeof resourceLabel === "string"
-        ? resourceLabel
-        : capitalizeFirst(resource),
-    action:
-      typeof actionLabel === "string" ? actionLabel : capitalizeFirst(action),
+    resource: group.label,
+    action: actionLabel ?? capitalizeFirst(action),
   };
 };

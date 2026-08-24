@@ -1,5 +1,5 @@
 import { describe, expect, it } from "@effect/vitest";
-import { Effect, Redacted } from "effect";
+import { Effect, Redacted, Schema } from "effect";
 import {
   HttpClient,
   HttpClientRequest,
@@ -52,7 +52,7 @@ const user = {
 const response = (
   request: HttpClientRequest.HttpClientRequest,
   status: number,
-  body?: unknown,
+  body?: typeof Schema.Unknown.Type,
 ) =>
   HttpClientResponse.fromWeb(
     request,

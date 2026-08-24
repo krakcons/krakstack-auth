@@ -41,8 +41,8 @@ import { Domains } from "@/services/domains";
 import { DB } from "@/services/database";
 import { Organizations } from "@/services/organizations";
 
-const internalServerError = (error: unknown) => {
-  console.error("Failed to fetch dashboard stats:", error);
+const internalServerError = (cause: unknown) => {
+  console.error("Failed to fetch dashboard stats:", cause);
   return new HttpApiError.InternalServerError({});
 };
 
@@ -382,32 +382,27 @@ export const adminApiHandler = HttpApiBuilder.group(
           if (payload.referrers !== undefined && !existing) {
             return yield* new HttpApiError.NotFound({});
           }
+          const updates: Partial<typeof apikey.$inferInsert> = {
+            updatedAt: new Date(),
+          };
+          if (payload.name !== undefined) updates.name = name;
+          if (payload.enabled !== undefined) updates.enabled = payload.enabled;
+          if (payload.rateLimitEnabled !== undefined)
+            updates.rateLimitEnabled = payload.rateLimitEnabled;
+          if (payload.rateLimitMax !== undefined)
+            updates.rateLimitMax = payload.rateLimitMax;
+          if (payload.rateLimitTimeWindow !== undefined)
+            updates.rateLimitTimeWindow = payload.rateLimitTimeWindow;
+          if (payload.referrers !== undefined) {
+            updates.metadata = encodeApiKeyAllowedOrigins(
+              existing?.metadata,
+              payload.referrers,
+            );
+          }
+
           const [key] = yield* db
             .update(apikey)
-            .set({
-              ...(payload.name !== undefined ? { name } : {}),
-              ...(payload.enabled !== undefined
-                ? { enabled: payload.enabled }
-                : {}),
-              ...(payload.rateLimitEnabled !== undefined
-                ? { rateLimitEnabled: payload.rateLimitEnabled }
-                : {}),
-              ...(payload.rateLimitMax !== undefined
-                ? { rateLimitMax: payload.rateLimitMax }
-                : {}),
-              ...(payload.rateLimitTimeWindow !== undefined
-                ? { rateLimitTimeWindow: payload.rateLimitTimeWindow }
-                : {}),
-              ...(payload.referrers !== undefined
-                ? {
-                    metadata: encodeApiKeyAllowedOrigins(
-                      existing?.metadata,
-                      payload.referrers,
-                    ),
-                  }
-                : {}),
-              updatedAt: new Date(),
-            })
+            .set(updates)
             .where(eq(apikey.id, params.id))
             .returning()
             .pipe(Effect.mapError(internalServerError));

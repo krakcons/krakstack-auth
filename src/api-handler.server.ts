@@ -1,6 +1,10 @@
-import { Context, Effect, FileSystem, Layer, Path, Redacted } from "effect";
+import { Effect, FileSystem, Layer, Path, Redacted, Schema } from "effect";
 import { CredentialsFromEnv } from "@distilled.cloud/cloudflare";
-import { AuthMiddleware, AuthService } from "@krak-stack/auth/server";
+import {
+  AuthMiddleware,
+  AuthService,
+  type AuthSession,
+} from "@krak-stack/auth/server";
 import {
   healthHandler,
   HealthService,
@@ -9,7 +13,6 @@ import * as FetchHttpClient from "effect/unstable/http/FetchHttpClient";
 import {
   Etag,
   HttpEffect,
-  HttpMiddleware,
   HttpPlatform,
   HttpRouter,
   HttpServerRequest,
@@ -22,6 +25,7 @@ import {
   HttpApiGroup,
   OpenApi,
 } from "effect/unstable/httpapi";
+import { GetSessionResponse } from "@krak-stack/auth/better-auth";
 
 import { AdminApi, FrontendApi } from "@/api";
 import { LocaleMiddlewareLive } from "@/lib/localization";
@@ -89,23 +93,36 @@ const localAuthServiceLayer = Layer.effect(
   AuthService,
   Effect.gen(function* () {
     const request = yield* HttpServerRequest.HttpServerRequest;
+    const authService = yield* AuthService;
     const betterAuth = yield* BetterAuthRequest.pipe(
       Effect.provide(BetterAuthRequest.make(request)),
     );
 
     return {
+      ...authService,
       getSession: () =>
         Effect.tryPromise({
           try: () => betterAuth.api.getSession({ headers: betterAuth.headers }),
           catch: () => new HttpApiError.Unauthorized({}),
-        }),
-      requireSession: () => Effect.fail(new HttpApiError.Unauthorized({})),
-      requireUser: () => Effect.fail(new HttpApiError.Unauthorized({})),
-      requireOrganization: () => Effect.fail(new HttpApiError.Unauthorized({})),
-      requireUserOrganization: () =>
-        Effect.fail(new HttpApiError.Unauthorized({})),
-    } as never;
+        }).pipe(
+          Effect.flatMap(Schema.decodeUnknownEffect(GetSessionResponse)),
+          Effect.mapError(() => new HttpApiError.Unauthorized({})),
+          Effect.map((session): AuthSession | null =>
+            session
+              ? {
+                  ...session,
+                  isSuperAdminImpersonation: false,
+                  authMethod: { type: "cookie" },
+                }
+              : null,
+          ),
+        ),
+    };
   }),
+).pipe(
+  Layer.provide(
+    AuthService.layer({ apiKey: Redacted.make("local-session-lookup") }),
+  ),
 );
 const authMiddlewareLayer = AuthMiddleware.layer({
   allowedOrganizationImpersonationRoutes:
@@ -305,24 +322,16 @@ const appServicesLayer = Layer.mergeAll(
   CloudflareLive,
 ).pipe(Layer.provideMerge(DB.layer));
 
-const apiWebHandler = HttpEffect.toWebHandlerLayerWith(appServicesLayer, {
-  middleware: HttpMiddleware.logger,
-  toHandler: (context) => {
-    const handler = HttpRouter.toHttpEffect(apiLayer).pipe(
-      Effect.provide(context),
-      Effect.scoped,
-    );
-
-    // SAFETY: appServicesLayer provides HealthService before the router is built.
-    return handler as Effect.Effect<
-      Effect.Success<typeof handler>,
-      Effect.Error<typeof handler>
-    >;
-  },
-});
-const emptyHandlerContext = Context.empty() as Context.Context<unknown>;
+const apiApplicationLayer = apiLayer.pipe(Layer.provide(appServicesLayer));
+const apiWebHandler = HttpRouter.toWebHandler<
+  Layer.Success<typeof apiApplicationLayer>,
+  Layer.Error<typeof apiApplicationLayer>,
+  Layer.Services<typeof apiApplicationLayer>,
+  never,
+  never
+>(apiApplicationLayer);
 
 export const apiHandler = corsMiddleware((request) =>
-  apiWebHandler.handler(request, emptyHandlerContext),
+  apiWebHandler.handler(request),
 );
 export const disposeApiHandler = apiWebHandler.dispose;

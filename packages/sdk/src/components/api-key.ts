@@ -36,7 +36,10 @@ export const parseApiKeyReferrers = (value: string, errorMessage: string) => {
 
 const ErrorResponse = Schema.Struct({ message: Schema.String });
 
-const errorMessage = async (value: unknown, fallback: string) =>
+const errorMessage = async (
+  value: typeof Schema.Unknown.Type,
+  fallback: string,
+) =>
   Schema.decodeUnknownPromise(ErrorResponse)(value)
     .then((error) => error.message)
     .catch(() => fallback);

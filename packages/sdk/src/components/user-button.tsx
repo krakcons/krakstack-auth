@@ -6,7 +6,7 @@ import {
   useNavigate,
   useRouterState,
 } from "@tanstack/react-router";
-import { Effect, Schema } from "effect";
+import { Effect, Option, Predicate, Schema } from "effect";
 import { AsyncResult, Atom } from "effect/unstable/reactivity";
 import {
   ArrowLeft,
@@ -370,6 +370,9 @@ const userButtonMessages = (overrides?: UserButtonMessages) => ({
 });
 
 type UserButtonLabels = ReturnType<typeof userButtonMessages>;
+type UserButtonMessageFunction = (
+  params?: Record<string, string | number>,
+) => string;
 
 const interpolate = (value: string, params?: Record<string, string | number>) =>
   params
@@ -378,33 +381,50 @@ const interpolate = (value: string, params?: Record<string, string | number>) =>
       )
     : value;
 
-const userButtonMessageFns = (labels: UserButtonLabels) =>
-  new Proxy(
+const interpolateMessage = (
+  labels: UserButtonLabels,
+  key: string,
+  params?: Record<string, string | number>,
+) => {
+  const entry = Object.entries(labels).find(([labelKey]) => labelKey === key);
+  return interpolate(entry?.[1] ?? key, params);
+};
+
+const userButtonMessageFns = (labels: UserButtonLabels) => {
+  return new Proxy<Record<string, UserButtonMessageFunction>>(
     {},
     {
       get:
         (_target, key: string) => (params?: Record<string, string | number>) =>
-          interpolate(labels[key as UserButtonMessageKey], params),
+          interpolateMessage(labels, key, params),
     },
-  ) as Record<
-    UserButtonMessageKey,
-    (params?: Record<string, string | number>) => string
-  >;
+  );
+};
 
 const UserButtonMessagesContext = createContext(
   userButtonMessageFns(userButtonMessages()),
 );
 const useUserButtonMessages = () => useContext(UserButtonMessagesContext);
 
-const hasRole = (role: unknown, roles: readonly string[]) =>
-  typeof role === "string" &&
-  role.split(",").some((item) => roles.includes(item.trim().toLowerCase()));
+const UserRole = Schema.Struct({ role: Schema.String });
 
-const hasAdminRole = (user: unknown) =>
-  typeof user === "object" &&
-  user !== null &&
-  "role" in user &&
-  hasRole(user.role, ["admin"]);
+const hasRole = (
+  role: typeof Schema.Unknown.Type,
+  roles: readonly string[],
+) => {
+  const decoded = Schema.decodeUnknownOption(Schema.String)(role);
+  return (
+    Option.isSome(decoded) &&
+    decoded.value
+      .split(",")
+      .some((item) => roles.includes(item.trim().toLowerCase()))
+  );
+};
+
+const hasAdminRole = (user: typeof Schema.Unknown.Type) => {
+  const decoded = Schema.decodeUnknownOption(UserRole)(user);
+  return Option.isSome(decoded) && hasRole(decoded.value.role, ["admin"]);
+};
 
 type UserFormType = {
   name: string;
@@ -439,14 +459,17 @@ const apiKeyFormBuilder = FormBuilder.empty
   .addField("name", Schema.NonEmptyString)
   .addField("referrers", Schema.String);
 
-const isFile = (value: unknown): value is File => value instanceof File;
+const isFile = (value: typeof Schema.Unknown.Type): value is File =>
+  value instanceof File;
 
 const decodeUploadedAsset = Schema.decodeUnknownPromise(ExtraUploadedAsset);
 
 const uploadUserImageAsset = async (
   file: File,
   m: ReturnType<typeof userButtonMessageFns>,
-  uploadUserImage: (input: { payload: FormData }) => Promise<unknown>,
+  uploadUserImage: (input: {
+    payload: FormData;
+  }) => Promise<typeof Schema.Unknown.Type>,
 ) => {
   const payload = new FormData();
   payload.append("file", file);
@@ -499,7 +522,7 @@ const userAccountsAtom = Atom.family((authClient: AuthUiClient) =>
   ),
 );
 
-const emptyAccountsAtom = Atom.make(Effect.succeed([] as LinkedAccount[]));
+const emptyAccountsAtom = Atom.make(Effect.succeed(Array<LinkedAccount>()));
 
 const userApiKeysAtom = Atom.family((authClient: AuthUiClient) =>
   Atom.keepAlive(
@@ -522,7 +545,7 @@ const userApiKeysAtom = Atom.family((authClient: AuthUiClient) =>
   ),
 );
 
-const emptyApiKeysAtom = Atom.make(Effect.succeed([] as ApiKeySummary[]));
+const emptyApiKeysAtom = Atom.make(Effect.succeed(Array<ApiKeySummary>()));
 
 export type UserButtonProps = {
   authClient?: AuthUiClient;
@@ -614,7 +637,7 @@ export const UserButton = ({
       | null
       | ((current: UserButtonDialog | null) => UserButtonDialog | null),
   ) => {
-    const nextDialog = typeof next === "function" ? next(settingsDialog) : next;
+    const nextDialog = Predicate.isFunction(next) ? next(settingsDialog) : next;
 
     if (nextDialog === settingsDialog) return;
     if (controlledDialog === undefined) setUncontrolledDialog(nextDialog);
@@ -670,7 +693,7 @@ export const UserButton = ({
 
           return assetPath(uploaded.url);
         })()
-      : typeof values.image === "string"
+      : Schema.is(Schema.String)(values.image)
         ? assetPath(values.image)
         : null;
     const result = await authClient.updateUser({
@@ -2271,18 +2294,13 @@ const apiKeyRowActions = ({
 const getPermissionId = (resource: string, action: string) =>
   `${resource}:${action}`;
 
-const isPermissionRecord = (
-  permissions: unknown,
-): permissions is Record<string, string[]> =>
-  typeof permissions === "object" &&
-  permissions !== null &&
-  Object.values(permissions).every(
-    (actions) =>
-      Array.isArray(actions) &&
-      actions.every((action) => typeof action === "string"),
-  );
+const PermissionRecord = Schema.Record(
+  Schema.String,
+  Schema.Array(Schema.String),
+);
+const isPermissionRecord = Schema.is(PermissionRecord);
 
-const formatPermissions = (permissions: unknown) => {
+const formatPermissions = (permissions: typeof Schema.Unknown.Type) => {
   if (!isPermissionRecord(permissions)) return [];
 
   return Object.entries(permissions).flatMap(([resource, actions]) =>
@@ -2318,24 +2336,17 @@ const getSelectedPermissionObject = (
   return permissions;
 };
 
-const hasTwoFactorEnabled = (user: unknown) => {
-  if (
-    typeof user !== "object" ||
-    user === null ||
-    !("twoFactorEnabled" in user)
-  )
-    return false;
-  return user.twoFactorEnabled === true;
-};
+const TwoFactorUser = Schema.Struct({ twoFactorEnabled: Schema.Boolean });
+const AuthErrorResult = Schema.Struct({
+  error: Schema.Struct({ message: Schema.optional(Schema.String) }),
+});
+
+const hasTwoFactorEnabled = (user: typeof Schema.Unknown.Type) =>
+  Option.exists(
+    Schema.decodeUnknownOption(TwoFactorUser)(user),
+    (decoded) => decoded.twoFactorEnabled,
+  );
 
 const isAuthErrorResult = (
-  result: unknown,
-): result is { error: { message?: string } } => {
-  return (
-    typeof result === "object" &&
-    result !== null &&
-    "error" in result &&
-    typeof result.error === "object" &&
-    result.error !== null
-  );
-};
+  result: typeof Schema.Unknown.Type,
+): result is typeof AuthErrorResult.Type => Schema.is(AuthErrorResult)(result);

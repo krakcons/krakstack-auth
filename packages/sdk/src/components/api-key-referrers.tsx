@@ -4,17 +4,17 @@ import { Badge } from "@/components/ui/badge";
 
 const Metadata = Schema.Record(Schema.String, Schema.Unknown);
 const MetadataJson = Schema.fromJsonString(Metadata);
+const MetadataInput = Schema.Union([Metadata, MetadataJson]);
 const Referrers = Schema.Array(Schema.String);
 
-const apiKeyMetadata = (metadata: unknown): Record<string, unknown> => {
-  const decodedMetadata =
-    typeof metadata === "string"
-      ? Schema.decodeUnknownOption(MetadataJson)(metadata)
-      : Schema.decodeUnknownOption(Metadata)(metadata);
+const apiKeyMetadata = (
+  metadata: typeof Schema.Unknown.Type,
+): typeof Metadata.Type => {
+  const decodedMetadata = Schema.decodeUnknownOption(MetadataInput)(metadata);
   return Option.getOrElse(decodedMetadata, () => ({}));
 };
 
-export const apiKeyReferrers = (metadata: unknown) =>
+export const apiKeyReferrers = (metadata: typeof Schema.Unknown.Type) =>
   Option.getOrElse(
     Schema.decodeUnknownOption(Referrers)(
       apiKeyMetadata(metadata).allowedOrigins,
@@ -23,7 +23,7 @@ export const apiKeyReferrers = (metadata: unknown) =>
   );
 
 export const withApiKeyReferrers = (
-  metadata: unknown,
+  metadata: typeof Schema.Unknown.Type,
   referrers: ReadonlyArray<string>,
 ) => ({
   ...apiKeyMetadata(metadata),

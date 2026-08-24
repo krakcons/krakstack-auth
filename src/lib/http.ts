@@ -1,20 +1,21 @@
-import { Effect } from "effect";
+import { Effect, Option, Schema } from "effect";
 import { HttpEffect, HttpServerResponse } from "effect/unstable/http";
 
 import { corsMiddleware, type CorsOptions } from "@/lib/cors";
 
-export const httpJson = (body: unknown, status = 200) =>
+export const httpJson = (body: typeof Schema.Unknown.Type, status = 200) =>
   HttpServerResponse.jsonUnsafe(body, { status });
 
 const readStringField = async (request: Request, field: string) => {
-  const body: unknown = await request.json();
+  const body = await request.json();
+  const decoded = Schema.decodeUnknownOption(
+    Schema.Record(Schema.String, Schema.Unknown),
+  )(body);
+  if (Option.isNone(decoded)) return null;
 
-  if (typeof body !== "object" || body === null || !(field in body)) {
-    return null;
-  }
-
-  const value = Reflect.get(body, field);
-  return typeof value === "string" ? value : null;
+  return Option.getOrNull(
+    Schema.decodeUnknownOption(Schema.String)(decoded.value[field]),
+  );
 };
 
 export const readStringFieldEffect = (request: Request, field: string) =>

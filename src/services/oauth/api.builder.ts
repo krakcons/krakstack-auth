@@ -1,4 +1,4 @@
-import { Cause, Effect } from "effect";
+import { Cause, Effect, Option, Schema } from "effect";
 import { HttpApiBuilder, HttpApiError } from "effect/unstable/httpapi";
 
 import { AdminApi, FrontendApi } from "@/api";
@@ -7,18 +7,20 @@ import { uploadImageFromMultipart } from "@/services/s3/upload";
 
 import { OAuthClients } from ".";
 
-const internalServerError = (error: unknown) => {
-  const cause =
-    typeof error === "object" && error !== null && "cause" in error
-      ? Reflect.get(error, "cause")
-      : null;
+const FailureWithCause = Schema.Struct({ cause: Schema.Unknown });
+
+const internalServerError = (cause: unknown) => {
+  const nestedCause = Option.map(
+    Schema.decodeUnknownOption(FailureWithCause)(cause),
+    (failure) => failure.cause,
+  );
   console.error(
     "Failed to handle OAuth client request:",
-    Cause.isCause(error)
-      ? Cause.pretty(error)
-      : Cause.isCause(cause)
-        ? Cause.pretty(cause)
-        : error,
+    Cause.isCause(cause)
+      ? Cause.pretty(cause)
+      : Option.isSome(nestedCause) && Cause.isCause(nestedCause.value)
+        ? Cause.pretty(nestedCause.value)
+        : cause,
   );
   return new HttpApiError.InternalServerError({});
 };

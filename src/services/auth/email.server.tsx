@@ -4,7 +4,7 @@ import * as Sesv2 from "@distilled.cloud/aws/sesv2";
 import { NotificationService } from "@krak-stack/registry/service-notification";
 import type { SesEmailNotification } from "@krak-stack/registry/notification-channel-email-ses/schema";
 import { render } from "@react-email/components";
-import { Effect, Layer } from "effect";
+import { Effect, Layer, Option, Schema } from "effect";
 import * as FetchHttpClient from "effect/unstable/http/FetchHttpClient";
 
 import { OTPEmail } from "@/emails/OTP";
@@ -46,13 +46,15 @@ const emailThemeVariables: ReadonlyArray<readonly [string, keyof EmailTheme]> =
 
 const unsafeEmailThemeValue = /[{};@]|url\s*\(|expression\s*\(/i;
 
-const projectThemeCss = (data: unknown) => {
-  if (typeof data !== "object" || data === null) return undefined;
-  const branding = "branding" in data ? data.branding : undefined;
-  if (typeof branding !== "object" || branding === null) return undefined;
-  const themeCss = "themeCss" in branding ? branding.themeCss : undefined;
-  return typeof themeCss === "string" ? themeCss : undefined;
-};
+const ProjectTheme = Schema.Struct({
+  branding: Schema.Struct({ themeCss: Schema.String }),
+});
+
+const projectThemeCss = (data: typeof Schema.Unknown.Type) =>
+  Option.map(
+    Schema.decodeUnknownOption(ProjectTheme)(data),
+    (project) => project.branding.themeCss,
+  ).pipe(Option.getOrUndefined);
 
 const emailThemeFromCss = (css: string | undefined) => {
   if (!css?.trim()) return undefined;

@@ -1,9 +1,9 @@
 import { Schema } from "effect";
 
-import { OrganizationMetadata } from "../schema";
+import { decodeOrganizationMetadata } from "../schema";
 
-export const isRecord = (value: unknown): value is Record<string, unknown> =>
-  typeof value === "object" && value !== null;
+const UnknownRecord = Schema.Record(Schema.String, Schema.Unknown);
+export const isRecord = Schema.is(UnknownRecord);
 
 export const cn = (
   ...inputs: ReadonlyArray<string | false | null | undefined>
@@ -17,16 +17,7 @@ export interface OrganizationBrandingSource {
   readonly metadata?: unknown;
 }
 
-const parseOrganizationMetadata = (metadata: unknown) => {
-  try {
-    const value =
-      typeof metadata === "string" ? JSON.parse(metadata) : metadata;
-
-    return Schema.decodeUnknownSync(OrganizationMetadata)(value);
-  } catch {
-    return { translations: [] };
-  }
-};
+const parseOrganizationMetadata = decodeOrganizationMetadata;
 
 export const organizationBranding = (
   organization: OrganizationBrandingSource | null | undefined,

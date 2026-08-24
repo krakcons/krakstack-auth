@@ -1,4 +1,4 @@
-import { Effect, Layer, Option } from "effect";
+import { Effect, Layer, Option, Schema } from "effect";
 import { Headers, HttpServerRequest } from "effect/unstable/http";
 import { HttpApiError } from "effect/unstable/httpapi";
 
@@ -13,19 +13,24 @@ import {
   ServiceApiKeyUnauthorized,
 } from "@/services/auth/middleware";
 
-const userRole = (value: unknown) => {
-  if (typeof value !== "object" || value === null || !("role" in value)) {
-    return undefined;
-  }
-  return Reflect.get(value, "role");
+const UserRole = Schema.Struct({ role: Schema.String });
+
+const userRole = (value: typeof Schema.Unknown.Type) =>
+  Option.map(
+    Schema.decodeUnknownOption(UserRole)(value),
+    (user) => user.role,
+  ).pipe(Option.getOrUndefined);
+
+const hasAdminRole = (role: typeof Schema.Unknown.Type) => {
+  const decoded = Schema.decodeUnknownOption(Schema.String)(role);
+  return (
+    Option.isSome(decoded) &&
+    decoded.value.split(",").some((item) => item.trim() === "admin")
+  );
 };
 
-const hasAdminRole = (role: unknown) =>
-  typeof role === "string" &&
-  role.split(",").some((item) => item.trim() === "admin");
-
-const internalServerError = (error: unknown) => {
-  console.error("Failed to authorize API request:", error);
+const internalServerError = (cause: unknown) => {
+  console.error("Failed to authorize API request:", cause);
   return new HttpApiError.InternalServerError({});
 };
 

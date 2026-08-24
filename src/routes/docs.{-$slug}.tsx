@@ -71,10 +71,9 @@ export const Route = createFileRoute("/docs/{-$slug}")({
   },
   head: ({ loaderData }) => {
     const locale = loaderData?.page.locale ?? docsLocale();
-    return docs.getHead({
-      locale,
-      ...(loaderData?.page ? { page: loaderData.page } : {}),
-    });
+    return loaderData?.page
+      ? docs.getHead({ locale, page: loaderData.page })
+      : docs.getHead({ locale });
   },
   component: DocsRoutePage,
   notFoundComponent: () => <DocsNotFound docs={docs} locale={docsLocale()} />,

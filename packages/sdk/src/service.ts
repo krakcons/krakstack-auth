@@ -233,13 +233,12 @@ export class AuthService extends Context.Service<AuthService>()(
           never
         > =>
           Effect.gen(function* () {
+            const payload = { key };
+            const verifyPayload = apiKeyConfigId
+              ? { ...payload, configId: apiKeyConfigId }
+              : payload;
             const verified = yield* api.authExtra
-              .verifyApiKey({
-                payload: {
-                  key,
-                  ...(apiKeyConfigId ? { configId: apiKeyConfigId } : {}),
-                },
-              })
+              .verifyApiKey({ payload: verifyPayload })
               .pipe(Effect.mapError(serviceUnavailable));
 
             if (!verified.valid || !verified.key) {
@@ -312,6 +311,14 @@ export class AuthService extends Context.Service<AuthService>()(
           HttpApiError.Unauthorized | HttpApiError.ServiceUnavailable
         > => requireUser().pipe(Effect.flatMap(withRequiredOrganization));
 
+        const getActiveMemberRole = (input: {
+          readonly organizationId: string;
+          readonly userId: string;
+        }) =>
+          api.organizations
+            .getActiveMember({ params: input })
+            .pipe(Effect.map((member) => member.role));
+
         return {
           ...api,
           getSession,
@@ -319,6 +326,7 @@ export class AuthService extends Context.Service<AuthService>()(
           requireUser,
           requireOrganization,
           requireUserOrganization,
+          getActiveMemberRole,
         };
       }),
   },
@@ -326,13 +334,15 @@ export class AuthService extends Context.Service<AuthService>()(
   static readonly layer = (options: AuthServiceLayerOptions = {}) => {
     const headers = options.headers ?? {};
 
+    let clientConfig: Partial<ClientConfig> = {};
+    if (options.baseUrl) {
+      clientConfig = { ...clientConfig, baseUrl: options.baseUrl };
+    }
+    if (options.apiKey) {
+      clientConfig = { ...clientConfig, apiKey: options.apiKey };
+    }
     return Layer.effect(this, this.make({ ...options, headers })).pipe(
-      Layer.provide(
-        AuthClientConfig.layer({
-          ...(options.baseUrl ? { baseUrl: options.baseUrl } : {}),
-          ...(options.apiKey ? { apiKey: options.apiKey } : {}),
-        }),
-      ),
+      Layer.provide(AuthClientConfig.layer(clientConfig)),
       Layer.provide(authHttpClientLayer(headers)),
     );
   };

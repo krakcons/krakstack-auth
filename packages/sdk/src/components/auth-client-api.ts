@@ -1,16 +1,13 @@
-import { Effect, Layer } from "effect";
+import { Effect } from "effect";
 import { FetchHttpClient, HttpClient } from "effect/unstable/http";
 import { AtomHttpApi } from "effect/unstable/reactivity";
 
 import { AuthClientApi } from "../api";
 import { defaultBaseUrl } from "../config";
 
-const fetchHttpClientLayer = FetchHttpClient.layer as Layer.Layer<unknown>;
-
 const authClientApiUrl = (baseUrl?: string | undefined) => {
   const url =
-    baseUrl?.trim() ||
-    (typeof window === "undefined" ? defaultBaseUrl() : window.location.origin);
+    baseUrl?.trim() || globalThis.window?.location.origin || defaultBaseUrl();
   return url.replace(/\/$/, "");
 };
 
@@ -18,7 +15,7 @@ const createAuthClientApiClient = (key: string) =>
   AtomHttpApi.Service<object>()(`AuthClientApi:${key}`, {
     api: AuthClientApi,
     baseUrl: key,
-    httpClient: fetchHttpClientLayer,
+    httpClient: FetchHttpClient.layer,
     transformClient: (client) =>
       HttpClient.makeWith(
         (request) =>

@@ -3,7 +3,7 @@ import { HttpServerRequest } from "effect/unstable/http";
 
 import { authForRequest, type Auth } from "@/services/auth/config";
 
-type BetterAuthRequestShape = {
+type BetterAuthRequestContext = {
   readonly auth: Auth;
   readonly request: Request;
   readonly headers: Headers;
@@ -31,7 +31,7 @@ export const restoreProxyAuthOrigin = (request: Request) => {
 
 export class BetterAuthRequest extends Context.Service<
   BetterAuthRequest,
-  BetterAuthRequestShape
+  BetterAuthRequestContext
 >()("@/services/auth/BetterAuthRequest") {
   static readonly make = (
     request: HttpServerRequest.HttpServerRequest | Request,

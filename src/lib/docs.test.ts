@@ -85,10 +85,10 @@ describe("documentation catalog", () => {
       "https://github.com/example/docs/edit/develop/src/content/docs/en/introduction.mdx",
     );
     expect(
-      configured.getHead({
-        locale: "en",
-        ...(introduction ? { page: introduction } : {}),
-      }).meta,
+      (introduction
+        ? configured.getHead({ locale: "en", page: introduction })
+        : configured.getHead({ locale: "en" })
+      ).meta,
     ).toContainEqual({
       title: `${introduction?.title ?? "Documentation"} | Example Docs`,
     });

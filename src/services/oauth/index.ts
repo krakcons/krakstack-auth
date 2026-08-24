@@ -62,7 +62,10 @@ type ProjectSummary = {
   data: ProjectData;
 };
 
-const adminRow = (client: object, projectSummary?: ProjectSummary) => {
+const adminRow = (
+  client: typeof Schema.Unknown.Type,
+  projectSummary?: ProjectSummary,
+) => {
   const decoded = decodeRawOAuthClient(client);
   const clientId = decoded.client_id ?? decoded.clientId;
   if (!clientId) throw new Error("OAuth client response is missing client ID");
@@ -86,7 +89,10 @@ const adminRow = (client: object, projectSummary?: ProjectSummary) => {
   };
 };
 
-const createdRow = (client: object, projectSummary?: ProjectSummary) => {
+const createdRow = (
+  client: typeof Schema.Unknown.Type,
+  projectSummary?: ProjectSummary,
+) => {
   const decoded = decodeRawOAuthClient(client);
 
   return {

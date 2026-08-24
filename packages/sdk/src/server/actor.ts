@@ -18,10 +18,10 @@ const activeMemberRoles = ({
 }) =>
   Effect.gen(function* () {
     const auth = yield* AuthService;
-    const member = yield* auth.organizations
-      .getActiveMember({ params: { organizationId, userId } })
+    const role = yield* auth
+      .getActiveMemberRole({ organizationId, userId })
       .pipe(Effect.mapError(() => new HttpApiError.Forbidden({})));
-    return parseRoleList(member.role);
+    return parseRoleList(role);
   });
 
 const resolveCurrentActor = <Project extends string, Action extends string>(
@@ -181,12 +181,10 @@ const withCurrentActor = <A, E, R>(
       : actor.actor.owner.type === "user"
         ? actor.actor.owner.userId
         : undefined;
-  const attributes = {
-    ...(actor.organizationId
-      ? { "organization.id": actor.organizationId }
-      : {}),
-    ...(userId ? { "user.id": userId } : {}),
-  };
+  const attributes: Record<string, string> = {};
+  if (actor.organizationId)
+    attributes["organization.id"] = actor.organizationId;
+  if (userId) attributes["user.id"] = userId;
 
   return Effect.annotateCurrentSpan(attributes).pipe(
     Effect.andThen(
@@ -199,7 +197,22 @@ const withCurrentActor = <A, E, R>(
   );
 };
 
-const actorRequired = (constraint?: ActorConstraint) => {
+export function ActorRequired(): typeof AnyActorRequired;
+export function ActorRequired(constraint: {
+  readonly type: "user";
+}): typeof UserActorRequired;
+export function ActorRequired(constraint: {
+  readonly type: "apiKey";
+  readonly ownerType: "user";
+}): typeof UserApiKeyActorRequired;
+export function ActorRequired(constraint: {
+  readonly type: "apiKey";
+  readonly ownerType: "organization";
+}): typeof OrganizationApiKeyActorRequired;
+export function ActorRequired(constraint: {
+  readonly type: "apiKey";
+}): typeof ApiKeyActorRequired;
+export function ActorRequired(constraint?: ActorConstraint) {
   if (!constraint) return AnyActorRequired;
   if (constraint.type === "user") return UserActorRequired;
   if (constraint.ownerType === "user") return UserApiKeyActorRequired;
@@ -207,7 +220,7 @@ const actorRequired = (constraint?: ActorConstraint) => {
     return OrganizationApiKeyActorRequired;
   }
   return ApiKeyActorRequired;
-};
+}
 
 const actorRequiredLayer = <Project extends string, Action extends string>(
   access: ProjectAccessDefinition<Project, Action>,
@@ -241,21 +254,4 @@ const actorRequiredLayer = <Project extends string, Action extends string>(
     ),
   );
 
-type ActorRequiredFactory = {
-  (): typeof AnyActorRequired;
-  (constraint: { readonly type: "user" }): typeof UserActorRequired;
-  (constraint: {
-    readonly type: "apiKey";
-    readonly ownerType: "user";
-  }): typeof UserApiKeyActorRequired;
-  (constraint: {
-    readonly type: "apiKey";
-    readonly ownerType: "organization";
-  }): typeof OrganizationApiKeyActorRequired;
-  (constraint: { readonly type: "apiKey" }): typeof ApiKeyActorRequired;
-  readonly layer: typeof actorRequiredLayer;
-};
-
-export const ActorRequired = Object.assign(actorRequired, {
-  layer: actorRequiredLayer,
-}) as ActorRequiredFactory;
+ActorRequired.layer = actorRequiredLayer;

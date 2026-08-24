@@ -4,9 +4,9 @@ import { AtomHttpApi } from "effect/unstable/reactivity";
 import { FrontendApi } from "@/api";
 
 const siteUrl =
-  typeof window === "undefined"
-    ? (import.meta.env.VITE_SITE_URL ?? "http://localhost:3000")
-    : window.location.origin;
+  globalThis.window?.location.origin ??
+  import.meta.env.VITE_SITE_URL ??
+  "http://localhost:3000";
 
 export class ApiClient extends AtomHttpApi.Service<ApiClient>()("ApiClient", {
   api: FrontendApi,

@@ -2,19 +2,19 @@ import { Option, Schema } from "effect";
 
 const Metadata = Schema.Record(Schema.String, Schema.Unknown);
 const MetadataJson = Schema.fromJsonString(Metadata);
+const MetadataInput = Schema.Union([Metadata, MetadataJson]);
 const AllowedOrigins = Schema.Array(Schema.String);
 const decodeUrl = Schema.decodeUnknownOption(Schema.URLFromString);
 
-export const apiKeyMetadata = (value: unknown): Record<string, unknown> => {
-  const decoded =
-    typeof value === "string"
-      ? Schema.decodeUnknownOption(MetadataJson)(value)
-      : Schema.decodeUnknownOption(Metadata)(value);
+export const apiKeyMetadata = (
+  value: typeof Schema.Unknown.Type,
+): typeof Metadata.Type => {
+  const decoded = Schema.decodeUnknownOption(MetadataInput)(value);
 
   return Option.getOrElse(decoded, () => ({}));
 };
 
-export const apiKeyAllowedOrigins = (value: unknown) => {
+export const apiKeyAllowedOrigins = (value: typeof Schema.Unknown.Type) => {
   const decoded = Schema.decodeUnknownOption(AllowedOrigins)(
     apiKeyMetadata(value).allowedOrigins,
   );
@@ -22,7 +22,7 @@ export const apiKeyAllowedOrigins = (value: unknown) => {
 };
 
 export const encodeApiKeyAllowedOrigins = (
-  metadata: unknown,
+  metadata: typeof Schema.Unknown.Type,
   allowedOrigins: ReadonlyArray<string>,
 ) =>
   Schema.encodeSync(MetadataJson)({

@@ -1,7 +1,7 @@
 import type { ApiKey } from "@better-auth/api-key/client";
 import { useAtomRefresh, useAtomSet, useAtomValue } from "@effect/atom-react";
 import { FormBuilder, FormReact } from "@lucas-barake/effect-form-react";
-import { Effect, Option, Schema } from "effect";
+import { Effect, Option, Predicate, Schema } from "effect";
 import { AsyncResult, Atom } from "effect/unstable/reactivity";
 import {
   ArrowLeft,
@@ -466,6 +466,9 @@ const organizationSwitcherMessages = (
 type OrganizationSwitcherLabels = ReturnType<
   typeof organizationSwitcherMessages
 >;
+type OrganizationMessageFunction = (
+  params?: Record<string, string | number>,
+) => string;
 
 const interpolate = (value: string, params?: Record<string, string | number>) =>
   params
@@ -474,18 +477,25 @@ const interpolate = (value: string, params?: Record<string, string | number>) =>
       )
     : value;
 
-const organizationMessageFns = (labels: OrganizationSwitcherLabels) =>
-  new Proxy(
+const interpolateMessage = (
+  labels: OrganizationSwitcherLabels,
+  key: string,
+  params?: Record<string, string | number>,
+) => {
+  const entry = Object.entries(labels).find(([labelKey]) => labelKey === key);
+  return interpolate(entry?.[1] ?? key, params);
+};
+
+const organizationMessageFns = (labels: OrganizationSwitcherLabels) => {
+  return new Proxy<Record<string, OrganizationMessageFunction>>(
     {},
     {
       get:
         (_target, key: string) => (params?: Record<string, string | number>) =>
-          interpolate(labels[key as OrganizationSwitcherMessageKey], params),
+          interpolateMessage(labels, key, params),
     },
-  ) as Record<
-    OrganizationSwitcherMessageKey,
-    (params?: Record<string, string | number>) => string
-  >;
+  );
+};
 
 const OrganizationMessagesContext = createContext(
   organizationMessageFns(organizationSwitcherMessages()),
@@ -645,7 +655,7 @@ const organizationMembersAtom = Atom.family((authClient: AuthUiClient) =>
 );
 
 const emptyOrganizationMembersAtom = Atom.make(
-  Effect.succeed({ members: [], invitations: [] } as OrganizationMembersData),
+  Effect.succeed<OrganizationMembersData>({ members: [], invitations: [] }),
 );
 
 const organizationApiKeysAtom = Atom.family((authClient: AuthUiClient) =>
@@ -674,7 +684,7 @@ const organizationApiKeysAtom = Atom.family((authClient: AuthUiClient) =>
 );
 
 const emptyOrganizationApiKeysAtom = Atom.make(
-  Effect.succeed([] as ApiKeySummary[]),
+  Effect.succeed(Array<ApiKeySummary>()),
 );
 
 type OrganizationFormValues = {
@@ -1213,14 +1223,17 @@ const slugify = (value: string) =>
 
 const noParentOrganization = "__none__";
 
-const isOrganizationSlugConflict = (error: unknown) => {
-  if (typeof error !== "object" || error === null) return false;
+const OrganizationFailure = Schema.Struct({
+  code: Schema.optional(Schema.String),
+  message: Schema.optional(Schema.String),
+});
 
-  const code = Reflect.get(error, "code");
-  const message = Reflect.get(error, "message");
+const isOrganizationSlugConflict = (cause: unknown) => {
+  const decoded = Schema.decodeUnknownOption(OrganizationFailure)(cause);
+  if (Option.isNone(decoded)) return false;
 
-  return [code, message].some((value) => {
-    if (typeof value !== "string") return false;
+  return [decoded.value.code, decoded.value.message].some((value) => {
+    if (!value) return false;
     const normalized = value.toLowerCase().replaceAll("_", " ");
 
     return normalized.includes("organization already exists");
@@ -1232,7 +1245,9 @@ const decodeUploadedAsset = Schema.decodeUnknownPromise(ExtraUploadedAsset);
 const uploadImageAsset = async (
   file: File,
   m: ReturnType<typeof organizationMessageFns>,
-  uploadImage: (input: { payload: FormData }) => Promise<unknown>,
+  uploadImage: (input: {
+    payload: FormData;
+  }) => Promise<typeof Schema.Unknown.Type>,
 ) => {
   const payload = new FormData();
   payload.append("file", file);
@@ -1361,11 +1376,13 @@ const organizationFormDefaults = (
 const organizationLogoFromForm = async (
   value: File | string | null | undefined,
   m: ReturnType<typeof organizationMessageFns>,
-  uploadImage: (input: { payload: FormData }) => Promise<unknown>,
+  uploadImage: (input: {
+    payload: FormData;
+  }) => Promise<typeof Schema.Unknown.Type>,
 ) => {
   if (value instanceof File)
     return await uploadImageAsset(value, m, uploadImage);
-  if (typeof value === "string") return assetPath(value);
+  if (Schema.is(Schema.String)(value)) return assetPath(value);
   return null;
 };
 
@@ -1423,24 +1440,19 @@ const formatOrganizationDate = (date: Date | string) =>
 const organizationMetadataFromForm = async (
   value: OrganizationFormValues,
   m: ReturnType<typeof organizationMessageFns>,
-  uploadImage: (input: { payload: FormData }) => Promise<unknown>,
-  existingMetadata?: unknown,
+  uploadImage: (input: {
+    payload: FormData;
+  }) => Promise<typeof Schema.Unknown.Type>,
+  existingMetadata?: typeof Schema.Unknown.Type,
 ): Promise<OrganizationMetadata> => {
   const existing = parseOrganizationMetadata(existingMetadata);
-  const decodedExistingMetadata =
-    typeof existingMetadata === "string"
-      ? Option.getOrNull(
-          Schema.decodeUnknownOption(Schema.fromJsonString(Schema.Unknown))(
-            existingMetadata,
-          ),
-        )
-      : existingMetadata;
-  const preservedMetadata =
-    typeof decodedExistingMetadata === "object" &&
-    decodedExistingMetadata !== null &&
-    !Array.isArray(decodedExistingMetadata)
-      ? decodedExistingMetadata
-      : {};
+  const MetadataRecord = Schema.Record(Schema.String, Schema.Json);
+  const preservedMetadata = Option.getOrElse(
+    Schema.decodeUnknownOption(
+      Schema.Union([MetadataRecord, Schema.fromJsonString(MetadataRecord)]),
+    )(existingMetadata),
+    () => ({}),
+  );
   const translations: OrganizationTranslation[] = [];
   const enName = value.enName.trim();
   const frName = value.frName.trim();
@@ -1468,17 +1480,12 @@ const organizationMetadataFromForm = async (
   });
   const phones = value.phones.flatMap((phone) => {
     const number = phone.number.trim();
-    return number
-      ? [
-          {
-            number,
-            ...(phone.extension?.trim()
-              ? { extension: phone.extension.trim() }
-              : {}),
-            translations: localized(phone.translations),
-          },
-        ]
-      : [];
+    if (!number) return [];
+    const extension = phone.extension?.trim();
+    const result: OrganizationPhoneValue = extension
+      ? { number, extension, translations: localized(phone.translations) }
+      : { number, translations: localized(phone.translations) };
+    return [result];
   });
   const websites = value.websites.flatMap((website) => {
     const url = website.url.trim();
@@ -1497,17 +1504,17 @@ const organizationMetadataFromForm = async (
       : [];
   });
   const addresses = value.addresses.flatMap((input) => {
-    const normalized = {
-      ...(input.streetAddress?.trim()
-        ? { streetAddress: input.streetAddress.trim() }
-        : {}),
-      ...(input.locality?.trim() ? { locality: input.locality.trim() } : {}),
-      ...(input.region?.trim() ? { region: input.region.trim() } : {}),
-      ...(input.postalCode?.trim()
-        ? { postalCode: input.postalCode.trim() }
-        : {}),
-      ...(input.country?.trim() ? { country: input.country.trim() } : {}),
-    };
+    let normalized: Omit<OrganizationAddressValue, "translations"> = {};
+    const streetAddress = input.streetAddress?.trim();
+    const locality = input.locality?.trim();
+    const region = input.region?.trim();
+    const postalCode = input.postalCode?.trim();
+    const country = input.country?.trim();
+    if (streetAddress) normalized = { ...normalized, streetAddress };
+    if (locality) normalized = { ...normalized, locality };
+    if (region) normalized = { ...normalized, region };
+    if (postalCode) normalized = { ...normalized, postalCode };
+    if (country) normalized = { ...normalized, country };
     return Object.keys(normalized).length
       ? [
           {
@@ -1652,7 +1659,7 @@ export function OrganizationSwitcher({
           current: OrganizationSwitcherDialog | null,
         ) => OrganizationSwitcherDialog | null),
   ) => {
-    const nextDialog = typeof next === "function" ? next(dialog) : next;
+    const nextDialog = Predicate.isFunction(next) ? next(dialog) : next;
 
     if (nextDialog === dialog) return;
     if (controlledDialog === undefined) setUncontrolledDialog(nextDialog);
@@ -2506,14 +2513,16 @@ function CreateOrganizationSection({
               m,
               uploadImage,
             );
-            const result = await authClient.organization.create({
+            let createOptions: Parameters<
+              typeof authClient.organization.create
+            >[0] = {
               name,
               slug,
               metadata,
-              ...(value.parentId === noParentOrganization
-                ? {}
-                : { parentId: value.parentId }),
-            });
+            };
+            if (value.parentId !== noParentOrganization)
+              createOptions = { ...createOptions, parentId: value.parentId };
+            const result = await authClient.organization.create(createOptions);
 
             if (result.error) {
               throw new Error(
@@ -3618,7 +3627,9 @@ const organizationApiKeySelectedPermissions = (
   return permissions;
 };
 
-const organizationApiKeyFormattedPermissions = (value: unknown) => {
+const organizationApiKeyFormattedPermissions = (
+  value: typeof Schema.Unknown.Type,
+) => {
   const decoded = Schema.decodeUnknownOption(
     Schema.Record(Schema.String, Schema.Array(Schema.String)),
   )(value);

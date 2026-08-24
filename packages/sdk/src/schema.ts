@@ -282,48 +282,47 @@ export const OrganizationMetadata = Schema.Struct({
   ],
 });
 
-const decodeOrganizationMetadataJson = Schema.decodeUnknownOption(
-  Schema.fromJsonString(Schema.Unknown),
-);
+const OrganizationMetadataRecord = Schema.Record(Schema.String, Schema.Unknown);
+const OrganizationMetadataInput = Schema.Union([
+  OrganizationMetadataRecord,
+  Schema.fromJsonString(OrganizationMetadataRecord),
+]);
 
 export const decodeOrganizationMetadata = (
-  metadata: unknown,
+  metadata: typeof Schema.Unknown.Type,
 ): OrganizationMetadata => {
-  const value =
-    typeof metadata === "string"
-      ? Option.getOrNull(decodeOrganizationMetadataJson(metadata))
-      : metadata;
-  if (typeof value !== "object" || value === null) {
-    return { translations: [] };
-  }
+  const value = Schema.decodeUnknownOption(OrganizationMetadataInput)(metadata);
+  if (Option.isNone(value)) return { translations: [] };
 
   const translations = Schema.decodeUnknownOption(
     Schema.Array(OrganizationTranslation),
-  )(Reflect.get(value, "translations"));
+  )(value.value.translations);
   const emails = Schema.decodeUnknownOption(Schema.Array(OrganizationEmail))(
-    Reflect.get(value, "emails"),
+    value.value.emails,
   );
   const phones = Schema.decodeUnknownOption(Schema.Array(OrganizationPhone))(
-    Reflect.get(value, "phones"),
+    value.value.phones,
   );
   const websites = Schema.decodeUnknownOption(
     Schema.Array(OrganizationWebsite),
-  )(Reflect.get(value, "websites"));
+  )(value.value.websites);
   const socials = Schema.decodeUnknownOption(Schema.Array(OrganizationSocial))(
-    Reflect.get(value, "socials"),
+    value.value.socials,
   );
   const addresses = Schema.decodeUnknownOption(
     Schema.Array(OrganizationAddress),
-  )(Reflect.get(value, "addresses"));
+  )(value.value.addresses);
 
-  return {
+  let result: OrganizationMetadata = {
     translations: Option.getOrElse(translations, () => []),
-    ...(Option.isSome(emails) ? { emails: emails.value } : {}),
-    ...(Option.isSome(phones) ? { phones: phones.value } : {}),
-    ...(Option.isSome(websites) ? { websites: websites.value } : {}),
-    ...(Option.isSome(socials) ? { socials: socials.value } : {}),
-    ...(Option.isSome(addresses) ? { addresses: addresses.value } : {}),
   };
+  if (Option.isSome(emails)) result = { ...result, emails: emails.value };
+  if (Option.isSome(phones)) result = { ...result, phones: phones.value };
+  if (Option.isSome(websites)) result = { ...result, websites: websites.value };
+  if (Option.isSome(socials)) result = { ...result, socials: socials.value };
+  if (Option.isSome(addresses))
+    result = { ...result, addresses: addresses.value };
+  return result;
 };
 
 const CompatibleOrganizationMetadata = Schema.Unknown.pipe(

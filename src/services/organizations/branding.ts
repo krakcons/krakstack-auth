@@ -1,4 +1,4 @@
-import { Schema } from "effect";
+import { Option, Schema } from "effect";
 import { OrganizationMetadata } from "@krak-stack/auth/schema";
 
 import { localize, type Locale } from "@/lib/localization";
@@ -9,16 +9,16 @@ export interface OrganizationBrandingSource {
   readonly metadata?: unknown;
 }
 
-const parseOrganizationMetadata = (metadata: unknown) => {
-  try {
-    const value =
-      typeof metadata === "string" ? JSON.parse(metadata) : metadata;
+const OrganizationMetadataInput = Schema.Union([
+  OrganizationMetadata,
+  Schema.fromJsonString(OrganizationMetadata),
+]);
 
-    return Schema.decodeUnknownSync(OrganizationMetadata)(value);
-  } catch {
-    return { translations: [] };
-  }
-};
+const parseOrganizationMetadata = (metadata: typeof Schema.Unknown.Type) =>
+  Option.getOrElse(
+    Schema.decodeUnknownOption(OrganizationMetadataInput)(metadata),
+    () => ({ translations: [] }),
+  );
 
 export const organizationBranding = (
   organization: OrganizationBrandingSource | null | undefined,

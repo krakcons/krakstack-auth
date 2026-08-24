@@ -1,4 +1,4 @@
-import { betterAuth } from "better-auth";
+import { betterAuth, type BetterAuthOptions } from "better-auth";
 import type { GenericEndpointContext } from "@better-auth/core";
 import { drizzleAdapter } from "better-auth-drizzle-adapter";
 import {
@@ -14,7 +14,7 @@ import {
 import { oauthProvider } from "@better-auth/oauth-provider";
 import { apiKey } from "@better-auth/api-key";
 import { APIError } from "@better-auth/core/error";
-import { Effect } from "effect";
+import { Effect, Option, Schema } from "effect";
 
 import { db } from "../../services/database";
 import { schema } from "../../db/schema";
@@ -44,10 +44,15 @@ const apiKeyRateLimit = {
   timeWindow: 1000 * 60 * 60 * 24,
   maxRequests: 1000,
 };
-const organizationParentId = (value: object) => {
-  const parentId = Reflect.get(value, "parentId");
-  return typeof parentId === "string" && parentId ? parentId : null;
-};
+interface OrganizationParentInput {
+  readonly [key: string]: typeof Schema.Unknown.Type;
+  readonly parentId?: typeof Schema.Unknown.Type;
+}
+
+const organizationParentId = (value: OrganizationParentInput) =>
+  Option.getOrNull(
+    Schema.decodeUnknownOption(Schema.NonEmptyString)(value.parentId),
+  );
 
 const validateOrganizationParent = ({
   organizationId,
@@ -167,10 +172,9 @@ const connectSessionProject = async (
 ) => {
   const projectId = projectIdFromContext(context);
   if (!projectId || !session?.userId) return;
-  const activeOrganizationId =
-    typeof session.activeOrganizationId === "string"
-      ? session.activeOrganizationId
-      : null;
+  const activeOrganizationId = Option.getOrNull(
+    Schema.decodeUnknownOption(Schema.String)(session.activeOrganizationId),
+  );
 
   try {
     await Effect.runPromise(
@@ -240,6 +244,48 @@ const createAuth = ({
     );
   });
 
+  const crossSubDomainCookies: NonNullable<
+    NonNullable<BetterAuthOptions["advanced"]>["crossSubDomainCookies"]
+  > = { enabled: !isDev };
+  if (cookieDomain) crossSubDomainCookies.domain = cookieDomain;
+
+  const oauthOptions: Parameters<typeof oauthProvider>[0] = {
+    loginPage: "/sign-in",
+    consentPage: "/consent",
+    allowDynamicClientRegistration: false,
+    silenceWarnings: {
+      oauthAuthServerConfig: true,
+    },
+    clientReference: ({ session }) =>
+      Option.getOrUndefined(
+        Schema.decodeUnknownOption(Schema.String)(
+          session?.activeOrganizationId,
+        ),
+      ),
+    clientPrivileges: async ({ user }) => {
+      const UserRole = Schema.Struct({ role: Schema.String });
+      const decoded = Schema.decodeUnknownOption(UserRole)(user);
+      if (Option.isNone(decoded)) return false;
+
+      return decoded.value.role
+        .split(",")
+        .some((item) => item.trim() === "admin");
+    },
+    scopes: ["openid", "profile", "email", "offline_access"],
+  };
+  if (validAudiences) oauthOptions.validAudiences = validAudiences;
+  const socialProviderOptions =
+    googleClientId && googleClientSecret
+      ? {
+          socialProviders: {
+            google: {
+              clientId: googleClientId,
+              clientSecret: googleClientSecret,
+            },
+          },
+        }
+      : {};
+
   const auth = betterAuth({
     appName: "Krakstack Auth",
     baseURL: {
@@ -254,10 +300,7 @@ const createAuth = ({
     }),
     advanced: {
       cookiePrefix: "krakstack-auth",
-      crossSubDomainCookies: {
-        enabled: !isDev,
-        ...(cookieDomain ? { domain: cookieDomain } : {}),
-      },
+      crossSubDomainCookies,
       defaultCookieAttributes: {
         sameSite: isDev ? "lax" : "none",
         secure: !isDev,
@@ -277,16 +320,7 @@ const createAuth = ({
     emailVerification: {
       autoSignInAfterVerification: true,
     },
-    ...(googleClientId && googleClientSecret
-      ? {
-          socialProviders: {
-            google: {
-              clientId: googleClientId,
-              clientSecret: googleClientSecret,
-            },
-          },
-        }
-      : {}),
+    ...socialProviderOptions,
     account: {
       encryptOAuthTokens: true,
       accountLinking: {
@@ -448,20 +482,17 @@ const createAuth = ({
                   columns: { metadata: true, userId: true },
                 });
 
-                return {
-                  data: {
-                    ...organization,
-                    ...(organization.metadata
-                      ? {
-                          metadata: mergeOrganizationMetadata(
-                            current?.metadata,
-                            organization.metadata,
-                          ),
-                        }
-                      : {}),
-                    userId: current?.userId ?? null,
-                  },
+                const data = {
+                  ...organization,
+                  userId: current?.userId ?? null,
                 };
+                if (organization.metadata) {
+                  data.metadata = mergeOrganizationMetadata(
+                    current?.metadata,
+                    organization.metadata,
+                  );
+                }
+                return { data };
               }).pipe(Effect.provide(DB.layer)),
             );
           },
@@ -505,27 +536,7 @@ const createAuth = ({
           },
         },
       ]),
-      oauthProvider({
-        loginPage: "/sign-in",
-        consentPage: "/consent",
-        allowDynamicClientRegistration: false,
-        silenceWarnings: {
-          oauthAuthServerConfig: true,
-        },
-        clientReference: ({ session }) => {
-          return (
-            (session?.activeOrganizationId as string | undefined) ?? undefined
-          );
-        },
-        clientPrivileges: async ({ user }) => {
-          const role = (user as { role?: unknown } | undefined)?.role;
-          if (typeof role !== "string") return false;
-
-          return role.split(",").some((item) => item.trim() === "admin");
-        },
-        scopes: ["openid", "profile", "email", "offline_access"],
-        ...(validAudiences ? { validAudiences } : {}),
-      }),
+      oauthProvider(oauthOptions),
     ],
   });
 

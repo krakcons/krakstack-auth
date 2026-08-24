@@ -411,26 +411,22 @@ const makeApiKeyForm = (apiKey: ApiKeySummary | null) =>
           );
       }
 
-      return get
-        .setResult(createApiKeyAtom, {
-          payload: {
-            configId: "service",
-            ...(name ? { name } : {}),
-          },
-        })
-        .pipe(
-          Effect.flatMap((created) =>
-            get
-              .setResult(updateApiKeyAtom, {
-                params: { id: created.id },
-                payload,
-              })
-              .pipe(Effect.as(created.key)),
-          ),
-          Effect.mapError((cause) =>
-            cause instanceof Error ? cause : new Error(String(cause)),
-          ),
-        );
+      const createPayload = name
+        ? { configId: "service" as const, name }
+        : { configId: "service" as const };
+      return get.setResult(createApiKeyAtom, { payload: createPayload }).pipe(
+        Effect.flatMap((created) =>
+          get
+            .setResult(updateApiKeyAtom, {
+              params: { id: created.id },
+              payload,
+            })
+            .pipe(Effect.as(created.key)),
+        ),
+        Effect.mapError((cause) =>
+          cause instanceof Error ? cause : new Error(String(cause)),
+        ),
+      );
     },
   });
 

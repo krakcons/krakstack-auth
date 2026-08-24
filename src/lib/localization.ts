@@ -30,6 +30,11 @@ export const LocalizedInputSchema = Schema.Struct({
 
 export type LocalizedInputType = typeof LocalizedInputSchema.Type;
 
+type LocalizedResult<
+  TBase extends { translations: Array<{ locale: Locale }> },
+> = Omit<TBase, "name" | "translations"> &
+  Partial<TBase["translations"][number]> & { locale: Locale };
+
 const decodeLocale = Schema.decodeUnknownOption(LocaleSchema);
 
 const parseAcceptLanguage = (input?: string | null): Locale | undefined => {
@@ -98,19 +103,17 @@ export const LocaleMiddlewareLive = Layer.effect(
 );
 
 export const localize = <
-  TBase extends { name?: unknown; translations: Array<{ locale: string }> },
-  TTranslation = TBase["translations"][number],
-  TResult = Omit<TBase, "translations"> & TTranslation,
+  TBase extends { name?: unknown; translations: Array<{ locale: Locale }> },
   TVariables extends LocalizedInputType = LocalizedInputType,
 >(
   context: TVariables,
   obj: TBase,
   customLocale?: Locale,
-): TResult => {
+): LocalizedResult<TBase> => {
   const locale = customLocale ?? context.locale;
   const fallbackLocale = context.fallbackLocale;
 
-  let translation = undefined;
+  let translation: TBase["translations"][number] | undefined;
   if (fallbackLocale === "none") {
     translation = obj.translations.find((item) => item.locale === locale);
   } else {
@@ -125,8 +128,5 @@ export const localize = <
 
   const { translations: _translations, name: _name, ...rest } = obj;
 
-  return {
-    ...rest,
-    ...(translation ?? { locale }),
-  } as TResult;
+  return { ...rest, ...(translation ?? { locale }) };
 };

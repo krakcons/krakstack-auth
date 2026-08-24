@@ -21,8 +21,14 @@ import {
   CollapsibleContent,
   CollapsibleTrigger,
 } from "@/components/ui/collapsible";
-import { SearchMenu, type SearchMenuGroup } from "@krak-stack/registry/search-menu";
-import { SidebarLayout, type NavGroup } from "@krak-stack/registry/sidebar-layout";
+import {
+  SearchMenu,
+  type SearchMenuGroup,
+} from "@krak-stack/registry/search-menu";
+import {
+  SidebarLayout,
+  type NavGroup,
+} from "@krak-stack/registry/sidebar-layout";
 import { createSeo } from "@/lib/seo";
 
 addCollection(lucideIcons);
@@ -374,12 +380,13 @@ export const makeDocs = (config: DocsConfig) => {
     icon: "lucide:book-open",
     href: "/",
   };
-  const docsSeo = createSeo({
+  const seoDefaults: Parameters<typeof createSeo>[0] = {
     origin,
     locales: source.locales,
-    ...(config.defaultLocale ? { defaultLocale: config.defaultLocale } : {}),
     siteName: config.siteName,
-  });
+  };
+  if (config.defaultLocale) seoDefaults.defaultLocale = config.defaultLocale;
+  const docsSeo = createSeo(seoDefaults);
   const getMessages = (locale: DocsLocale) =>
     getDocsMessages(locale, config.messages?.(locale));
   const normalizeSearchText = (value: string) =>
@@ -482,10 +489,11 @@ export const makeDocs = (config: DocsConfig) => {
           left.entry.page.order - right.entry.page.order,
       )
       .slice(0, limit)
-      .map(({ entry }) => ({
-        page: entry.page,
-        ...("heading" in entry ? { heading: entry.heading } : {}),
-      }));
+      .map(({ entry }) =>
+        "heading" in entry
+          ? { page: entry.page, heading: entry.heading }
+          : { page: entry.page },
+      );
   };
   const url = (page: DocsPage, locale: DocsLocale) =>
     `${origin}/${locale}${page.path}`;
@@ -608,9 +616,9 @@ const docsPageTypeMessages = {
 } as const;
 
 const defaultSectionLabel = (locale: "en" | "fr", section: DocsSection) =>
-  docsSectionMessages[locale][
-    section as keyof (typeof docsSectionMessages)["en"]
-  ] ?? humanizeDocsValue(section);
+  Object.entries(docsSectionMessages[locale]).find(
+    ([id]) => id === section,
+  )?.[1] ?? humanizeDocsValue(section);
 
 const messages = {
   en: {
@@ -713,7 +721,7 @@ const iconFor = (name: string): LucideIcon => {
 const headingText = (children: ReactNode) =>
   Children.toArray(children)
     .filter((child): child is string | number =>
-      ["string", "number"].includes(typeof child),
+      Schema.is(Schema.Union([Schema.String, Schema.Number]))(child),
     )
     .join("");
 
@@ -1006,12 +1014,16 @@ export const DocsLayout = ({
     groups.push({
       label: resources.label,
       items: [
-        ...resources.items.map((item) => ({
-          label: item.label,
-          href: item.href,
-          icon: iconFor(item.icon),
-          ...(item.external === undefined ? {} : { external: item.external }),
-        })),
+        ...resources.items.map((item) => {
+          const navItem = {
+            label: item.label,
+            href: item.href,
+            icon: iconFor(item.icon),
+          };
+          return item.external === undefined
+            ? navItem
+            : { ...navItem, external: item.external };
+        }),
         ...(docs.githubUrl
           ? [
               {

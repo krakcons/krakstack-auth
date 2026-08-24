@@ -18,6 +18,7 @@ import {
   Users,
 } from "lucide-react";
 import { useState } from "react";
+import { Schema } from "effect";
 
 import { m } from "@/paraglide/messages";
 import { SidebarPageHeader } from "@krak-stack/registry/sidebar-layout";
@@ -47,23 +48,26 @@ export const Route = createFileRoute("/admin/")({
   component: DashboardPage,
 });
 
-type DashboardStats = {
-  totalUsers: number;
-  totalOrganizations: number;
-  totalProjects: number;
-  totalDomains: number;
-  totalApiKeys: number;
-  totalOauthClients: number;
-  dailyActiveUsers: number;
-  dailyActiveUsersByDay: { date: string; count: number }[];
-  signupsByDay: { date: string; count: number }[];
-  projectConnections: {
-    projectId: string;
-    projectName: string;
-    users: number;
-    organizations: number;
-  }[];
-};
+const DailyCount = Schema.Struct({ date: Schema.String, count: Schema.Number });
+const DashboardStats = Schema.Struct({
+  totalUsers: Schema.Number,
+  totalOrganizations: Schema.Number,
+  totalProjects: Schema.Number,
+  totalDomains: Schema.Number,
+  totalApiKeys: Schema.Number,
+  totalOauthClients: Schema.Number,
+  dailyActiveUsers: Schema.Number,
+  dailyActiveUsersByDay: Schema.Array(DailyCount),
+  signupsByDay: Schema.Array(DailyCount),
+  projectConnections: Schema.Array(
+    Schema.Struct({
+      projectId: Schema.String,
+      projectName: Schema.String,
+      users: Schema.Number,
+      organizations: Schema.Number,
+    }),
+  ),
+}).annotate({ identifier: "DashboardStats" });
 
 const chartRanges = ["7", "14", "30", "90"] as const;
 type ChartRange = (typeof chartRanges)[number];
@@ -76,7 +80,7 @@ const chartRangeOptions: { value: ChartRange; label: string }[] = [
 ];
 
 const isChartRange = (value: string): value is ChartRange =>
-  chartRanges.includes(value as ChartRange);
+  chartRanges.some((range) => range === value);
 
 function useDashboardStats(range: ChartRange) {
   return useQuery({
@@ -87,7 +91,7 @@ function useDashboardStats(range: ChartRange) {
         credentials: "include",
       });
       if (!res.ok) throw new Error("Failed to fetch dashboard stats.");
-      return (await res.json()) as DashboardStats;
+      return Schema.decodeUnknownPromise(DashboardStats)(await res.json());
     },
   });
 }
