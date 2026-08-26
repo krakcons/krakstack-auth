@@ -1,6 +1,6 @@
 import { describe, expect, it } from "@effect/vitest";
 
-import { listenForSessionRevalidation } from "./auth-provider";
+import { listenForSessionRevalidation } from "./auth-provider.js";
 
 describe("listenForSessionRevalidation", () => {
   it("revalidates only on back-forward cache restoration", () => {

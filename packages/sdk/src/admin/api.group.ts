@@ -24,9 +24,9 @@ import {
   ServerDomainIdParams,
   ServerDomainRecordsResponse,
   ServerUpdateDomainPayload,
-} from "./schema";
+} from "./schema.js";
 
-export * from "./schema";
+export * from "./schema.js";
 
 export const AdminApiGroup = HttpApiGroup.make("admin")
   .add(

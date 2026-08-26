@@ -1,53 +1,60 @@
-import { createAuthClient } from "better-auth/react";
-import {
-  adminClient,
-  anonymousClient,
-  emailOTPClient,
-  genericOAuthClient,
-  lastLoginMethodClient,
-  organizationClient,
-  twoFactorClient,
-} from "better-auth/client/plugins";
-import { oauthProviderClient } from "@better-auth/oauth-provider/client";
-import { apiKeyClient } from "@better-auth/api-key/client";
+import { AuthClientApi } from "@krak-stack/auth/api";
+import { Effect } from "effect";
+import { FetchHttpClient, HttpClient } from "effect/unstable/http";
+import { HttpApiClient } from "effect/unstable/httpapi";
+import { AtomHttpApi } from "effect/unstable/reactivity";
 
 export const KRAK_ORGANIZATION_SLUG = "krak";
 
-const organizationSchema = {
-  organization: {
-    additionalFields: {
-      userId: { type: "string", required: false },
-      parentId: { type: "string", required: false },
-    },
-  },
-} as const;
 export const authBaseUrl =
   import.meta.env.VITE_KRAKSTACK_AUTH_URL ?? import.meta.env.VITE_SITE_URL;
 
-export const authClient = createAuthClient({
-  plugins: [
-    adminClient(),
-    anonymousClient(),
-    emailOTPClient(),
-    lastLoginMethodClient({
-      cookieName: "krakstack-auth.last_used_login_method",
-    }),
-    organizationClient({ schema: organizationSchema }),
-    twoFactorClient({
-      twoFactorPage: "/2fa",
-    }),
-    apiKeyClient(),
-    oauthProviderClient(),
-    genericOAuthClient(),
-  ],
-});
+const authOrigin =
+  authBaseUrl ??
+  globalThis.window?.location.origin ??
+  import.meta.env.VITE_SITE_URL ??
+  "http://localhost:3000";
 
-export const ensureKrakOrganizationSelected = async () => {
-  const result = await authClient.organization.setActive({
-    organizationSlug: KRAK_ORGANIZATION_SLUG,
-  });
+const withCredentials = (client: HttpClient.HttpClient) =>
+  HttpClient.makeWith(
+    (request) =>
+      client.postprocess(request).pipe(
+        Effect.provideService(FetchHttpClient.RequestInit, {
+          credentials: "include",
+        }),
+      ),
+    client.preprocess,
+  );
 
-  if (result.error) {
-    throw new Error(result.error.message ?? "Krak organization is required");
-  }
-};
+export class AuthApiClient extends AtomHttpApi.Service<AuthApiClient>()(
+  "AuthApiClient",
+  {
+    api: AuthClientApi,
+    baseUrl: authOrigin,
+    httpClient: FetchHttpClient.layer,
+    transformClient: withCredentials,
+  },
+) {}
+
+const makeAuthClient = HttpApiClient.make(AuthClientApi, {
+  baseUrl: authOrigin,
+  transformClient: withCredentials,
+}).pipe(Effect.provide(FetchHttpClient.layer));
+
+export const getAuthSession = () =>
+  makeAuthClient.pipe(
+    Effect.flatMap((client) =>
+      client.auth.getSession({
+        query: { disableCookieCache: "true" },
+      }),
+    ),
+  );
+
+export const ensureKrakOrganizationSelected = () =>
+  makeAuthClient.pipe(
+    Effect.flatMap((client) =>
+      client.auth.organizationSetActive({
+        payload: { organizationSlug: KRAK_ORGANIZATION_SLUG },
+      }),
+    ),
+  );

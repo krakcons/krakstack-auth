@@ -1,11 +1,11 @@
-import { useAtomSet, useAtomValue } from "@effect/atom-react";
+import { useAtomRefresh, useAtomSet, useAtomValue } from "@effect/atom-react";
 import {
   useNavigate,
   useRouter,
   type ValidateFromPath,
 } from "@tanstack/react-router";
 import { Atom, AsyncResult } from "effect/unstable/reactivity";
-import { Option, Schema } from "effect";
+import { Effect, Option, Schema } from "effect";
 import {
   Ban,
   Building2,
@@ -38,12 +38,12 @@ import {
 import type {
   AdminOrganizationPreview,
   AdminProjectPreview,
-} from "../admin/schema";
+} from "../admin/schema.js";
 
-import type { AuthUiClient } from "./auth-client";
-import { authClientApi } from "./auth-client-api";
-import { type KrakstackAuthLocale, useKrakstackAuth } from "./auth-provider";
-import { assetUrl } from "./utils";
+import { authSessionAtom, notifyAuthChange } from "./auth-atoms.js";
+import { authClientApi, authHttpClient } from "./auth-client-api.js";
+import { type KrakstackAuthLocale, useKrakstackAuth } from "./auth-provider.js";
+import { assetUrl } from "./utils.js";
 
 const defaultMessages = {
   en: {
@@ -161,6 +161,19 @@ interface AdminUsersQuery {
   projectId?: string;
 }
 
+const AdminUsersFamilyKey = Schema.fromJsonString(
+  Schema.Struct({
+    query: Schema.Struct({
+      page: Schema.Number,
+      pageSize: Schema.Number,
+      globalFilter: Schema.optional(Schema.String),
+      sort: Schema.optional(Schema.String),
+      projectId: Schema.optional(Schema.String),
+    }),
+    reloadKey: Schema.Number,
+  }),
+).annotate({ identifier: "AdminUsersFamilyKey" });
+
 const adminUsersQuery = (search: TableParams, projectId?: string | null) => {
   let query: AdminUsersQuery = {
     page: search.page ?? 0,
@@ -171,66 +184,30 @@ const adminUsersQuery = (search: TableParams, projectId?: string | null) => {
   if (search.sort) query = { ...query, sort: search.sort };
   if (projectId) query = { ...query, projectId };
 
-  return {
-    query,
-    key: JSON.stringify(query),
-  };
+  return query;
 };
 
-const usersAtom = Atom.family(
-  ({
-    baseUrl,
-    projectId,
-    reloadKey,
-    search,
-  }: {
-    baseUrl?: string | undefined;
-    projectId?: string | null | undefined;
-    reloadKey: number;
-    search: TableParams;
-  }) => {
-    const request = adminUsersQuery(search, projectId);
+const adminUsersFamilyKey = (
+  search: TableParams,
+  projectId: string | null | undefined,
+  reloadKey: number,
+) => JSON.stringify({ query: adminUsersQuery(search, projectId), reloadKey });
 
+const usersAtom = Atom.family((baseUrl?: string | undefined) =>
+  Atom.family((key: string) => {
+    const { query, reloadKey } =
+      Schema.decodeUnknownSync(AdminUsersFamilyKey)(key);
     return authClientApi(baseUrl).query("admin", "listUsers", {
-      query: request.query,
+      query,
       timeToLive: "1 minute",
       reactivityKeys: [
         "admin-users",
-        ...(projectId ? [`project:${projectId}`] : []),
+        ...(query.projectId ? [`project:${query.projectId}`] : []),
       ],
-      serializationKey: `admin-users:${reloadKey}:${request.key}`,
+      serializationKey: `admin-users:${reloadKey}:${JSON.stringify(query)}`,
     });
-  },
+  }),
 );
-
-const banUser = async (
-  authClient: AuthUiClient,
-  userId: string,
-  m: AdminUsersLabels,
-) => {
-  const result = await authClient.admin.banUser({ userId });
-  if (result.error) throw new Error(result.error.message ?? m.admin_error_ban);
-};
-
-const unbanUser = async (
-  authClient: AuthUiClient,
-  userId: string,
-  m: AdminUsersLabels,
-) => {
-  const result = await authClient.admin.unbanUser({ userId });
-  if (result.error)
-    throw new Error(result.error.message ?? m.admin_error_unban);
-};
-
-const impersonateUser = async (
-  authClient: AuthUiClient,
-  userId: string,
-  m: AdminUsersLabels,
-) => {
-  const result = await authClient.admin.impersonateUser({ userId });
-  if (result.error)
-    throw new Error(result.error.message ?? m.admin_error_impersonate);
-};
 
 type SessionWithActiveOrganization = {
   session?: { activeOrganizationId?: typeof Schema.Unknown.Type };
@@ -258,21 +235,16 @@ export function AdminUsersTable({
   const router = useRouter();
   const auth = useKrakstackAuth();
   const m = labels(auth?.locale ?? "en");
-  const authClient = auth?.authClient;
   const baseUrl = auth?.baseUrl;
-  const { data: session, refetch: refetchSession } =
-    authClient?.useSession() ?? {
-      data: null,
-      refetch: async () => undefined,
-    };
-  const impersonateOrganizationUser = useAtomSet(
-    authClientApi(baseUrl).mutation("auth", "organizationImpersonateUser"),
-    { mode: "promise" },
-  );
+  const sessionAtom = authSessionAtom(baseUrl);
+  const sessionResult = useAtomValue(sessionAtom);
+  const refetchSession = useAtomRefresh(sessionAtom);
+  const session = AsyncResult.match(sessionResult, {
+    onInitial: () => null,
+    onFailure: () => null,
+    onSuccess: ({ value }) => value,
+  });
   const projectId = auth?.projectId;
-  const [impersonatingUserId, setImpersonatingUserId] = useState<string | null>(
-    null,
-  );
   const [impersonateError, setImpersonateError] = useState("");
   const [refreshKey, setRefreshKey] = useState(0);
   const [localSearch, setLocalSearch] = useState<TableParams>({
@@ -280,15 +252,95 @@ export function AdminUsersTable({
   });
   const tableSearch = search ?? localSearch;
   const result = useAtomValue(
-    usersAtom({
-      baseUrl,
-      projectId,
-      search: tableSearch,
-      reloadKey: reloadKey + refreshKey,
-    }),
+    usersAtom(baseUrl)(
+      adminUsersFamilyKey(tableSearch, projectId, reloadKey + refreshKey),
+    ),
   );
   const [banningUser, setBanningUser] = useState<User | null>(null);
   const [unbanningUser, setUnbanningUser] = useState<User | null>(null);
+  const [impersonateUserAtom] = useState(() =>
+    Atom.fn((userId: string) =>
+      Effect.gen(function* () {
+        const client = yield* authHttpClient(baseUrl);
+        yield* client.auth.adminImpersonateUser({ payload: { userId } });
+        notifyAuthChange();
+        auth?.refreshAuth();
+        refetchSession();
+        yield* Effect.tryPromise({
+          try: async () => {
+            await navigate({ to: "/" });
+            await router.invalidate();
+          },
+          catch: (cause) =>
+            cause instanceof Error
+              ? cause
+              : new Error(m.admin_error_impersonate),
+        });
+      }).pipe(
+        Effect.catch((cause) =>
+          Effect.sync(() =>
+            setImpersonateError(
+              cause instanceof Error
+                ? cause.message
+                : m.admin_error_impersonate,
+            ),
+          ),
+        ),
+      ),
+    ),
+  );
+  const [impersonateOrganizationUserAtom] = useState(() =>
+    Atom.fn(
+      ({
+        actorUserId,
+        organizationId,
+        targetUserId,
+      }: {
+        actorUserId: string;
+        organizationId: string;
+        targetUserId: string;
+      }) =>
+        Effect.gen(function* () {
+          const client = yield* authHttpClient(baseUrl);
+          yield* client.auth.organizationImpersonateUser({
+            payload: { organizationId, actorUserId, targetUserId },
+          });
+          notifyAuthChange();
+          auth?.refreshAuth();
+          refetchSession();
+          yield* Effect.tryPromise({
+            try: async () => {
+              await navigate({ to: "/" });
+              await router.invalidate();
+            },
+            catch: (cause) =>
+              cause instanceof Error
+                ? cause
+                : new Error(m.admin_error_impersonate_organization),
+          });
+        }).pipe(
+          Effect.catch((cause) =>
+            Effect.sync(() =>
+              setImpersonateError(
+                cause instanceof Error
+                  ? cause.message
+                  : m.admin_error_impersonate_organization,
+              ),
+            ),
+          ),
+        ),
+    ),
+  );
+  const impersonateUser = useAtomSet(impersonateUserAtom);
+  const impersonateUserResult = useAtomValue(impersonateUserAtom);
+  const impersonateOrganizationUser = useAtomSet(
+    impersonateOrganizationUserAtom,
+  );
+  const impersonateOrganizationUserResult = useAtomValue(
+    impersonateOrganizationUserAtom,
+  );
+  const isImpersonating =
+    impersonateUserResult.waiting || impersonateOrganizationUserResult.waiting;
 
   const users = AsyncResult.match(result, {
     onInitial: () => [],
@@ -311,13 +363,6 @@ export function AdminUsersTable({
     onSuccess: () => false,
   });
 
-  const refreshSessionAndNavigate = async () => {
-    auth?.refreshAuth();
-    await refetchSession();
-    await navigate({ to: "/" });
-    await router.invalidate();
-  };
-
   return (
     <>
       {error ? <ErrorMessage text={error} /> : null}
@@ -334,67 +379,41 @@ export function AdminUsersTable({
             items: [
               {
                 name: m.admin_action_impersonate,
-                icon: impersonatingUserId ? (
+                icon: isImpersonating ? (
                   <Loader2 className="size-4 animate-spin" />
                 ) : (
                   <UserCog className="size-4" />
                 ),
-                onClick: async (user) => {
+                onClick: (user) => {
                   setImpersonateError("");
-                  setImpersonatingUserId(user.id);
-                  try {
-                    if (!authClient)
-                      throw new Error(m.admin_error_access_required);
-                    await impersonateUser(authClient, user.id, m);
-                    await refreshSessionAndNavigate();
-                  } catch (cause) {
-                    setImpersonateError(
-                      cause instanceof Error
-                        ? cause.message
-                        : m.admin_error_impersonate,
-                    );
-                  } finally {
-                    setImpersonatingUserId(null);
-                  }
+                  impersonateUser(user.id);
                 },
                 visible: (user) => !user.banned,
               },
               {
                 name: m.admin_action_impersonate_organization,
-                icon: impersonatingUserId ? (
+                icon: isImpersonating ? (
                   <Loader2 className="size-4 animate-spin" />
                 ) : (
                   <Building2 className="size-4" />
                 ),
-                onClick: async (user) => {
+                onClick: (user) => {
                   setImpersonateError("");
-                  setImpersonatingUserId(user.id);
-                  try {
-                    if (!session?.user?.id) {
-                      throw new Error(m.admin_error_access_required);
-                    }
-                    const organizationId = activeOrganizationId(session);
-                    if (!organizationId) {
-                      throw new Error(m.admin_error_organization_required);
-                    }
-
-                    await impersonateOrganizationUser({
-                      payload: {
-                        organizationId,
-                        actorUserId: session.user.id,
-                        targetUserId: user.id,
-                      },
-                    });
-                    await refreshSessionAndNavigate();
-                  } catch (cause) {
-                    setImpersonateError(
-                      cause instanceof Error
-                        ? cause.message
-                        : m.admin_error_impersonate_organization,
-                    );
-                  } finally {
-                    setImpersonatingUserId(null);
+                  if (!session?.user?.id) {
+                    setImpersonateError(m.admin_error_access_required);
+                    return;
                   }
+                  const organizationId = activeOrganizationId(session);
+                  if (!organizationId) {
+                    setImpersonateError(m.admin_error_organization_required);
+                    return;
+                  }
+
+                  impersonateOrganizationUser({
+                    organizationId,
+                    actorUserId: session.user.id,
+                    targetUserId: user.id,
+                  });
                 },
                 visible: (user) => !user.banned,
               },
@@ -428,7 +447,7 @@ export function AdminUsersTable({
       {banningUser ? (
         <BanUserDialog
           labels={m}
-          authClient={authClient}
+          baseUrl={baseUrl}
           user={banningUser}
           onBanned={() => setRefreshKey((current) => current + 1)}
           onClose={() => setBanningUser(null)}
@@ -437,7 +456,7 @@ export function AdminUsersTable({
       {unbanningUser ? (
         <UnbanUserDialog
           labels={m}
-          authClient={authClient}
+          baseUrl={baseUrl}
           user={unbanningUser}
           onUnbanned={() => setRefreshKey((current) => current + 1)}
           onClose={() => setUnbanningUser(null)}
@@ -450,12 +469,7 @@ export function AdminUsersTable({
 export function useAdminUsersTotal(search: TableParams) {
   const auth = useKrakstackAuth();
   const result = useAtomValue(
-    usersAtom({
-      baseUrl: auth?.baseUrl,
-      projectId: auth?.projectId,
-      search,
-      reloadKey: 0,
-    }),
+    usersAtom(auth?.baseUrl)(adminUsersFamilyKey(search, auth?.projectId, 0)),
   );
   return AsyncResult.match(result, {
     onInitial: () => 0,
@@ -603,19 +617,37 @@ const userColumns = (
 
 function BanUserDialog({
   labels: m,
-  authClient,
+  baseUrl,
   user,
   onBanned,
   onClose,
 }: {
   labels: AdminUsersLabels;
-  authClient?: AuthUiClient | undefined;
+  baseUrl?: string | undefined;
   user: User;
   onBanned: () => void;
   onClose: () => void;
 }) {
-  const [isPending, setIsPending] = useState(false);
+  const [banUserAtom] = useState(() =>
+    Atom.fn((userId: string) =>
+      Effect.flatMap(authHttpClient(baseUrl), (client) =>
+        client.auth.adminBanUser({ payload: { userId } }),
+      ).pipe(
+        Effect.tap(() => Effect.sync(onBanned)),
+        Effect.tap(() => Effect.sync(onClose)),
+        Effect.catch((cause) =>
+          Effect.sync(() =>
+            setError(
+              cause instanceof Error ? cause.message : m.admin_error_ban,
+            ),
+          ),
+        ),
+      ),
+    ),
+  );
   const [error, setError] = useState("");
+  const banUser = useAtomSet(banUserAtom);
+  const isPending = useAtomValue(banUserAtom).waiting;
 
   return (
     <AlertDialog open onOpenChange={(open) => !open && onClose()}>
@@ -635,21 +667,9 @@ function BanUserDialog({
             {m.form_cancel}
           </AlertDialogCancel>
           <AlertDialogAction
-            onClick={async () => {
+            onClick={() => {
               setError("");
-              setIsPending(true);
-              try {
-                if (!authClient) throw new Error(m.admin_error_access_required);
-                await banUser(authClient, user.id, m);
-                onBanned();
-                onClose();
-              } catch (cause) {
-                setError(
-                  cause instanceof Error ? cause.message : m.admin_error_ban,
-                );
-              } finally {
-                setIsPending(false);
-              }
+              banUser(user.id);
             }}
             disabled={isPending}
           >
@@ -666,19 +686,37 @@ function BanUserDialog({
 
 function UnbanUserDialog({
   labels: m,
-  authClient,
+  baseUrl,
   user,
   onUnbanned,
   onClose,
 }: {
   labels: AdminUsersLabels;
-  authClient?: AuthUiClient | undefined;
+  baseUrl?: string | undefined;
   user: User;
   onUnbanned: () => void;
   onClose: () => void;
 }) {
-  const [isPending, setIsPending] = useState(false);
+  const [unbanUserAtom] = useState(() =>
+    Atom.fn((userId: string) =>
+      Effect.flatMap(authHttpClient(baseUrl), (client) =>
+        client.auth.adminUnbanUser({ payload: { userId } }),
+      ).pipe(
+        Effect.tap(() => Effect.sync(onUnbanned)),
+        Effect.tap(() => Effect.sync(onClose)),
+        Effect.catch((cause) =>
+          Effect.sync(() =>
+            setError(
+              cause instanceof Error ? cause.message : m.admin_error_unban,
+            ),
+          ),
+        ),
+      ),
+    ),
+  );
   const [error, setError] = useState("");
+  const unbanUser = useAtomSet(unbanUserAtom);
+  const isPending = useAtomValue(unbanUserAtom).waiting;
 
   return (
     <AlertDialog open onOpenChange={(open) => !open && onClose()}>
@@ -698,21 +736,9 @@ function UnbanUserDialog({
             {m.form_cancel}
           </AlertDialogCancel>
           <AlertDialogAction
-            onClick={async () => {
+            onClick={() => {
               setError("");
-              setIsPending(true);
-              try {
-                if (!authClient) throw new Error(m.admin_error_access_required);
-                await unbanUser(authClient, user.id, m);
-                onUnbanned();
-                onClose();
-              } catch (cause) {
-                setError(
-                  cause instanceof Error ? cause.message : m.admin_error_unban,
-                );
-              } finally {
-                setIsPending(false);
-              }
+              unbanUser(user.id);
             }}
             disabled={isPending}
           >

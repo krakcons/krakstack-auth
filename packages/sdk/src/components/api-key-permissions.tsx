@@ -1,7 +1,7 @@
 import { ChevronDown } from "lucide-react";
 import { useState } from "react";
 
-import type { ProjectAccessLabelCatalog } from "../access";
+import type { ProjectAccessLabelCatalog } from "../access.js";
 
 import { Checkbox } from "@/components/ui/checkbox";
 import {

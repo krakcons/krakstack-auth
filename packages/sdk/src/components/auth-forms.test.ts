@@ -1,9 +1,9 @@
 import { describe, expect, it } from "@effect/vitest";
 
-import { resolveInitialAuthMethod } from "./auth-forms";
+import { resolveInitialAuthMethod } from "./auth-forms.js";
 
 describe("resolveInitialAuthMethod", () => {
-  it("restores password from Better Auth's email login method", () => {
+  it("restores password from the email login method", () => {
     expect(
       resolveInitialAuthMethod({
         requestedMethod: null,

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "@effect/vitest";
 
-import { proxyAuthRequest } from "./proxy";
+import { proxyAuthRequest } from "./proxy.js";
 
 interface CapturedRequest {
   request?: Request;

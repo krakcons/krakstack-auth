@@ -28,7 +28,7 @@ Les composants utilisent les variables shadcn comme `--background`, `--foregroun
 ## Fournisseur
 
 ```tsx
-import { KrakstackAuthProvider } from "@krak-stack/auth";
+import { KrakstackAuthProvider } from "@krak-stack/auth/components";
 
 <KrakstackAuthProvider
   locale="fr"
@@ -38,12 +38,15 @@ import { KrakstackAuthProvider } from "@krak-stack/auth";
 </KrakstackAuthProvider>;
 ```
 
-Fournissez `baseUrl` ou un `authClient` personnalisé si le client de même origine par défaut ne convient pas.
+Fournissez `baseUrl` si le point de même origine par défaut ne convient pas. Le fournisseur et les composants utilisent en interne le client Effect HttpApi fourni; ils n'acceptent pas de client Better Auth.
 
 ## Contrôles de compte
 
 ```tsx
-import { OrganizationSwitcher, UserButton } from "@krak-stack/auth";
+import {
+  OrganizationSwitcher,
+  UserButton,
+} from "@krak-stack/auth/components";
 
 <OrganizationSwitcher side="bottom" />
 <UserButton signOutRedirect="/" side="bottom" />
@@ -57,6 +60,6 @@ Le paquet exporte `Signin`, `VerifyEmail`, `ForgotPassword`, `ResetPassword` et 
 
 `MemberRequired` protège la présentation selon l'adhésion à une organisation, mais chaque endpoint backend doit aussi vérifier indépendamment la session, l'organisation et le rôle. Une garde frontend n'est jamais une frontière d'autorisation.
 
-## Hooks et client
+## Hooks, atomes et contrat
 
-Les hooks `useAuthClient`, `useKrakstackAuth` et `useKrakstackAuthProjectConfig` sont disponibles dans le fournisseur. Importez les deux derniers depuis `@krak-stack/auth/components`; ils ne sont pas encore réexportés par la racine du paquet.
+Importez `useKrakstackAuth`, `useKrakstackAuthProjectConfig` et `usePermissions` depuis `@krak-stack/auth/components` dans le fournisseur. Pour accéder directement à l'état Effect, utilisez `authSessionAtom`, `authOrganizationsAtom` et `activeAuthOrganizationAtom` depuis le même sous-chemin avec `@effect/atom-react`. Utilisez le contrat HttpApi `@krak-stack/auth/auth` lorsqu'un client Effect personnalisé est nécessaire.

@@ -1,4 +1,4 @@
-import { useAtomSuspense } from "@effect/atom-react";
+import { useAtomSet, useAtomSuspense } from "@effect/atom-react";
 import { Effect, Schema } from "effect";
 import { Atom } from "effect/unstable/reactivity";
 import { Check, Loader2, Mail, ShieldAlert } from "lucide-react";
@@ -15,13 +15,15 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 
-import type { AuthUiClient } from "./auth-client";
-import { type KrakstackAuthLocale, useKrakstackAuth } from "./auth-provider";
-import { OrganizationEmail } from "../schema";
+import { authSessionAtom, notifyAuthChange } from "./auth-atoms.js";
+import { authClientApi, authHttpClient } from "./auth-client-api.js";
+import { type KrakstackAuthLocale, useKrakstackAuth } from "./auth-provider.js";
+import { AuthForbidden } from "../auth/schema.js";
+import type { OrganizationEmail } from "../schema.js";
 import {
   isInvitationExpired,
   useInvitationExpirationClock,
-} from "./invitation-expiration";
+} from "./invitation-expiration.js";
 
 const defaultMessages = {
   en: {
@@ -72,7 +74,6 @@ type MemberRequiredLabels = (typeof defaultMessages)["en"];
 export type MemberRequiredMessages = Partial<MemberRequiredLabels>;
 
 export type MemberRequiredProps = {
-  authClient?: AuthUiClient | undefined;
   organizationId: string;
   contactEmail?: string | undefined;
   children?: ReactNode;
@@ -85,7 +86,7 @@ type Invitation = {
   expiresAt: Date | string;
   organizationId: string;
   organization?: { name?: string | null } | null;
-  organizationName?: string | null;
+  organizationName?: string | null | undefined;
 };
 type FullOrganization = {
   id: string;
@@ -93,23 +94,10 @@ type FullOrganization = {
   slug: string;
   displayName: string;
   contactEmail?: string | null;
-  emails?: ReadonlyArray<OrganizationEmail>;
+  emails?: ReadonlyArray<OrganizationEmail> | undefined;
   logo: string | null;
   icon: string | null;
 };
-
-const FullOrganizationSchema = Schema.Struct({
-  id: Schema.String,
-  name: Schema.String,
-  slug: Schema.String,
-  displayName: Schema.String,
-  contactEmail: Schema.optional(Schema.NullOr(Schema.String)),
-  emails: Schema.optional(Schema.Array(OrganizationEmail)),
-  logo: Schema.NullOr(Schema.String),
-  icon: Schema.NullOr(Schema.String),
-});
-
-const isFullOrganization = Schema.is(FullOrganizationSchema);
 
 const interpolate = (value: string, params?: Record<string, string>) =>
   Object.entries(params ?? {}).reduce(
@@ -149,35 +137,6 @@ const organizationDisplayName = (
   invitation?.organizationName ??
   fallback;
 
-const organizationProfileUrl = (
-  baseUrl: string | undefined,
-  organizationId: string,
-  locale: KrakstackAuthLocale | undefined,
-) => {
-  const root = baseUrl?.trim() || globalThis.window?.location.origin || "";
-  const url = new URL("/api/auth/organization-profile", root);
-  url.searchParams.set("organizationId", organizationId);
-  if (locale) url.searchParams.set("locale", locale);
-  return url;
-};
-
-const getOrganizationPublicProfile = async (
-  baseUrl: string | undefined,
-  organizationId: string,
-  locale: KrakstackAuthLocale | undefined,
-): Promise<FullOrganization | null> => {
-  const response = await fetch(
-    organizationProfileUrl(baseUrl, organizationId, locale),
-    {
-      credentials: "include",
-    },
-  );
-
-  if (!response.ok) return null;
-  const body = await response.json();
-  return isFullOrganization(body) ? body : null;
-};
-
 type AccessResult =
   | { allowed: true }
   | {
@@ -186,7 +145,78 @@ type AccessResult =
       organization: FullOrganization | null;
     };
 
-const accessAtom = Atom.family((authClient: AuthUiClient) =>
+const acceptInvitationAtom = Atom.family((baseUrl?: string | undefined) =>
+  Atom.fn(
+    (
+      {
+        invitationId,
+        organizationId,
+        onFailure,
+        onSuccess,
+      }: {
+        invitationId: string;
+        organizationId: string;
+        onFailure: (cause: unknown) => void;
+        onSuccess: () => void;
+      },
+      get,
+    ) =>
+      Effect.gen(function* () {
+        const client = yield* authHttpClient(baseUrl);
+        yield* client.auth.organizationAcceptInvitation({
+          payload: { invitationId },
+        });
+        yield* client.auth
+          .organizationSetActive({ payload: { organizationId } })
+          .pipe(Effect.catchCause(() => Effect.void));
+        get.refresh(authSessionAtom(baseUrl));
+        yield* get.result(authSessionAtom(baseUrl), {
+          suspendOnWaiting: true,
+        });
+        yield* Effect.sync(notifyAuthChange);
+      }).pipe(
+        Effect.match({
+          onFailure,
+          onSuccess,
+        }),
+      ),
+  ),
+);
+
+const organizationProfileAtom = Atom.family((baseUrl?: string | undefined) =>
+  Atom.family((key: string) => {
+    const ProfileKey = Schema.fromJsonString(
+      Schema.Struct({
+        locale: Schema.optional(Schema.Literals(["en", "fr"])),
+        organizationId: Schema.String,
+      }),
+    );
+    const { locale, organizationId } =
+      Schema.decodeUnknownSync(ProfileKey)(key);
+    const query = locale ? { organizationId, locale } : { organizationId };
+
+    return authClientApi(baseUrl).query(
+      "authExtra",
+      "getOrganizationPublicProfile",
+      {
+        query,
+        timeToLive: "5 minutes",
+        serializationKey: `member-organization-profile:${key}`,
+      },
+    );
+  }),
+);
+
+const invitationsAtom = Atom.family((baseUrl?: string | undefined) =>
+  Atom.family((accessKey: string) =>
+    authClientApi(baseUrl).query("auth", "organizationListUserInvitations", {
+      query: {},
+      serializationKey: `member-invitations:${accessKey}`,
+    }),
+  ),
+);
+
+const accessAtom = Atom.family((baseUrl?: string | undefined) =>
   Atom.family((key: string) => {
     const AccessKey = Schema.fromJsonString(
       Schema.Struct({
@@ -196,38 +226,59 @@ const accessAtom = Atom.family((authClient: AuthUiClient) =>
         userId: Schema.optional(Schema.String),
       }),
     );
-    const { baseUrl, locale, organizationId } =
-      Schema.decodeUnknownSync(AccessKey)(key);
+    const { locale, organizationId } = Schema.decodeUnknownSync(AccessKey)(key);
 
     return Atom.keepAlive(
-      Atom.make(
-        Effect.tryPromise({
-          try: async (): Promise<AccessResult> => {
-            const activeResult = await authClient.organization.setActive({
-              organizationId,
+      Atom.make((get) =>
+        Effect.gen(function* () {
+          const client = yield* authHttpClient(baseUrl);
+          const allowed = yield* client.auth
+            .organizationSetActive({ payload: { organizationId } })
+            .pipe(
+              Effect.as(true),
+              Effect.catch((error) =>
+                error instanceof AuthForbidden
+                  ? Effect.succeed(false)
+                  : Effect.fail(error),
+              ),
+            );
+
+          if (allowed) {
+            get.refresh(authSessionAtom(baseUrl));
+            yield* get.result(authSessionAtom(baseUrl), {
+              suspendOnWaiting: true,
             });
+            return { allowed: true } satisfies AccessResult;
+          }
 
-            if (!activeResult.error) return { allowed: true };
+          const profileKey = JSON.stringify({ locale, organizationId });
+          const { organization, invitations } = yield* Effect.all(
+            {
+              organization: get
+                .result(organizationProfileAtom(baseUrl)(profileKey), {
+                  suspendOnWaiting: true,
+                })
+                .pipe(
+                  Effect.matchCause({
+                    onFailure: () => null,
+                    onSuccess: (value) => value,
+                  }),
+                ),
+              invitations: get.result(invitationsAtom(baseUrl)(key), {
+                suspendOnWaiting: true,
+              }),
+            },
+            { concurrency: "unbounded" },
+          );
 
-            const [organization, invitationsResult] = await Promise.all([
-              getOrganizationPublicProfile(
-                baseUrl,
-                organizationId,
-                locale,
-              ).catch(() => null),
-              authClient.organization.listUserInvitations({}),
-            ]);
-
-            return {
-              allowed: false,
-              organization,
-              invitation:
-                invitationsResult.data?.find((item) =>
-                  invitationMatches(item, organizationId),
-                ) ?? null,
-            };
-          },
-          catch: (error) => error,
+          return {
+            allowed: false,
+            organization,
+            invitation:
+              invitations.find((item) =>
+                invitationMatches(item, organizationId),
+              ) ?? null,
+          } satisfies AccessResult;
         }),
       ),
     );
@@ -256,24 +307,20 @@ const accessAtomKey = ({
   });
 
 export function MemberRequired({
-  authClient: providedAuthClient,
   organizationId,
   contactEmail,
   children,
   messages,
 }: MemberRequiredProps) {
   const auth = useKrakstackAuth();
-  const authClient = providedAuthClient ?? auth?.authClient;
   const baseUrl = auth?.baseUrl;
   const authRefreshVersion = auth?.authRefreshVersion ?? 0;
   const locale = auth?.locale;
   const refreshAuth = auth?.refreshAuth;
-  if (!authClient) {
-    throw new Error("KrakstackAuthProvider is required to use authClient.");
-  }
-
-  const session = authClient.useSession();
-  const userId = session.data?.user.id;
+  const session = useAtomSuspense(authSessionAtom(baseUrl), {
+    suspendOnWaiting: true,
+  }).value;
+  const userId = session?.user.id;
   const currentAccessKey = accessAtomKey({
     authRefreshVersion,
     baseUrl,
@@ -288,7 +335,7 @@ export function MemberRequired({
   return (
     <MemberRequiredGate
       accessKey={currentAccessKey}
-      authClient={authClient}
+      baseUrl={baseUrl}
       contactEmail={contactEmail}
       locale={locale}
       messages={messages}
@@ -303,7 +350,7 @@ export function MemberRequired({
 
 function MemberRequiredGate({
   accessKey,
-  authClient,
+  baseUrl,
   contactEmail,
   children,
   locale,
@@ -313,7 +360,7 @@ function MemberRequiredGate({
   refreshAuth,
 }: {
   accessKey: string;
-  authClient: AuthUiClient;
+  baseUrl?: string | undefined;
   contactEmail?: string | undefined;
   children?: ReactNode;
   locale?: KrakstackAuthLocale | undefined;
@@ -323,9 +370,10 @@ function MemberRequiredGate({
   refreshAuth?: (() => void) | undefined;
 }) {
   const m = labels(locale, messages);
-  const accessResult = useAtomSuspense(accessAtom(authClient)(accessKey), {
+  const accessResult = useAtomSuspense(accessAtom(baseUrl)(accessKey), {
     suspendOnWaiting: true,
   });
+  const acceptInvitationMutation = useAtomSet(acceptInvitationAtom(baseUrl));
   const [accepting, setAccepting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -357,27 +405,28 @@ function MemberRequiredGate({
     contactEmail,
   );
 
-  const acceptInvitation = async () => {
+  const acceptInvitation = () => {
     if (!invitation || isInvitationExpired(invitation)) return;
     setAccepting(true);
     setError(null);
 
-    const result = await authClient.organization.acceptInvitation({
+    acceptInvitationMutation({
       invitationId: invitation.id,
-    });
-
-    if (result.error) {
-      setAccepting(false);
-      setError(result.error.message ?? m.member_required_accept_error);
-      return;
-    }
-
-    await authClient.organization.setActive({
       organizationId: invitation.organizationId,
+      onFailure: (cause) => {
+        setAccepting(false);
+        setError(
+          cause instanceof Error && cause.message
+            ? cause.message
+            : m.member_required_accept_error,
+        );
+      },
+      onSuccess: () => {
+        refreshAuth?.();
+        onAccessAllowed();
+        setAccepting(false);
+      },
     });
-    refreshAuth?.();
-    onAccessAllowed();
-    setAccepting(false);
   };
 
   return (

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "@effect/vitest";
 
-import { parseApiKeyReferrers } from "./api-key";
+import { parseApiKeyReferrers } from "./api-key.js";
 
 describe("parseApiKeyReferrers", () => {
   it("normalizes and deduplicates comma- and newline-separated URLs", () => {

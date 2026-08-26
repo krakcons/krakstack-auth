@@ -1,5 +1,6 @@
-import { useAtomSet, useAtomValue } from "@effect/atom-react";
+import { useAtomSet, useAtomSubscribe, useAtomValue } from "@effect/atom-react";
 import type { ValidateFromPath } from "@tanstack/react-router";
+import { Cause, Effect, Schema } from "effect";
 import { Atom, AsyncResult } from "effect/unstable/reactivity";
 import { Building2, Pencil, Trash2 } from "lucide-react";
 import { useState } from "react";
@@ -24,11 +25,11 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 
-import type { AdminOrganization } from "../admin/schema";
-import { AdminOrganizationForm } from "./admin-organization-form";
-import { authClientApi } from "./auth-client-api";
-import { type KrakstackAuthLocale, useKrakstackAuth } from "./auth-provider";
-import { assetUrl, organizationBranding } from "./utils";
+import type { AdminOrganization } from "../admin/schema.js";
+import { AdminOrganizationForm } from "./admin-organization-form.js";
+import { authClientApi, authHttpClient } from "./auth-client-api.js";
+import { type KrakstackAuthLocale, useKrakstackAuth } from "./auth-provider.js";
+import { assetUrl, organizationBranding } from "./utils.js";
 
 const defaultMessages = {
   en: {
@@ -94,6 +95,19 @@ interface AdminOrganizationsQuery {
   projectId?: string;
 }
 
+const AdminOrganizationsFamilyKey = Schema.fromJsonString(
+  Schema.Struct({
+    query: Schema.Struct({
+      page: Schema.Number,
+      pageSize: Schema.Number,
+      globalFilter: Schema.optional(Schema.String),
+      sort: Schema.optional(Schema.String),
+      projectId: Schema.optional(Schema.String),
+    }),
+    reloadKey: Schema.Number,
+  }),
+).annotate({ identifier: "AdminOrganizationsFamilyKey" });
+
 const organizationsQuery = (search: TableParams, projectId?: string | null) => {
   let query: AdminOrganizationsQuery = {
     page: search.page ?? 0,
@@ -104,36 +118,34 @@ const organizationsQuery = (search: TableParams, projectId?: string | null) => {
   if (search.sort) query = { ...query, sort: search.sort };
   if (projectId) query = { ...query, projectId };
 
-  return {
-    query,
-    key: JSON.stringify(query),
-  };
+  return query;
 };
 
-const organizationsAtom = Atom.family(
-  ({
-    baseUrl,
-    projectId,
+const adminOrganizationsFamilyKey = (
+  search: TableParams,
+  projectId: string | null | undefined,
+  reloadKey: number,
+) =>
+  JSON.stringify({
+    query: organizationsQuery(search, projectId),
     reloadKey,
-    search,
-  }: {
-    baseUrl?: string | undefined;
-    projectId?: string | null | undefined;
-    reloadKey: number;
-    search: TableParams;
-  }) => {
-    const request = organizationsQuery(search, projectId);
+  });
 
+const organizationsAtom = Atom.family((baseUrl?: string | undefined) =>
+  Atom.family((key: string) => {
+    const { query, reloadKey } = Schema.decodeUnknownSync(
+      AdminOrganizationsFamilyKey,
+    )(key);
     return authClientApi(baseUrl).query("admin", "listOrganizations", {
-      query: request.query,
+      query,
       timeToLive: "1 minute",
       reactivityKeys: [
         "organizations",
-        ...(projectId ? [`project:${projectId}`] : []),
+        ...(query.projectId ? [`project:${query.projectId}`] : []),
       ],
-      serializationKey: `organizations:${reloadKey}:${request.key}`,
+      serializationKey: `organizations:${reloadKey}:${JSON.stringify(query)}`,
     });
-  },
+  }),
 );
 
 export function AdminOrganizationsTable({
@@ -160,18 +172,14 @@ export function AdminOrganizationsTable({
   });
   const tableSearch = search ?? localSearch;
   const result = useAtomValue(
-    organizationsAtom({
-      baseUrl,
-      projectId,
-      reloadKey: reloadKey + refreshKey,
-      search: tableSearch,
-    }),
+    organizationsAtom(baseUrl)(
+      adminOrganizationsFamilyKey(
+        tableSearch,
+        projectId,
+        reloadKey + refreshKey,
+      ),
+    ),
   );
-  const deleteOrganization = useAtomSet(
-    authClientApi(baseUrl).mutation("admin", "deleteOrganization"),
-    { mode: "promise" },
-  );
-
   const organizations = AsyncResult.match(result, {
     onInitial: () => [],
     onFailure: () => [],
@@ -243,11 +251,9 @@ export function AdminOrganizationsTable({
         <DeleteOrganizationDialog
           labels={m}
           organization={deletingOrganization}
+          baseUrl={baseUrl}
           onClose={() => setDeletingOrganization(null)}
-          onDelete={async () => {
-            await deleteOrganization({
-              params: { id: deletingOrganization.id },
-            });
+          onDeleted={() => {
             toast.success(m.organization_deleted_toast);
             setDeletingOrganization(null);
             setRefreshKey((current) => current + 1);
@@ -373,18 +379,34 @@ function OrganizationMembers({
 }
 
 function DeleteOrganizationDialog({
+  baseUrl,
   labels: m,
   organization,
   onClose,
-  onDelete,
+  onDeleted,
 }: {
+  baseUrl?: string | undefined;
   labels: AdminOrganizationsLabels;
   organization: AdminOrganization;
   onClose: () => void;
-  onDelete: () => Promise<void>;
+  onDeleted: () => void;
 }) {
-  const [error, setError] = useState("");
-  const [isPending, setIsPending] = useState(false);
+  const [deleteOrganizationAtom] = useState(() =>
+    Atom.fn((id: string) =>
+      Effect.flatMap(authHttpClient(baseUrl), (http) =>
+        http.admin.deleteOrganization({ params: { id } }),
+      ),
+    ),
+  );
+  const deleteOrganization = useAtomSet(deleteOrganizationAtom);
+  const result = useAtomValue(deleteOrganizationAtom);
+  useAtomSubscribe(deleteOrganizationAtom, (current) => {
+    if (AsyncResult.isSuccess(current)) onDeleted();
+  });
+  const error = AsyncResult.isFailure(result)
+    ? Cause.squash(result.cause)
+    : undefined;
+  const isPending = !AsyncResult.isInitial(result) && result.waiting;
 
   return (
     <AlertDialog open onOpenChange={(open) => !open && onClose()}>
@@ -398,27 +420,24 @@ function DeleteOrganizationDialog({
             )}
           </AlertDialogDescription>
         </AlertDialogHeader>
-        {error ? <ErrorMessage text={error} /> : null}
+        {error ? (
+          <ErrorMessage
+            text={
+              error instanceof Error
+                ? error.message
+                : m.organization_delete_error
+            }
+          />
+        ) : null}
         <AlertDialogFooter>
           <AlertDialogCancel disabled={isPending}>
             {m.organization_delete_cancel}
           </AlertDialogCancel>
           <AlertDialogAction
             disabled={isPending}
-            onClick={async (event) => {
+            onClick={(event) => {
               event.preventDefault();
-              setError("");
-              setIsPending(true);
-              try {
-                await onDelete();
-              } catch (cause) {
-                setError(
-                  cause instanceof Error
-                    ? cause.message
-                    : m.organization_delete_error,
-                );
-                setIsPending(false);
-              }
+              deleteOrganization(organization.id);
             }}
           >
             {m.organization_delete_confirm}

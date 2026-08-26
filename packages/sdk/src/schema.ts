@@ -46,7 +46,7 @@ export const Session = Schema.Struct({
 }).annotate({
   identifier: "Session",
   title: "Session",
-  description: "Current Better Auth browser session record.",
+  description: "Current browser session record.",
   examples: [
     {
       id: "session_1",

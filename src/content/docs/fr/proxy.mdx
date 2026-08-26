@@ -42,30 +42,27 @@ export const Route = createFileRoute("/api/auth/$")({
 
 Gardez le chemin générique afin que tous les points Better Auth soient transmis. La cible doit provenir d'une configuration serveur de confiance.
 
-## Créer le client navigateur
+## Utiliser le contrat navigateur
 
-Pointez le client vers l'origine de l'application et non vers le serveur en amont :
+Les composants et atomes fournis utilisent l'origine de l'application par défaut; aucun client Better Auth ne doit être créé. Pour un client Effect personnalisé, importez le contrat navigateur fourni :
 
 ```ts
-import { createAuthUiClient } from "@krak-stack/auth";
-
-const appOrigin =
-  typeof window === "undefined"
-    ? process.env.VITE_SITE_URL
-    : window.location.origin;
-
-export const authClient = createAuthUiClient(appOrigin);
+import { AuthApiGroup } from "@krak-stack/auth/auth";
 ```
+
+Enregistrez `AuthApiGroup` avec `HttpApi`, ou utilisez l'API combinée `AuthClientApi` de `@krak-stack/auth/api`, pour construire un client Effect `HttpApiClient` ou `AtomHttpApi`. Configurez ce client avec l'origine de l'application et non celle du serveur d'authentification en amont.
 
 ## Ajouter le fournisseur
 
 ```tsx
+import { KrakstackAuthProvider } from "@krak-stack/auth/components";
+
 <KrakstackAuthProvider
   locale="fr"
   projectId={import.meta.env.VITE_KRAKSTACK_AUTH_PROJECT_ID}
 >
   <App />
-</KrakstackAuthProvider>
+</KrakstackAuthProvider>;
 ```
 
 ## Configurer le service central

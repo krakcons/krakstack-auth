@@ -2,7 +2,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import {
   AdminOrganizationForm,
   AdminOrganizationsTable,
-} from "@krak-stack/auth";
+} from "@krak-stack/auth/components";
 import { Plus } from "lucide-react";
 import { useState } from "react";
 

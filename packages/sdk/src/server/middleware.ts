@@ -6,7 +6,7 @@ import {
   HttpApiSecurity,
 } from "effect/unstable/httpapi";
 
-import { AuthService, type AuthServiceLayerOptions } from "../service";
+import { AuthService, type AuthServiceLayerOptions } from "../service.js";
 
 export const ApiKeySecurity = HttpApiSecurity.apiKey({
   key: "x-api-key",

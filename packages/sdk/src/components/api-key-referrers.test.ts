@@ -1,6 +1,6 @@
 import { describe, expect, it } from "@effect/vitest";
 
-import { apiKeyReferrers, withApiKeyReferrers } from "./api-key-referrers";
+import { apiKeyReferrers, withApiKeyReferrers } from "./api-key-referrers.js";
 
 describe("API key referrer metadata", () => {
   it("reads allowed origins from object and JSON metadata", () => {

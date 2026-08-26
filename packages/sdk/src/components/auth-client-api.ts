@@ -1,9 +1,10 @@
 import { Effect } from "effect";
 import { FetchHttpClient, HttpClient } from "effect/unstable/http";
 import { AtomHttpApi } from "effect/unstable/reactivity";
+import { HttpApiClient } from "effect/unstable/httpapi";
 
-import { AuthClientApi } from "../api";
-import { defaultBaseUrl } from "../config";
+import { AuthClientApi } from "../api.js";
+import { defaultBaseUrl } from "../config.js";
 
 const authClientApiUrl = (baseUrl?: string | undefined) => {
   const url =
@@ -11,21 +12,29 @@ const authClientApiUrl = (baseUrl?: string | undefined) => {
   return url.replace(/\/$/, "");
 };
 
+const withCredentials = (client: HttpClient.HttpClient) =>
+  HttpClient.makeWith(
+    (request) =>
+      client.postprocess(request).pipe(
+        Effect.provideService(FetchHttpClient.RequestInit, {
+          credentials: "include",
+        }),
+      ),
+    client.preprocess,
+  );
+
+export const authHttpClient = (baseUrl?: string | undefined) =>
+  HttpApiClient.make(AuthClientApi, {
+    baseUrl: authClientApiUrl(baseUrl),
+    transformClient: withCredentials,
+  }).pipe(Effect.provide(FetchHttpClient.layer));
+
 const createAuthClientApiClient = (key: string) =>
   AtomHttpApi.Service<object>()(`AuthClientApi:${key}`, {
     api: AuthClientApi,
     baseUrl: key,
     httpClient: FetchHttpClient.layer,
-    transformClient: (client) =>
-      HttpClient.makeWith(
-        (request) =>
-          client.postprocess(request).pipe(
-            Effect.provideService(FetchHttpClient.RequestInit, {
-              credentials: "include",
-            }),
-          ),
-        client.preprocess,
-      ),
+    transformClient: withCredentials,
   });
 
 const authClientApis = new Map<

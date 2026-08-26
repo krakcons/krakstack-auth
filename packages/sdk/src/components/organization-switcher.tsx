@@ -1,4 +1,9 @@
-import type { ApiKey } from "@better-auth/api-key/client";
+import type {
+  AuthApiKey as ApiKey,
+  AuthInvitation,
+  AuthMember,
+  AuthOrganization,
+} from "../auth/schema.js";
 import { useAtomRefresh, useAtomSet, useAtomValue } from "@effect/atom-react";
 import { FormBuilder, FormReact } from "@lucas-barake/effect-form-react";
 import { Effect, Option, Predicate, Schema } from "effect";
@@ -38,6 +43,7 @@ import {
 } from "@krak-stack/registry/data-table";
 import {
   ErrorMessage,
+  CheckboxField,
   ImageField,
   SelectField,
   SubmitButton,
@@ -101,25 +107,30 @@ import {
   organizationRoles,
   parseRoleList,
   type OrganizationRole,
-} from "../roles";
+} from "../roles.js";
 
-import type { AuthUiClient } from "./auth-client";
-import { authClientApi } from "./auth-client-api";
-import { useKrakstackAuth } from "./auth-provider";
-import { createApiKey, parseApiKeyReferrers } from "./api-key";
-import { ApiKeyEditForm } from "./api-key-edit-form";
-import { ApiKeyPermissions } from "./api-key-permissions";
-import { ApiKeyRateLimit, apiKeyUsagePercent } from "./api-key-rate-limit";
-import { ApiKeyReferrers } from "./api-key-referrers";
-import { useOpenedOnce } from "./hooks";
+import { authClientApi, authHttpClient } from "./auth-client-api.js";
+import {
+  activeAuthOrganizationAtom,
+  authOrganizationsAtom,
+  authSessionAtom,
+  notifyAuthChange,
+} from "./auth-atoms.js";
+import { useKrakstackAuth } from "./auth-provider.js";
+import { parseApiKeyReferrers } from "./api-key.js";
+import { ApiKeyPermissions } from "./api-key-permissions.js";
+import { ApiKeyRateLimit, apiKeyUsagePercent } from "./api-key-rate-limit.js";
+import { ApiKeyReferrers, apiKeyReferrers } from "./api-key-referrers.js";
+import { useOpenedOnce } from "./hooks.js";
 import {
   invitationDisplayStatus,
   isInvitationExpired,
   useInvitationExpirationClock,
-} from "./invitation-expiration";
-import { ExtraUploadedAsset } from "../extra/schema";
-import { assetPath, assetUrl, cn } from "./utils";
-import type { ProjectAccessLabelCatalog } from "../access";
+} from "./invitation-expiration.js";
+import { ExtraUploadedAsset } from "../extra/schema.js";
+import { assetPath, assetUrl, cn } from "./utils.js";
+import type { ProjectAccessLabelCatalog } from "../access.js";
+import { ExtraApiKeyPermissions } from "../extra/schema.js";
 
 type Locale = "en" | "fr";
 
@@ -509,7 +520,6 @@ export type OrganizationSwitcherFeatures = {
 };
 
 export type OrganizationSwitcherProps = {
-  authClient?: AuthUiClient;
   baseUrl?: string | undefined;
   side?: ComponentProps<typeof DropdownMenuContent>["side"];
   className?: string;
@@ -531,9 +541,9 @@ type OrganizationSummary = {
   id: string;
   name: string;
   slug: string;
-  metadata?: unknown;
-  userId?: string | null;
-  parentId?: string | null;
+  metadata?: unknown | undefined;
+  userId?: string | null | undefined;
+  parentId?: string | null | undefined;
 };
 
 export type OrganizationSwitcherDialog =
@@ -543,14 +553,9 @@ export type OrganizationSwitcherDialog =
   | "apiKeys"
   | "invitations";
 type ApiKeySummary = Omit<ApiKey, "key">;
-type ActiveOrganization = NonNullable<
-  ReturnType<AuthUiClient["useActiveOrganization"]>["data"]
->;
-type OrganizationMemberSummary = ActiveOrganization["members"][number];
-type OrganizationInvitationSummary = ActiveOrganization["invitations"][number];
-type UserInvitationSummary = OrganizationInvitationSummary & {
-  organizationName?: string | null;
-};
+type OrganizationMemberSummary = AuthMember;
+type OrganizationInvitationSummary = AuthInvitation;
+type UserInvitationSummary = OrganizationInvitationSummary;
 type OrganizationMembersData = {
   members: OrganizationMemberSummary[];
   invitations: OrganizationInvitationSummary[];
@@ -564,127 +569,78 @@ const normalizeInvitationRole = (role: string) => {
   return normalized === "support" ? "member" : normalized;
 };
 
-const userInvitationsAtom = Atom.family((authClient: AuthUiClient) =>
-  Atom.keepAlive(
-    Atom.make(
-      Effect.tryPromise({
-        try: async () => {
-          const result = await authClient.organization.listUserInvitations({});
-
-          if (result.error) {
-            throw new Error(
-              result.error.message ??
-                "Could not load organization invitations.",
-            );
-          }
-
-          return (result.data ?? []).filter(
-            (invitation) => invitation.status === "pending",
-          );
-        },
-        catch: (error) => error,
-      }),
-    ),
-  ),
-);
-
-const invitationOrganizationProfileAtom = Atom.family(
-  ({
-    baseUrl,
-    locale,
-    organizationId,
-  }: {
-    baseUrl?: string | undefined;
-    locale: OrganizationLocale;
-    organizationId: string;
-  }) =>
-    authClientApi(baseUrl).query("authExtra", "getOrganizationPublicProfile", {
-      query: { locale, organizationId },
-      timeToLive: "5 minutes",
-      serializationKey: `invitation-organization:${organizationId}:${locale}`,
-    }),
-);
-
-const emptyUserInvitationsAtom = Atom.make(
-  Effect.try({
-    try: (): UserInvitationSummary[] => [],
-    catch: (error) => error,
+const userInvitationsAtom = Atom.family((baseUrl?: string | undefined) =>
+  authClientApi(baseUrl).query("auth", "organizationListUserInvitations", {
+    query: {},
+    timeToLive: "1 minute",
+    reactivityKeys: ["auth-user-invitations"],
   }),
 );
 
-const organizationMembersAtom = Atom.family((authClient: AuthUiClient) =>
-  Atom.family((organizationId: string) =>
-    Atom.keepAlive(
-      Atom.make(
-        Effect.tryPromise({
-          try: async (): Promise<OrganizationMembersData> => {
-            const [membersResult, invitationsResult] = await Promise.all([
-              authClient.organization.listMembers({
-                query: { organizationId },
-              }),
-              authClient.organization.listInvitations({
-                query: { organizationId },
-              }),
-            ]);
-
-            if (membersResult.error) {
-              throw new Error(
-                membersResult.error.message ?? "Could not load members.",
-              );
-            }
-
-            if (invitationsResult.error) {
-              throw new Error(
-                invitationsResult.error.message ??
-                  "Could not load invitations.",
-              );
-            }
-
-            return {
-              members: membersResult.data?.members ?? [],
-              invitations: (invitationsResult.data ?? []).filter(
-                (invitation) => invitation.status === "pending",
-              ),
-            };
+const invitationOrganizationProfileAtom = Atom.family(
+  (baseUrl?: string | undefined) =>
+    Atom.family((organizationId: string) =>
+      Atom.family((locale: OrganizationLocale) =>
+        authClientApi(baseUrl).query(
+          "authExtra",
+          "getOrganizationPublicProfile",
+          {
+            query: { locale, organizationId },
+            timeToLive: "5 minutes",
+            serializationKey: `invitation-organization:${organizationId}:${locale}`,
           },
-          catch: (error) => error,
-        }),
+        ),
       ),
     ),
+);
+
+const organizationMembersAtom = Atom.family((baseUrl?: string | undefined) =>
+  Atom.family((organizationId: string) =>
+    authClientApi(baseUrl).query("auth", "organizationListMembers", {
+      query: { organizationId },
+      timeToLive: "1 minute",
+      reactivityKeys: ["auth-organization-members", organizationId],
+      serializationKey: `organization-members:${organizationId}`,
+    }),
   ),
 );
 
-const emptyOrganizationMembersAtom = Atom.make(
-  Effect.succeed<OrganizationMembersData>({ members: [], invitations: [] }),
+const organizationInvitationsAtom = Atom.family(
+  (baseUrl?: string | undefined) =>
+    Atom.family((organizationId: string) =>
+      authClientApi(baseUrl).query("auth", "organizationListInvitations", {
+        query: { organizationId },
+        timeToLive: "1 minute",
+        reactivityKeys: ["auth-organization-invitations", organizationId],
+        serializationKey: `organization-invitations:${organizationId}`,
+      }),
+    ),
 );
 
-const organizationApiKeysAtom = Atom.family((authClient: AuthUiClient) =>
+const emptyOrganizationMembersAtom = Atom.make(
+  Effect.succeed({ members: Array<OrganizationMemberSummary>(), total: 0 }),
+);
+
+const emptyOrganizationInvitationsAtom = Atom.make(
+  Effect.succeed(Array<OrganizationInvitationSummary>()),
+);
+
+const organizationApiKeysAtom = Atom.family((baseUrl?: string | undefined) =>
   Atom.family((organizationId: string) =>
-    Atom.keepAlive(
-      Atom.make(
-        Effect.tryPromise({
-          try: async (): Promise<ApiKeySummary[]> => {
-            const result = await authClient.apiKey.list({
-              query: { configId: "organization", organizationId },
-            });
-
-            if (result.error) {
-              throw new Error(
-                result.error.message ?? "Could not load API keys.",
-              );
-            }
-
-            return result.data?.apiKeys ?? [];
-          },
-          catch: (error) => error,
-        }),
-      ),
-    ),
+    authClientApi(baseUrl).query("auth", "apiKeyList", {
+      query: { configId: "organization", organizationId },
+      timeToLive: "1 minute",
+      reactivityKeys: ["auth-organization-api-keys", organizationId],
+      serializationKey: `organization-api-keys:${organizationId}`,
+    }),
   ),
 );
 
 const emptyOrganizationApiKeysAtom = Atom.make(
-  Effect.succeed(Array<ApiKeySummary>()),
+  Effect.succeed({
+    apiKeys: Array<ApiKeySummary>(),
+    total: 0,
+  }),
 );
 
 type OrganizationFormValues = {
@@ -1214,6 +1170,37 @@ const apiKeyFormBuilder = FormBuilder.empty
   .addField("name", Schema.NonEmptyString)
   .addField("referrers", Schema.String);
 
+const editApiKeyFormBuilder = FormBuilder.empty
+  .addField("name", Schema.NonEmptyString)
+  .addField("enabled", Schema.Boolean)
+  .addField("referrers", Schema.String)
+  .addField("permissions", Schema.Record(Schema.String, Schema.Boolean));
+
+type ApiKeyPermissionsFieldOptions = {
+  description: string;
+  idPrefix: string;
+  labels?: ProjectAccessLabelCatalog | undefined;
+  permissions: Readonly<Record<string, ReadonlyArray<string>>>;
+  title: string;
+};
+
+const ApiKeyPermissionsField: FormReact.FieldComponent<
+  Readonly<Record<string, boolean>>,
+  ApiKeyPermissionsFieldOptions
+> = ({ field, props }) => (
+  <ApiKeyPermissions
+    description={props.description}
+    idPrefix={props.idPrefix}
+    permissions={props.permissions}
+    labels={props.labels}
+    selected={field.value}
+    title={props.title}
+    onChange={(id, checked) =>
+      field.onChange({ ...field.value, [id]: checked })
+    }
+  />
+);
+
 const slugify = (value: string) =>
   value
     .trim()
@@ -1240,25 +1227,40 @@ const isOrganizationSlugConflict = (cause: unknown) => {
   });
 };
 
-const decodeUploadedAsset = Schema.decodeUnknownPromise(ExtraUploadedAsset);
+const organizationFailureMessage = (cause: unknown, fallback: string) => {
+  const decoded = Schema.decodeUnknownOption(OrganizationFailure)(cause);
+  return Option.isSome(decoded)
+    ? (decoded.value.message ?? fallback)
+    : fallback;
+};
 
-const uploadImageAsset = async (
+const decodeUploadedAsset = Schema.decodeUnknownEffect(ExtraUploadedAsset);
+const OrganizationMetadataRecord = Schema.Record(Schema.String, Schema.Json);
+
+const normalizeOrganizationMetadata = (metadata: OrganizationMetadata) =>
+  Schema.encodeUnknownEffect(Schema.UnknownFromJsonString)(metadata).pipe(
+    Effect.flatMap(
+      Schema.decodeUnknownEffect(
+        Schema.fromJsonString(OrganizationMetadataRecord),
+      ),
+    ),
+  );
+
+const uploadImageAsset = (
   file: File,
   m: ReturnType<typeof organizationMessageFns>,
   uploadImage: (input: {
     payload: FormData;
-  }) => Promise<typeof Schema.Unknown.Type>,
+  }) => Effect.Effect<typeof Schema.Unknown.Type, unknown>,
 ) => {
   const payload = new FormData();
   payload.append("file", file);
 
-  try {
-    const uploaded = await decodeUploadedAsset(await uploadImage({ payload }));
-
-    return assetPath(uploaded.url);
-  } catch {
-    throw new Error(m.organization_logo_upload_error());
-  }
+  return uploadImage({ payload }).pipe(
+    Effect.flatMap(decodeUploadedAsset),
+    Effect.map((uploaded) => assetPath(uploaded.url)),
+    Effect.mapError(() => new Error(m.organization_logo_upload_error())),
+  );
 };
 
 const currentOrganizationLocale = (): OrganizationLocale =>
@@ -1373,17 +1375,16 @@ const organizationFormDefaults = (
   };
 };
 
-const organizationLogoFromForm = async (
+const organizationLogoFromForm = (
   value: File | string | null | undefined,
   m: ReturnType<typeof organizationMessageFns>,
   uploadImage: (input: {
     payload: FormData;
-  }) => Promise<typeof Schema.Unknown.Type>,
+  }) => Effect.Effect<typeof Schema.Unknown.Type, unknown>,
 ) => {
-  if (value instanceof File)
-    return await uploadImageAsset(value, m, uploadImage);
-  if (Schema.is(Schema.String)(value)) return assetPath(value);
-  return null;
+  if (value instanceof File) return uploadImageAsset(value, m, uploadImage);
+  if (Schema.is(Schema.String)(value)) return Effect.succeed(assetPath(value));
+  return Effect.succeed(null);
 };
 
 const organizationNameFromForm = (
@@ -1437,29 +1438,31 @@ const formatOrganizationDate = (date: Date | string) =>
     new Date(date),
   );
 
-const organizationMetadataFromForm = async (
+const organizationMetadataFromForm = Effect.fn(function* (
   value: OrganizationFormValues,
   m: ReturnType<typeof organizationMessageFns>,
   uploadImage: (input: {
     payload: FormData;
-  }) => Promise<typeof Schema.Unknown.Type>,
+  }) => Effect.Effect<typeof Schema.Unknown.Type, unknown>,
   existingMetadata?: typeof Schema.Unknown.Type,
-): Promise<OrganizationMetadata> => {
+) {
   const existing = parseOrganizationMetadata(existingMetadata);
-  const MetadataRecord = Schema.Record(Schema.String, Schema.Json);
   const preservedMetadata = Option.getOrElse(
     Schema.decodeUnknownOption(
-      Schema.Union([MetadataRecord, Schema.fromJsonString(MetadataRecord)]),
+      Schema.Union([
+        OrganizationMetadataRecord,
+        Schema.fromJsonString(OrganizationMetadataRecord),
+      ]),
     )(existingMetadata),
     () => ({}),
   );
   const translations: OrganizationTranslation[] = [];
   const enName = value.enName.trim();
   const frName = value.frName.trim();
-  const enLogo = await organizationLogoFromForm(value.enLogo, m, uploadImage);
-  const enIcon = await organizationLogoFromForm(value.enIcon, m, uploadImage);
-  const frLogo = await organizationLogoFromForm(value.frLogo, m, uploadImage);
-  const frIcon = await organizationLogoFromForm(value.frIcon, m, uploadImage);
+  const enLogo = yield* organizationLogoFromForm(value.enLogo, m, uploadImage);
+  const enIcon = yield* organizationLogoFromForm(value.enIcon, m, uploadImage);
+  const frLogo = yield* organizationLogoFromForm(value.frLogo, m, uploadImage);
+  const frIcon = yield* organizationLogoFromForm(value.frIcon, m, uploadImage);
   const localized = (
     values: ReadonlyArray<OrganizationContactTranslation> | undefined,
   ): OrganizationContactTranslation[] =>
@@ -1583,11 +1586,10 @@ const organizationMetadataFromForm = async (
     socials,
     addresses,
   };
-};
+});
 
 export function OrganizationSwitcher({
-  authClient: providedAuthClient,
-  baseUrl,
+  baseUrl: providedBaseUrl,
   side = "bottom",
   className,
   defaultDialog = null,
@@ -1604,17 +1606,49 @@ export function OrganizationSwitcher({
   apiKeyPermissions,
 }: OrganizationSwitcherProps) {
   const auth = useKrakstackAuth();
-  const authClient = providedAuthClient ?? auth?.authClient;
-
-  if (!authClient) {
-    throw new Error("KrakstackAuthProvider is required to use authClient.");
-  }
+  const baseUrl = providedBaseUrl ?? auth?.baseUrl;
 
   const labels = organizationSwitcherMessages(messages);
   const m = organizationMessageFns(labels);
-  const session = authClient.useSession();
-  const organizations = authClient.useListOrganizations();
-  const activeOrganization = authClient.useActiveOrganization();
+  const sessionAtom = authSessionAtom(baseUrl);
+  const organizationsAtom = authOrganizationsAtom(baseUrl);
+  const sessionResult = useAtomValue(sessionAtom);
+  const organizationsResult = useAtomValue(organizationsAtom);
+  const session = AsyncResult.match(sessionResult, {
+    onInitial: () => null,
+    onFailure: () => null,
+    onSuccess: ({ value }) => value,
+  });
+  const activeOrganizationId = session?.session.activeOrganizationId ?? null;
+  const activeOrganizationAtom =
+    activeAuthOrganizationAtom(baseUrl)(activeOrganizationId);
+  const activeOrganizationResult = useAtomValue(activeOrganizationAtom);
+  const activeOrganization = AsyncResult.match(activeOrganizationResult, {
+    onInitial: () => null,
+    onFailure: () => null,
+    onSuccess: ({ value }) => value,
+  });
+  const organizations = AsyncResult.match(organizationsResult, {
+    onInitial: () => Array<AuthOrganization>(),
+    onFailure: () => Array<AuthOrganization>(),
+    onSuccess: ({ value }) => Array.from(value),
+  });
+  const organizationsError = AsyncResult.match(organizationsResult, {
+    onInitial: () => null,
+    onFailure: () => m.organization_switcher_empty(),
+    onSuccess: () => null,
+  });
+  const refreshSession = useAtomRefresh(sessionAtom);
+  const refreshOrganizations = useAtomRefresh(organizationsAtom);
+  const refreshActiveOrganization = useAtomRefresh(activeOrganizationAtom);
+  const setActiveOrganization = (organizationId: string) =>
+    authHttpClient(baseUrl).pipe(
+      Effect.flatMap((client) =>
+        client.auth.organizationSetActive({
+          payload: { organizationId },
+        }),
+      ),
+    );
   const lastAuthRefreshVersion = useRef(auth?.authRefreshVersion ?? 0);
   const [uncontrolledDialog, setUncontrolledDialog] =
     useState<OrganizationSwitcherDialog | null>(defaultDialog);
@@ -1622,15 +1656,14 @@ export function OrganizationSwitcher({
     useState<OrganizationLocale>(currentOrganizationLocale);
   const dialog =
     controlledDialog !== undefined ? controlledDialog : uncontrolledDialog;
-  const invitationsAtom = session.data
-    ? userInvitationsAtom(authClient)
-    : emptyUserInvitationsAtom;
+  const invitationsAtom = userInvitationsAtom(baseUrl);
   const invitationsResult = useAtomValue(invitationsAtom);
   const refreshUserInvitations = useAtomRefresh(invitationsAtom);
   const userInvitations = AsyncResult.match(invitationsResult, {
     onInitial: () => [],
     onFailure: () => [],
-    onSuccess: ({ value }) => Array.from(value),
+    onSuccess: ({ value }) =>
+      Array.from(value).filter((invitation) => invitation.status === "pending"),
   });
   const userInvitationsError = AsyncResult.match(invitationsResult, {
     onInitial: () => null,
@@ -1639,8 +1672,8 @@ export function OrganizationSwitcher({
   });
   const loadingUserInvitations = invitationsResult._tag === "Initial";
   const activeMemberRoles = parseRoleList(
-    activeOrganization.data?.members.find(
-      (member) => member.userId === session.data?.user.id,
+    activeOrganization?.members.find(
+      (member) => member.userId === session?.user.id,
     )?.role,
   );
   const canManageApiKeys = activeMemberRoles.some(
@@ -1668,9 +1701,9 @@ export function OrganizationSwitcher({
   const openCreate = () => setDialog("create");
 
   const refresh = async () => {
-    await organizations.refetch();
-    await activeOrganization.refetch();
-    await session.refetch();
+    refreshOrganizations();
+    refreshActiveOrganization();
+    refreshSession();
   };
   const refreshOnSessionChanged = useEffectEvent(() => {
     void refresh();
@@ -1684,18 +1717,17 @@ export function OrganizationSwitcher({
     refreshOnSessionChanged();
   }, [auth?.authRefreshVersion]);
 
-  if (!session.data) {
+  if (!session) {
     return <>{renderUnauthenticated?.()}</>;
   }
 
-  const active = activeOrganization.data;
+  const active = activeOrganization;
   const activeName = active?.name;
-  const visibleOrganizations =
-    organizations.data?.filter(
-      (organization) =>
-        !allowedOrganizationIds ||
-        allowedOrganizationIds.includes(organization.id),
-    ) ?? [];
+  const visibleOrganizations = organizations.filter(
+    (organization) =>
+      !allowedOrganizationIds ||
+      allowedOrganizationIds.includes(organization.id),
+  );
   const selectableOrganizations = canSwitchOrganizations
     ? visibleOrganizations.filter(
         (organization) => organization.id !== active?.id,
@@ -1703,8 +1735,8 @@ export function OrganizationSwitcher({
     : [];
   const scrollOrganizationList = selectableOrganizations.length > 5;
   const hasOrganizationListItems =
-    organizations.isPending ||
-    Boolean(organizations.error) ||
+    organizationsResult._tag === "Initial" ||
+    Boolean(organizationsError) ||
     canSwitchOrganizations;
 
   const refreshAfterInvitationAction = async (previousActiveId?: string) => {
@@ -1712,17 +1744,17 @@ export function OrganizationSwitcher({
     await refresh();
 
     if (!canSwitchOrganizations && previousActiveId) {
-      const result = await authClient.organization.setActive({
-        organizationId: previousActiveId,
-      });
-
-      if (!result.error) {
+      try {
+        await Effect.runPromise(setActiveOrganization(previousActiveId));
+        notifyAuthChange();
         await refresh();
         onChange?.(
-          organizations.data?.find(
+          organizations.find(
             (organization) => organization.id === previousActiveId,
           ) ?? null,
         );
+      } catch {
+        // The invitation action succeeded; keep the newly active organization.
       }
     }
   };
@@ -1793,14 +1825,14 @@ export function OrganizationSwitcher({
                 </>
               ) : null}
               {hasOrganizationListItems ? <DropdownMenuSeparator /> : null}
-              {organizations.isPending ? (
+              {organizationsResult._tag === "Initial" ? (
                 <DropdownMenuItem disabled>
                   {m.organization_loading()}
                 </DropdownMenuItem>
               ) : null}
-              {organizations.error ? (
+              {organizationsError ? (
                 <DropdownMenuItem disabled>
-                  {organizations.error.message}
+                  {organizationsError}
                 </DropdownMenuItem>
               ) : null}
               {canSwitchOrganizations && selectableOrganizations.length ? (
@@ -1821,13 +1853,16 @@ export function OrganizationSwitcher({
                       <DropdownMenuItem
                         key={organization.id}
                         onClick={async () => {
-                          const result =
-                            await authClient.organization.setActive({
-                              organizationId: organization.id,
-                            });
-                          if (!result.error) {
+                          try {
+                            const result = await Effect.runPromise(
+                              setActiveOrganization(organization.id),
+                            );
+                            if (!result) return;
+                            notifyAuthChange();
                             await refresh();
                             onChange?.(organization);
+                          } catch {
+                            // Switching previously failed silently in this menu.
                           }
                         }}
                       >
@@ -1849,7 +1884,8 @@ export function OrganizationSwitcher({
                     );
                   })}
                 </div>
-              ) : canSwitchOrganizations && !organizations.isPending ? (
+              ) : canSwitchOrganizations &&
+                organizationsResult._tag !== "Initial" ? (
                 <DropdownMenuItem disabled>
                   {active
                     ? m.organization_switcher_no_other_organizations()
@@ -1887,11 +1923,11 @@ export function OrganizationSwitcher({
                   ) : null}
                 </>
               ) : null}
-              {activeOrganization.data ? (
+              {activeOrganization ? (
                 <>
                   <DropdownMenuSeparator />
                   {(() => {
-                    const organizationId = activeOrganization.data.id;
+                    const organizationId = activeOrganization.id;
 
                     return (
                       <DropdownMenuItem
@@ -1951,17 +1987,21 @@ export function OrganizationSwitcher({
           </DialogHeader>
           <Separator />
           <CreateOrganizationSection
-            authClient={authClient}
             baseUrl={baseUrl}
             editingLocale={editingOrganizationLocale}
             organizations={visibleOrganizations}
             onCreated={async (organization) => {
               setDialog(null);
-              const activeResult = await authClient.organization.setActive({
-                organizationId: organization.id,
-              });
+              let activated = false;
+              try {
+                await Effect.runPromise(setActiveOrganization(organization.id));
+                activated = true;
+                notifyAuthChange();
+              } catch {
+                // Creation succeeded even if activating the organization did not.
+              }
               await refresh();
-              if (!activeResult.error) {
+              if (activated) {
                 onCreate?.(organization);
                 onChange?.(organization);
               }
@@ -1993,12 +2033,11 @@ export function OrganizationSwitcher({
             </div>
           </DialogHeader>
           <Separator />
-          {activeOrganization.data && canUpdateOrganization ? (
+          {activeOrganization && canUpdateOrganization ? (
             <EditOrganizationSection
-              authClient={authClient}
               baseUrl={baseUrl}
               editingLocale={editingOrganizationLocale}
-              organization={activeOrganization.data}
+              organization={activeOrganization}
               onUpdated={refresh}
             />
           ) : null}
@@ -2013,17 +2052,15 @@ export function OrganizationSwitcher({
         }}
       >
         <DialogContent className="max-h-[85vh] overflow-y-auto sm:max-w-4xl">
-          {activeOrganization.data ? (
+          {activeOrganization ? (
             <OrganizationMembersManager
-              authClient={authClient}
               baseUrl={baseUrl}
               canManageMembers={canManageApiKeys}
-              organization={activeOrganization.data}
-              currentUserId={session.data.user.id}
+              organization={activeOrganization}
+              currentUserId={session.user.id}
               active={dialog === "members"}
               onLeft={async () => {
                 setDialog(null);
-                auth?.refreshAuth();
                 await refresh();
                 onChange?.(null);
               }}
@@ -2040,10 +2077,10 @@ export function OrganizationSwitcher({
         }}
       >
         <DialogContent className="max-h-[85vh] min-w-0 overflow-x-hidden overflow-y-auto sm:max-w-3xl">
-          {activeOrganization.data ? (
+          {activeOrganization ? (
             <OrganizationApiKeyManager
-              authClient={authClient}
-              organization={activeOrganization.data}
+              baseUrl={baseUrl}
+              organization={activeOrganization}
               active={dialog === "apiKeys" && canManageApiKeys}
               permissionLabels={auth?.accessLabels ?? undefined}
               permissions={
@@ -2074,13 +2111,12 @@ export function OrganizationSwitcher({
           </DialogHeader>
           <Separator />
           <UserInvitationsManager
-            authClient={authClient}
             baseUrl={baseUrl}
             invitations={userInvitations}
             loading={loadingUserInvitations}
             error={userInvitationsError}
-            {...(activeOrganization.data
-              ? { activeOrganizationId: activeOrganization.data.id }
+            {...(activeOrganization
+              ? { activeOrganizationId: activeOrganization.id }
               : {})}
             onActionComplete={refreshAfterInvitationAction}
           />
@@ -2091,7 +2127,6 @@ export function OrganizationSwitcher({
 }
 
 function UserInvitationsManager({
-  authClient,
   baseUrl,
   invitations,
   loading,
@@ -2099,7 +2134,6 @@ function UserInvitationsManager({
   activeOrganizationId,
   onActionComplete,
 }: {
-  authClient: AuthUiClient;
   baseUrl?: string | undefined;
   invitations: UserInvitationSummary[];
   loading: boolean;
@@ -2113,47 +2147,61 @@ function UserInvitationsManager({
   );
   const [actionError, setActionError] = useState<string | null>(null);
   const invitationNow = useInvitationExpirationClock(invitations);
-
   const acceptInvitation = async (invitation: UserInvitationSummary) => {
     if (isInvitationExpired(invitation)) return;
 
     setActingInvitationId(invitation.id);
     setActionError(null);
 
-    const result = await authClient.organization.acceptInvitation({
-      invitationId: invitation.id,
-    });
-
-    setActingInvitationId(null);
-
-    if (result.error) {
-      setActionError(
-        result.error.message ?? m.organization_invitation_accept_error(),
+    try {
+      await Effect.runPromise(
+        authHttpClient(baseUrl).pipe(
+          Effect.flatMap((client) =>
+            client.auth.organizationAcceptInvitation({
+              payload: { invitationId: invitation.id },
+            }),
+          ),
+        ),
       );
-      return;
+      notifyAuthChange();
+      await onActionComplete(activeOrganizationId);
+    } catch (cause) {
+      setActionError(
+        organizationFailureMessage(
+          cause,
+          m.organization_invitation_accept_error(),
+        ),
+      );
+    } finally {
+      setActingInvitationId(null);
     }
-
-    await onActionComplete(activeOrganizationId);
   };
 
   const rejectInvitation = async (invitation: UserInvitationSummary) => {
     setActingInvitationId(invitation.id);
     setActionError(null);
 
-    const result = await authClient.organization.rejectInvitation({
-      invitationId: invitation.id,
-    });
-
-    setActingInvitationId(null);
-
-    if (result.error) {
-      setActionError(
-        result.error.message ?? m.organization_invitation_reject_error(),
+    try {
+      await Effect.runPromise(
+        authHttpClient(baseUrl).pipe(
+          Effect.flatMap((client) =>
+            client.auth.organizationRejectInvitation({
+              payload: { invitationId: invitation.id },
+            }),
+          ),
+        ),
       );
-      return;
+      await onActionComplete(activeOrganizationId);
+    } catch (cause) {
+      setActionError(
+        organizationFailureMessage(
+          cause,
+          m.organization_invitation_reject_error(),
+        ),
+      );
+    } finally {
+      setActingInvitationId(null);
     }
-
-    await onActionComplete(activeOrganizationId);
   };
 
   return (
@@ -2257,11 +2305,9 @@ function InvitationOrganizationBrand({
 }) {
   const locale = useKrakstackAuth()?.locale ?? currentOrganizationLocale();
   const profileResult = useAtomValue(
-    invitationOrganizationProfileAtom({
-      baseUrl,
+    invitationOrganizationProfileAtom(baseUrl)(invitation.organizationId)(
       locale,
-      organizationId: invitation.organizationId,
-    }),
+    ),
   );
   const profile = AsyncResult.match(profileResult, {
     onInitial: () => null,
@@ -2318,60 +2364,63 @@ const userInvitationRowActions = ({
 ];
 
 function EditOrganizationSection({
-  authClient,
   baseUrl,
   editingLocale,
   organization,
   onUpdated,
 }: {
-  authClient: AuthUiClient;
   baseUrl?: string | undefined;
   editingLocale: OrganizationLocale;
   organization: OrganizationSummary;
   onUpdated: () => Promise<void>;
 }) {
   const m = useOrganizationMessages();
-  const uploadImage = useAtomSet(
-    authClientApi(baseUrl).mutation("authExtra", "uploadUserImage"),
-    { mode: "promise" },
-  );
   const [defaultLocale] = useState(currentOrganizationLocale);
   const defaultValues = organizationFormDefaults(organization, baseUrl);
   const [form] = useState(() =>
     FormReact.make(organizationFormBuilder, {
       fields: organizationFormFields,
       onSubmit: (_, { decoded: value }) =>
-        Effect.tryPromise({
-          try: async () => {
-            const name = organizationNameFromForm(value, defaultLocale);
-            if (!name) throw new Error(m.organization_name_required());
-
-            const slug = value.slug.trim().toLowerCase();
-            const metadata = await organizationMetadataFromForm(
-              value,
-              m,
-              uploadImage,
-              organization.metadata,
+        Effect.gen(function* () {
+          const name = organizationNameFromForm(value, defaultLocale);
+          if (!name)
+            return yield* Effect.fail(
+              new Error(m.organization_name_required()),
             );
-            const result = await authClient.organization.update({
+
+          const slug = value.slug.trim().toLowerCase();
+          const client = yield* authHttpClient(baseUrl);
+          const metadata = yield* organizationMetadataFromForm(
+            value,
+            m,
+            (input) => client.authExtra.uploadUserImage(input),
+            organization.metadata,
+          );
+          const normalizedMetadata =
+            yield* normalizeOrganizationMetadata(metadata);
+          const updated = yield* client.auth.organizationUpdate({
+            payload: {
               organizationId: organization.id,
-              data: { name, slug, metadata },
-            });
-
-            if (result.error) {
-              throw new Error(
-                result.error.message ?? m.organization_update_error(),
-              );
-            }
-
-            await onUpdated();
-            return result.data;
-          },
-          catch: (cause) =>
+              data: {
+                name,
+                slug,
+                metadata: normalizedMetadata,
+              },
+            },
+          });
+          yield* Effect.sync(notifyAuthChange);
+          yield* Effect.tryPromise({
+            try: onUpdated,
+            catch: (cause) => cause,
+          });
+          return updated;
+        }).pipe(
+          Effect.mapError((cause) =>
             cause instanceof Error
               ? cause
               : new Error(m.organization_update_error()),
-        }),
+          ),
+        ),
     }),
   );
   const submit = useAtomSet(form.submit);
@@ -2479,67 +2528,76 @@ function EditOrganizationSection({
 }
 
 function CreateOrganizationSection({
-  authClient,
   baseUrl,
   editingLocale,
   organizations,
   onCreated,
 }: {
-  authClient: AuthUiClient;
   baseUrl?: string | undefined;
   editingLocale: OrganizationLocale;
   organizations: readonly OrganizationSummary[];
   onCreated: (organization: OrganizationSummary) => Promise<void>;
 }) {
   const m = useOrganizationMessages();
-  const uploadImage = useAtomSet(
-    authClientApi(baseUrl).mutation("authExtra", "uploadUserImage"),
-    { mode: "promise" },
-  );
   const [defaultLocale] = useState(currentOrganizationLocale);
   const defaultValues = organizationFormDefaults(undefined, baseUrl);
   const [form] = useState(() =>
     FormReact.make(organizationFormBuilder, {
       fields: organizationFormFields,
       onSubmit: (_, { decoded: value }) =>
-        Effect.tryPromise({
-          try: async () => {
-            const name = organizationNameFromForm(value, defaultLocale);
-            if (!name) throw new Error(m.organization_name_required());
-
-            const slug = (value.slug.trim() || slugify(name)).toLowerCase();
-            const metadata = await organizationMetadataFromForm(
-              { ...value, slug },
-              m,
-              uploadImage,
+        Effect.gen(function* () {
+          const name = organizationNameFromForm(value, defaultLocale);
+          if (!name)
+            return yield* Effect.fail(
+              new Error(m.organization_name_required()),
             );
-            let createOptions: Parameters<
-              typeof authClient.organization.create
-            >[0] = {
-              name,
-              slug,
-              metadata,
-            };
-            if (value.parentId !== noParentOrganization)
-              createOptions = { ...createOptions, parentId: value.parentId };
-            const result = await authClient.organization.create(createOptions);
 
-            if (result.error) {
-              throw new Error(
-                isOrganizationSlugConflict(result.error)
-                  ? m.organization_create_slug_conflict()
-                  : (result.error.message ?? m.organization_create_error()),
-              );
-            }
-
-            await onCreated(result.data);
-            return result.data;
-          },
-          catch: (cause) =>
+          const slug = (value.slug.trim() || slugify(name)).toLowerCase();
+          const client = yield* authHttpClient(baseUrl);
+          const metadata = yield* organizationMetadataFromForm(
+            { ...value, slug },
+            m,
+            (input) => client.authExtra.uploadUserImage(input),
+          );
+          const normalizedMetadata =
+            yield* normalizeOrganizationMetadata(metadata);
+          const createPayload =
+            value.parentId === noParentOrganization
+              ? { name, slug, metadata: normalizedMetadata }
+              : {
+                  name,
+                  slug,
+                  metadata: normalizedMetadata,
+                  parentId: value.parentId,
+                };
+          const created = yield* client.auth
+            .organizationCreate({ payload: createPayload })
+            .pipe(
+              Effect.mapError(
+                (cause) =>
+                  new Error(
+                    isOrganizationSlugConflict(cause)
+                      ? m.organization_create_slug_conflict()
+                      : organizationFailureMessage(
+                          cause,
+                          m.organization_create_error(),
+                        ),
+                  ),
+              ),
+            );
+          yield* Effect.sync(notifyAuthChange);
+          yield* Effect.tryPromise({
+            try: () => onCreated(created),
+            catch: (cause) => cause,
+          });
+          return created;
+        }).pipe(
+          Effect.mapError((cause) =>
             cause instanceof Error
               ? cause
               : new Error(m.organization_create_error()),
-        }),
+          ),
+        ),
     }),
   );
   const submit = useAtomSet(form.submit);
@@ -2713,7 +2771,6 @@ function OrganizationContactGroup({
 }
 
 function OrganizationMembersManager({
-  authClient,
   baseUrl,
   canManageMembers,
   organization,
@@ -2721,7 +2778,6 @@ function OrganizationMembersManager({
   active,
   onLeft,
 }: {
-  authClient: AuthUiClient;
   baseUrl?: string | undefined;
   canManageMembers: boolean;
   organization: OrganizationSummary;
@@ -2732,10 +2788,15 @@ function OrganizationMembersManager({
   const m = useOrganizationMessages();
   const hasOpened = useOpenedOnce(active);
   const membersAtom = hasOpened
-    ? organizationMembersAtom(authClient)(organization.id)
+    ? organizationMembersAtom(baseUrl)(organization.id)
     : emptyOrganizationMembersAtom;
+  const invitationsAtom = hasOpened
+    ? organizationInvitationsAtom(baseUrl)(organization.id)
+    : emptyOrganizationInvitationsAtom;
   const membersResult = useAtomValue(membersAtom);
+  const invitationsResult = useAtomValue(invitationsAtom);
   const refreshMembers = useAtomRefresh(membersAtom);
+  const refreshInvitations = useAtomRefresh(invitationsAtom);
   const [inviting, setInviting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [cancellingInvitationId, setCancellingInvitationId] = useState<
@@ -2744,11 +2805,25 @@ function OrganizationMembersManager({
   const [leavingOrganization, setLeavingOrganization] = useState(false);
   const [lastMembersData, setLastMembersData] =
     useState<OrganizationMembersData | null>(null);
-  const currentMembersData = AsyncResult.match(membersResult, {
+  const currentMembers = AsyncResult.match(membersResult, {
+    onInitial: () => null,
+    onFailure: () => null,
+    onSuccess: ({ value }) => value.members,
+  });
+  const currentInvitations = AsyncResult.match(invitationsResult, {
     onInitial: () => null,
     onFailure: () => null,
     onSuccess: ({ value }) => value,
   });
+  const currentMembersData =
+    currentMembers && currentInvitations
+      ? {
+          members: Array.from(currentMembers),
+          invitations: Array.from(currentInvitations).filter(
+            (invitation) => invitation.status === "pending",
+          ),
+        }
+      : null;
   const membersData = currentMembersData ??
     lastMembersData ?? {
       members: [],
@@ -2769,15 +2844,27 @@ function OrganizationMembersManager({
     onFailure: () => m.organization_members_load_error(),
     onSuccess: () => null,
   });
-  const loading = !lastMembersData && membersResult._tag === "Initial";
+  const invitationsError = AsyncResult.match(invitationsResult, {
+    onInitial: () => null,
+    onFailure: () => m.organization_invitations_load_error(),
+    onSuccess: () => null,
+  });
+  const loadError = membersError ?? invitationsError;
+  const loading =
+    !lastMembersData &&
+    (membersResult._tag === "Initial" || invitationsResult._tag === "Initial");
   const canInviteMembers = canManageMembers;
   const canRemoveMembers = canManageMembers;
-
   useEffect(() => {
-    if (!currentMembersData) return;
+    if (!currentMembers || !currentInvitations) return;
 
-    setLastMembersData(currentMembersData);
-  }, [currentMembersData]);
+    setLastMembersData({
+      members: Array.from(currentMembers),
+      invitations: Array.from(currentInvitations).filter(
+        (invitation) => invitation.status === "pending",
+      ),
+    });
+  }, [currentInvitations, currentMembers]);
 
   const [inviteForm] = useState(() =>
     FormReact.make(inviteMemberFormBuilder, {
@@ -2786,28 +2873,23 @@ function OrganizationMembersManager({
         role: SelectField,
       },
       onSubmit: (_, { decoded: value }) =>
-        Effect.tryPromise({
-          try: async () => {
-            const result = await authClient.organization.inviteMember({
-              email: value.email.trim(),
-              role: normalizeInvitationRole(value.role),
-              organizationId: organization.id,
-            });
-
-            if (result.error) {
-              throw new Error(
-                result.error.message ?? m.organization_invite_error(),
-              );
-            }
-
-            refreshMembers();
-            return result.data;
-          },
-          catch: (cause) =>
+        authHttpClient(baseUrl).pipe(
+          Effect.flatMap((client) =>
+            client.auth.organizationInviteMember({
+              payload: {
+                email: value.email.trim(),
+                role: normalizeInvitationRole(value.role),
+                organizationId: organization.id,
+              },
+            }),
+          ),
+          Effect.tap(() => Effect.sync(refreshInvitations)),
+          Effect.mapError((cause) =>
             cause instanceof Error
               ? cause
               : new Error(m.organization_invite_error()),
-        }),
+          ),
+        ),
     }),
   );
   const submitInvitation = useAtomSet(inviteForm.submit);
@@ -2834,53 +2916,81 @@ function OrganizationMembersManager({
       [member.id]: nextRole,
     }));
 
-    const result = await authClient.organization.updateMemberRole({
-      memberId: member.id,
-      role: Array.isArray(role) ? role : normalizeOrganizationRole(role),
-      organizationId: organization.id,
-    });
-
-    if (result.error) {
+    try {
+      await Effect.runPromise(
+        authHttpClient(baseUrl).pipe(
+          Effect.flatMap((client) =>
+            client.auth.organizationUpdateMemberRole({
+              payload: {
+                memberId: member.id,
+                role: Array.isArray(role)
+                  ? role
+                  : normalizeOrganizationRole(role),
+                organizationId: organization.id,
+              },
+            }),
+          ),
+        ),
+      );
+      refreshMembers();
+    } catch (cause) {
       setMemberRoleOverrides((current) => ({
         ...current,
         [member.id]: member.role,
       }));
-      setError(result.error.message ?? m.organization_member_role_error());
+      setError(
+        organizationFailureMessage(cause, m.organization_member_role_error()),
+      );
     }
   };
 
   const removeMember = async (member: OrganizationMemberRow) => {
     setError(null);
 
-    const result = await authClient.organization.removeMember({
-      memberIdOrEmail: member.id,
-      organizationId: organization.id,
-    });
-
-    if (result.error) {
-      setError(result.error.message ?? m.organization_member_remove_error());
-      return;
+    try {
+      await Effect.runPromise(
+        authHttpClient(baseUrl).pipe(
+          Effect.flatMap((client) =>
+            client.auth.organizationRemoveMember({
+              payload: {
+                memberIdOrEmail: member.id,
+                organizationId: organization.id,
+              },
+            }),
+          ),
+        ),
+      );
+      refreshMembers();
+    } catch (cause) {
+      setError(
+        organizationFailureMessage(cause, m.organization_member_remove_error()),
+      );
     }
-
-    refreshMembers();
   };
 
   const leaveOrganization = async () => {
     setLeavingOrganization(true);
     setError(null);
 
-    const result = await authClient.organization.leave({
-      organizationId: organization.id,
-    });
-
-    setLeavingOrganization(false);
-
-    if (result.error) {
-      setError(result.error.message ?? m.organization_member_leave_error());
-      return;
+    try {
+      await Effect.runPromise(
+        authHttpClient(baseUrl).pipe(
+          Effect.flatMap((client) =>
+            client.auth.organizationLeave({
+              payload: { organizationId: organization.id },
+            }),
+          ),
+        ),
+      );
+      notifyAuthChange();
+      await onLeft();
+    } catch (cause) {
+      setError(
+        organizationFailureMessage(cause, m.organization_member_leave_error()),
+      );
+    } finally {
+      setLeavingOrganization(false);
     }
-
-    await onLeft();
   };
 
   const cancelInvitation = async (
@@ -2889,20 +2999,27 @@ function OrganizationMembersManager({
     setCancellingInvitationId(invitation.id);
     setError(null);
 
-    const result = await authClient.organization.cancelInvitation({
-      invitationId: invitation.id,
-    });
-
-    setCancellingInvitationId(null);
-
-    if (result.error) {
-      setError(
-        result.error.message ?? m.organization_invitation_cancel_error(),
+    try {
+      await Effect.runPromise(
+        authHttpClient(baseUrl).pipe(
+          Effect.flatMap((client) =>
+            client.auth.organizationCancelInvitation({
+              payload: { invitationId: invitation.id },
+            }),
+          ),
+        ),
       );
-      return;
+      refreshInvitations();
+    } catch (cause) {
+      setError(
+        organizationFailureMessage(
+          cause,
+          m.organization_invitation_cancel_error(),
+        ),
+      );
+    } finally {
+      setCancellingInvitationId(null);
     }
-
-    refreshMembers();
   };
 
   return (
@@ -2973,8 +3090,8 @@ function OrganizationMembersManager({
             </form>
           </inviteForm.Initialize>
         ) : null}
-        {!inviting && membersError ? (
-          <p className="text-destructive text-sm">{membersError}</p>
+        {!inviting && loadError ? (
+          <p className="text-destructive text-sm">{loadError}</p>
         ) : null}
         {!inviting && error ? (
           <p className="text-destructive text-sm">{error}</p>
@@ -3247,13 +3364,13 @@ const invitationRowActions = ({
 ];
 
 function OrganizationApiKeyManager({
-  authClient,
+  baseUrl,
   organization,
   active,
   permissionLabels,
   permissions,
 }: {
-  authClient: AuthUiClient;
+  baseUrl?: string | undefined;
   organization: OrganizationSummary;
   active: boolean;
   permissionLabels?: ProjectAccessLabelCatalog | undefined;
@@ -3262,7 +3379,7 @@ function OrganizationApiKeyManager({
   const m = useOrganizationMessages();
   const hasOpened = useOpenedOnce(active);
   const keysAtom = hasOpened
-    ? organizationApiKeysAtom(authClient)(organization.id)
+    ? organizationApiKeysAtom(baseUrl)(organization.id)
     : emptyOrganizationApiKeysAtom;
   const keysResult = useAtomValue(keysAtom);
   const refreshKeys = useAtomRefresh(keysAtom);
@@ -3281,7 +3398,7 @@ function OrganizationApiKeyManager({
   const keys = AsyncResult.match(keysResult, {
     onInitial: () => [],
     onFailure: () => [],
-    onSuccess: ({ value }) => Array.from(value),
+    onSuccess: ({ value }) => Array.from(value.apiKeys),
   });
   const keysError = AsyncResult.match(keysResult, {
     onInitial: () => null,
@@ -3289,41 +3406,42 @@ function OrganizationApiKeyManager({
     onSuccess: () => null,
   });
   const loading = keysResult._tag === "Initial";
-
   const [createForm] = useState(() =>
     FormReact.make(apiKeyFormBuilder, {
       fields: { name: TextField, referrers: TextAreaField },
       onSubmit: (_, { decoded: value }) =>
-        Effect.tryPromise({
-          try: async () => {
-            setCreatedKey(null);
-            const created = await createApiKey(
-              {
-                configId: "organization",
-                organizationId: organization.id,
-                name: value.name.trim(),
-                permissions: organizationApiKeySelectedPermissions(
-                  permissionOptionsRef.current,
-                  selectedPermissionsRef.current,
-                ),
-                referrers: parseApiKeyReferrers(
-                  value.referrers,
-                  m.user_api_key_referrers_error(),
-                ),
-              },
-              m.user_api_key_create_error(),
-            );
+        Effect.gen(function* () {
+          yield* Effect.sync(() => setCreatedKey(null));
+          const client = yield* authHttpClient(baseUrl);
+          const created = yield* client.authExtra.createApiKey({
+            payload: {
+              configId: "organization",
+              organizationId: organization.id,
+              name: value.name.trim(),
+              permissions: organizationApiKeySelectedPermissions(
+                permissionOptionsRef.current,
+                selectedPermissionsRef.current,
+              ),
+              referrers: parseApiKeyReferrers(
+                value.referrers,
+                m.user_api_key_referrers_error(),
+              ),
+            },
+          });
 
+          yield* Effect.sync(() => {
             setCreatedKey(created.key);
             setSelectedPermissions({});
             refreshKeys();
-            return created;
-          },
-          catch: (cause) =>
+          });
+          return created;
+        }).pipe(
+          Effect.mapError((cause) =>
             cause instanceof Error
               ? cause
               : new Error(m.user_api_key_create_error()),
-        }),
+          ),
+        ),
     }),
   );
   const submitApiKey = useAtomSet(createForm.submit);
@@ -3339,17 +3457,23 @@ function OrganizationApiKeyManager({
   }, [createResult, resetApiKey]);
 
   const deleteKey = async (key: ApiKeySummary) => {
-    const result = await authClient.apiKey.delete({
-      configId: "organization",
-      keyId: key.id,
-    });
-
-    if (result.error) {
-      setError(result.error.message ?? m.user_api_key_delete_error());
-      return;
+    setError(null);
+    try {
+      await Effect.runPromise(
+        authHttpClient(baseUrl).pipe(
+          Effect.flatMap((client) =>
+            client.auth.apiKeyDelete({
+              payload: { configId: "organization", keyId: key.id },
+            }),
+          ),
+        ),
+      );
+      refreshKeys();
+    } catch (cause) {
+      setError(
+        organizationFailureMessage(cause, m.user_api_key_delete_error()),
+      );
     }
-
-    refreshKeys();
   };
 
   return (
@@ -3487,9 +3611,9 @@ function OrganizationApiKeyManager({
           </div>
         ) : null}
         {editingKey ? (
-          <ApiKeyEditForm
+          <OrganizationApiKeyEditForm
+            baseUrl={baseUrl}
             key={editingKey.id}
-            configId="organization"
             keyData={editingKey}
             permissions={permissions}
             permissionLabels={permissionLabels}
@@ -3512,6 +3636,149 @@ function OrganizationApiKeyManager({
         ) : null}
       </div>
     </>
+  );
+}
+
+function OrganizationApiKeyEditForm({
+  baseUrl,
+  keyData,
+  messages,
+  permissions,
+  permissionLabels,
+  onSaved,
+}: {
+  baseUrl?: string | undefined;
+  keyData: ApiKeySummary;
+  messages: {
+    enabled: string;
+    name: string;
+    referrers: string;
+    referrersDescription: string;
+    referrersError: string;
+    referrersPlaceholder: string;
+    permissions: string;
+    permissionsDescription: string;
+    updateError: string;
+  };
+  permissions: Readonly<Record<string, ReadonlyArray<string>>>;
+  permissionLabels?: ProjectAccessLabelCatalog | undefined;
+  onSaved: () => void;
+}) {
+  const permissionOptions = Object.entries(permissions).flatMap(
+    ([project, actions]) =>
+      actions.map((action) => ({
+        id: `${project}:${action}`,
+        project,
+        action,
+      })),
+  );
+  const currentPermissions = Schema.decodeUnknownOption(ExtraApiKeyPermissions)(
+    keyData.permissions ?? {},
+  );
+  const currentGrant = Option.isSome(currentPermissions)
+    ? currentPermissions.value
+    : {};
+  const initialSelectedPermissions = Object.fromEntries(
+    permissionOptions.map((option) => [
+      option.id,
+      currentGrant[option.project]?.includes(option.action) ?? false,
+    ]),
+  );
+  const permissionOptionsRef = useRef(permissionOptions);
+  const permissionsRef = useRef(permissions);
+  permissionOptionsRef.current = permissionOptions;
+  permissionsRef.current = permissions;
+  const [form] = useState(() =>
+    FormReact.make(editApiKeyFormBuilder, {
+      fields: {
+        name: TextField,
+        enabled: CheckboxField,
+        referrers: TextAreaField,
+        permissions: ApiKeyPermissionsField,
+      },
+      mode: { validation: "onSubmit" },
+      onSubmit: (_, { decoded }) =>
+        Effect.gen(function* () {
+          const referrers = parseApiKeyReferrers(
+            decoded.referrers,
+            messages.referrersError,
+          );
+          const selectedGrant: Record<string, string[]> = {};
+          for (const project of Object.keys(permissionsRef.current)) {
+            selectedGrant[project] = [];
+          }
+          for (const option of permissionOptionsRef.current) {
+            if (!decoded.permissions[option.id]) continue;
+            selectedGrant[option.project] = [
+              ...(selectedGrant[option.project] ?? []),
+              option.action,
+            ];
+          }
+          const client = yield* authHttpClient(baseUrl);
+          const updated = yield* client.authExtra.updateApiKey({
+            params: { keyId: keyData.id },
+            payload: {
+              configId: "organization",
+              name: decoded.name.trim(),
+              enabled: decoded.enabled,
+              permissions: selectedGrant,
+              referrers,
+            },
+          });
+          yield* Effect.sync(onSaved);
+          return updated;
+        }).pipe(
+          Effect.mapError((cause) =>
+            cause instanceof Error
+              ? cause
+              : new Error(
+                  organizationFailureMessage(cause, messages.updateError),
+                ),
+          ),
+        ),
+    }),
+  );
+  const submit = useAtomSet(form.submit);
+  const submitResult = useAtomValue(form.submit);
+
+  return (
+    <section className="w-full">
+      <form.Initialize
+        defaultValues={{
+          name: keyData.name ?? "",
+          enabled: keyData.enabled,
+          referrers: apiKeyReferrers(keyData.metadata).join("\n"),
+          permissions: initialSelectedPermissions,
+        }}
+      >
+        <form
+          className="flex flex-col gap-4"
+          onSubmit={(event) => {
+            event.preventDefault();
+            event.stopPropagation();
+            submit();
+          }}
+        >
+          <form.name label={messages.name} required />
+          <form.enabled label={messages.enabled} />
+          <form.referrers
+            label={messages.referrers}
+            description={messages.referrersDescription}
+            placeholder={messages.referrersPlaceholder}
+            rows={3}
+          />
+          <form.permissions
+            description={messages.permissionsDescription}
+            idPrefix={`organization-edit-${keyData.id}`}
+            labels={permissionLabels}
+            permissions={permissions}
+            title={messages.permissions}
+          />
+          <SubmitError result={submitResult} />
+          <SubmitButton form={form} />
+        </form>
+      </form.Initialize>
+    </section>
   );
 }
 

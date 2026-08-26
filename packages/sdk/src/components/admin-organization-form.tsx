@@ -22,11 +22,11 @@ import {
 import {
   AdminCreateOrganizationPayload,
   type AdminOrganization,
-} from "../admin/schema";
+} from "../admin/schema.js";
 
-import { authClientApi } from "./auth-client-api";
-import { type KrakstackAuthLocale, useKrakstackAuth } from "./auth-provider";
-import { assetPath, assetUrl } from "./utils";
+import { authClientApi, authHttpClient } from "./auth-client-api.js";
+import { type KrakstackAuthLocale, useKrakstackAuth } from "./auth-provider.js";
+import { assetPath, assetUrl } from "./utils.js";
 
 const defaultMessages = {
   en: {
@@ -35,7 +35,7 @@ const defaultMessages = {
     field_name: "Name",
     form_submit: "Save",
     organization_create_description:
-      "Create an organization that can be used for Better Auth membership.",
+      "Create an organization that can be used for authentication membership.",
     organization_create_error: "Unable to create organization.",
     organization_create_title: "Create organization",
     organization_created_toast: "Organization created.",
@@ -58,7 +58,7 @@ const defaultMessages = {
     field_name: "Nom",
     form_submit: "Enregistrer",
     organization_create_description:
-      "Créez une organisation utilisable pour les adhésions Better Auth.",
+      "Créez une organisation utilisable pour les adhésions d'authentification.",
     organization_create_error: "Impossible de créer l'organisation.",
     organization_create_title: "Créer une organisation",
     organization_created_toast: "Organisation créée.",
@@ -95,16 +95,6 @@ const organizationOptionsAtom = Atom.family((baseUrl?: string | undefined) =>
     reactivityKeys: ["organizations"],
   }),
 );
-const createOrganizationAtom = Atom.family((baseUrl?: string | undefined) =>
-  authClientApi(baseUrl).mutation("admin", "createOrganization"),
-);
-const updateOrganizationAtom = Atom.family((baseUrl?: string | undefined) =>
-  authClientApi(baseUrl).mutation("admin", "updateOrganization"),
-);
-const uploadOrganizationLogoAtom = Atom.family((baseUrl?: string | undefined) =>
-  authClientApi(baseUrl).mutation("authExtra", "uploadUserImage"),
-);
-
 const slugify = (value: string) =>
   value
     .trim()
@@ -140,17 +130,15 @@ const makeOrganizationForm = ({
       parentId: SingleSearchableSelectField,
     },
     mode: { validation: "onSubmit" },
-    onSubmit: (_, { decoded, get }) =>
+    onSubmit: (_, { decoded }) =>
       Effect.gen(function* () {
+        const http = yield* authHttpClient(baseUrl);
         const logoValue = decoded.logo;
         let logo = assetPath(logoValue instanceof File ? null : logoValue);
         if (logoValue instanceof File) {
           const payload = new FormData();
           payload.append("file", logoValue);
-          const uploaded = yield* get.setResult(
-            uploadOrganizationLogoAtom(baseUrl),
-            { payload },
-          );
+          const uploaded = yield* http.authExtra.uploadUserImage({ payload });
           logo = assetPath(uploaded.url);
         }
 
@@ -167,7 +155,7 @@ const makeOrganizationForm = ({
             : { ...input, parentId: decoded.parentId },
         );
         const saved = organization
-          ? yield* get.setResult(updateOrganizationAtom(baseUrl), {
+          ? yield* http.admin.updateOrganization({
               params: { id: organization.id },
               payload: {
                 ...payload,
@@ -177,7 +165,7 @@ const makeOrganizationForm = ({
                     : decoded.parentId,
               },
             })
-          : yield* get.setResult(createOrganizationAtom(baseUrl), { payload });
+          : yield* http.admin.createOrganization({ payload });
 
         return saved;
       }),

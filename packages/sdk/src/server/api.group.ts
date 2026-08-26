@@ -5,7 +5,7 @@ import {
   HttpApiGroup,
 } from "effect/unstable/httpapi";
 
-import { Member, Organization, User } from "../schema";
+import { Member, Organization, User } from "../schema.js";
 import {
   ServerActiveOrganization,
   ServerCreateDomainPayload,
@@ -23,7 +23,7 @@ import {
   ServerOrganizationsResponse,
   ServerUserIdParams,
   ServerUsersResponse,
-} from "./schema";
+} from "./schema.js";
 
 export const ServerUsersApiGroup = HttpApiGroup.make("users")
   .add(

@@ -42,25 +42,20 @@ export const Route = createFileRoute("/api/auth/$")({
 
 Keep the wildcard path unchanged so every Better Auth endpoint is forwarded. Do not implement a generic open proxy; the target must come from trusted server configuration.
 
-## Create the browser client
+## Use the browser contract
 
-Point the client to the application origin, not the upstream auth origin:
+The packaged components and atoms use the application origin by default, so no Better Auth client needs to be created. For a custom Effect client, import the owned browser contract:
 
 ```ts
-import { createAuthUiClient } from "@krak-stack/auth";
-
-const appOrigin =
-  typeof window === "undefined"
-    ? process.env.VITE_SITE_URL
-    : window.location.origin;
-
-export const authClient = createAuthUiClient(appOrigin);
+import { AuthApiGroup } from "@krak-stack/auth/auth";
 ```
+
+Register `AuthApiGroup` with `HttpApi` or use the combined `AuthClientApi` from `@krak-stack/auth/api` when constructing an Effect `HttpApiClient` or `AtomHttpApi` client. Configure that client with the application origin, not the upstream auth origin.
 
 ## Add the provider
 
 ```tsx
-import { KrakstackAuthProvider } from "@krak-stack/auth";
+import { KrakstackAuthProvider } from "@krak-stack/auth/components";
 
 <KrakstackAuthProvider
   locale="en"

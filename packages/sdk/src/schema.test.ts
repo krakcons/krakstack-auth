@@ -8,7 +8,7 @@ import {
   OrganizationMetadata,
   WebsiteUrl,
   decodeOrganizationMetadata,
-} from "./schema";
+} from "./schema.js";
 
 describe("organization contact schemas", () => {
   it("validates email and website formats", () => {

@@ -9,7 +9,7 @@ import {
   OrganizationSocial,
   OrganizationWebsite,
   FormattedOrganizationAddress,
-} from "../schema";
+} from "../schema.js";
 
 export const ExtraImageUploadPayload = Schema.Struct({
   file: Multipart.SingleFileSchema,

@@ -1,13 +1,12 @@
 import { useAtomSet, useAtomSubscribe, useAtomValue } from "@effect/atom-react";
 import { FormBuilder, FormReact } from "@lucas-barake/effect-form-react";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
-import { useQuery } from "@tanstack/react-query";
-import { Effect, Option, Schema } from "effect";
-import { AsyncResult } from "effect/unstable/reactivity";
-import { useState } from "react";
+import { Option, Schema } from "effect";
+import { AsyncResult, Atom } from "effect/unstable/reactivity";
+import { useMemo } from "react";
 
 import { m } from "@/paraglide/messages";
-import { authClient } from "@/services/auth/client";
+import { AuthApiClient } from "@/services/auth/client";
 import { SubmitError } from "@krak-stack/registry/effect-form";
 import { Button } from "@/components/ui/button";
 import {
@@ -35,23 +34,20 @@ export const Route = createFileRoute("/_auth/consent")({
 });
 
 const consentFormBuilder = FormBuilder.empty;
+const consentMutation = AuthApiClient.mutation("auth", "oauthConsent");
+const oauthClientAtom = Atom.family((clientId: string) =>
+  AuthApiClient.query("auth", "oauthPublicClient", {
+    query: { client_id: clientId },
+    timeToLive: "5 minutes",
+  }),
+);
 
 const makeConsentForm = (scope: string) =>
   FormReact.make(consentFormBuilder, {
     fields: {},
-    onSubmit: (accept: boolean) =>
-      Effect.tryPromise({
-        try: async () => {
-          const result = await authClient.oauth2.consent({ accept, scope });
-
-          if (result.error) {
-            throw new Error(result.error.message ?? m.consent_error());
-          }
-
-          return result.data?.url ?? "/";
-        },
-        catch: (cause) =>
-          cause instanceof Error ? cause : new Error(m.consent_error()),
+    onSubmit: (accept: boolean, { get }) =>
+      get.setResult(consentMutation, {
+        payload: { accept, scope },
       }),
   });
 
@@ -62,11 +58,11 @@ function Consent() {
   const projectConfig = useAuthBrandingConfig();
   const fallbackClientName = useOAuthClientName(clientId);
   const clientName = projectConfig?.name ?? fallbackClientName;
-  const [form] = useState(() => makeConsentForm(scope));
+  const form = useMemo(() => makeConsentForm(scope), [scope]);
   const submit = useAtomSet(form.submit);
   const submitResult = useAtomValue(form.submit);
   useAtomSubscribe(form.submit, (result) => {
-    if (AsyncResult.isSuccess(result)) navigate({ href: result.value });
+    if (AsyncResult.isSuccess(result)) navigate({ href: result.value.url });
   });
 
   return (
@@ -119,33 +115,11 @@ function Consent() {
 }
 
 const useOAuthClientName = (clientId: string) => {
-  const { data } = useQuery({
-    queryKey: ["oauth", "public-client", clientId],
-    queryFn: async () => {
-      const result = await authClient.$fetch("/oauth2/public-client", {
-        method: "GET",
-        query: { client_id: clientId },
-      });
+  const result = useAtomValue(oauthClientAtom(clientId));
 
-      if (result.error) return clientId;
-
-      return getOAuthClientDisplayName(result.data, clientId);
-    },
+  return AsyncResult.match(result, {
+    onInitial: () => clientId,
+    onFailure: () => clientId,
+    onSuccess: ({ value }) => value.client_name || value.client_id,
   });
-
-  return data ?? clientId;
 };
-
-const OAuthClientDisplay = Schema.Struct({
-  client_name: Schema.optional(Schema.String),
-  client_id: Schema.optional(Schema.String),
-});
-
-const getOAuthClientDisplayName = (
-  data: typeof Schema.Unknown.Type,
-  fallback: string,
-) =>
-  Option.match(Schema.decodeUnknownOption(OAuthClientDisplay)(data), {
-    onNone: () => fallback,
-    onSome: (client) => client.client_name || client.client_id || fallback,
-  });

@@ -1,6 +1,6 @@
 import { Schema } from "effect";
 
-import { decodeOrganizationMetadata } from "../schema";
+import { decodeOrganizationMetadata } from "../schema.js";
 
 const UnknownRecord = Schema.Record(Schema.String, Schema.Unknown);
 export const isRecord = Schema.is(UnknownRecord);

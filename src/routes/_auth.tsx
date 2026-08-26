@@ -2,14 +2,13 @@ import { Outlet, createFileRoute } from "@tanstack/react-router";
 import {
   KrakstackAuthProvider,
   useKrakstackAuthProjectConfig,
-} from "@krak-stack/auth";
+} from "@krak-stack/auth/components";
 import { Users } from "lucide-react";
 
 import { AppBrand } from "@krak-stack/registry/app-brand";
 import { LocaleSwitcher } from "@krak-stack/registry/locale-switcher";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { m } from "@/paraglide/messages";
-import { authClient } from "@/services/auth/client";
 import { AuthBrandingProvider } from "@/services/auth/client/branding";
 
 export const Route = createFileRoute("/_auth")({
@@ -24,10 +23,7 @@ function AuthLayout() {
   const projectId = import.meta.env.VITE_KRAKSTACK_AUTH_PROJECT_ID;
 
   return (
-    <KrakstackAuthProvider
-      authClient={authClient}
-      {...(projectId ? { projectId } : {})}
-    >
+    <KrakstackAuthProvider {...(projectId ? { projectId } : {})}>
       <AuthLayoutContent />
     </KrakstackAuthProvider>
   );

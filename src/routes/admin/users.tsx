@@ -1,5 +1,8 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { AdminUsersTable, useAdminUsersTotal } from "@krak-stack/auth";
+import {
+  AdminUsersTable,
+  useAdminUsersTotal,
+} from "@krak-stack/auth/components";
 
 import { TableSearchSchemaStandard as TableSearchSchema } from "@krak-stack/registry/data-table";
 import { SidebarPageHeader } from "@krak-stack/registry/sidebar-layout";

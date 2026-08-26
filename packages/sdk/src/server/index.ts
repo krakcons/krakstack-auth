@@ -1,26 +1,26 @@
-export { AuthService } from "../service";
+export { AuthService } from "../service.js";
 export type {
   AuthSession,
   AuthSessionWithOrganization,
   AuthSessionWithUser,
   AuthSessionWithUserAndOrganization,
-} from "../service";
-export { AuthClientConfig } from "../config";
+} from "../service.js";
+export { AuthClientConfig } from "../config.js";
 export {
   ServerDomainsApiGroup,
   ServerOrganizationsApiGroup,
   ServerUsersApiGroup,
-} from "./api.group";
-export { proxyAuthRequest } from "./proxy";
-export type { ProxyAuthRequestOptions } from "./proxy";
-export { ActorRequired } from "./actor";
-export type { ActorConstraint } from "./actor";
+} from "./api.group.js";
+export { proxyAuthRequest } from "./proxy.js";
+export type { ProxyAuthRequestOptions } from "./proxy.js";
+export { ActorRequired } from "./actor.js";
+export type { ActorConstraint } from "./actor.js";
 export {
   ApiKeySecurity,
   AuthMiddleware,
   makeAuthenticationLive,
-} from "./middleware";
-export type { AuthenticationLiveOptions } from "./middleware";
+} from "./middleware.js";
+export type { AuthenticationLiveOptions } from "./middleware.js";
 export {
   ServerActiveOrganization,
   ServerCreateDomainPayload,
@@ -33,13 +33,13 @@ export {
   ServerOrganizationsResponse,
   ServerUpdateDomainPayload,
   ServerUsersResponse,
-} from "./schema";
+} from "./schema.js";
 export type {
   Member,
   Organization,
   OrganizationMetadata,
   User,
-} from "../schema";
+} from "../schema.js";
 export {
   ApiKeyPermissionGrant,
   CurrentActor,
@@ -51,7 +51,7 @@ export {
   permission,
   policy,
   withPolicy,
-} from "../access";
+} from "../access.js";
 export type {
   ApiKeyOwner,
   ApiKeyActor,
@@ -61,4 +61,4 @@ export type {
   ProjectAccessCatalog,
   ProjectAccessDefinition,
   UserActor,
-} from "../access";
+} from "../access.js";

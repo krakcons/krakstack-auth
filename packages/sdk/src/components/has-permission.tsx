@@ -1,6 +1,6 @@
 import type { ReactNode } from "react";
 
-import { usePermissions } from "./auth-provider";
+import { usePermissions } from "./auth-provider.js";
 
 export const useHasPermission = (permission: string) =>
   usePermissions().can(permission);

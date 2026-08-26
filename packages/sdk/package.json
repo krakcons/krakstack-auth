@@ -1,6 +1,6 @@
 {
   "name": "@krak-stack/auth",
-  "version": "0.1.71",
+  "version": "0.2.0",
   "description": "Effect HttpApi clients and schemas for KrakStack Auth.",
   "license": "MIT",
   "files": [
@@ -47,9 +47,9 @@
       "default": "./dist/components/index.js"
     },
     "./tailwind.css": "./tailwind.css",
-    "./better-auth": {
-      "types": "./dist/better-auth/api.group.d.ts",
-      "default": "./dist/better-auth/api.group.js"
+    "./auth": {
+      "types": "./dist/auth/api.group.d.ts",
+      "default": "./dist/auth/api.group.js"
     },
     "./extra": {
       "types": "./dist/extra/api.group.d.ts",
@@ -79,13 +79,14 @@
     "react-qr-code": "^2.2.0"
   },
   "peerDependencies": {
-    "@better-auth/api-key": "^1.6.14",
+    "@effect/atom-react": "^4.0.0-beta.78",
+    "@lucas-barake/effect-form-react": "^0.26.0-beta.5",
     "@tanstack/react-router": "^1.170.15",
     "@tanstack/react-table": "^9.1.2",
-    "better-auth": "^1.6.14",
     "effect": "^4.0.0-beta.78",
     "input-otp": "^1.4.2",
     "lucide-react": "^1.17.0",
-    "react": "^19.2.7"
+    "react": "^19.2.7",
+    "sonner": "^2.0.7"
   }
 }

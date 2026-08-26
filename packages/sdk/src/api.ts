@@ -1,13 +1,13 @@
 import { HttpApi, OpenApi } from "effect/unstable/httpapi";
 
-import { AdminApiGroup } from "./admin/api.group";
-import { BetterAuthApiGroup } from "./better-auth/api.group";
-import { ExtraApiGroup } from "./extra/api.group";
+import { AdminApiGroup } from "./admin/api.group.js";
+import { AuthApiGroup } from "./auth/api.group.js";
+import { ExtraApiGroup } from "./extra/api.group.js";
 import {
   ServerDomainsApiGroup,
   ServerOrganizationsApiGroup,
   ServerUsersApiGroup,
-} from "./server/api.group";
+} from "./server/api.group.js";
 
 export const AuthServiceApi = HttpApi.make("AuthServiceApi")
   .annotateMerge(
@@ -15,11 +15,11 @@ export const AuthServiceApi = HttpApi.make("AuthServiceApi")
       title: "KrakStack Auth Service API",
       version: "1.0.0",
       description:
-        "Auth API for Better Auth extensions, KrakStack extra endpoints, and trusted server endpoints.",
+        "Authentication API for browser, extension, and trusted server endpoints.",
     }),
   )
   .add(
-    BetterAuthApiGroup.prefix("/auth"),
+    AuthApiGroup.prefix("/auth"),
     ExtraApiGroup,
     ServerUsersApiGroup,
     ServerOrganizationsApiGroup,
@@ -37,7 +37,7 @@ export const AuthClientApi = HttpApi.make("AuthClientApi")
     }),
   )
   .add(
-    BetterAuthApiGroup.prefix("/auth"),
+    AuthApiGroup.prefix("/auth"),
     ExtraApiGroup,
     AdminApiGroup.prefix("/auth"),
   )

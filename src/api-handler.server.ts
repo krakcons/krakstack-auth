@@ -25,7 +25,10 @@ import {
   HttpApiGroup,
   OpenApi,
 } from "effect/unstable/httpapi";
-import { GetSessionResponse } from "@krak-stack/auth/better-auth";
+import {
+  Session as InternalSession,
+  User as InternalUser,
+} from "@krak-stack/auth/schema";
 
 import { AdminApi, FrontendApi } from "@/api";
 import { LocaleMiddlewareLive } from "@/lib/localization";
@@ -105,7 +108,16 @@ const localAuthServiceLayer = Layer.effect(
           try: () => betterAuth.api.getSession({ headers: betterAuth.headers }),
           catch: () => new HttpApiError.Unauthorized({}),
         }).pipe(
-          Effect.flatMap(Schema.decodeUnknownEffect(GetSessionResponse)),
+          Effect.flatMap(
+            Schema.decodeUnknownEffect(
+              Schema.NullOr(
+                Schema.Struct({
+                  session: InternalSession,
+                  user: InternalUser,
+                }),
+              ),
+            ),
+          ),
           Effect.mapError(() => new HttpApiError.Unauthorized({})),
           Effect.map((session): AuthSession | null =>
             session

@@ -30,14 +30,14 @@ import {
   InputOTPSlot,
 } from "@/components/ui/input-otp";
 
-import type { AuthUiClient } from "./auth-client";
-import { authClientApi } from "./auth-client-api";
-import { type KrakstackAuthLocale, useKrakstackAuth } from "./auth-provider";
-import { cn } from "./utils";
+import { getLastUsedLoginMethod, notifyAuthChange } from "./auth-atoms.js";
+import { authClientApi, authHttpClient } from "./auth-client-api.js";
+import { type KrakstackAuthLocale, useKrakstackAuth } from "./auth-provider.js";
+import { cn } from "./utils.js";
 import {
   ExtraProjectPublicConfig as ExtraProjectPublicConfigSchema,
   type ExtraProjectPublicConfig,
-} from "../extra/schema";
+} from "../extra/schema.js";
 
 const EMAIL_OTP_RESEND_COOLDOWN_SECONDS = 60;
 
@@ -200,23 +200,14 @@ const labels = (locale: KrakstackAuthLocale) => ({
 });
 
 type AuthFormProps = {
-  authClient?: AuthUiClient;
   baseUrl?: string | undefined;
   locale?: KrakstackAuthLocale | undefined;
 };
 
-const useAuthFormOptions = ({ authClient, baseUrl, locale }: AuthFormProps) => {
+const useAuthFormOptions = ({ baseUrl, locale }: AuthFormProps) => {
   const auth = useKrakstackAuth();
-  const resolvedAuthClient = authClient ?? auth?.authClient;
-
-  if (!resolvedAuthClient) {
-    throw new Error(
-      "Krakstack auth components require an authClient prop or KrakstackAuthProvider.",
-    );
-  }
 
   return {
-    authClient: resolvedAuthClient,
     baseUrl: baseUrl ?? auth?.baseUrl,
     labels: labels(locale ?? auth?.locale ?? "en"),
     projectConfig: auth?.projectConfig,
@@ -314,7 +305,6 @@ export const resolveInitialAuthMethod = ({
 
 export function Signin(props: AuthFormProps) {
   const {
-    authClient,
     baseUrl,
     labels: m,
     projectConfig: providedProjectConfig,
@@ -352,7 +342,7 @@ export function Signin(props: AuthFormProps) {
   const [initialAuthMethod] = useState(() =>
     resolveInitialAuthMethod({
       requestedMethod,
-      lastLoginMethod: authClient.getLastUsedLoginMethod?.(),
+      lastLoginMethod: getLastUsedLoginMethod(),
       emailPassword: options.emailPassword,
       emailOtp: options.emailOtp,
     }),
@@ -374,7 +364,6 @@ export function Signin(props: AuthFormProps) {
         : "password";
   const hasPrimaryAuth = options.emailPassword || options.emailOtp;
   const canChangeAuthMethod = options.emailPassword && options.emailOtp;
-
   useEffect(() => {
     if (!emailOtpResendAvailableAt) {
       setEmailOtpResendSeconds(0);
@@ -411,90 +400,95 @@ export function Signin(props: AuthFormProps) {
           | { type: "sendEmailOtp" },
         { decoded: value },
       ) =>
-        Effect.tryPromise({
-          try: async () => {
-            const email = value.email.trim();
-            const sendEmailOtp = async () => {
-              const result = await authClient.emailOtp.sendVerificationOtp({
-                email,
-                type: "sign-in",
-              });
-              if (result.error) {
-                throw new Error(
-                  result.error.message ?? m.sign_in_email_otp_send_error,
-                );
-              }
-              setAuthMethod("emailOtp");
-              setEmailSubmitted(true);
-              setOtpSentTo(email);
-              navigate({
-                to: "/sign-in",
-                search: authMethodSearch(searchString, "emailOtp", email),
-                replace: true,
-              });
-              setEmailOtpResendAvailableAt(
-                Date.now() + EMAIL_OTP_RESEND_COOLDOWN_SECONDS * 1000,
-              );
-            };
-
-            if (action.type === "sendEmailOtp") {
-              await sendEmailOtp();
-              return;
-            }
-
-            if (!action.emailSubmitted) {
-              if (action.method === "emailOtp") await sendEmailOtp();
-              else {
+        Effect.gen(function* () {
+          const email = value.email.trim();
+          const sendEmailOtp = authHttpClient(baseUrl).pipe(
+            Effect.flatMap((client) =>
+              client.auth.sendVerificationOtp({
+                payload: { email, type: "sign-in" },
+              }),
+            ),
+            Effect.tap(() =>
+              Effect.sync(() => {
+                setAuthMethod("emailOtp");
                 setEmailSubmitted(true);
+                setOtpSentTo(email);
                 navigate({
                   to: "/sign-in",
-                  search: authMethodSearch(searchString, "password", email),
+                  search: authMethodSearch(searchString, "emailOtp", email),
                   replace: true,
                 });
-              }
-              return;
-            }
-
-            if (action.method === "emailOtp") {
-              if (!action.otpSent) {
-                await sendEmailOtp();
-                return;
-              }
-              const result = await authClient.signIn.emailOtp({
-                email,
-                otp: value.otp.trim(),
-                name: nameFromEmail(email),
-              });
-              if (result.error) {
-                throw new Error(
-                  result.error.message ?? m.sign_in_email_otp_error,
+                setEmailOtpResendAvailableAt(
+                  Date.now() + EMAIL_OTP_RESEND_COOLDOWN_SECONDS * 1000,
                 );
-              }
-              onNavigate(redirectTarget);
-              return;
-            }
+              }),
+            ),
+          );
 
-            const credentials: Parameters<typeof authClient.signIn.email>[0] & {
-              oauth_query?: string;
-            } = {
-              email,
-              password: value.password,
-              callbackURL: redirectTarget,
-            };
-            if (oauthQuery) credentials.oauth_query = oauthQuery;
-            const result = await authClient.signIn.email(credentials);
-            if (result.error) {
-              throw new Error(result.error.message ?? m.sign_in_error);
+          if (action.type === "sendEmailOtp") {
+            yield* sendEmailOtp;
+            return;
+          }
+
+          if (!action.emailSubmitted) {
+            if (action.method === "emailOtp") yield* sendEmailOtp;
+            else {
+              setEmailSubmitted(true);
+              navigate({
+                to: "/sign-in",
+                search: authMethodSearch(searchString, "password", email),
+                replace: true,
+              });
             }
-            if (hasTwoFactorRedirect(result.data)) {
-              onTwoFactorRedirect(
-                `/2fa${oauthQuery ? `?${oauthQuery}` : `?callbackURL=${encodeURIComponent(redirectTarget)}`}`,
-              );
+            return;
+          }
+
+          if (action.method === "emailOtp") {
+            if (!action.otpSent) {
+              yield* sendEmailOtp;
               return;
             }
-            onNavigate(result.data?.url ?? redirectTarget);
-          },
-          catch: (cause) =>
+            yield* authHttpClient(baseUrl).pipe(
+              Effect.flatMap((client) =>
+                client.auth.signInEmailOtp({
+                  payload: {
+                    email,
+                    otp: value.otp.trim(),
+                    name: nameFromEmail(email),
+                  },
+                }),
+              ),
+            );
+            notifyAuthChange();
+            onNavigate(redirectTarget);
+            return;
+          }
+
+          const payload = oauthQuery
+            ? {
+                email,
+                password: value.password,
+                callbackURL: redirectTarget,
+                oauth_query: oauthQuery,
+              }
+            : {
+                email,
+                password: value.password,
+                callbackURL: redirectTarget,
+              };
+          const result = yield* authHttpClient(baseUrl).pipe(
+            Effect.flatMap((client) => client.auth.signInEmail({ payload })),
+          );
+          if (hasTwoFactorRedirect(result)) {
+            onTwoFactorRedirect(
+              `/2fa${oauthQuery ? `?${oauthQuery}` : `?callbackURL=${encodeURIComponent(redirectTarget)}`}`,
+            );
+            return;
+          }
+          notifyAuthChange();
+          onNavigate(result.url ?? redirectTarget);
+        }).pipe(
+          Effect.mapError((cause) =>
             cause instanceof Error
               ? cause
               : new Error(
@@ -507,37 +501,38 @@ export function Signin(props: AuthFormProps) {
                       ? m.sign_in_email_otp_error
                       : m.sign_in_error,
                 ),
-        }),
+          ),
+        ),
     }),
   );
   const submit = useAtomSet(form.submit);
   const submitResult = useAtomValue(form.submit);
   const [socialSignIn] = useState(() =>
     Atom.fn((provider: "google") =>
-      Effect.tryPromise({
-        try: async () => {
-          const socialOptions: Parameters<
-            typeof authClient.signIn.social
-          >[0] & {
-            oauth_query?: string;
-          } = {
-            provider,
-            callbackURL: socialRedirectTarget,
-            errorCallbackURL: "/sign-in",
-          };
-          if (oauthQuery) {
-            socialOptions.additionalData = { query: oauthQuery };
-            socialOptions.oauth_query = oauthQuery;
-          }
-          const result = await authClient.signIn.social(socialOptions);
-          if (result.error) {
-            throw new Error(result.error.message ?? m.sign_in_error);
-          }
-          if (result.data?.url) onNavigate(result.data.url);
-        },
-        catch: (cause) =>
+      Effect.gen(function* () {
+        const payload = oauthQuery
+          ? {
+              provider,
+              callbackURL: socialRedirectTarget,
+              errorCallbackURL: "/sign-in",
+              additionalData: { query: oauthQuery },
+              oauth_query: oauthQuery,
+            }
+          : {
+              provider,
+              callbackURL: socialRedirectTarget,
+              errorCallbackURL: "/sign-in",
+            };
+        const result = yield* authHttpClient(baseUrl).pipe(
+          Effect.flatMap((client) => client.auth.signInSocial({ payload })),
+        );
+        notifyAuthChange();
+        if (result.url) onNavigate(result.url);
+      }).pipe(
+        Effect.mapError((cause) =>
           cause instanceof Error ? cause : new Error(m.sign_in_error),
-      }),
+        ),
+      ),
     ),
   );
   const startSocialSignIn = useAtomSet(socialSignIn);
@@ -764,7 +759,6 @@ export function Signin(props: AuthFormProps) {
 
 export function VerifyEmail(props: AuthFormProps) {
   const {
-    authClient,
     baseUrl,
     labels: m,
     projectConfig: providedProjectConfig,
@@ -790,32 +784,36 @@ export function VerifyEmail(props: AuthFormProps) {
       fields: { email: TextField, otp: OtpField },
       mode: { validation: "onSubmit" },
       onSubmit: (action: "verify" | "resend", { decoded: value }) =>
-        Effect.tryPromise({
-          try: async () => {
-            if (action === "resend") {
-              const result = await authClient.emailOtp.sendVerificationOtp({
-                email: value.email.trim(),
-                type: "email-verification",
-              });
-              if (result.error) {
-                throw new Error(
-                  result.error.message ?? m.verify_email_resend_error,
-                );
-              }
-              setResent(true);
-              return;
-            }
+        Effect.gen(function* () {
+          if (action === "resend") {
+            yield* authHttpClient(baseUrl).pipe(
+              Effect.flatMap((client) =>
+                client.auth.sendVerificationOtp({
+                  payload: {
+                    email: value.email.trim(),
+                    type: "email-verification",
+                  },
+                }),
+              ),
+            );
+            setResent(true);
+            return;
+          }
 
-            const result = await authClient.emailOtp.verifyEmail({
-              email: value.email.trim(),
-              otp: value.otp.trim(),
-            });
-            if (result.error) {
-              throw new Error(result.error.message ?? m.verify_email_error);
-            }
-            onNavigate(redirectTarget);
-          },
-          catch: (cause) =>
+          yield* authHttpClient(baseUrl).pipe(
+            Effect.flatMap((client) =>
+              client.auth.verifyEmailOtp({
+                payload: {
+                  email: value.email.trim(),
+                  otp: value.otp.trim(),
+                },
+              }),
+            ),
+          );
+          notifyAuthChange();
+          onNavigate(redirectTarget);
+        }).pipe(
+          Effect.mapError((cause) =>
             cause instanceof Error
               ? cause
               : new Error(
@@ -823,7 +821,8 @@ export function VerifyEmail(props: AuthFormProps) {
                     ? m.verify_email_resend_error
                     : m.verify_email_error,
                 ),
-        }),
+          ),
+        ),
     }),
   );
   const submit = useAtomSet(form.submit);
@@ -893,7 +892,7 @@ export function VerifyEmail(props: AuthFormProps) {
 }
 
 export function ForgotPassword(props: AuthFormProps) {
-  const { authClient, labels: m } = useAuthFormOptions(props);
+  const { baseUrl, labels: m } = useAuthFormOptions(props);
   const searchString = useRouterState({
     select: (state) => state.location.searchStr,
   });
@@ -904,21 +903,24 @@ export function ForgotPassword(props: AuthFormProps) {
       fields: { email: TextField },
       mode: { validation: "onSubmit" },
       onSubmit: (_, { decoded: value }) =>
-        Effect.tryPromise({
-          try: async () => {
-            setSubmitted(false);
-            const result = await authClient.requestPasswordReset({
-              email: value.email.trim(),
-              redirectTo: `${window.location.origin}/reset-password`,
-            });
-            if (result.error) {
-              throw new Error(result.error.message ?? m.forgot_password_error);
-            }
-            setSubmitted(true);
-          },
-          catch: (cause) =>
+        Effect.gen(function* () {
+          setSubmitted(false);
+          yield* authHttpClient(baseUrl).pipe(
+            Effect.flatMap((client) =>
+              client.auth.requestPasswordReset({
+                payload: {
+                  email: value.email.trim(),
+                  redirectTo: `${window.location.origin}/reset-password`,
+                },
+              }),
+            ),
+          );
+          setSubmitted(true);
+        }).pipe(
+          Effect.mapError((cause) =>
             cause instanceof Error ? cause : new Error(m.forgot_password_error),
-        }),
+          ),
+        ),
     }),
   );
   const submit = useAtomSet(form.submit);
@@ -991,7 +993,7 @@ function ResetPasswordForm({
   token,
   ...props
 }: AuthFormProps & { token: string }) {
-  const { authClient, labels: m } = useAuthFormOptions(props);
+  const { baseUrl, labels: m } = useAuthFormOptions(props);
   const navigate = useNavigate();
   const onSuccess = () => navigate({ to: "/sign-in" });
   const [form] = useState(() =>
@@ -999,20 +1001,23 @@ function ResetPasswordForm({
       fields: { password: TextField },
       mode: { validation: "onSubmit" },
       onSubmit: (_, { decoded: value }) =>
-        Effect.tryPromise({
-          try: async () => {
-            const result = await authClient.resetPassword({
-              newPassword: value.password,
-              token,
-            });
-            if (result.error) {
-              throw new Error(result.error.message ?? m.reset_password_error);
-            }
-            onSuccess();
-          },
-          catch: (cause) =>
+        Effect.gen(function* () {
+          yield* authHttpClient(baseUrl).pipe(
+            Effect.flatMap((client) =>
+              client.auth.resetPassword({
+                payload: {
+                  newPassword: value.password,
+                  token,
+                },
+              }),
+            ),
+          );
+          onSuccess();
+        }).pipe(
+          Effect.mapError((cause) =>
             cause instanceof Error ? cause : new Error(m.reset_password_error),
-        }),
+          ),
+        ),
     }),
   );
   const submit = useAtomSet(form.submit);
@@ -1057,7 +1062,6 @@ function ResetPasswordForm({
 
 export function TwoFactor(props: AuthFormProps) {
   const {
-    authClient,
     baseUrl,
     labels: m,
     projectConfig: providedProjectConfig,
@@ -1092,42 +1096,45 @@ export function TwoFactor(props: AuthFormProps) {
             },
         { decoded: value },
       ) =>
-        Effect.tryPromise({
-          try: async () => {
-            if (action.type === "sendEmailCode") {
-              const result = await authClient.twoFactor.sendOtp();
-              if (result.error) {
-                throw new Error(
-                  result.error.message ?? m.two_factor_send_email_code_error,
-                );
-              }
-              setEmailCodeSent(true);
-              setMode("email");
-              return;
-            }
+        Effect.gen(function* () {
+          if (action.type === "sendEmailCode") {
+            yield* authHttpClient(baseUrl).pipe(
+              Effect.flatMap((client) =>
+                client.auth.twoFactorSendOtp({ payload: {} }),
+              ),
+            );
+            setEmailCodeSent(true);
+            setMode("email");
+            return;
+          }
 
-            const code = value.code.trim();
-            const verification = oauthQuery
-              ? {
-                  code,
-                  trustDevice: value.trustDevice,
-                  oauth_query: oauthQuery,
-                }
-              : { code, trustDevice: value.trustDevice };
-            const result =
+          const code = value.code.trim();
+          const verification = oauthQuery
+            ? {
+                code,
+                trustDevice: value.trustDevice,
+                oauth_query: oauthQuery,
+              }
+            : { code, trustDevice: value.trustDevice };
+          const result = yield* authHttpClient(baseUrl).pipe(
+            Effect.flatMap((client) =>
               action.mode === "backup"
-                ? await authClient.twoFactor.verifyBackupCode(verification)
+                ? client.auth.twoFactorVerifyBackupCode({
+                    payload: verification,
+                  })
                 : action.mode === "email"
-                  ? await authClient.twoFactor.verifyOtp(verification)
-                  : await authClient.twoFactor.verifyTotp(verification);
-            if (result.error) {
-              throw new Error(
-                result.error.message ?? m.two_factor_verify_error,
-              );
-            }
-            onNavigate(getResultRedirectUrl(result.data) ?? redirectTarget);
-          },
-          catch: (cause) =>
+                  ? client.auth.twoFactorVerifyOtp({
+                      payload: verification,
+                    })
+                  : client.auth.twoFactorVerifyTotp({
+                      payload: verification,
+                    }),
+            ),
+          );
+          notifyAuthChange();
+          onNavigate(getResultRedirectUrl(result) ?? redirectTarget);
+        }).pipe(
+          Effect.mapError((cause) =>
             cause instanceof Error
               ? cause
               : new Error(
@@ -1135,7 +1142,8 @@ export function TwoFactor(props: AuthFormProps) {
                     ? m.two_factor_send_email_code_error
                     : m.two_factor_verify_error,
                 ),
-        }),
+          ),
+        ),
     }),
   );
   const submit = useAtomSet(form.submit);

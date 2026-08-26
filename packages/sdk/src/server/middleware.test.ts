@@ -11,9 +11,9 @@ import {
   HttpApiGroup,
 } from "effect/unstable/httpapi";
 
-import { AuthService } from "../service";
-import { AuthMiddleware, makeAuthenticationLive } from "./middleware";
-import type { AuthSession } from "../service";
+import { AuthService } from "../service.js";
+import { AuthMiddleware, makeAuthenticationLive } from "./middleware.js";
+import type { AuthSession } from "../service.js";
 
 const now = new Date("2026-01-01T00:00:00.000Z");
 
