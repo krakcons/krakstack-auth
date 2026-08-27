@@ -49,6 +49,8 @@ import { OrganizationSwitcher, UserButton } from "@krak-stack/auth";
 <UserButton signOutRedirect="/" side="bottom" />
 ```
 
+`UserButton` permet aussi de gérer des courriels publics, numéros de téléphone, sites Web et profils sociaux avec des libellés localisés. Ces valeurs sont distinctes du courriel utilisé pour la connexion et sont accessibles aux clients de l'API serveur de confiance.
+
 ## Formulaires
 
 Le paquet exporte `Signin`, `VerifyEmail`, `ForgotPassword`, `ResetPassword` et `TwoFactor`. `ResetPassword` affiche la demande par courriel sans jeton et le nouveau mot de passe avec un jeton; `ForgotPassword` reste disponible si seule l'étape du courriel est nécessaire. Affichez les formulaires dans vos propres routes afin de garder le contrôle des URL, métadonnées et limites d'erreur.

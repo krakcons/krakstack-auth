@@ -38,6 +38,7 @@ import {
   type DataTableColumnDef,
 } from "@krak-stack/registry/data-table";
 import { AppBrand } from "@krak-stack/registry/app-brand";
+import { EditingLocaleSwitcher } from "@krak-stack/registry/editing-locale-switcher";
 import {
   effectFormMessages,
   ImageField,
@@ -75,8 +76,27 @@ import { ApiKeyEditForm } from "./api-key-edit-form";
 import { ApiKeyPermissions } from "./api-key-permissions";
 import { ApiKeyRateLimit, apiKeyUsagePercent } from "./api-key-rate-limit";
 import { ApiKeyReferrers } from "./api-key-referrers";
+import {
+  ContactEmailsField,
+  ContactPhonesField,
+  ContactSocialsField,
+  ContactWebsitesField,
+  type ContactFieldMessages,
+} from "./contact-fields";
 import { useOpenedOnce } from "./hooks";
 import { ExtraUploadedAsset } from "../extra/schema";
+import {
+  decodeUserMetadata,
+  type ContactEmail as ContactEmailValue,
+  ContactLocale,
+  type ContactPhone as ContactPhoneValue,
+  type ContactSocial as ContactSocialValue,
+  type ContactTranslation,
+  type ContactWebsite as ContactWebsiteValue,
+  SocialPlatform,
+  USER_CONTACT_LIMIT,
+  UserMetadata,
+} from "@krak-stack/auth/schema";
 import { assetPath, assetUrl } from "./utils";
 import { AdminOrganizationsTable } from "./admin-organizations";
 import { AdminUsersTable } from "./admin-users";
@@ -184,6 +204,24 @@ const messages = {
     user_form_title: "Account",
     user_form_update_error: "Unable to update your account.",
     user_loading: "Loading...",
+    user_contact_add_email: "Add email",
+    user_contact_add_phone: "Add phone",
+    user_contact_add_social: "Add social profile",
+    user_contact_add_website: "Add website",
+    user_contact_description:
+      "Add up to 8 public contacts of each type, separately from the email used to sign in.",
+    user_contact_email_type: "Email",
+    user_contact_extension: "Extension",
+    user_contact_label: "Label",
+    user_contact_phone_type: "Phone",
+    user_contact_platform: "Platform",
+    user_contact_remove: "Remove contact method",
+    user_contact_social_type: "Social",
+    user_contact_title: "Contact methods",
+    user_contact_url: "URL",
+    user_contact_validation_error:
+      "Review your contact methods and keep the total metadata below 2 KB.",
+    user_contact_website_type: "Website",
     user_profile_description: "Update your public profile details.",
     user_profile_image_upload_error: "Could not upload your profile photo.",
     user_profile_photo_upload_label: "Profile photo",
@@ -316,6 +354,24 @@ const messages = {
     user_form_title: "Compte",
     user_form_update_error: "Impossible de mettre à jour votre compte.",
     user_loading: "Chargement...",
+    user_contact_add_email: "Ajouter un courriel",
+    user_contact_add_phone: "Ajouter un téléphone",
+    user_contact_add_social: "Ajouter un profil social",
+    user_contact_add_website: "Ajouter un site Web",
+    user_contact_description:
+      "Ajoutez jusqu’à 8 coordonnées publiques de chaque type, distinctes du courriel utilisé pour vous connecter.",
+    user_contact_email_type: "Courriel",
+    user_contact_extension: "Poste",
+    user_contact_label: "Libellé",
+    user_contact_phone_type: "Téléphone",
+    user_contact_platform: "Plateforme",
+    user_contact_remove: "Supprimer le moyen de contact",
+    user_contact_social_type: "Réseau social",
+    user_contact_title: "Moyens de contact",
+    user_contact_url: "URL",
+    user_contact_validation_error:
+      "Vérifiez vos moyens de contact et limitez les métadonnées totales à 2 Ko.",
+    user_contact_website_type: "Site Web",
     user_profile_description:
       "Mettez à jour les informations de votre profil public.",
     user_profile_image_upload_error:
@@ -406,6 +462,22 @@ const UserButtonMessagesContext = createContext(
 );
 const useUserButtonMessages = () => useContext(UserButtonMessagesContext);
 
+const userContactFieldMessages = (
+  m: ReturnType<typeof userButtonMessageFns>,
+): ContactFieldMessages => ({
+  addEmail: m.user_contact_add_email(),
+  addPhone: m.user_contact_add_phone(),
+  addSocial: m.user_contact_add_social(),
+  addWebsite: m.user_contact_add_website(),
+  email: m.user_contact_email_type(),
+  extension: m.user_contact_extension(),
+  label: m.user_contact_label(),
+  phone: m.user_contact_phone_type(),
+  platform: m.user_contact_platform(),
+  remove: m.user_contact_remove(),
+  url: m.user_contact_url(),
+});
+
 const UserRole = Schema.Struct({ role: Schema.String });
 
 const hasRole = (
@@ -429,6 +501,10 @@ const hasAdminRole = (user: typeof Schema.Unknown.Type) => {
 type UserFormType = {
   name: string;
   image: File | string | null;
+  emails: ReadonlyArray<ContactEmailValue>;
+  phones: ReadonlyArray<ContactPhoneValue>;
+  websites: ReadonlyArray<ContactWebsiteValue>;
+  socials: ReadonlyArray<ContactSocialValue>;
 };
 
 const changePasswordFormBuilder = FormBuilder.empty
@@ -441,6 +517,48 @@ const passwordFormBuilder = (required: boolean) =>
     required ? Schema.NonEmptyString : Schema.String,
   );
 
+const ContactFormTranslation = Schema.Struct({
+  locale: ContactLocale,
+  label: Schema.String,
+}).annotate({ identifier: "ContactFormTranslation" });
+const ContactFormTranslations = Schema.Array(ContactFormTranslation).annotate({
+  identifier: "ContactFormTranslations",
+});
+export const UserContactEmailsForm = Schema.Array(
+  Schema.Struct({
+    email: Schema.String,
+    translations: ContactFormTranslations,
+  }).annotate({ identifier: "UserContactEmailForm" }),
+)
+  .check(Schema.isMaxLength(USER_CONTACT_LIMIT))
+  .annotate({ identifier: "UserContactEmailsForm" });
+export const UserContactPhonesForm = Schema.Array(
+  Schema.Struct({
+    number: Schema.String,
+    extension: Schema.optional(Schema.String),
+    translations: ContactFormTranslations,
+  }).annotate({ identifier: "UserContactPhoneForm" }),
+)
+  .check(Schema.isMaxLength(USER_CONTACT_LIMIT))
+  .annotate({ identifier: "UserContactPhonesForm" });
+export const UserContactWebsitesForm = Schema.Array(
+  Schema.Struct({
+    url: Schema.String,
+    translations: ContactFormTranslations,
+  }).annotate({ identifier: "UserContactWebsiteForm" }),
+)
+  .check(Schema.isMaxLength(USER_CONTACT_LIMIT))
+  .annotate({ identifier: "UserContactWebsitesForm" });
+export const UserContactSocialsForm = Schema.Array(
+  Schema.Struct({
+    platform: SocialPlatform,
+    url: Schema.String,
+    translations: ContactFormTranslations,
+  }).annotate({ identifier: "UserContactSocialForm" }),
+)
+  .check(Schema.isMaxLength(USER_CONTACT_LIMIT))
+  .annotate({ identifier: "UserContactSocialsForm" });
+
 const userFormBuilder = FormBuilder.empty
   .addField("name", Schema.NonEmptyString)
   .addField(
@@ -448,7 +566,57 @@ const userFormBuilder = FormBuilder.empty
     Schema.UndefinedOr(
       Schema.NullOr(Schema.Union([Schema.String, Schema.instanceOf(File)])),
     ),
-  );
+  )
+  .addField("emails", UserContactEmailsForm)
+  .addField("phones", UserContactPhonesForm)
+  .addField("websites", UserContactWebsitesForm)
+  .addField("socials", UserContactSocialsForm);
+const decodeUserMetadataForm = Schema.decodeUnknownSync(UserMetadata);
+
+export const userMetadataFromForm = (value: UserFormType): UserMetadata => {
+  const localized = (
+    translations: ReadonlyArray<ContactTranslation> | undefined,
+  ): ContactTranslation[] =>
+    (translations ?? []).flatMap((translation) => {
+      const label = translation.label.trim();
+      return label ? [{ ...translation, label }] : [];
+    });
+  const emails = value.emails.flatMap((email) => {
+    const address = email.email.trim();
+    return address
+      ? [{ email: address, translations: localized(email.translations) }]
+      : [];
+  });
+  const phones = value.phones.flatMap((phone) => {
+    const number = phone.number.trim();
+    if (!number) return [];
+
+    const normalized = {
+      number,
+      translations: localized(phone.translations),
+    };
+    const extension = phone.extension?.trim();
+    return extension ? [{ ...normalized, extension }] : [normalized];
+  });
+  const websites = value.websites.flatMap((website) => {
+    const url = website.url.trim();
+    return url ? [{ url, translations: localized(website.translations) }] : [];
+  });
+  const socials = value.socials.flatMap((social) => {
+    const url = social.url.trim();
+    return url
+      ? [
+          {
+            platform: social.platform,
+            url,
+            translations: localized(social.translations),
+          },
+        ]
+      : [];
+  });
+
+  return decodeUserMetadataForm({ emails, phones, websites, socials });
+};
 
 const totpCodeFormBuilder = FormBuilder.empty.addField(
   "code",
@@ -651,6 +819,7 @@ export const UserButton = ({
   const displayName = session.user.name.trim();
   const displayEmail = session.user.email.trim();
   const displayImage = assetUrl(session.user.image, baseUrl);
+  const metadata = decodeUserMetadata(session.user.metadata);
   const isImpersonating = Boolean(session.session.impersonatedBy);
   const isOrganizationImpersonating = Boolean(
     session.session.impersonatedByOrganizationId,
@@ -682,6 +851,13 @@ export const UserButton = ({
 
   const updateUser = async (values: UserFormType) => {
     setFormError(null);
+    let metadata: UserMetadata;
+    try {
+      metadata = userMetadataFromForm(values);
+    } catch {
+      throw new Error(m.user_contact_validation_error());
+    }
+
     const imageFile = isFile(values.image) ? values.image : null;
     const image = imageFile
       ? await (async () => {
@@ -699,6 +875,7 @@ export const UserButton = ({
     const result = await authClient.updateUser({
       name: values.name.trim(),
       image: image?.trim() ?? "",
+      metadata,
     });
 
     if (isAuthErrorResult(result)) {
@@ -849,6 +1026,10 @@ export const UserButton = ({
                 defaultValues={{
                   name: displayName ?? "",
                   image: displayImage || null,
+                  emails: Array.from(metadata.emails ?? []),
+                  phones: Array.from(metadata.phones ?? []),
+                  websites: Array.from(metadata.websites ?? []),
+                  socials: Array.from(metadata.socials ?? []),
                 }}
                 error={formError}
                 onSubmit={async (data) => {
@@ -1549,9 +1730,18 @@ const UserForm = ({
   onSubmit: (values: UserFormType) => Promise<void>;
 }) => {
   const m = useUserButtonMessages();
+  const [editingLocale, setEditingLocale] =
+    useState<ContactLocale>(getLocale());
   const [form] = useState(() =>
     FormReact.make(userFormBuilder, {
-      fields: { name: TextField, image: ImageField },
+      fields: {
+        name: TextField,
+        image: ImageField,
+        emails: ContactEmailsField,
+        phones: ContactPhonesField,
+        websites: ContactWebsitesField,
+        socials: ContactSocialsField,
+      },
       mode: { validation: "onSubmit" },
       onSubmit: (_, { decoded }) =>
         Effect.tryPromise({
@@ -1598,6 +1788,51 @@ const UserForm = ({
             autoComplete="name"
             required
           />
+          <Separator />
+          <div className="flex flex-col gap-4">
+            <div className="flex flex-wrap items-start justify-between gap-3">
+              <div className="flex flex-col gap-1.5">
+                <h3 className="text-sm leading-none font-medium">
+                  {m.user_contact_title()}
+                </h3>
+                <p className="text-muted-foreground text-sm">
+                  {m.user_contact_description()}
+                </p>
+              </div>
+              <EditingLocaleSwitcher
+                value={editingLocale}
+                onValueChange={setEditingLocale}
+              />
+            </div>
+            <UserContactGroup title={m.user_contact_email_type()}>
+              <form.emails
+                locale={editingLocale}
+                maxItems={USER_CONTACT_LIMIT}
+                messages={userContactFieldMessages(m)}
+              />
+            </UserContactGroup>
+            <UserContactGroup title={m.user_contact_phone_type()}>
+              <form.phones
+                locale={editingLocale}
+                maxItems={USER_CONTACT_LIMIT}
+                messages={userContactFieldMessages(m)}
+              />
+            </UserContactGroup>
+            <UserContactGroup title={m.user_contact_website_type()}>
+              <form.websites
+                locale={editingLocale}
+                maxItems={USER_CONTACT_LIMIT}
+                messages={userContactFieldMessages(m)}
+              />
+            </UserContactGroup>
+            <UserContactGroup title={m.user_contact_social_type()}>
+              <form.socials
+                locale={editingLocale}
+                maxItems={USER_CONTACT_LIMIT}
+                messages={userContactFieldMessages(m)}
+              />
+            </UserContactGroup>
+          </div>
           {error && (
             <p role="alert" className="text-destructive text-sm">
               {error}
@@ -1609,6 +1844,19 @@ const UserForm = ({
     </section>
   );
 };
+
+const UserContactGroup = ({
+  children,
+  title,
+}: {
+  children: ReactNode;
+  title: string;
+}) => (
+  <div className="flex flex-col gap-3">
+    <h4 className="text-sm font-medium">{title}</h4>
+    {children}
+  </div>
+);
 
 function AccountSecuritySettings({
   authClient,
