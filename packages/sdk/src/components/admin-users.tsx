@@ -1,9 +1,5 @@
 import { useAtomRefresh, useAtomSet, useAtomValue } from "@effect/atom-react";
-import {
-  useNavigate,
-  useRouter,
-  type ValidateFromPath,
-} from "@tanstack/react-router";
+import { useNavigate, useRouter } from "@tanstack/react-router";
 import { Atom, AsyncResult } from "effect/unstable/reactivity";
 import { Effect, Option, Schema } from "effect";
 import {
@@ -18,10 +14,13 @@ import { useState } from "react";
 
 import {
   DataTable,
-  type DataTableColumnDef,
+  type DataTableColDef,
   DataTableListSummary,
-  type TableParams,
 } from "@krak-stack/registry/data-table";
+import {
+  SortParamsFromString,
+  type QueryType,
+} from "@krak-stack/registry/query";
 import { ErrorMessage } from "@krak-stack/registry/effect-form";
 import { AppBrand } from "@krak-stack/registry/app-brand";
 import { Badge } from "@/components/ui/badge";
@@ -174,21 +173,25 @@ const AdminUsersFamilyKey = Schema.fromJsonString(
   }),
 ).annotate({ identifier: "AdminUsersFamilyKey" });
 
-const adminUsersQuery = (search: TableParams, projectId?: string | null) => {
+const adminUsersQuery = (search: QueryType, projectId?: string | null) => {
   let query: AdminUsersQuery = {
     page: search.page ?? 0,
     pageSize: search.pageSize ?? 10,
   };
   if (search.globalFilter)
     query = { ...query, globalFilter: search.globalFilter };
-  if (search.sort) query = { ...query, sort: search.sort };
+  if (search.sort)
+    query = {
+      ...query,
+      sort: Schema.encodeSync(SortParamsFromString)(search.sort),
+    };
   if (projectId) query = { ...query, projectId };
 
   return query;
 };
 
 const adminUsersFamilyKey = (
-  search: TableParams,
+  search: QueryType,
   projectId: string | null | undefined,
   reloadKey: number,
 ) => JSON.stringify({ query: adminUsersQuery(search, projectId), reloadKey });
@@ -223,13 +226,13 @@ const activeOrganizationId = (
 };
 
 export function AdminUsersTable({
-  from,
+  onSearchChange,
   reloadKey = 0,
   search,
 }: {
-  from?: ValidateFromPath;
+  onSearchChange?: (search: QueryType) => void;
   reloadKey?: number;
-  search?: TableParams;
+  search?: QueryType;
 }) {
   const navigate = useNavigate();
   const router = useRouter();
@@ -247,8 +250,9 @@ export function AdminUsersTable({
   const projectId = auth?.projectId;
   const [impersonateError, setImpersonateError] = useState("");
   const [refreshKey, setRefreshKey] = useState(0);
-  const [localSearch, setLocalSearch] = useState<TableParams>({
-    globalFilter: "",
+  const [localSearch, setLocalSearch] = useState<QueryType>({
+    page: 0,
+    pageSize: 10,
   });
   const tableSearch = search ?? localSearch;
   const result = useAtomValue(
@@ -259,7 +263,7 @@ export function AdminUsersTable({
   const [banningUser, setBanningUser] = useState<User | null>(null);
   const [unbanningUser, setUnbanningUser] = useState<User | null>(null);
   const [impersonateUserAtom] = useState(() =>
-    Atom.fn((userId: string) =>
+    authClientApi(baseUrl).runtime.fn((userId: string) =>
       Effect.gen(function* () {
         const client = yield* authHttpClient(baseUrl);
         yield* client.auth.adminImpersonateUser({ payload: { userId } });
@@ -290,7 +294,7 @@ export function AdminUsersTable({
     ),
   );
   const [impersonateOrganizationUserAtom] = useState(() =>
-    Atom.fn(
+    authClientApi(baseUrl).runtime.fn(
       ({
         actorUserId,
         organizationId,
@@ -368,13 +372,14 @@ export function AdminUsersTable({
       {error ? <ErrorMessage text={error} /> : null}
       {impersonateError ? <ErrorMessage text={impersonateError} /> : null}
       <DataTable
-        columns={userColumns(m, baseUrl)}
-        data={users}
+        columnDefs={userColumns(m, baseUrl)}
+        rowData={users}
         features={{
-          columnVisibility: { default: { id: false } },
+          columnVisibility: true,
           export: { baseName: "users" },
           gallery: false,
           pagination: { mode: "server", rowCount: total },
+          refresh: () => setRefreshKey((current) => current + 1),
           rowActions: {
             items: [
               {
@@ -433,16 +438,16 @@ export function AdminUsersTable({
             ],
           },
         }}
-        {...(from ? { routeFrom: from } : {})}
-        {...(!search
-          ? {
-              search: tableSearch,
-              onSearchChange: setLocalSearch,
-              searchState: "local" as const,
-            }
-          : {})}
-        onRefresh={() => setRefreshKey((current) => current + 1)}
-        state={{ loading: isLoading }}
+        initialState={tableSearch}
+        onStateChange={({ page, pageSize, globalFilter, sort }) => {
+          const nextSearch = { page, pageSize, globalFilter, sort };
+          if (onSearchChange) {
+            onSearchChange(nextSearch);
+          } else {
+            setLocalSearch(nextSearch);
+          }
+        }}
+        status={{ loading: isLoading }}
       />
       {banningUser ? (
         <BanUserDialog
@@ -466,7 +471,7 @@ export function AdminUsersTable({
   );
 }
 
-export function useAdminUsersTotal(search: TableParams) {
+export function useAdminUsersTotal(search: QueryType) {
   const auth = useKrakstackAuth();
   const result = useAtomValue(
     usersAtom(auth?.baseUrl)(adminUsersFamilyKey(search, auth?.projectId, 0)),
@@ -481,27 +486,18 @@ export function useAdminUsersTotal(search: TableParams) {
 const userColumns = (
   m: AdminUsersLabels,
   baseUrl?: string | undefined,
-): DataTableColumnDef<User>[] => [
+): DataTableColDef<User>[] => [
   {
-    accessorKey: "id",
-    header: m.admin_column_id,
-    cell: ({ row }) => (
-      <span className="text-muted-foreground font-mono text-xs">
-        {row.original.id}
-      </span>
-    ),
-  },
-  {
-    accessorKey: "email",
-    header: m.admin_column_user,
-    cell: ({ row }) => {
-      const image = assetUrl(row.original.image);
+    field: "email",
+    headerName: m.admin_column_user,
+    cellRenderer: ({ data }) => {
+      const image = assetUrl(data.image);
 
       return (
         <AppBrand
           to={null}
-          label={row.original.email}
-          subtitle={row.original.name}
+          label={data.email}
+          subtitle={data.name}
           icon={UserIcon}
           className="min-w-48"
           {...(image ? { imageSrc: image } : {})}
@@ -510,12 +506,12 @@ const userColumns = (
     },
   },
   {
-    accessorKey: "organizations",
-    header: m.admin_column_organizations,
-    cell: ({ row }) => (
+    field: "organizations",
+    headerName: m.admin_column_organizations,
+    cellRenderer: ({ data }) => (
       <DataTableListSummary
         emptyLabel="-"
-        items={row.original.organizations.map((organization) => {
+        items={data.organizations.map((organization) => {
           const logo = assetUrl(organization.logo, baseUrl);
           return {
             label: organization.name,
@@ -532,12 +528,12 @@ const userColumns = (
     ),
   },
   {
-    accessorKey: "projects",
-    header: m.admin_column_projects,
-    cell: ({ row }) => (
+    field: "projects",
+    headerName: m.admin_column_projects,
+    cellRenderer: ({ data }) => (
       <DataTableListSummary
         emptyLabel="-"
-        items={row.original.projects.map((project) => {
+        items={data.projects.map((project) => {
           const logo = assetUrl(project.logo, baseUrl);
           return {
             label: project.name,
@@ -554,20 +550,20 @@ const userColumns = (
     ),
   },
   {
-    accessorKey: "emailVerified",
-    header: m.admin_column_verified,
-    cell: ({ row }) =>
-      row.original.emailVerified ? (
+    field: "emailVerified",
+    headerName: m.admin_column_verified,
+    cellRenderer: ({ data }) =>
+      data.emailVerified ? (
         <Badge variant="outline">{m.admin_column_verified}</Badge>
       ) : (
         <Badge variant="secondary">{m.admin_column_unverified}</Badge>
       ),
   },
   {
-    accessorKey: "role",
-    header: m.admin_column_role,
-    cell: ({ row }) => {
-      const role = row.original.role;
+    field: "role",
+    headerName: m.admin_column_role,
+    cellRenderer: ({ data }) => {
+      const role = data.role;
       if (!role) return <Badge variant="outline">{m.user_role_default}</Badge>;
       return (
         <div className="flex flex-wrap gap-1.5">
@@ -584,32 +580,30 @@ const userColumns = (
     },
   },
   {
-    accessorKey: "banned",
-    header: m.admin_column_status,
-    cell: ({ row }) =>
-      row.original.banned ? (
+    field: "banned",
+    headerName: m.admin_column_status,
+    cellRenderer: ({ data }) =>
+      data.banned ? (
         <Badge variant="destructive">{m.admin_status_banned}</Badge>
       ) : (
         <Badge variant="outline">{m.admin_status_active}</Badge>
       ),
   },
   {
-    accessorKey: "lastSignedIn",
-    header: m.admin_column_last_signed_in,
-    cell: ({ row }) => (
+    field: "lastSignedIn",
+    headerName: m.admin_column_last_signed_in,
+    cellRenderer: ({ data }) => (
       <span className="text-muted-foreground text-sm">
-        {row.original.lastSignedIn
-          ? new Date(row.original.lastSignedIn).toLocaleString()
-          : "-"}
+        {data.lastSignedIn ? new Date(data.lastSignedIn).toLocaleString() : "-"}
       </span>
     ),
   },
   {
-    accessorKey: "createdAt",
-    header: m.admin_column_created,
-    cell: ({ row }) => (
+    field: "createdAt",
+    headerName: m.admin_column_created,
+    cellRenderer: ({ data }) => (
       <span className="text-muted-foreground text-sm">
-        {new Date(row.original.createdAt).toLocaleDateString()}
+        {new Date(data.createdAt).toLocaleDateString()}
       </span>
     ),
   },
@@ -629,7 +623,7 @@ function BanUserDialog({
   onClose: () => void;
 }) {
   const [banUserAtom] = useState(() =>
-    Atom.fn((userId: string) =>
+    authClientApi(baseUrl).runtime.fn((userId: string) =>
       Effect.flatMap(authHttpClient(baseUrl), (client) =>
         client.auth.adminBanUser({ payload: { userId } }),
       ).pipe(
@@ -698,7 +692,7 @@ function UnbanUserDialog({
   onClose: () => void;
 }) {
   const [unbanUserAtom] = useState(() =>
-    Atom.fn((userId: string) =>
+    authClientApi(baseUrl).runtime.fn((userId: string) =>
       Effect.flatMap(authHttpClient(baseUrl), (client) =>
         client.auth.adminUnbanUser({ payload: { userId } }),
       ).pipe(

@@ -75,15 +75,15 @@
     "type:check": "tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {
-    "@krak-stack/registry": "0.1.19",
+    "@krak-stack/registry": "0.1.24",
     "react-qr-code": "^2.2.0"
   },
   "peerDependencies": {
-    "@effect/atom-react": "^4.0.0-beta.78",
+    "@effect/atom-react": "4.0.0-rc.112",
     "@lucas-barake/effect-form-react": "^0.26.0-beta.5",
     "@tanstack/react-router": "^1.170.15",
     "@tanstack/react-table": "^9.1.2",
-    "effect": "^4.0.0-beta.78",
+    "effect": "4.0.0-rc.112",
     "input-otp": "^1.4.2",
     "lucide-react": "^1.17.0",
     "react": "^19.2.7",

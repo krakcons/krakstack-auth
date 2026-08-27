@@ -3,7 +3,7 @@ import { Copy, Plus } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
 
-import { TableSearchSchemaStandard as TableSearchSchema } from "@krak-stack/registry/data-table";
+import { QueryStandard } from "@krak-stack/registry/query";
 import { SidebarPageHeader } from "@krak-stack/registry/sidebar-layout";
 import { Button } from "@/components/ui/button";
 import {
@@ -21,7 +21,7 @@ import {
 import { OAuthClientsTable } from "@/services/oauth/client/table";
 
 export const Route = createFileRoute("/admin/oauth/clients")({
-  validateSearch: TableSearchSchema,
+  validateSearch: QueryStandard,
   component: ClientsPage,
 });
 

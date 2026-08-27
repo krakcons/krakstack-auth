@@ -30,7 +30,7 @@ export type { Organization, OrganizationMetadata } from "../schema.js";
 export const ExtraApiGroup = HttpApiGroup.make("authExtra")
   .add(
     HttpApiEndpoint.get("getProjectPublicConfig", "/auth/project-config", {
-      query: ExtraProjectPublicConfigQuery,
+      query: ExtraProjectPublicConfigQuery.fields,
       success: ExtraProjectPublicConfig,
       error: [HttpApiError.InternalServerError],
     }).annotateMerge(
@@ -44,7 +44,7 @@ export const ExtraApiGroup = HttpApiGroup.make("authExtra")
   )
   .add(
     HttpApiEndpoint.patch("updateApiKey", "/auth/api-key/:keyId", {
-      params: Schema.Struct({ keyId: Schema.NonEmptyString }),
+      params: { keyId: Schema.NonEmptyString },
       payload: Schema.Struct({
         configId: ExtraUpdateApiKeyPayload.fields.configId,
         name: ExtraUpdateApiKeyPayload.fields.name,
@@ -73,7 +73,7 @@ export const ExtraApiGroup = HttpApiGroup.make("authExtra")
       "getOrganizationPublicProfile",
       "/auth/organization-profile",
       {
-        query: ExtraOrganizationPublicProfileQuery,
+        query: ExtraOrganizationPublicProfileQuery.fields,
         success: ExtraOrganizationPublicProfile,
         error: [HttpApiError.NotFound, HttpApiError.InternalServerError],
       },

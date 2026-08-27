@@ -96,7 +96,7 @@ const docs = (title: string, description: string) =>
 export const AuthApiGroup = HttpApiGroup.make("auth")
   .add(
     HttpApiEndpoint.get("getSession", "/get-session", {
-      query: GetSessionQuery,
+      query: GetSessionQuery.fields,
       success: GetSessionResponse,
       error: errors,
     }).annotateMerge(
@@ -290,7 +290,7 @@ export const AuthApiGroup = HttpApiGroup.make("auth")
       "organizationGetFull",
       "/organization/get-full-organization",
       {
-        query: GetFullOrganizationQuery,
+        query: GetFullOrganizationQuery.fields,
         success: Schema.NullOr(FullAuthOrganization),
         error: errors,
       },
@@ -332,7 +332,7 @@ export const AuthApiGroup = HttpApiGroup.make("auth")
       "organizationListUserInvitations",
       "/organization/list-user-invitations",
       {
-        query: UserInvitationsQuery,
+        query: UserInvitationsQuery.fields,
         success: Schema.Array(AuthInvitation),
         error: errors,
       },
@@ -348,7 +348,7 @@ export const AuthApiGroup = HttpApiGroup.make("auth")
       "organizationListMembers",
       "/organization/list-members",
       {
-        query: OrganizationListMembersQuery,
+        query: OrganizationListMembersQuery.fields,
         success: OrganizationListMembersResponse,
         error: errors,
       },
@@ -407,7 +407,7 @@ export const AuthApiGroup = HttpApiGroup.make("auth")
       "organizationListInvitations",
       "/organization/list-invitations",
       {
-        query: OrganizationInvitationsQuery,
+        query: OrganizationInvitationsQuery.fields,
         success: Schema.Array(AuthInvitation),
         error: errors,
       },
@@ -423,7 +423,7 @@ export const AuthApiGroup = HttpApiGroup.make("auth")
       "organizationGetInvitation",
       "/organization/get-invitation",
       {
-        query: GetInvitationQuery,
+        query: GetInvitationQuery.fields,
         success: GetInvitationResponse,
         error: errors,
       },
@@ -472,7 +472,7 @@ export const AuthApiGroup = HttpApiGroup.make("auth")
   )
   .add(
     HttpApiEndpoint.get("apiKeyList", "/api-key/list", {
-      query: ListApiKeysQuery,
+      query: ListApiKeysQuery.fields,
       success: ListApiKeysResponse,
       error: errors,
     }).annotateMerge(
@@ -551,7 +551,7 @@ export const AuthApiGroup = HttpApiGroup.make("auth")
   )
   .add(
     HttpApiEndpoint.get("oauthPublicClient", "/oauth2/public-client", {
-      query: OAuthPublicClientQuery,
+      query: OAuthPublicClientQuery.fields,
       success: OAuthPublicClient,
       error: errors,
     }).annotateMerge(

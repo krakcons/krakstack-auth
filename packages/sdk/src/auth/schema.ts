@@ -85,71 +85,90 @@ export const AuthErrorBody = Schema.Struct({
   description: "Wire error returned by an authentication endpoint.",
 });
 
-const authErrorFields = AuthErrorBody.fields;
+const authErrorFields = <const Tag extends string>(tag: Tag) => ({
+  _tag: Schema.tagDefaultOmit(tag),
+  ...AuthErrorBody.fields,
+});
 
-export class AuthBadRequest extends Schema.ErrorClass<AuthBadRequest>(
+export class AuthBadRequest extends Schema.TaggedError<AuthBadRequest>()(
   "AuthBadRequest",
-)(authErrorFields, {
-  identifier: "AuthBadRequest",
-  title: "Bad request",
-  httpApiStatus: 400,
-}) {}
+  authErrorFields("AuthBadRequest"),
+  {
+    identifier: "AuthBadRequest",
+    title: "Bad request",
+    httpApiStatus: 400,
+  },
+) {}
 
-export class AuthUnauthorized extends Schema.ErrorClass<AuthUnauthorized>(
+export class AuthUnauthorized extends Schema.TaggedError<AuthUnauthorized>()(
   "AuthUnauthorized",
-)(authErrorFields, {
-  identifier: "AuthUnauthorized",
-  title: "Unauthorized",
-  httpApiStatus: 401,
-}) {}
+  authErrorFields("AuthUnauthorized"),
+  {
+    identifier: "AuthUnauthorized",
+    title: "Unauthorized",
+    httpApiStatus: 401,
+  },
+) {}
 
-export class AuthForbidden extends Schema.ErrorClass<AuthForbidden>(
+export class AuthForbidden extends Schema.TaggedError<AuthForbidden>()(
   "AuthForbidden",
-)(authErrorFields, {
-  identifier: "AuthForbidden",
-  title: "Forbidden",
-  httpApiStatus: 403,
-}) {}
+  authErrorFields("AuthForbidden"),
+  {
+    identifier: "AuthForbidden",
+    title: "Forbidden",
+    httpApiStatus: 403,
+  },
+) {}
 
-export class AuthNotFound extends Schema.ErrorClass<AuthNotFound>(
+export class AuthNotFound extends Schema.TaggedError<AuthNotFound>()(
   "AuthNotFound",
-)(authErrorFields, {
-  identifier: "AuthNotFound",
-  title: "Not found",
-  httpApiStatus: 404,
-}) {}
+  authErrorFields("AuthNotFound"),
+  {
+    identifier: "AuthNotFound",
+    title: "Not found",
+    httpApiStatus: 404,
+  },
+) {}
 
-export class AuthConflict extends Schema.ErrorClass<AuthConflict>(
+export class AuthConflict extends Schema.TaggedError<AuthConflict>()(
   "AuthConflict",
-)(authErrorFields, {
-  identifier: "AuthConflict",
-  title: "Conflict",
-  httpApiStatus: 409,
-}) {}
+  authErrorFields("AuthConflict"),
+  {
+    identifier: "AuthConflict",
+    title: "Conflict",
+    httpApiStatus: 409,
+  },
+) {}
 
-export class AuthExpectationFailed extends Schema.ErrorClass<AuthExpectationFailed>(
+export class AuthExpectationFailed extends Schema.TaggedError<AuthExpectationFailed>()(
   "AuthExpectationFailed",
-)(authErrorFields, {
-  identifier: "AuthExpectationFailed",
-  title: "Expectation failed",
-  httpApiStatus: 417,
-}) {}
+  authErrorFields("AuthExpectationFailed"),
+  {
+    identifier: "AuthExpectationFailed",
+    title: "Expectation failed",
+    httpApiStatus: 417,
+  },
+) {}
 
-export class AuthTooManyRequests extends Schema.ErrorClass<AuthTooManyRequests>(
+export class AuthTooManyRequests extends Schema.TaggedError<AuthTooManyRequests>()(
   "AuthTooManyRequests",
-)(authErrorFields, {
-  identifier: "AuthTooManyRequests",
-  title: "Too many requests",
-  httpApiStatus: 429,
-}) {}
+  authErrorFields("AuthTooManyRequests"),
+  {
+    identifier: "AuthTooManyRequests",
+    title: "Too many requests",
+    httpApiStatus: 429,
+  },
+) {}
 
-export class AuthInternalServerError extends Schema.ErrorClass<AuthInternalServerError>(
+export class AuthInternalServerError extends Schema.TaggedError<AuthInternalServerError>()(
   "AuthInternalServerError",
-)(authErrorFields, {
-  identifier: "AuthInternalServerError",
-  title: "Internal server error",
-  httpApiStatus: 500,
-}) {}
+  authErrorFields("AuthInternalServerError"),
+  {
+    identifier: "AuthInternalServerError",
+    title: "Internal server error",
+    httpApiStatus: 500,
+  },
+) {}
 
 export const UpdateUserPayload = Schema.Struct({
   name: Schema.optional(Schema.String),

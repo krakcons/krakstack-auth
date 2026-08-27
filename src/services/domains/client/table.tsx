@@ -1,4 +1,5 @@
 import { useAtomSet, useAtomSubscribe, useAtomValue } from "@effect/atom-react";
+import { useNavigate, useSearch } from "@tanstack/react-router";
 import { FormBuilder, FormReact } from "@lucas-barake/effect-form-react";
 import { Effect, Schema } from "effect";
 import { Atom, AsyncResult } from "effect/unstable/reactivity";
@@ -9,7 +10,7 @@ import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import {
   DataTable,
-  type DataTableColumnDef,
+  type DataTableColDef,
 } from "@krak-stack/registry/data-table";
 import {
   CheckboxField,
@@ -19,6 +20,7 @@ import {
   TextField,
 } from "@krak-stack/registry/effect-form";
 import { AppBrand } from "@krak-stack/registry/app-brand";
+import { Query } from "@krak-stack/registry/query";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -68,6 +70,8 @@ export function DomainsTable({
   creatingDomain?: boolean;
   onCreatingDomainChange?: (open: boolean) => void;
 }) {
+  const navigate = useNavigate({ from: "/admin/domains" });
+  const search = useSearch({ from: "/admin/domains" });
   const result = useAtomValue(domainsAtom(reloadKey));
   const deleteDomain = useAtomSet(deleteDomainAtom, { mode: "promise" });
   const [domains, setDomains] = useState<ServerDomain[] | null>(null);
@@ -92,8 +96,8 @@ export function DomainsTable({
     <div className="flex flex-col gap-4">
       {error ? <ErrorMessage text={error} /> : null}
       <DataTable
-        columns={domainColumns()}
-        data={rows}
+        columnDefs={domainColumns()}
+        rowData={rows}
         features={{
           export: { baseName: "domains" },
           gallery: false,
@@ -113,7 +117,12 @@ export function DomainsTable({
             ],
           },
         }}
-        routeFrom="/admin/domains"
+        initialState={search}
+        onStateChange={(state) =>
+          void navigate({
+            search: Schema.encodeSync(Query)(state),
+          })
+        }
       />
       {deletingDomain ? (
         <DeleteDomainDialog
@@ -311,45 +320,41 @@ function DomainDialog({
   );
 }
 
-const domainColumns = (): DataTableColumnDef<ServerDomain>[] => [
+const domainColumns = (): DataTableColDef<ServerDomain>[] => [
   {
-    accessorKey: "hostname",
-    header: m.domain_hostname(),
-    cell: ({ row }) => (
-      <code className="text-muted-foreground text-xs">
-        {row.original.hostname}
-      </code>
+    field: "hostname",
+    headerName: m.domain_hostname(),
+    cellRenderer: ({ data }) => (
+      <code className="text-muted-foreground text-xs">{data.hostname}</code>
     ),
   },
   {
-    accessorKey: "rootHostname",
-    header: m.domain_root_hostname(),
-    cell: ({ row }) => (
-      <code className="text-muted-foreground text-xs">
-        {row.original.rootHostname}
-      </code>
+    field: "rootHostname",
+    headerName: m.domain_root_hostname(),
+    cellRenderer: ({ data }) => (
+      <code className="text-muted-foreground text-xs">{data.rootHostname}</code>
     ),
   },
   {
-    accessorKey: "active",
-    header: m.admin_column_status(),
-    cell: ({ row }) => (
-      <Badge variant={row.original.active ? "default" : "secondary"}>
-        {row.original.active ? m.admin_status_active() : m.domain_pending()}
+    field: "active",
+    headerName: m.admin_column_status(),
+    cellRenderer: ({ data }) => (
+      <Badge variant={data.active ? "default" : "secondary"}>
+        {data.active ? m.admin_status_active() : m.domain_pending()}
       </Badge>
     ),
   },
   {
-    accessorKey: "projectId",
-    header: m.project(),
-    cell: ({ row }) => {
-      const logo = assetUrl(row.original.projectLogo ?? null, authBaseUrl);
+    field: "projectId",
+    headerName: m.project(),
+    cellRenderer: ({ data }) => {
+      const logo = assetUrl(data.projectLogo ?? null, authBaseUrl);
 
-      return row.original.projectId ? (
+      return data.projectId ? (
         <AppBrand
           to={null}
-          label={row.original.projectName ?? row.original.projectId}
-          subtitle={row.original.projectId}
+          label={data.projectName ?? data.projectId}
+          subtitle={data.projectId}
           icon={FolderKanban}
           className="min-w-48"
           {...(logo ? { imageSrc: logo } : {})}
@@ -360,16 +365,16 @@ const domainColumns = (): DataTableColumnDef<ServerDomain>[] => [
     },
   },
   {
-    accessorKey: "organizationId",
-    header: m.admin_column_organization(),
-    cell: ({ row }) => {
-      const logo = assetUrl(row.original.organizationLogo ?? null, authBaseUrl);
+    field: "organizationId",
+    headerName: m.admin_column_organization(),
+    cellRenderer: ({ data }) => {
+      const logo = assetUrl(data.organizationLogo ?? null, authBaseUrl);
 
-      return row.original.organizationId ? (
+      return data.organizationId ? (
         <AppBrand
           to={null}
-          label={row.original.organizationName ?? row.original.organizationId}
-          subtitle={row.original.organizationId}
+          label={data.organizationName ?? data.organizationId}
+          subtitle={data.organizationId}
           icon={Building2}
           className="min-w-48"
           {...(logo ? { imageSrc: logo } : {})}
@@ -380,11 +385,11 @@ const domainColumns = (): DataTableColumnDef<ServerDomain>[] => [
     },
   },
   {
-    accessorKey: "createdAt",
-    header: m.admin_column_created(),
-    cell: ({ row }) => (
+    field: "createdAt",
+    headerName: m.admin_column_created(),
+    cellRenderer: ({ data }) => (
       <span className="text-muted-foreground text-sm">
-        {new Date(row.original.createdAt).toLocaleDateString()}
+        {new Date(data.createdAt).toLocaleDateString()}
       </span>
     ),
   },

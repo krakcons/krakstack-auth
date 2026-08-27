@@ -146,7 +146,7 @@ type AccessResult =
     };
 
 const acceptInvitationAtom = Atom.family((baseUrl?: string | undefined) =>
-  Atom.fn(
+  authClientApi(baseUrl).runtime.fn(
     (
       {
         invitationId,
@@ -229,7 +229,7 @@ const accessAtom = Atom.family((baseUrl?: string | undefined) =>
     const { locale, organizationId } = Schema.decodeUnknownSync(AccessKey)(key);
 
     return Atom.keepAlive(
-      Atom.make((get) =>
+      authClientApi(baseUrl).runtime.atom((get) =>
         Effect.gen(function* () {
           const client = yield* authHttpClient(baseUrl);
           const allowed = yield* client.auth

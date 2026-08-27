@@ -2,7 +2,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { Plus } from "lucide-react";
 import { useState } from "react";
 
-import { TableSearchSchemaStandard as TableSearchSchema } from "@krak-stack/registry/data-table";
+import { QueryStandard } from "@krak-stack/registry/query";
 import { Button } from "@/components/ui/button";
 import { SidebarPageHeader } from "@krak-stack/registry/sidebar-layout";
 import { m } from "@/paraglide/messages";
@@ -10,7 +10,7 @@ import { ProjectForm } from "@/services/projects/client/form";
 import { ProjectsTable } from "@/services/projects/client/table";
 
 export const Route = createFileRoute("/admin/projects")({
-  validateSearch: TableSearchSchema,
+  validateSearch: QueryStandard,
   component: ProjectsPage,
 });
 

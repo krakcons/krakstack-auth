@@ -14,7 +14,7 @@ import {
   TextField,
 } from "@krak-stack/registry/effect-form";
 import { parseApiKeyReferrers } from "./api-key.js";
-import { authHttpClient } from "./auth-client-api.js";
+import { authClientApi, authHttpClient } from "./auth-client-api.js";
 import { ApiKeyPermissions } from "./api-key-permissions.js";
 import { apiKeyReferrers } from "./api-key-referrers.js";
 import { ExtraApiKeyPermissions } from "../extra/schema.js";
@@ -106,6 +106,7 @@ export const ApiKeyEditForm = ({
   permissionsRef.current = permissions;
   const [form] = useState(() =>
     FormReact.make(editApiKeyFormBuilder, {
+      runtime: authClientApi(baseUrl).runtime,
       fields: {
         name: TextField,
         enabled: CheckboxField,

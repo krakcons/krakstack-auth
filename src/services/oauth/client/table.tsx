@@ -1,4 +1,6 @@
 import { useAtomSet, useAtomValue } from "@effect/atom-react";
+import { useNavigate, useSearch } from "@tanstack/react-router";
+import { Schema } from "effect";
 import { Atom, AsyncResult } from "effect/unstable/reactivity";
 import { FolderKanban, KeyRound, Pencil, Trash2 } from "lucide-react";
 import { useState } from "react";
@@ -6,10 +8,11 @@ import { toast } from "sonner";
 
 import {
   DataTable,
-  type DataTableColumnDef,
+  type DataTableColDef,
 } from "@krak-stack/registry/data-table";
 import { ErrorMessage } from "@krak-stack/registry/effect-form";
 import { AppBrand } from "@krak-stack/registry/app-brand";
+import { Query } from "@krak-stack/registry/query";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -42,6 +45,8 @@ const deleteOAuthClientAtom = AdminApiClient.mutation(
 );
 
 export function OAuthClientsTable({ reloadKey = 0 }: { reloadKey?: number }) {
+  const navigate = useNavigate({ from: "/admin/oauth/clients" });
+  const search = useSearch({ from: "/admin/oauth/clients" });
   const result = useAtomValue(oauthClientsAtom(reloadKey));
   const deleteOAuthClient = useAtomSet(deleteOAuthClientAtom, {
     mode: "promise",
@@ -70,8 +75,8 @@ export function OAuthClientsTable({ reloadKey = 0 }: { reloadKey?: number }) {
     <div className="flex flex-col gap-4">
       {error ? <ErrorMessage text={error} /> : null}
       <DataTable
-        columns={clientColumns()}
-        data={rows}
+        columnDefs={clientColumns()}
+        rowData={rows}
         features={{
           export: { baseName: "oauth-clients" },
           gallery: false,
@@ -91,7 +96,12 @@ export function OAuthClientsTable({ reloadKey = 0 }: { reloadKey?: number }) {
             ],
           },
         }}
-        routeFrom="/admin/oauth/clients"
+        initialState={search}
+        onStateChange={(state) =>
+          void navigate({
+            search: Schema.encodeSync(Query)(state),
+          })
+        }
       />
       {editingClient ? (
         <OAuthClientForm
@@ -124,18 +134,18 @@ export function OAuthClientsTable({ reloadKey = 0 }: { reloadKey?: number }) {
   );
 }
 
-const clientColumns = (): DataTableColumnDef<OAuthClientAdmin>[] => [
+const clientColumns = (): DataTableColDef<OAuthClientAdmin>[] => [
   {
-    accessorKey: "name",
-    header: m.admin_column_client(),
-    cell: ({ row }) => {
-      const icon = assetUrl(row.original.icon, authBaseUrl);
+    field: "name",
+    headerName: m.admin_column_client(),
+    cellRenderer: ({ data }) => {
+      const icon = assetUrl(data.icon, authBaseUrl);
 
       return (
         <AppBrand
           to={null}
-          label={row.original.name ?? row.original.clientId}
-          subtitle={row.original.clientId}
+          label={data.name ?? data.clientId}
+          subtitle={data.clientId}
           icon={KeyRound}
           className="min-w-56"
           {...(icon ? { imageSrc: icon } : {})}
@@ -144,16 +154,16 @@ const clientColumns = (): DataTableColumnDef<OAuthClientAdmin>[] => [
     },
   },
   {
-    id: "project",
-    header: m.project(),
-    cell: ({ row }) => {
-      const logo = assetUrl(row.original.projectLogo, authBaseUrl);
+    colId: "project",
+    headerName: m.project(),
+    cellRenderer: ({ data }) => {
+      const logo = assetUrl(data.projectLogo, authBaseUrl);
 
       return (
         <AppBrand
           to={null}
-          label={row.original.projectName ?? m.project_none()}
-          subtitle={row.original.projectId ?? ""}
+          label={data.projectName ?? m.project_none()}
+          subtitle={data.projectId ?? ""}
           icon={FolderKanban}
           className="min-w-48"
           {...(logo ? { imageSrc: logo } : {})}
@@ -162,12 +172,12 @@ const clientColumns = (): DataTableColumnDef<OAuthClientAdmin>[] => [
     },
   },
   {
-    accessorKey: "redirectUris",
-    header: m.admin_column_redirect_uris(),
-    cell: ({ row }) => (
+    field: "redirectUris",
+    headerName: m.admin_column_redirect_uris(),
+    cellRenderer: ({ data }) => (
       <div className="flex max-w-80 flex-col gap-1">
-        {row.original.redirectUris.length ? (
-          row.original.redirectUris.map((uri) => (
+        {data.redirectUris.length ? (
+          data.redirectUris.map((uri) => (
             <code key={uri} className="text-muted-foreground truncate text-xs">
               {uri}
             </code>
@@ -181,11 +191,11 @@ const clientColumns = (): DataTableColumnDef<OAuthClientAdmin>[] => [
     ),
   },
   {
-    accessorKey: "scope",
-    header: m.admin_column_scopes(),
-    cell: ({ row }) => (
+    field: "scope",
+    headerName: m.admin_column_scopes(),
+    cellRenderer: ({ data }) => (
       <code className="text-muted-foreground text-xs">
-        {row.original.scope ?? m.admin_none()}
+        {data.scope ?? m.admin_none()}
       </code>
     ),
   },

@@ -123,6 +123,7 @@ const makeOrganizationForm = ({
   organization,
 }: OrganizationFormResource) =>
   FormReact.make(organizationFormBuilder, {
+    runtime: authClientApi(baseUrl).runtime,
     fields: {
       name: TextField,
       slug: TextField,

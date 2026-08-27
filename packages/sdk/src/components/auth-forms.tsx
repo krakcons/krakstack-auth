@@ -387,6 +387,7 @@ export function Signin(props: AuthFormProps) {
 
   const [form] = useState(() =>
     FormReact.make(signinFormBuilder, {
+      runtime: authClientApi(baseUrl).runtime,
       fields: { email: TextField, password: TextField, otp: OtpField },
       mode: { validation: "onSubmit" },
       onSubmit: (
@@ -508,7 +509,7 @@ export function Signin(props: AuthFormProps) {
   const submit = useAtomSet(form.submit);
   const submitResult = useAtomValue(form.submit);
   const [socialSignIn] = useState(() =>
-    Atom.fn((provider: "google") =>
+    authClientApi(baseUrl).runtime.fn((provider: "google") =>
       Effect.gen(function* () {
         const payload = oauthQuery
           ? {
@@ -781,6 +782,7 @@ export function VerifyEmail(props: AuthFormProps) {
   const [resent, setResent] = useState(false);
   const [form] = useState(() =>
     FormReact.make(verifyEmailFormBuilder, {
+      runtime: authClientApi(baseUrl).runtime,
       fields: { email: TextField, otp: OtpField },
       mode: { validation: "onSubmit" },
       onSubmit: (action: "verify" | "resend", { decoded: value }) =>
@@ -900,6 +902,7 @@ export function ForgotPassword(props: AuthFormProps) {
   const [submitted, setSubmitted] = useState(false);
   const [form] = useState(() =>
     FormReact.make(forgotPasswordFormBuilder, {
+      runtime: authClientApi(baseUrl).runtime,
       fields: { email: TextField },
       mode: { validation: "onSubmit" },
       onSubmit: (_, { decoded: value }) =>
@@ -998,6 +1001,7 @@ function ResetPasswordForm({
   const onSuccess = () => navigate({ to: "/sign-in" });
   const [form] = useState(() =>
     FormReact.make(resetPasswordFormBuilder, {
+      runtime: authClientApi(baseUrl).runtime,
       fields: { password: TextField },
       mode: { validation: "onSubmit" },
       onSubmit: (_, { decoded: value }) =>
@@ -1086,6 +1090,7 @@ export function TwoFactor(props: AuthFormProps) {
   const [emailCodeSent, setEmailCodeSent] = useState(false);
   const [form] = useState(() =>
     FormReact.make(twoFactorFormBuilder, {
+      runtime: authClientApi(baseUrl).runtime,
       fields: { code: AuthCodeField, trustDevice: CheckboxField },
       mode: { validation: "onSubmit" },
       onSubmit: (

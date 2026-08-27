@@ -1,7 +1,7 @@
 import { Effect } from "effect";
 import { FetchHttpClient, HttpClient } from "effect/unstable/http";
 import { AtomHttpApi } from "effect/unstable/reactivity";
-import { HttpApiClient } from "effect/unstable/httpapi";
+import { HttpApi, HttpApiClient } from "effect/unstable/httpapi";
 
 import { AuthClientApi } from "../api.js";
 import { defaultBaseUrl } from "../config.js";
@@ -29,20 +29,35 @@ export const authHttpClient = (baseUrl?: string | undefined) =>
     transformClient: withCredentials,
   }).pipe(Effect.provide(FetchHttpClient.layer));
 
-const createAuthClientApiClient = (key: string) =>
-  AtomHttpApi.Service<object>()(`AuthClientApi:${key}`, {
-    api: AuthClientApi,
-    baseUrl: key,
-    httpClient: FetchHttpClient.layer,
-    transformClient: withCredentials,
-  });
+type AuthClientApiGroups =
+  typeof AuthClientApi extends HttpApi.HttpApi<string, infer Groups>
+    ? Groups
+    : never;
 
-const authClientApis = new Map<
-  string,
-  ReturnType<typeof createAuthClientApiClient>
->();
+type AuthClientApiClient = Pick<
+  AtomHttpApi.AtomHttpApiClient<never, string, AuthClientApiGroups>,
+  "mutation" | "query" | "runtime"
+>;
 
-export const authClientApi = (baseUrl?: string | undefined) => {
+const createAuthClientApiClient = (key: string): AuthClientApiClient => {
+  class AuthClientApiClient extends AtomHttpApi.Service<AuthClientApiClient>()(
+    `AuthClientApi:${key}`,
+    {
+      api: AuthClientApi,
+      baseUrl: key,
+      httpClient: FetchHttpClient.layer,
+      transformClient: withCredentials,
+    },
+  ) {}
+
+  return AuthClientApiClient;
+};
+
+const authClientApis = new Map<string, AuthClientApiClient>();
+
+export const authClientApi: (
+  baseUrl?: string | undefined,
+) => AuthClientApiClient = (baseUrl) => {
   const key = authClientApiUrl(baseUrl);
   const existing = authClientApis.get(key);
 

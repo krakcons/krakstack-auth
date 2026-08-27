@@ -35,7 +35,7 @@ import {
 
 import {
   DataTable,
-  type DataTableColumnDef,
+  type DataTableColDef,
 } from "@krak-stack/registry/data-table";
 import { AppBrand } from "@krak-stack/registry/app-brand";
 import {
@@ -608,7 +608,7 @@ export const UserButton = ({
     ? refreshLoadedAccounts
     : refreshEmptyAccounts;
   const [signOutAction] = useState(() =>
-    Atom.fn(
+    authClientApi(resolvedBaseUrl).runtime.fn(
       ({
         baseUrl,
         redirectUrl,
@@ -628,7 +628,7 @@ export const UserButton = ({
   const signOut = useAtomSet(signOutAction);
   const signOutResult = useAtomValue(signOutAction);
   const [stopImpersonatingAction] = useState(() =>
-    Atom.fn(
+    authClientApi(resolvedBaseUrl).runtime.fn(
       (input: {
         baseUrl: string | undefined;
         currentSiteHref: string;
@@ -1045,34 +1045,35 @@ function ConnectedAccounts({
     null,
   );
   const [linkGoogleAction] = useState(() =>
-    Atom.fn((input: { baseUrl: string | undefined; callbackURL: string }) =>
-      Effect.gen(function* () {
-        setError(null);
-        setIsLinking(true);
-        const client = yield* authHttpClient(input.baseUrl);
-        const result = yield* client.auth.linkSocial({
-          payload: { provider: "google", callbackURL: input.callbackURL },
-        });
-        notifyAuthChange();
-        yield* Effect.tryPromise(() => accountCache.reload());
-        const redirectUrl = result.url;
-        if (redirectUrl) {
-          yield* Effect.tryPromise(() => navigate({ href: redirectUrl }));
-        } else {
-          setIsLinking(false);
-        }
-      }).pipe(
-        Effect.catch((cause) =>
-          Effect.sync(() => {
-            setError(
-              cause instanceof Error && cause.message
-                ? cause.message
-                : m.user_account_google_link_error(),
-            );
+    authClientApi(baseUrl).runtime.fn(
+      (input: { baseUrl: string | undefined; callbackURL: string }) =>
+        Effect.gen(function* () {
+          setError(null);
+          setIsLinking(true);
+          const client = yield* authHttpClient(input.baseUrl);
+          const result = yield* client.auth.linkSocial({
+            payload: { provider: "google", callbackURL: input.callbackURL },
+          });
+          notifyAuthChange();
+          yield* Effect.tryPromise(() => accountCache.reload());
+          const redirectUrl = result.url;
+          if (redirectUrl) {
+            yield* Effect.tryPromise(() => navigate({ href: redirectUrl }));
+          } else {
             setIsLinking(false);
-          }),
+          }
+        }).pipe(
+          Effect.catch((cause) =>
+            Effect.sync(() => {
+              setError(
+                cause instanceof Error && cause.message
+                  ? cause.message
+                  : m.user_account_google_link_error(),
+              );
+              setIsLinking(false);
+            }),
+          ),
         ),
-      ),
     ),
   );
   const linkGoogle = useAtomSet(linkGoogleAction);
@@ -1364,6 +1365,7 @@ function ChangePasswordForm({ baseUrl }: { baseUrl?: string | undefined }) {
   let reset = () => {};
   const [form] = useState(() =>
     FormReact.make(changePasswordFormBuilder, {
+      runtime: authClientApi(baseUrl).runtime,
       fields: { currentPassword: TextField, newPassword: TextField },
       mode: { validation: "onSubmit" },
       onSubmit: (_, { decoded }) =>
@@ -1447,6 +1449,7 @@ function SetPasswordForm({
   let reset = () => {};
   const [form] = useState(() =>
     FormReact.make(passwordFormBuilder(true), {
+      runtime: authClientApi(baseUrl).runtime,
       fields: { password: TextField },
       mode: { validation: "onSubmit" },
       onSubmit: (_, { decoded }) =>
@@ -1510,6 +1513,7 @@ function RevokeAccountForm({
   const m = useUserButtonMessages();
   const [form] = useState(() =>
     FormReact.make(passwordFormBuilder(requirePassword), {
+      runtime: authClientApi(baseUrl).runtime,
       fields: { password: TextField },
       mode: { validation: "onSubmit" },
       onSubmit: (_, { decoded }) =>
@@ -1763,6 +1767,7 @@ function EnableTotpForm({
   const m = useUserButtonMessages();
   const [form] = useState(() =>
     FormReact.make(passwordFormBuilder(requirePassword), {
+      runtime: authClientApi(baseUrl).runtime,
       fields: { password: TextField },
       mode: { validation: "onSubmit" },
       onSubmit: (_, { decoded }) =>
@@ -1844,6 +1849,7 @@ function VerifyTotpSetup({
   const m = useUserButtonMessages();
   const [form] = useState(() =>
     FormReact.make(totpCodeFormBuilder, {
+      runtime: authClientApi(baseUrl).runtime,
       fields: { code: TextField },
       mode: { validation: "onSubmit" },
       onSubmit: (_, { decoded }) =>
@@ -1925,6 +1931,7 @@ function DisableTotpForm({
   const m = useUserButtonMessages();
   const [form] = useState(() =>
     FormReact.make(passwordFormBuilder(requirePassword), {
+      runtime: authClientApi(baseUrl).runtime,
       fields: { password: TextField },
       mode: { validation: "onSubmit" },
       onSubmit: (_, { decoded }) =>
@@ -2030,6 +2037,7 @@ function ApiKeyManager({
   selectedPermissionsRef.current = selectedPermissions;
   const [createForm] = useState(() =>
     FormReact.make(apiKeyFormBuilder, {
+      runtime: authClientApi(baseUrl).runtime,
       fields: { name: TextField, referrers: TextAreaField },
       mode: { validation: "onSubmit" },
       onSubmit: (_, { decoded }) =>
@@ -2081,7 +2089,7 @@ function ApiKeyManager({
   };
 
   const [deleteKeyAction] = useState(() =>
-    Atom.fn((key: ApiKeySummary) =>
+    authClientApi(baseUrl).runtime.fn((key: ApiKeySummary) =>
       authHttpClient(baseUrl).pipe(
         Effect.flatMap((client) =>
           client.auth.apiKeyDelete({
@@ -2214,8 +2222,8 @@ function ApiKeyManager({
         {!creating && !editingKey ? (
           <div className="max-w-full min-w-0 overflow-x-hidden">
             <DataTable
-              columns={apiKeyColumns({ m })}
-              data={keys}
+              columnDefs={apiKeyColumns({ m })}
+              rowData={keys}
               features={{
                 export: { baseName: m.user_api_keys_export_file_name() },
                 gallery: false,
@@ -2227,8 +2235,7 @@ function ApiKeyManager({
                   }),
                 },
               }}
-              searchState="local"
-              state={{
+              status={{
                 empty: loading ? m.user_loading() : m.table_empty(),
                 loading,
               }}
@@ -2269,47 +2276,45 @@ const apiKeyColumns = ({
   m,
 }: {
   m: ReturnType<typeof userButtonMessageFns>;
-}): DataTableColumnDef<ApiKeySummary>[] => [
+}): DataTableColDef<ApiKeySummary>[] => [
   {
-    accessorKey: "name",
-    header: m.user_api_key_name(),
-    cell: ({ row }) => (
+    field: "name",
+    headerName: m.user_api_key_name(),
+    cellRenderer: ({ data }) => (
       <div className="min-w-0">
         <p className="truncate font-medium">
-          {row.original.name ?? m.user_api_key_hidden()}
+          {data.name ?? m.user_api_key_hidden()}
         </p>
       </div>
     ),
   },
   {
-    accessorKey: "enabled",
-    header: m.user_api_key_status(),
-    cell: ({ row }) => (
-      <Badge variant={row.original.enabled ? "default" : "secondary"}>
-        {row.original.enabled
-          ? m.user_api_key_enabled()
-          : m.user_api_key_disabled()}
+    field: "enabled",
+    headerName: m.user_api_key_status(),
+    cellRenderer: ({ data }) => (
+      <Badge variant={data.enabled ? "default" : "secondary"}>
+        {data.enabled ? m.user_api_key_enabled() : m.user_api_key_disabled()}
       </Badge>
     ),
   },
   {
-    id: "referrers",
-    accessorFn: (keyData) => keyData.metadata,
-    header: m.user_api_key_referrers_column(),
-    cell: ({ row }) => (
+    colId: "referrers",
+    valueGetter: ({ data }) => data.metadata,
+    headerName: m.user_api_key_referrers_column(),
+    cellRenderer: ({ data }) => (
       <ApiKeyReferrers
-        metadata={row.original.metadata}
+        metadata={data.metadata}
         unrestrictedLabel={m.user_api_key_referrers_any()}
       />
     ),
   },
   {
-    id: "rateLimit",
-    accessorFn: apiKeyUsagePercent,
-    header: m.user_api_key_rate_limit(),
-    cell: ({ row }) => (
+    colId: "rateLimit",
+    valueGetter: ({ data }) => apiKeyUsagePercent(data),
+    headerName: m.user_api_key_rate_limit(),
+    cellRenderer: ({ data }) => (
       <ApiKeyRateLimit
-        keyData={row.original}
+        keyData={data}
         messages={{
           disabled: m.user_api_key_disabled(),
           none: m.user_api_key_window_none(),
@@ -2324,10 +2329,10 @@ const apiKeyColumns = ({
     ),
   },
   {
-    accessorKey: "permissions",
-    header: m.user_api_key_permissions(),
-    cell: ({ row }) => {
-      const permissions = formatPermissions(row.original.permissions);
+    field: "permissions",
+    headerName: m.user_api_key_permissions(),
+    cellRenderer: ({ data }) => {
+      const permissions = formatPermissions(data.permissions);
 
       if (permissions.length === 0) {
         return (

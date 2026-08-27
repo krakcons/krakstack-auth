@@ -31,7 +31,7 @@ export * from "./schema.js";
 export const AdminApiGroup = HttpApiGroup.make("admin")
   .add(
     HttpApiEndpoint.get("dashboardStats", "/admin/dashboard-stats", {
-      query: DashboardStatsQuery,
+      query: DashboardStatsQuery.fields,
       success: DashboardStatsResponse,
       error: [
         HttpApiError.Unauthorized,
@@ -66,7 +66,7 @@ export const AdminApiGroup = HttpApiGroup.make("admin")
   )
   .add(
     HttpApiEndpoint.delete("deleteApiKey", "/admin/api-keys/:id", {
-      params: AdminApiKeyIdParams,
+      params: AdminApiKeyIdParams.fields,
       success: AdminApiKey,
       error: [
         HttpApiError.Unauthorized,
@@ -84,7 +84,7 @@ export const AdminApiGroup = HttpApiGroup.make("admin")
   )
   .add(
     HttpApiEndpoint.patch("updateApiKey", "/admin/api-keys/:id", {
-      params: AdminApiKeyIdParams,
+      params: AdminApiKeyIdParams.fields,
       payload: AdminUpdateApiKeyPayload,
       success: AdminApiKey,
       error: [
@@ -107,7 +107,7 @@ export const AdminApiGroup = HttpApiGroup.make("admin")
       "resetApiKeyRateLimit",
       "/admin/api-keys/:id/reset-rate-limit",
       {
-        params: AdminApiKeyIdParams,
+        params: AdminApiKeyIdParams.fields,
         success: AdminApiKey,
         error: [
           HttpApiError.Unauthorized,
@@ -130,7 +130,7 @@ export const AdminApiGroup = HttpApiGroup.make("admin")
       "enableApiKeyRateLimit",
       "/admin/api-keys/:id/enable-rate-limit",
       {
-        params: AdminApiKeyIdParams,
+        params: AdminApiKeyIdParams.fields,
         success: AdminApiKey,
         error: [
           HttpApiError.Unauthorized,
@@ -152,7 +152,7 @@ export const AdminApiGroup = HttpApiGroup.make("admin")
       "disableApiKeyRateLimit",
       "/admin/api-keys/:id/disable-rate-limit",
       {
-        params: AdminApiKeyIdParams,
+        params: AdminApiKeyIdParams.fields,
         success: AdminApiKey,
         error: [
           HttpApiError.Unauthorized,
@@ -171,7 +171,7 @@ export const AdminApiGroup = HttpApiGroup.make("admin")
   )
   .add(
     HttpApiEndpoint.get("listUsers", "/admin/users", {
-      query: AdminListQuery,
+      query: AdminListQuery.fields,
       success: PaginatedAdminUsers,
       error: [
         HttpApiError.Unauthorized,
@@ -189,7 +189,7 @@ export const AdminApiGroup = HttpApiGroup.make("admin")
   )
   .add(
     HttpApiEndpoint.get("listOrganizations", "/admin/organizations", {
-      query: AdminListQuery,
+      query: AdminListQuery.fields,
       success: PaginatedAdminOrganizations,
       error: [
         HttpApiError.Unauthorized,
@@ -224,7 +224,7 @@ export const AdminApiGroup = HttpApiGroup.make("admin")
   )
   .add(
     HttpApiEndpoint.patch("updateOrganization", "/admin/organizations/:id", {
-      params: AdminOrganizationIdParams,
+      params: AdminOrganizationIdParams.fields,
       payload: AdminUpdateOrganizationPayload,
       success: AdminOrganization,
       error: [
@@ -243,7 +243,7 @@ export const AdminApiGroup = HttpApiGroup.make("admin")
   )
   .add(
     HttpApiEndpoint.delete("deleteOrganization", "/admin/organizations/:id", {
-      params: AdminOrganizationIdParams,
+      params: AdminOrganizationIdParams.fields,
       success: AdminOrganization,
       error: [
         HttpApiError.Unauthorized,
@@ -295,7 +295,7 @@ export const AdminApiGroup = HttpApiGroup.make("admin")
   )
   .add(
     HttpApiEndpoint.patch("updateDomain", "/admin/domains/:id", {
-      params: ServerDomainIdParams,
+      params: ServerDomainIdParams.fields,
       payload: ServerUpdateDomainPayload,
       success: ServerDomain,
       error: [
@@ -315,7 +315,7 @@ export const AdminApiGroup = HttpApiGroup.make("admin")
   )
   .add(
     HttpApiEndpoint.get("getDomainRecords", "/admin/domains/:id/records", {
-      params: ServerDomainIdParams,
+      params: ServerDomainIdParams.fields,
       success: ServerDomainRecordsResponse,
       error: [
         HttpApiError.Unauthorized,
@@ -334,7 +334,7 @@ export const AdminApiGroup = HttpApiGroup.make("admin")
   )
   .add(
     HttpApiEndpoint.delete("deleteDomain", "/admin/domains/:id", {
-      params: ServerDomainIdParams,
+      params: ServerDomainIdParams.fields,
       success: ServerDomain,
       error: [
         HttpApiError.Unauthorized,

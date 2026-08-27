@@ -5,7 +5,7 @@ import {
 } from "@tanstack/react-router";
 import type { QueryClient } from "@tanstack/react-query";
 
-import { TableSearchSchemaStandard as TableSearchSchema } from "@krak-stack/registry/data-table";
+import { QueryStandard } from "@krak-stack/registry/query";
 import { Toaster } from "@/components/ui/sonner";
 import { ThemeProvider } from "@krak-stack/registry/theme-switcher";
 import { m } from "../paraglide/messages.js";
@@ -17,7 +17,7 @@ const analyticsWebsiteId = import.meta.env.VITE_ANALYTICS_WEBSITE_ID;
 export const Route = createRootRouteWithContext<{
   queryClient: QueryClient;
 }>()({
-  validateSearch: TableSearchSchema,
+  validateSearch: QueryStandard,
   head: () => ({
     meta: [
       {

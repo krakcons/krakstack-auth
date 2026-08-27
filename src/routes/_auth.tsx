@@ -44,15 +44,27 @@ function AuthLayoutContent() {
         <style dangerouslySetInnerHTML={{ __html: projectConfig.themeCss }} />
       ) : null}
       <div className="absolute top-6 left-6 md:top-10 md:left-10">
-        <AppBrand
-          label={projectConfig?.name ?? m.sidebar_brand()}
-          subtitle={m.sidebar_brand_subtitle()}
-          icon={Users}
-          {...(brandHref ? { href: brandHref } : {})}
-          {...(projectConfig?.logoUrl
-            ? { imageSrc: projectConfig.logoUrl }
-            : {})}
-        />
+        {brandHref ? (
+          <AppBrand
+            label={projectConfig?.name ?? m.sidebar_brand()}
+            subtitle={m.sidebar_brand_subtitle()}
+            icon={Users}
+            href={brandHref}
+            {...(projectConfig?.logoUrl
+              ? { imageSrc: projectConfig.logoUrl }
+              : {})}
+          />
+        ) : (
+          <AppBrand
+            label={projectConfig?.name ?? m.sidebar_brand()}
+            subtitle={m.sidebar_brand_subtitle()}
+            icon={Users}
+            to={null}
+            {...(projectConfig?.logoUrl
+              ? { imageSrc: projectConfig.logoUrl }
+              : {})}
+          />
+        )}
       </div>
       <div className="absolute top-6 right-6 flex items-center gap-2 md:top-10 md:right-10">
         <ThemeToggle />

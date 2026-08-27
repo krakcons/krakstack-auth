@@ -1,10 +1,6 @@
 import { Effect, FileSystem, Layer, Path, Redacted, Schema } from "effect";
 import { CredentialsFromEnv } from "@distilled.cloud/cloudflare";
-import {
-  AuthMiddleware,
-  AuthService,
-  type AuthSession,
-} from "@krak-stack/auth/server";
+import { AuthService, type AuthSession } from "@krak-stack/auth/server";
 import {
   healthHandler,
   HealthService,
@@ -18,13 +14,7 @@ import {
   HttpServerRequest,
   HttpServerResponse,
 } from "effect/unstable/http";
-import {
-  HttpApiBuilder,
-  HttpApiEndpoint,
-  HttpApiError,
-  HttpApiGroup,
-  OpenApi,
-} from "effect/unstable/httpapi";
+import { HttpApiBuilder, HttpApiError, OpenApi } from "effect/unstable/httpapi";
 import {
   Session as InternalSession,
   User as InternalUser,
@@ -85,13 +75,6 @@ const organizationImpersonationAllowedAuthPaths = [
   { method: "GET", path: "/api/auth/ok" },
   { method: "POST", path: "/api/auth/sign-out" },
 ] as const;
-const authMiddlewareOptions = {
-  endpoint: HttpApiEndpoint.get("betterAuth", "/api/auth/*", {
-    error: [HttpApiError.Unauthorized, HttpApiError.Forbidden],
-  }),
-  group: HttpApiGroup.make("betterAuth"),
-  credential: Redacted.make(""),
-};
 const localAuthServiceLayer = Layer.effect(
   AuthService,
   Effect.gen(function* () {
@@ -136,12 +119,6 @@ const localAuthServiceLayer = Layer.effect(
     AuthService.layer({ apiKey: Redacted.make("local-session-lookup") }),
   ),
 );
-const authMiddlewareLayer = AuthMiddleware.layer({
-  allowedOrganizationImpersonationRoutes:
-    organizationImpersonationAllowedAuthPaths,
-  authLayer: localAuthServiceLayer,
-});
-
 export const authWebHandler = async (request: Request) => {
   const authRequest = await Effect.runPromise(
     BetterAuthRequest.pipe(Effect.provide(BetterAuthRequest.make(request))),
@@ -164,14 +141,27 @@ const authHandlerEffect = HttpEffect.fromWebHandler((request) =>
 );
 const guardedAuthHandlerEffect = Effect.gen(function* () {
   const request = yield* HttpServerRequest.HttpServerRequest;
-  const middleware = yield* AuthMiddleware;
-  return yield* middleware.apiKey(
-    authHandlerEffect.pipe(
-      Effect.provideService(HttpServerRequest.HttpServerRequest, request),
-    ),
-    authMiddlewareOptions,
+  const auth = yield* AuthService;
+  const session = yield* auth
+    .getSession()
+    .pipe(Effect.catchTag("Unauthorized", () => Effect.succeed(null)));
+  const pathname = new URL(request.url, "http://localhost").pathname;
+  const allowsOrganizationImpersonation =
+    organizationImpersonationAllowedAuthPaths.some(
+      (route) => route.method === request.method && route.path === pathname,
+    );
+
+  if (
+    session?.session.impersonatedByOrganizationId &&
+    !allowsOrganizationImpersonation
+  ) {
+    return yield* new HttpApiError.Forbidden({});
+  }
+
+  return yield* authHandlerEffect.pipe(
+    Effect.provideService(HttpServerRequest.HttpServerRequest, request),
   );
-}).pipe(Effect.provide(authMiddlewareLayer));
+}).pipe(Effect.provide(localAuthServiceLayer));
 
 const logoContentType = (path: string) => {
   if (path.endsWith(".svg")) return "image/svg+xml";

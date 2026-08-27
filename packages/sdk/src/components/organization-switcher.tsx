@@ -38,7 +38,7 @@ import {
 
 import {
   DataTable,
-  type DataTableColumnDef,
+  type DataTableColDef,
   DataTableRelationshipCell,
 } from "@krak-stack/registry/data-table";
 import {
@@ -1238,12 +1238,8 @@ const decodeUploadedAsset = Schema.decodeUnknownEffect(ExtraUploadedAsset);
 const OrganizationMetadataRecord = Schema.Record(Schema.String, Schema.Json);
 
 const normalizeOrganizationMetadata = (metadata: OrganizationMetadata) =>
-  Schema.encodeUnknownEffect(Schema.UnknownFromJsonString)(metadata).pipe(
-    Effect.flatMap(
-      Schema.decodeUnknownEffect(
-        Schema.fromJsonString(OrganizationMetadataRecord),
-      ),
-    ),
+  Schema.decodeUnknownEffect(Schema.fromJsonString(OrganizationMetadataRecord))(
+    metadata,
   );
 
 const uploadImageAsset = (
@@ -2212,12 +2208,12 @@ function UserInvitationsManager({
       ) : null}
       <div className="-m-1 min-w-0 overflow-x-auto p-1">
         <DataTable
-          columns={userInvitationColumns({
+          columnDefs={userInvitationColumns({
             baseUrl,
             m,
             now: invitationNow,
           })}
-          data={invitations}
+          rowData={invitations}
           features={{
             export: { baseName: "organization-invitations" },
             gallery: false,
@@ -2231,8 +2227,7 @@ function UserInvitationsManager({
               }),
             },
           }}
-          searchState="local"
-          state={{
+          status={{
             empty: loading
               ? m.user_loading()
               : m.organization_user_invitations_empty(),
@@ -2252,45 +2247,38 @@ const userInvitationColumns = ({
   baseUrl?: string | undefined;
   m: ReturnType<typeof organizationMessageFns>;
   now: number;
-}): DataTableColumnDef<UserInvitationSummary>[] => [
+}): DataTableColDef<UserInvitationSummary>[] => [
   {
-    accessorKey: "organizationName",
-    header: m.organization_invitation_organization(),
-    cell: ({ row }) => (
-      <InvitationOrganizationBrand
-        baseUrl={baseUrl}
-        invitation={row.original}
-      />
+    field: "organizationName",
+    headerName: m.organization_invitation_organization(),
+    cellRenderer: ({ data }) => (
+      <InvitationOrganizationBrand baseUrl={baseUrl} invitation={data} />
     ),
   },
   {
-    accessorKey: "role",
-    header: m.organization_member_role(),
-    cell: ({ row }) => (
-      <Badge variant="secondary">
-        {organizationRoleLabel(row.original.role, m)}
-      </Badge>
+    field: "role",
+    headerName: m.organization_member_role(),
+    cellRenderer: ({ data }) => (
+      <Badge variant="secondary">{organizationRoleLabel(data.role, m)}</Badge>
     ),
   },
   {
-    accessorKey: "status",
-    header: m.organization_invitation_status(),
-    cell: ({ row }) => (
+    field: "status",
+    headerName: m.organization_invitation_status(),
+    cellRenderer: ({ data }) => (
       <Badge
-        variant={
-          isInvitationExpired(row.original, now) ? "destructive" : "default"
-        }
+        variant={isInvitationExpired(data, now) ? "destructive" : "default"}
       >
-        {invitationStatusLabel(invitationDisplayStatus(row.original, now), m)}
+        {invitationStatusLabel(invitationDisplayStatus(data, now), m)}
       </Badge>
     ),
   },
   {
-    accessorKey: "expiresAt",
-    header: m.organization_invitation_expires(),
-    cell: ({ row }) => (
+    field: "expiresAt",
+    headerName: m.organization_invitation_expires(),
+    cellRenderer: ({ data }) => (
       <span className="text-muted-foreground text-sm">
-        {formatOrganizationDate(row.original.expiresAt)}
+        {formatOrganizationDate(data.expiresAt)}
       </span>
     ),
   },
@@ -2379,6 +2367,7 @@ function EditOrganizationSection({
   const defaultValues = organizationFormDefaults(organization, baseUrl);
   const [form] = useState(() =>
     FormReact.make(organizationFormBuilder, {
+      runtime: authClientApi(baseUrl).runtime,
       fields: organizationFormFields,
       onSubmit: (_, { decoded: value }) =>
         Effect.gen(function* () {
@@ -2543,6 +2532,7 @@ function CreateOrganizationSection({
   const defaultValues = organizationFormDefaults(undefined, baseUrl);
   const [form] = useState(() =>
     FormReact.make(organizationFormBuilder, {
+      runtime: authClientApi(baseUrl).runtime,
       fields: organizationFormFields,
       onSubmit: (_, { decoded: value }) =>
         Effect.gen(function* () {
@@ -2868,6 +2858,7 @@ function OrganizationMembersManager({
 
   const [inviteForm] = useState(() =>
     FormReact.make(inviteMemberFormBuilder, {
+      runtime: authClientApi(baseUrl).runtime,
       fields: {
         email: TextField,
         role: SelectField,
@@ -3108,13 +3099,13 @@ function OrganizationMembersManager({
             </div>
             <div className="-m-1 min-w-0 overflow-x-auto p-1">
               <DataTable
-                columns={memberColumns({
+                columnDefs={memberColumns({
                   m,
                   baseUrl,
                   canChangeRoles: canManageMembers,
                   onRoleChange: updateRole,
                 })}
-                data={displayedMembers}
+                rowData={displayedMembers}
                 features={{
                   export: { baseName: `${organization.slug}-members` },
                   gallery: false,
@@ -3129,8 +3120,7 @@ function OrganizationMembersManager({
                     }),
                   },
                 }}
-                searchState="local"
-                state={{ empty: m.organization_members_empty(), loading }}
+                status={{ empty: m.organization_members_empty(), loading }}
               />
             </div>
           </section>
@@ -3147,11 +3137,11 @@ function OrganizationMembersManager({
             </div>
             <div className="-m-1 min-w-0 overflow-x-auto p-1">
               <DataTable
-                columns={invitationColumns({
+                columnDefs={invitationColumns({
                   m,
                   now: invitationNow,
                 })}
-                data={invitations}
+                rowData={invitations}
                 features={{
                   export: { baseName: `${organization.slug}-invitations` },
                   gallery: false,
@@ -3163,8 +3153,7 @@ function OrganizationMembersManager({
                     }),
                   },
                 }}
-                searchState="local"
-                state={{ empty: m.organization_invitations_empty(), loading }}
+                status={{ empty: m.organization_invitations_empty(), loading }}
               />
             </div>
           </section>
@@ -3187,18 +3176,18 @@ const memberColumns = ({
     member: OrganizationMemberRow,
     role: OrganizationRole | OrganizationRole[],
   ) => void;
-}): DataTableColumnDef<OrganizationMemberRow>[] => [
+}): DataTableColDef<OrganizationMemberRow>[] => [
   {
-    id: "user",
-    header: m.organization_member_user(),
-    cell: ({ row }) => {
-      const image = assetUrl(row.original.user.image, baseUrl);
+    colId: "user",
+    headerName: m.organization_member_user(),
+    cellRenderer: ({ data }) => {
+      const image = assetUrl(data.user.image, baseUrl);
 
       return (
         <AppBrand
           to={null}
-          label={row.original.user.name}
-          subtitle={row.original.user.email}
+          label={data.user.name}
+          subtitle={data.user.email}
           icon={UserIcon}
           className="min-w-0"
           {...(image ? { imageSrc: image } : {})}
@@ -3207,10 +3196,10 @@ const memberColumns = ({
     },
   },
   {
-    accessorKey: "role",
-    header: m.organization_member_role(),
-    cell: ({ row }) => {
-      const member = row.original;
+    field: "role",
+    headerName: m.organization_member_role(),
+    cellRenderer: ({ data }) => {
+      const member = data;
       const roles = normalizeOrganizationRoles(member.role);
       const roleOptions = roles.map((role) => ({
         label: organizationRoleLabel(role, m),
@@ -3252,11 +3241,11 @@ const memberColumns = ({
     },
   },
   {
-    accessorKey: "createdAt",
-    header: m.organization_member_joined(),
-    cell: ({ row }) => (
+    field: "createdAt",
+    headerName: m.organization_member_joined(),
+    cellRenderer: ({ data }) => (
       <span className="text-muted-foreground text-sm">
-        {formatOrganizationDate(row.original.createdAt)}
+        {formatOrganizationDate(data.createdAt)}
       </span>
     ),
   },
@@ -3303,42 +3292,38 @@ const invitationColumns = ({
 }: {
   m: ReturnType<typeof organizationMessageFns>;
   now: number;
-}): DataTableColumnDef<OrganizationInvitationSummary>[] => [
+}): DataTableColDef<OrganizationInvitationSummary>[] => [
   {
-    accessorKey: "email",
-    header: m.organization_member_email(),
-    cell: ({ row }) => (
-      <p className="truncate font-medium">{row.original.email}</p>
+    field: "email",
+    headerName: m.organization_member_email(),
+    cellRenderer: ({ data }) => (
+      <p className="truncate font-medium">{data.email}</p>
     ),
   },
   {
-    accessorKey: "role",
-    header: m.organization_member_role(),
-    cell: ({ row }) => (
-      <Badge variant="secondary">
-        {organizationRoleLabel(row.original.role, m)}
-      </Badge>
+    field: "role",
+    headerName: m.organization_member_role(),
+    cellRenderer: ({ data }) => (
+      <Badge variant="secondary">{organizationRoleLabel(data.role, m)}</Badge>
     ),
   },
   {
-    accessorKey: "status",
-    header: m.organization_invitation_status(),
-    cell: ({ row }) => (
+    field: "status",
+    headerName: m.organization_invitation_status(),
+    cellRenderer: ({ data }) => (
       <Badge
-        variant={
-          isInvitationExpired(row.original, now) ? "destructive" : "default"
-        }
+        variant={isInvitationExpired(data, now) ? "destructive" : "default"}
       >
-        {invitationStatusLabel(invitationDisplayStatus(row.original, now), m)}
+        {invitationStatusLabel(invitationDisplayStatus(data, now), m)}
       </Badge>
     ),
   },
   {
-    accessorKey: "expiresAt",
-    header: m.organization_invitation_expires(),
-    cell: ({ row }) => (
+    field: "expiresAt",
+    headerName: m.organization_invitation_expires(),
+    cellRenderer: ({ data }) => (
       <span className="text-muted-foreground text-sm">
-        {formatOrganizationDate(row.original.expiresAt)}
+        {formatOrganizationDate(data.expiresAt)}
       </span>
     ),
   },
@@ -3408,6 +3393,7 @@ function OrganizationApiKeyManager({
   const loading = keysResult._tag === "Initial";
   const [createForm] = useState(() =>
     FormReact.make(apiKeyFormBuilder, {
+      runtime: authClientApi(baseUrl).runtime,
       fields: { name: TextField, referrers: TextAreaField },
       onSubmit: (_, { decoded: value }) =>
         Effect.gen(function* () {
@@ -3589,8 +3575,8 @@ function OrganizationApiKeyManager({
         {!creating && !editingKey ? (
           <div className="max-w-full min-w-0 overflow-x-hidden">
             <DataTable
-              columns={apiKeyColumns({ m })}
-              data={keys}
+              columnDefs={apiKeyColumns({ m })}
+              rowData={keys}
               features={{
                 export: { baseName: `${organization.slug}-api-keys` },
                 gallery: false,
@@ -3602,8 +3588,7 @@ function OrganizationApiKeyManager({
                   }),
                 },
               }}
-              searchState="local"
-              state={{
+              status={{
                 empty: loading ? m.user_loading() : m.table_empty(),
                 loading,
               }}
@@ -3690,6 +3675,7 @@ function OrganizationApiKeyEditForm({
   permissionsRef.current = permissions;
   const [form] = useState(() =>
     FormReact.make(editApiKeyFormBuilder, {
+      runtime: authClientApi(baseUrl).runtime,
       fields: {
         name: TextField,
         enabled: CheckboxField,
@@ -3786,40 +3772,36 @@ const apiKeyColumns = ({
   m,
 }: {
   m: ReturnType<typeof organizationMessageFns>;
-}): DataTableColumnDef<ApiKeySummary>[] => [
+}): DataTableColDef<ApiKeySummary>[] => [
   {
-    accessorKey: "name",
-    header: m.user_api_key_name(),
-    cell: ({ row }) => (
+    field: "name",
+    headerName: m.user_api_key_name(),
+    cellRenderer: ({ data }) => (
       <div className="min-w-0">
-        <p className="truncate font-medium">{row.original.name}</p>
+        <p className="truncate font-medium">{data.name}</p>
         <p className="text-muted-foreground text-sm">
-          {row.original.start
-            ? m.user_api_key_starts_with({ start: row.original.start })
+          {data.start
+            ? m.user_api_key_starts_with({ start: data.start })
             : m.user_api_key_hidden()}
         </p>
       </div>
     ),
   },
   {
-    accessorKey: "enabled",
-    header: m.user_api_key_status(),
-    cell: ({ row }) => (
-      <Badge variant={row.original.enabled ? "default" : "secondary"}>
-        {row.original.enabled
-          ? m.user_api_key_enabled()
-          : m.user_api_key_disabled()}
+    field: "enabled",
+    headerName: m.user_api_key_status(),
+    cellRenderer: ({ data }) => (
+      <Badge variant={data.enabled ? "default" : "secondary"}>
+        {data.enabled ? m.user_api_key_enabled() : m.user_api_key_disabled()}
       </Badge>
     ),
   },
   {
-    id: "permissions",
-    accessorFn: (keyData) => keyData.permissions,
-    header: m.user_api_key_permissions(),
-    cell: ({ row }) => {
-      const values = organizationApiKeyFormattedPermissions(
-        row.original.permissions,
-      );
+    colId: "permissions",
+    valueGetter: ({ data }) => data.permissions,
+    headerName: m.user_api_key_permissions(),
+    cellRenderer: ({ data }) => {
+      const values = organizationApiKeyFormattedPermissions(data.permissions);
       return values.length > 0 ? (
         <div className="flex flex-wrap gap-1">
           {values.map((value) => (
@@ -3836,23 +3818,23 @@ const apiKeyColumns = ({
     },
   },
   {
-    id: "referrers",
-    accessorFn: (keyData) => keyData.metadata,
-    header: m.user_api_key_referrers_column(),
-    cell: ({ row }) => (
+    colId: "referrers",
+    valueGetter: ({ data }) => data.metadata,
+    headerName: m.user_api_key_referrers_column(),
+    cellRenderer: ({ data }) => (
       <ApiKeyReferrers
-        metadata={row.original.metadata}
+        metadata={data.metadata}
         unrestrictedLabel={m.user_api_key_referrers_any()}
       />
     ),
   },
   {
-    id: "rateLimit",
-    accessorFn: apiKeyUsagePercent,
-    header: m.user_api_key_rate_limit(),
-    cell: ({ row }) => (
+    colId: "rateLimit",
+    valueGetter: ({ data }) => apiKeyUsagePercent(data),
+    headerName: m.user_api_key_rate_limit(),
+    cellRenderer: ({ data }) => (
       <ApiKeyRateLimit
-        keyData={row.original}
+        keyData={data}
         messages={{
           disabled: m.user_api_key_disabled(),
           none: m.user_api_key_window_none(),
