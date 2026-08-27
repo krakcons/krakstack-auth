@@ -1,7 +1,9 @@
 import { Effect, Schema } from "effect";
 import { Tool, Toolkit } from "effect/unstable/ai";
 
-import { DocsPageSchema, type DocsCatalog, type DocsLocale } from "./docs";
+import { DocsPageSchema, type DocsLocale } from "@krak-stack/registry/docs";
+
+import type { DocsCatalog } from "./docs";
 
 const SearchDocumentation = Tool.make("searchDocumentation", {
   description:
