@@ -444,9 +444,19 @@ export const AuthMemberRecord = Schema.Struct({
   title: "Organization member record",
 });
 
+export const AuthMemberUser = Schema.Struct({
+  id: Schema.String,
+  name: Schema.String,
+  email: Schema.String,
+  image: Schema.optional(Schema.NullOr(Schema.String)),
+}).annotate({
+  identifier: "AuthMemberUser",
+  title: "Organization member user",
+});
+
 export const AuthMember = Schema.Struct({
   ...AuthMemberRecord.fields,
-  user: AuthUser,
+  user: AuthMemberUser,
 }).annotate({ identifier: "AuthMember", title: "Organization member" });
 
 export const AuthInvitation = Schema.Struct({

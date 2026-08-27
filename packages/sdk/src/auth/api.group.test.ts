@@ -7,6 +7,7 @@ import {
   AuthOrganization,
   AuthConflict,
   AuthExpectationFailed,
+  FullAuthOrganization,
   AuthSessionResponse,
   AuthUnauthorized,
   SignInEmailResponse,
@@ -65,6 +66,36 @@ describe("AuthApiGroup", () => {
     });
 
     expect(decoded.metadata).toBe('{"translations":[]}');
+  });
+
+  it("decodes full organizations with projected member users", () => {
+    const decoded = Schema.decodeUnknownSync(FullAuthOrganization)({
+      id: "organization_1",
+      name: "Krak",
+      slug: "krak",
+      logo: null,
+      metadata: JSON.stringify({ translations: [] }),
+      createdAt: "2026-08-01T00:00:00.000Z",
+      invitations: [],
+      members: [
+        {
+          id: "member_1",
+          organizationId: "organization_1",
+          userId: "user_1",
+          role: "owner",
+          createdAt: "2026-08-01T00:00:00.000Z",
+          user: {
+            id: "user_1",
+            name: "Billy",
+            email: "billy@example.com",
+            image: null,
+          },
+        },
+      ],
+    });
+
+    expect(decoded.name).toBe("Krak");
+    expect(decoded.members[0]?.user.name).toBe("Billy");
   });
 
   it("decodes redirecting email sign-in responses", () => {
