@@ -13,6 +13,12 @@ import {
 import { createAuthClient, type ReactAuthClient } from "better-auth/react";
 
 const additionalFields = {
+  user: {
+    metadata: {
+      type: "json",
+      required: false,
+    },
+  },
   session: {
     impersonatedByOrganizationId: {
       type: "string",

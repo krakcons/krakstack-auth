@@ -2,6 +2,7 @@ import { apiKeyClient } from "@better-auth/api-key/client";
 import { createAuthClient } from "better-auth/react";
 import {
   anonymousClient,
+  inferAdditionalFields,
   organizationClient,
   twoFactorClient,
 } from "better-auth/client/plugins";
@@ -14,6 +15,11 @@ const organizationSchema = {
     },
   },
 } as const;
+const additionalFields = {
+  user: {
+    metadata: { type: "json", required: false },
+  },
+} as const;
 
 export const centralAuthClient = createAuthClient({
   baseURL: import.meta.env.VITE_KRAKSTACK_AUTH_URL,
@@ -21,6 +27,7 @@ export const centralAuthClient = createAuthClient({
     credentials: "include",
   },
   plugins: [
+    inferAdditionalFields(additionalFields),
     anonymousClient(),
     twoFactorClient({
       twoFactorPage: `${import.meta.env.VITE_KRAKSTACK_AUTH_URL}/2fa`,

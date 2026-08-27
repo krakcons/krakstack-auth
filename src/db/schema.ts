@@ -1,4 +1,5 @@
 import { defineRelations } from "drizzle-orm";
+import type { UserMetadata } from "@krak-stack/auth/schema";
 import {
   type AnyPgColumn,
   pgTable,
@@ -17,6 +18,7 @@ export const user = pgTable("user", {
   email: text("email").notNull().unique(),
   emailVerified: boolean("email_verified").default(false).notNull(),
   image: text("image"),
+  metadata: jsonb("metadata").$type<UserMetadata>(),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at")
     .defaultNow()

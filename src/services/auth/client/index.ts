@@ -4,6 +4,7 @@ import {
   anonymousClient,
   emailOTPClient,
   genericOAuthClient,
+  inferAdditionalFields,
   lastLoginMethodClient,
   organizationClient,
   twoFactorClient,
@@ -21,11 +22,17 @@ const organizationSchema = {
     },
   },
 } as const;
+const additionalFields = {
+  user: {
+    metadata: { type: "json", required: false },
+  },
+} as const;
 export const authBaseUrl =
   import.meta.env.VITE_KRAKSTACK_AUTH_URL ?? import.meta.env.VITE_SITE_URL;
 
 export const authClient = createAuthClient({
   plugins: [
+    inferAdditionalFields(additionalFields),
     adminClient(),
     anonymousClient(),
     emailOTPClient(),

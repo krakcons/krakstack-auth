@@ -1,4 +1,5 @@
 import { Schema } from "effect";
+import { UserMetadata } from "@krak-stack/auth/schema";
 
 export const AuthUser = Schema.Struct({
   id: Schema.String,
@@ -6,6 +7,7 @@ export const AuthUser = Schema.Struct({
   email: Schema.String,
   emailVerified: Schema.Boolean,
   image: Schema.NullOr(Schema.String),
+  metadata: Schema.NullOr(UserMetadata),
   role: Schema.NullOr(Schema.String),
   banned: Schema.NullOr(Schema.Boolean),
   createdAt: Schema.Date,
@@ -21,6 +23,7 @@ export const AuthUser = Schema.Struct({
       email: "ada@example.com",
       emailVerified: true,
       image: null,
+      metadata: null,
       role: "admin",
       banned: false,
       createdAt: new Date("2026-01-01T00:00:00.000Z"),
@@ -78,6 +81,7 @@ export const AuthMember = Schema.Struct({
         email: "ada@example.com",
         emailVerified: true,
         image: null,
+        metadata: null,
         role: "admin",
         banned: false,
         createdAt: new Date("2026-01-01T00:00:00.000Z"),
