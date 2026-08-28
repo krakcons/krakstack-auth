@@ -22,6 +22,7 @@ import {
 import { LocaleSwitcher } from "@krak-stack/registry/locale-switcher";
 import { m } from "@/paraglide/messages";
 import { authBaseUrl } from "@/services/auth/client";
+import { authAccessLabels } from "@/services/auth/access-labels";
 
 const previewApiKeyPermissions = {
   projects: ["read", "create", "update", "delete"],
@@ -42,6 +43,7 @@ function AuthPreviews() {
 
   return (
     <KrakstackAuthProvider
+      accessLabels={authAccessLabels()}
       baseUrl={authBaseUrl}
       {...(projectId ? { projectId } : {})}
     >

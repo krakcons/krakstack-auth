@@ -36,6 +36,7 @@ import {
 import {
   DataTable,
   type DataTableColDef,
+  DataTableListSummary,
 } from "@krak-stack/registry/data-table";
 import { AppBrand } from "@krak-stack/registry/app-brand";
 import { EditingLocaleSwitcher } from "@krak-stack/registry/editing-locale-switcher";
@@ -158,9 +159,11 @@ const messages = {
     user_api_key_hidden: "Secret hidden",
     user_api_key_name: "Key name",
     user_api_key_no_permissions: "No permissions",
+    user_api_key_permissions_clear_all: "Clear all",
     user_api_key_permissions: "Permissions",
     user_api_key_permissions_description:
       "Choose the permissions this API key should receive.",
+    user_api_key_permissions_select_all: "Select all",
     user_api_key_rate_limit: "Rate limit",
     user_api_key_referrers: "Allowed referrers (optional)",
     user_api_key_referrers_any: "Any referrer",
@@ -310,9 +313,11 @@ const messages = {
     user_api_key_hidden: "Secret masqué",
     user_api_key_name: "Nom de la clé",
     user_api_key_no_permissions: "Aucune autorisation",
+    user_api_key_permissions_clear_all: "Tout effacer",
     user_api_key_permissions: "Autorisations",
     user_api_key_permissions_description:
       "Choisissez les autorisations que cette clé API doit recevoir.",
+    user_api_key_permissions_select_all: "Tout sélectionner",
     user_api_key_rate_limit: "Limite de débit",
     user_api_key_referrers: "Référents autorisés (facultatifs)",
     user_api_key_referrers_any: "Tout référent",
@@ -2426,13 +2431,21 @@ function ApiKeyManager({
                   rows={3}
                 />
                 <ApiKeyPermissions
+                  clearAllLabel={m.user_api_key_permissions_clear_all()}
                   description={m.user_api_key_permissions_description()}
                   idPrefix="user-create"
                   permissions={permissions}
                   labels={permissionLabels}
+                  selectAllLabel={m.user_api_key_permissions_select_all()}
                   selected={selectedPermissions}
                   title={m.user_api_key_permissions()}
                   onChange={togglePermission}
+                  onChangeAll={(ids, checked) =>
+                    setSelectedPermissions((current) => ({
+                      ...current,
+                      ...Object.fromEntries(ids.map((id) => [id, checked])),
+                    }))
+                  }
                 />
                 <SubmitError result={createSubmitResult} />
                 <SubmitButton form={createForm} />
@@ -2496,6 +2509,7 @@ function ApiKeyManager({
             permissions={permissions}
             permissionLabels={permissionLabels}
             messages={{
+              clearAll: m.user_api_key_permissions_clear_all(),
               enabled: m.user_api_key_enabled(),
               name: m.user_api_key_name(),
               referrers: m.user_api_key_referrers(),
@@ -2504,6 +2518,7 @@ function ApiKeyManager({
               referrersPlaceholder: m.user_api_key_referrers_placeholder(),
               permissions: m.user_api_key_permissions(),
               permissionsDescription: m.user_api_key_permissions_description(),
+              selectAll: m.user_api_key_permissions_select_all(),
               updateError: m.user_api_key_update_error(),
             }}
             onSaved={() => {
@@ -2579,22 +2594,12 @@ const apiKeyColumns = ({
     cellRenderer: ({ data }) => {
       const permissions = formatPermissions(data.permissions);
 
-      if (permissions.length === 0) {
-        return (
-          <span className="text-muted-foreground text-sm">
-            {m.user_api_key_no_permissions()}
-          </span>
-        );
-      }
-
       return (
-        <div className="flex max-w-sm flex-wrap gap-1.5">
-          {permissions.map((permission) => (
-            <Badge key={permission} variant="secondary">
-              {permission}
-            </Badge>
-          ))}
-        </div>
+        <DataTableListSummary
+          emptyLabel={m.user_api_key_no_permissions()}
+          items={permissions}
+          visibleCount={1}
+        />
       );
     },
   },

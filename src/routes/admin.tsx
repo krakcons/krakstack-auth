@@ -21,6 +21,7 @@ import {
   useSidebarLayout,
 } from "@krak-stack/registry/sidebar-layout";
 import { authBaseUrl, getAuthSession } from "@/services/auth/client";
+import { authAccessLabels } from "@/services/auth/access-labels";
 import {
   MemberRequired,
   KrakstackAuthProvider,
@@ -53,6 +54,7 @@ export const Route = createFileRoute("/admin")({
 function Admin() {
   return (
     <KrakstackAuthProvider
+      accessLabels={authAccessLabels()}
       baseUrl={authBaseUrl}
       projectId={import.meta.env.VITE_KRAKSTACK_AUTH_PROJECT_ID}
     >

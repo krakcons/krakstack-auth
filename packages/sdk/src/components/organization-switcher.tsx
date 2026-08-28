@@ -39,6 +39,7 @@ import {
 import {
   DataTable,
   type DataTableColDef,
+  DataTableListSummary,
   DataTableRelationshipCell,
 } from "@krak-stack/registry/data-table";
 import {
@@ -257,9 +258,11 @@ const messages = {
     user_api_key_hidden: "Secret hidden",
     user_api_key_name: "Key name",
     user_api_key_no_permissions: "No permissions",
+    user_api_key_permissions_clear_all: "Clear all",
     user_api_key_permissions: "Permissions",
     user_api_key_permissions_description:
       "Choose the project permissions this API key should receive.",
+    user_api_key_permissions_select_all: "Select all",
     user_api_key_rate_limit: "Rate limit",
     user_api_key_referrers: "Allowed referrers (optional)",
     user_api_key_referrers_any: "Any referrer",
@@ -416,9 +419,11 @@ const messages = {
     user_api_key_hidden: "Secret masqué",
     user_api_key_name: "Nom de la clé",
     user_api_key_no_permissions: "Aucune autorisation",
+    user_api_key_permissions_clear_all: "Tout effacer",
     user_api_key_permissions: "Autorisations",
     user_api_key_permissions_description:
       "Choisissez les autorisations de projet à attribuer à cette clé API.",
+    user_api_key_permissions_select_all: "Tout sélectionner",
     user_api_key_rate_limit: "Limite de débit",
     user_api_key_referrers: "Référents autorisés (facultatifs)",
     user_api_key_referrers_any: "Tout référent",
@@ -732,10 +737,12 @@ const editApiKeyFormBuilder = FormBuilder.empty
   .addField("permissions", Schema.Record(Schema.String, Schema.Boolean));
 
 type ApiKeyPermissionsFieldOptions = {
+  clearAllLabel: string;
   description: string;
   idPrefix: string;
   labels?: ProjectAccessLabelCatalog | undefined;
   permissions: Readonly<Record<string, ReadonlyArray<string>>>;
+  selectAllLabel: string;
   title: string;
 };
 
@@ -744,14 +751,22 @@ const ApiKeyPermissionsField: FormReact.FieldComponent<
   ApiKeyPermissionsFieldOptions
 > = ({ field, props }) => (
   <ApiKeyPermissions
+    clearAllLabel={props.clearAllLabel}
     description={props.description}
     idPrefix={props.idPrefix}
     permissions={props.permissions}
     labels={props.labels}
+    selectAllLabel={props.selectAllLabel}
     selected={field.value}
     title={props.title}
     onChange={(id, checked) =>
       field.onChange({ ...field.value, [id]: checked })
+    }
+    onChangeAll={(ids, checked) =>
+      field.onChange({
+        ...field.value,
+        ...Object.fromEntries(ids.map((id) => [id, checked])),
+      })
     }
   />
 );
@@ -3117,13 +3132,21 @@ function OrganizationApiKeyManager({
                   rows={3}
                 />
                 <ApiKeyPermissions
+                  clearAllLabel={m.user_api_key_permissions_clear_all()}
                   description={m.user_api_key_permissions_description()}
                   idPrefix="organization-create"
                   permissions={permissions}
                   labels={permissionLabels}
+                  selectAllLabel={m.user_api_key_permissions_select_all()}
                   selected={selectedPermissions}
                   title={m.user_api_key_permissions()}
                   onChange={togglePermission}
+                  onChangeAll={(ids, checked) =>
+                    setSelectedPermissions((current) => ({
+                      ...current,
+                      ...Object.fromEntries(ids.map((id) => [id, checked])),
+                    }))
+                  }
                 />
                 <SubmitError result={createResult} />
                 <SubmitButton form={createForm} />
@@ -3186,6 +3209,7 @@ function OrganizationApiKeyManager({
             permissions={permissions}
             permissionLabels={permissionLabels}
             messages={{
+              clearAll: m.user_api_key_permissions_clear_all(),
               enabled: m.user_api_key_enabled(),
               name: m.user_api_key_name(),
               referrers: m.user_api_key_referrers(),
@@ -3194,6 +3218,7 @@ function OrganizationApiKeyManager({
               referrersPlaceholder: m.user_api_key_referrers_placeholder(),
               permissions: m.user_api_key_permissions(),
               permissionsDescription: m.user_api_key_permissions_description(),
+              selectAll: m.user_api_key_permissions_select_all(),
               updateError: m.user_api_key_update_error(),
             }}
             onSaved={() => {
@@ -3218,6 +3243,7 @@ function OrganizationApiKeyEditForm({
   baseUrl?: string | undefined;
   keyData: ApiKeySummary;
   messages: {
+    clearAll: string;
     enabled: string;
     name: string;
     referrers: string;
@@ -3226,6 +3252,7 @@ function OrganizationApiKeyEditForm({
     referrersPlaceholder: string;
     permissions: string;
     permissionsDescription: string;
+    selectAll: string;
     updateError: string;
   };
   permissions: Readonly<Record<string, ReadonlyArray<string>>>;
@@ -3337,10 +3364,12 @@ function OrganizationApiKeyEditForm({
             rows={3}
           />
           <form.permissions
+            clearAllLabel={messages.clearAll}
             description={messages.permissionsDescription}
             idPrefix={`organization-edit-${keyData.id}`}
             labels={permissionLabels}
             permissions={permissions}
+            selectAllLabel={messages.selectAll}
             title={messages.permissions}
           />
           <SubmitError result={submitResult} />
@@ -3385,18 +3414,12 @@ const apiKeyColumns = ({
     headerName: m.user_api_key_permissions(),
     cellRenderer: ({ data }) => {
       const values = organizationApiKeyFormattedPermissions(data.permissions);
-      return values.length > 0 ? (
-        <div className="flex flex-wrap gap-1">
-          {values.map((value) => (
-            <Badge key={value} variant="outline">
-              {value}
-            </Badge>
-          ))}
-        </div>
-      ) : (
-        <span className="text-muted-foreground text-sm">
-          {m.user_api_key_no_permissions()}
-        </span>
+      return (
+        <DataTableListSummary
+          emptyLabel={m.user_api_key_no_permissions()}
+          items={values}
+          visibleCount={1}
+        />
       );
     },
   },

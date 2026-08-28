@@ -3,6 +3,7 @@ import { useState } from "react";
 
 import type { ProjectAccessLabelCatalog } from "../access.js";
 
+import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import {
   Collapsible,
@@ -20,21 +21,27 @@ import {
 } from "@/components/ui/field";
 
 export const ApiKeyPermissions = ({
+  clearAllLabel,
   description,
   idPrefix,
   permissions,
   labels,
+  selectAllLabel,
   selected,
   title,
   onChange,
+  onChangeAll,
 }: {
+  clearAllLabel: string;
   description: string;
   idPrefix: string;
   permissions: Readonly<Record<string, ReadonlyArray<string>>>;
   labels?: ProjectAccessLabelCatalog | undefined;
+  selectAllLabel: string;
   selected: Readonly<Record<string, boolean>>;
   title: string;
   onChange: (id: string, checked: boolean) => void;
+  onChangeAll: (ids: ReadonlyArray<string>, checked: boolean) => void;
 }) => {
   const groups = Object.entries(permissions).reduce<
     Array<{
@@ -72,12 +79,46 @@ export const ApiKeyPermissions = ({
     return groups;
   }, []);
 
+  const actions = groups.flatMap((group) => group.actions);
+  const actionIds = actions.map((action) => action.id);
+  const anySelected = actions.some((action) => selected[action.id]);
+  const [openGroups, setOpenGroups] = useState<ReadonlySet<string>>(
+    () =>
+      new Set(
+        groups
+          .filter((group) =>
+            group.actions.some((action) => selected[action.id]),
+          )
+          .map((group) => group.resource),
+      ),
+  );
+
   if (groups.length === 0) return null;
 
   return (
     <FieldSet className="gap-3">
       <FieldLegend className="mb-0">{title}</FieldLegend>
       <FieldDescription>{description}</FieldDescription>
+      <div className="flex flex-wrap gap-2">
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          onClick={() => onChangeAll(actionIds, true)}
+        >
+          {selectAllLabel}
+        </Button>
+        {anySelected ? (
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={() => onChangeAll(actionIds, false)}
+          >
+            {clearAllLabel}
+          </Button>
+        ) : null}
+      </div>
       <div className="overflow-hidden rounded-lg border">
         {groups.map(({ resource, label, actions }, index) => (
           <PermissionGroup
@@ -85,9 +126,18 @@ export const ApiKeyPermissions = ({
             actions={actions}
             className={index > 0 ? "border-t" : ""}
             idPrefix={idPrefix}
+            open={openGroups.has(resource)}
             resourceLabel={label}
             selected={selected}
             onChange={onChange}
+            onOpenChange={(nextOpen) =>
+              setOpenGroups((current) => {
+                const next = new Set(current);
+                if (nextOpen) next.add(resource);
+                else next.delete(resource);
+                return next;
+              })
+            }
           />
         ))}
       </div>
@@ -99,22 +149,25 @@ const PermissionGroup = ({
   actions,
   className,
   idPrefix,
+  open,
   resourceLabel,
   selected,
   onChange,
+  onOpenChange,
 }: {
   actions: ReadonlyArray<{ id: string; label: string }>;
   className?: string;
   idPrefix: string;
+  open: boolean;
   resourceLabel: string;
   selected: Readonly<Record<string, boolean>>;
   onChange: (id: string, checked: boolean) => void;
+  onOpenChange: (open: boolean) => void;
 }) => {
   const selectedCount = actions.filter((action) => selected[action.id]).length;
-  const [open, setOpen] = useState(selectedCount > 0);
 
   return (
-    <Collapsible className={className} open={open} onOpenChange={setOpen}>
+    <Collapsible className={className} open={open} onOpenChange={onOpenChange}>
       <CollapsibleTrigger className="hover:bg-muted/50 focus-visible:ring-ring flex w-full items-center gap-3 px-4 py-3 text-left outline-none focus-visible:ring-2 focus-visible:ring-inset">
         <span className="min-w-0 flex-1 truncate text-sm font-medium">
           {resourceLabel}

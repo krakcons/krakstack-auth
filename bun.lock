@@ -80,7 +80,7 @@
     },
     "packages/sdk": {
       "name": "@krak-stack/auth",
-      "version": "0.2.4",
+      "version": "0.2.5",
       "peerDependencies": {
         "@effect/atom-react": "4.0.0-rc.112",
         "@krak-stack/registry": "^0.1.25",

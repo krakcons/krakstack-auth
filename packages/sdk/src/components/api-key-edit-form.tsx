@@ -28,10 +28,12 @@ const editApiKeyFormBuilder = FormBuilder.empty
   .addField("permissions", Schema.Record(Schema.String, Schema.Boolean));
 
 type ApiKeyPermissionsFieldOptions = {
+  clearAllLabel: string;
   description: string;
   idPrefix: string;
   labels?: ProjectAccessLabelCatalog | undefined;
   permissions: Readonly<Record<string, ReadonlyArray<string>>>;
+  selectAllLabel: string;
   title: string;
 };
 
@@ -40,19 +42,28 @@ const ApiKeyPermissionsField: FormReact.FieldComponent<
   ApiKeyPermissionsFieldOptions
 > = ({ field, props }) => (
   <ApiKeyPermissions
+    clearAllLabel={props.clearAllLabel}
     description={props.description}
     idPrefix={props.idPrefix}
     permissions={props.permissions}
     labels={props.labels}
+    selectAllLabel={props.selectAllLabel}
     selected={field.value}
     title={props.title}
     onChange={(id, checked) =>
       field.onChange({ ...field.value, [id]: checked })
     }
+    onChangeAll={(ids, checked) =>
+      field.onChange({
+        ...field.value,
+        ...Object.fromEntries(ids.map((id) => [id, checked])),
+      })
+    }
   />
 );
 
 export type ApiKeyEditMessages = {
+  clearAll: string;
   enabled: string;
   name: string;
   referrers: string;
@@ -61,6 +72,7 @@ export type ApiKeyEditMessages = {
   referrersPlaceholder: string;
   permissions: string;
   permissionsDescription: string;
+  selectAll: string;
   updateError: string;
 };
 
@@ -183,10 +195,12 @@ export const ApiKeyEditForm = ({
             rows={3}
           />
           <form.permissions
+            clearAllLabel={messages.clearAll}
             description={messages.permissionsDescription}
             idPrefix="edit"
             permissions={permissions}
             labels={permissionLabels}
+            selectAllLabel={messages.selectAll}
             title={messages.permissions}
           />
           <SubmitError result={submitResult} />
