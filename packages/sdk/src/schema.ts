@@ -1,36 +1,5 @@
 import { Option, Schema, SchemaGetter } from "effect";
 
-export const User = Schema.Struct({
-  id: Schema.String,
-  name: Schema.String,
-  email: Schema.String,
-  emailVerified: Schema.Boolean,
-  image: Schema.NullOr(Schema.String),
-  role: Schema.NullOr(Schema.String),
-  banned: Schema.NullOr(Schema.Boolean),
-  lastLoginMethod: Schema.optional(Schema.NullOr(Schema.String)),
-  createdAt: Schema.Date,
-  updatedAt: Schema.Date,
-}).annotate({
-  identifier: "User",
-  title: "User",
-  description: "Stable central auth user record.",
-  examples: [
-    {
-      id: "user_1",
-      name: "Ada Lovelace",
-      email: "ada@example.com",
-      emailVerified: true,
-      image: null,
-      role: "admin",
-      banned: false,
-      lastLoginMethod: "email-otp",
-      createdAt: new Date("2026-01-01T00:00:00.000Z"),
-      updatedAt: new Date("2026-01-01T00:00:00.000Z"),
-    },
-  ],
-});
-
 export const Session = Schema.Struct({
   id: Schema.String,
   expiresAt: Schema.Date,
@@ -64,10 +33,17 @@ export const Session = Schema.Struct({
   ],
 });
 
-export const OrganizationLocale = Schema.Union([
+export const ContactLocale = Schema.Union([
   Schema.Literal("en"),
   Schema.Literal("fr"),
 ]).annotate({
+  identifier: "ContactLocale",
+  title: "Contact locale",
+  description: "Supported localized contact-label locale.",
+  examples: ["en", "fr"],
+});
+
+export const OrganizationLocale = ContactLocale.annotate({
   identifier: "OrganizationLocale",
   title: "Organization locale",
   description: "Supported organization translation locale.",
@@ -82,7 +58,7 @@ export const EmailAddress = Schema.NonEmptyString.check(
 });
 
 export const PhoneNumber = Schema.NonEmptyString.check(
-  Schema.isPattern(/^\+?[0-9 ()-]{7,}$/),
+  Schema.isPattern(/^(?=.*\d)\+?[0-9 ()-]{7,}$/),
 ).annotate({
   identifier: "PhoneNumber",
   title: "Phone number",
@@ -108,54 +84,218 @@ export const SocialPlatform = Schema.Literals([
   title: "Social platform",
 });
 
-export const OrganizationContactTranslation = Schema.Struct({
-  locale: OrganizationLocale,
+export const ContactTranslation = Schema.Struct({
+  locale: ContactLocale,
   label: Schema.NonEmptyString.check(Schema.isPattern(/\S/)),
 }).annotate({
+  identifier: "ContactTranslation",
+  title: "Contact translation",
+});
+
+export const OrganizationContactTranslation = ContactTranslation.annotate({
   identifier: "OrganizationContactTranslation",
   title: "Organization contact translation",
 });
 
-export const OrganizationEmail = Schema.Struct({
+export const ContactEmail = Schema.Struct({
   email: EmailAddress,
-  translations: Schema.Array(OrganizationContactTranslation).check(
-    Schema.isMinLength(1),
-  ),
+  translations: Schema.Array(ContactTranslation).check(Schema.isMinLength(1)),
 }).annotate({
+  identifier: "ContactEmail",
+  title: "Contact email",
+});
+
+export const OrganizationEmail = ContactEmail.annotate({
   identifier: "OrganizationEmail",
   title: "Organization email",
 });
 
-export const OrganizationPhone = Schema.Struct({
+export const ContactPhone = Schema.Struct({
   number: PhoneNumber,
   extension: Schema.optional(Schema.String),
-  translations: Schema.Array(OrganizationContactTranslation).check(
-    Schema.isMinLength(1),
-  ),
+  translations: Schema.Array(ContactTranslation).check(Schema.isMinLength(1)),
 }).annotate({
+  identifier: "ContactPhone",
+  title: "Contact phone",
+});
+
+export const OrganizationPhone = ContactPhone.annotate({
   identifier: "OrganizationPhone",
   title: "Organization phone",
 });
 
-export const OrganizationWebsite = Schema.Struct({
+export const ContactWebsite = Schema.Struct({
   url: WebsiteUrl,
-  translations: Schema.Array(OrganizationContactTranslation).check(
-    Schema.isMinLength(1),
-  ),
+  translations: Schema.Array(ContactTranslation).check(Schema.isMinLength(1)),
 }).annotate({
+  identifier: "ContactWebsite",
+  title: "Contact website",
+});
+
+export const OrganizationWebsite = ContactWebsite.annotate({
   identifier: "OrganizationWebsite",
   title: "Organization website",
 });
 
-export const OrganizationSocial = Schema.Struct({
+export const ContactSocial = Schema.Struct({
   platform: SocialPlatform,
   url: WebsiteUrl,
-  translations: Schema.Array(OrganizationContactTranslation).check(
-    Schema.isMinLength(1),
-  ),
+  translations: Schema.Array(ContactTranslation).check(Schema.isMinLength(1)),
 }).annotate({
+  identifier: "ContactSocial",
+  title: "Contact social profile",
+});
+
+export const OrganizationSocial = ContactSocial.annotate({
   identifier: "OrganizationSocial",
   title: "Organization social profile",
+});
+
+export const USER_CONTACT_LIMIT = 8;
+
+export const UserContactEmails = Schema.Array(ContactEmail)
+  .check(Schema.isMaxLength(USER_CONTACT_LIMIT))
+  .annotate({ identifier: "UserContactEmails" });
+export const UserContactPhones = Schema.Array(ContactPhone)
+  .check(Schema.isMaxLength(USER_CONTACT_LIMIT))
+  .annotate({ identifier: "UserContactPhones" });
+export const UserContactWebsites = Schema.Array(ContactWebsite)
+  .check(Schema.isMaxLength(USER_CONTACT_LIMIT))
+  .annotate({ identifier: "UserContactWebsites" });
+export const UserContactSocials = Schema.Array(ContactSocial)
+  .check(Schema.isMaxLength(USER_CONTACT_LIMIT))
+  .annotate({ identifier: "UserContactSocials" });
+
+const UserMetadataFields = Schema.Struct({
+  emails: Schema.optional(UserContactEmails),
+  phones: Schema.optional(UserContactPhones),
+  websites: Schema.optional(UserContactWebsites),
+  socials: Schema.optional(UserContactSocials),
+});
+const UserMetadataJson = Schema.fromJsonString(UserMetadataFields);
+
+export const UserMetadata = UserMetadataFields.check(
+  Schema.makeFilter((metadata) => {
+    const json = Schema.encodeSync(UserMetadataJson)(metadata);
+    return new TextEncoder().encode(json).byteLength <= 2048
+      ? undefined
+      : "User contact metadata must not exceed 2 KB";
+  }),
+).annotate({
+  identifier: "UserMetadata",
+  title: "User metadata",
+  description: "Localized contact details stored on a user record.",
+  examples: [
+    {
+      emails: [
+        {
+          email: "ada@example.com",
+          translations: [{ locale: "en", label: "Work" }],
+        },
+      ],
+      phones: [
+        {
+          number: "+1 514 555 0100",
+          translations: [{ locale: "en", label: "Mobile" }],
+        },
+      ],
+      websites: [
+        {
+          url: "https://example.com",
+          translations: [{ locale: "en", label: "Website" }],
+        },
+      ],
+      socials: [
+        {
+          platform: "linkedin",
+          url: "https://linkedin.com/in/example",
+          translations: [{ locale: "en", label: "LinkedIn" }],
+        },
+      ],
+    },
+  ],
+});
+
+const MetadataRecord = Schema.Record(Schema.String, Schema.Unknown);
+type MetadataRecord = typeof MetadataRecord.Type;
+
+export const decodeUserMetadata = (
+  metadata: MetadataRecord | null | undefined,
+): UserMetadata => {
+  const value = metadata ?? {};
+
+  const emails = Schema.decodeUnknownOption(UserContactEmails)(value.emails);
+  const phones = Schema.decodeUnknownOption(UserContactPhones)(value.phones);
+  const websites = Schema.decodeUnknownOption(UserContactWebsites)(
+    value.websites,
+  );
+  const socials = Schema.decodeUnknownOption(UserContactSocials)(value.socials);
+
+  let metadataValue: UserMetadata = {};
+  if (Option.isSome(emails))
+    metadataValue = { ...metadataValue, emails: emails.value };
+  if (Option.isSome(phones))
+    metadataValue = { ...metadataValue, phones: phones.value };
+  if (Option.isSome(websites))
+    metadataValue = { ...metadataValue, websites: websites.value };
+  if (Option.isSome(socials))
+    metadataValue = { ...metadataValue, socials: socials.value };
+  return Option.getOrElse(
+    Schema.decodeUnknownOption(UserMetadata)(metadataValue),
+    () => ({}),
+  );
+};
+
+export const UserMetadataStandard = Schema.toStandardSchemaV1(UserMetadata);
+
+const CompatibleUserMetadata = Schema.Unknown.pipe(
+  Schema.decodeTo(UserMetadata, {
+    decode: SchemaGetter.transform((metadata) => {
+      const decoded = Schema.decodeUnknownOption(MetadataRecord)(metadata);
+      return decodeUserMetadata(Option.getOrNull(decoded));
+    }),
+    encode: SchemaGetter.transform((metadata) => metadata),
+  }),
+);
+
+export const User = Schema.Struct({
+  id: Schema.String,
+  name: Schema.String,
+  email: Schema.String,
+  emailVerified: Schema.Boolean,
+  image: Schema.NullOr(Schema.String),
+  metadata: Schema.optional(Schema.NullOr(CompatibleUserMetadata)),
+  role: Schema.NullOr(Schema.String),
+  banned: Schema.NullOr(Schema.Boolean),
+  lastLoginMethod: Schema.optional(Schema.NullOr(Schema.String)),
+  createdAt: Schema.Date,
+  updatedAt: Schema.Date,
+}).annotate({
+  identifier: "User",
+  title: "User",
+  description: "Stable central auth user record.",
+  examples: [
+    {
+      id: "user_1",
+      name: "Ada Lovelace",
+      email: "ada@example.com",
+      emailVerified: true,
+      image: null,
+      metadata: {
+        websites: [
+          {
+            url: "https://example.com",
+            translations: [{ locale: "en", label: "Website" }],
+          },
+        ],
+      },
+      role: "admin",
+      banned: false,
+      lastLoginMethod: "email-otp",
+      createdAt: new Date("2026-01-01T00:00:00.000Z"),
+      updatedAt: new Date("2026-01-01T00:00:00.000Z"),
+    },
+  ],
 });
 
 export const PostalAddress = Schema.Struct({
@@ -437,6 +577,13 @@ export const Member = Schema.Struct({
 
 export type User = typeof User.Type;
 export type Session = typeof Session.Type;
+export type ContactLocale = typeof ContactLocale.Type;
+export type ContactTranslation = typeof ContactTranslation.Type;
+export type ContactEmail = typeof ContactEmail.Type;
+export type ContactPhone = typeof ContactPhone.Type;
+export type ContactWebsite = typeof ContactWebsite.Type;
+export type ContactSocial = typeof ContactSocial.Type;
+export type UserMetadata = typeof UserMetadata.Type;
 export type OrganizationLocale = typeof OrganizationLocale.Type;
 export type EmailAddress = typeof EmailAddress.Type;
 export type PhoneNumber = typeof PhoneNumber.Type;

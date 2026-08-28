@@ -8,6 +8,7 @@ import {
   user,
 } from "@/db/schema";
 import type { AuthOrganization } from "@/lib/auth-schema";
+import { decodeUserMetadata, type UserMetadata } from "@krak-stack/auth/schema";
 import { DB } from "@/services/database";
 import type {
   BackendAuthActiveOrganization,
@@ -29,6 +30,7 @@ type MemberRow = {
   email: string;
   emailVerified: boolean;
   image: string | null;
+  metadata: typeof user.$inferSelect.metadata;
   userRole: string | null;
   banned: boolean | null;
   userCreatedAt: Date;
@@ -44,6 +46,9 @@ const parseMetadata = (
     () => value,
   );
 };
+
+const userMetadata = (value: UserMetadata | null) =>
+  value === null ? null : decodeUserMetadata(value);
 
 const uniqueIds = (ids: ReadonlyArray<string>) =>
   Array.from(new Set(ids.map((id) => id.trim()).filter(Boolean)));
@@ -75,6 +80,7 @@ const selectMemberColumns = () => ({
   email: user.email,
   emailVerified: user.emailVerified,
   image: user.image,
+  metadata: user.metadata,
   userRole: user.role,
   banned: user.banned,
   userCreatedAt: user.createdAt,
@@ -93,6 +99,7 @@ const memberRecord = (record: MemberRow): MemberRecord => ({
     email: record.email,
     emailVerified: record.emailVerified,
     image: record.image,
+    metadata: userMetadata(record.metadata),
     role: record.userRole,
     banned: record.banned,
     createdAt: record.userCreatedAt,
@@ -121,6 +128,7 @@ export class BackendAuth extends Context.Service<BackendAuth>()("BackendAuth", {
           email: user.email,
           emailVerified: user.emailVerified,
           image: user.image,
+          metadata: user.metadata,
           role: user.role,
           banned: user.banned,
           createdAt: user.createdAt,
@@ -131,7 +139,10 @@ export class BackendAuth extends Context.Service<BackendAuth>()("BackendAuth", {
 
       return orderedBatch(
         normalizedIds,
-        records,
+        records.map((record) => ({
+          ...record,
+          metadata: userMetadata(record.metadata),
+        })),
       ) satisfies BackendAuthUsersResponse;
     });
 
@@ -147,6 +158,7 @@ export class BackendAuth extends Context.Service<BackendAuth>()("BackendAuth", {
           email: user.email,
           emailVerified: user.emailVerified,
           image: user.image,
+          metadata: user.metadata,
           role: user.role,
           banned: user.banned,
           createdAt: user.createdAt,
@@ -156,7 +168,9 @@ export class BackendAuth extends Context.Service<BackendAuth>()("BackendAuth", {
         .where(eq(user.id, id))
         .limit(1);
 
-      return record;
+      return record
+        ? { ...record, metadata: userMetadata(record.metadata) }
+        : undefined;
     });
 
     const listOrganizationsByIds = Effect.fn(

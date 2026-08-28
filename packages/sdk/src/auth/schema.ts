@@ -1,5 +1,7 @@
 import { Schema } from "effect";
 
+import { User, UserMetadata } from "../schema.js";
+
 const JsonRecord = Schema.Record(Schema.String, Schema.Json);
 const StringArrayRecord = Schema.Record(
   Schema.String,
@@ -12,6 +14,7 @@ export const AuthUser = Schema.Struct({
   email: Schema.String,
   emailVerified: Schema.Boolean,
   image: Schema.NullOr(Schema.String),
+  metadata: User.fields.metadata,
   role: Schema.NullOr(Schema.String),
   banned: Schema.NullOr(Schema.Boolean),
   banReason: Schema.optional(Schema.NullOr(Schema.String)),
@@ -173,6 +176,7 @@ export class AuthInternalServerError extends Schema.TaggedError<AuthInternalServ
 export const UpdateUserPayload = Schema.Struct({
   name: Schema.optional(Schema.String),
   image: Schema.optional(Schema.NullOr(Schema.String)),
+  metadata: Schema.optional(Schema.NullOr(UserMetadata)),
 }).annotate({ identifier: "UpdateUserPayload", title: "Update user payload" });
 
 export const SignInEmailPayload = Schema.Struct({
@@ -449,6 +453,7 @@ export const AuthMemberUser = Schema.Struct({
   name: Schema.String,
   email: Schema.String,
   image: Schema.optional(Schema.NullOr(Schema.String)),
+  metadata: User.fields.metadata,
 }).annotate({
   identifier: "AuthMemberUser",
   title: "Organization member user",

@@ -42,7 +42,6 @@ import {
   DataTableRelationshipCell,
 } from "@krak-stack/registry/data-table";
 import {
-  ErrorMessage,
   CheckboxField,
   ImageField,
   SelectField,
@@ -53,8 +52,7 @@ import {
 } from "@krak-stack/registry/effect-form";
 import { EditingLocaleSwitcher } from "@krak-stack/registry/editing-locale-switcher";
 import { AppBrand } from "@krak-stack/registry/app-brand";
-import { Field, FieldLabel, FieldSet } from "@/components/ui/field";
-import { Input } from "@/components/ui/input";
+import { FieldSet } from "@/components/ui/field";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { CopyButton } from "@krak-stack/registry/copy-button";
@@ -74,13 +72,6 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import { Separator } from "@/components/ui/separator";
 import {
   OrganizationEmail,
@@ -98,7 +89,6 @@ import {
   type OrganizationPhone as OrganizationPhoneValue,
   type OrganizationSocial as OrganizationSocialValue,
   type OrganizationWebsite as OrganizationWebsiteValue,
-  type SocialPlatform,
 } from "@krak-stack/auth/schema";
 import {
   isOrganizationRole,
@@ -121,6 +111,14 @@ import { parseApiKeyReferrers } from "./api-key.js";
 import { ApiKeyPermissions } from "./api-key-permissions.js";
 import { ApiKeyRateLimit, apiKeyUsagePercent } from "./api-key-rate-limit.js";
 import { ApiKeyReferrers, apiKeyReferrers } from "./api-key-referrers.js";
+import {
+  ContactAddressesField,
+  ContactEmailsField,
+  ContactPhonesField,
+  ContactSocialsField,
+  ContactWebsitesField,
+  type ContactAddressFieldMessages,
+} from "./contact-fields.js";
 import { useOpenedOnce } from "./hooks.js";
 import {
   invitationDisplayStatus,
@@ -513,6 +511,28 @@ const OrganizationMessagesContext = createContext(
 );
 const useOrganizationMessages = () => useContext(OrganizationMessagesContext);
 
+const organizationContactFieldMessages = (
+  m: ReturnType<typeof organizationMessageFns>,
+): ContactAddressFieldMessages => ({
+  addAddress: m.organization_address_add(),
+  addEmail: m.organization_contact_add_email(),
+  addPhone: m.organization_contact_add_phone(),
+  addSocial: m.organization_contact_add_social(),
+  addWebsite: m.organization_contact_add_website(),
+  country: m.organization_address_country(),
+  email: m.organization_contact_email_type(),
+  extension: m.organization_contact_extension(),
+  label: m.organization_contact_label(),
+  locality: m.organization_address_locality(),
+  phone: m.organization_contact_phone_type(),
+  platform: m.organization_contact_platform(),
+  postalCode: m.organization_address_postal_code(),
+  region: m.organization_address_region(),
+  remove: m.organization_contact_remove(),
+  street: m.organization_address_street(),
+  url: m.organization_contact_url(),
+});
+
 export type OrganizationSwitcherFeatures = {
   organizationSwitching?: boolean;
   organizationCreation?: boolean;
@@ -681,479 +701,14 @@ const organizationFormBuilder = FormBuilder.empty
   .addField("frLogo", organizationImageSchema)
   .addField("frIcon", organizationImageSchema);
 
-const socialPlatform = (value: string | null): SocialPlatform | null => {
-  switch (value) {
-    case "facebook":
-    case "github":
-    case "instagram":
-    case "linkedin":
-    case "tiktok":
-    case "x":
-    case "youtube":
-      return value;
-    default:
-      return null;
-  }
-};
-
-const contactLabel = (
-  translations: ReadonlyArray<OrganizationContactTranslation> | undefined,
-  locale: OrganizationLocale,
-) =>
-  translations?.find((translation) => translation.locale === locale)?.label ??
-  "";
-
-const contactTranslations = (
-  translations: ReadonlyArray<OrganizationContactTranslation> | undefined,
-  locale: OrganizationLocale,
-  label: string,
-): OrganizationContactTranslation[] => [
-  ...(translations ?? []).filter(
-    (translation) => translation.locale !== locale,
-  ),
-  ...(label ? [{ locale, label }] : []),
-];
-
-const EmailsField: FormReact.FieldComponent<
-  ReadonlyArray<OrganizationEmailValue>,
-  { locale: OrganizationLocale }
-> = ({ field, props }) => {
-  const m = useOrganizationMessages();
-
-  return (
-    <RepeatableContactField
-      addLabel={m.organization_contact_add_email()}
-      emptyValue={{
-        email: "",
-        translations: [{ locale: props.locale, label: "" }],
-      }}
-      error={Option.isSome(field.error) ? field.error.value : undefined}
-      path={field.path}
-      values={field.value}
-      onChange={field.onChange}
-      render={(contact, index, update) => (
-        <div className="grid gap-3 sm:grid-cols-2">
-          <ContactInput
-            id={`${field.path}-${index}-email`}
-            label={m.organization_contact_email_type()}
-            placeholder="team@example.com"
-            type="email"
-            value={contact.email}
-            onBlur={field.onBlur}
-            onChange={(email) => update({ ...contact, email })}
-          />
-          <ContactLabelInput
-            id={`${field.path}-${index}-label`}
-            locale={props.locale}
-            translations={contact.translations}
-            onBlur={field.onBlur}
-            onChange={(translations) =>
-              update({
-                ...contact,
-                translations,
-              })
-            }
-          />
-        </div>
-      )}
-    />
-  );
-};
-
-const PhonesField: FormReact.FieldComponent<
-  ReadonlyArray<OrganizationPhoneValue>,
-  { locale: OrganizationLocale }
-> = ({ field, props }) => {
-  const m = useOrganizationMessages();
-  return (
-    <RepeatableContactField
-      addLabel={m.organization_contact_add_phone()}
-      emptyValue={{
-        number: "",
-        translations: [{ locale: props.locale, label: "" }],
-      }}
-      error={Option.isSome(field.error) ? field.error.value : undefined}
-      path={field.path}
-      values={field.value}
-      onChange={field.onChange}
-      render={(phone, index, update) => (
-        <div className="grid gap-3 sm:grid-cols-2">
-          <ContactInput
-            id={`${field.path}-${index}-number`}
-            label={m.organization_contact_phone_type()}
-            placeholder="+1 514 555 0100"
-            type="tel"
-            value={phone.number}
-            onBlur={field.onBlur}
-            onChange={(number) => update({ ...phone, number })}
-          />
-          <ContactInput
-            id={`${field.path}-${index}-extension`}
-            label={m.organization_contact_extension()}
-            value={phone.extension ?? ""}
-            onBlur={field.onBlur}
-            onChange={(extension) =>
-              update({
-                ...phone,
-                ...(extension ? { extension } : { extension: undefined }),
-              })
-            }
-          />
-          <ContactLabelInput
-            id={`${field.path}-${index}-label`}
-            locale={props.locale}
-            translations={phone.translations}
-            onBlur={field.onBlur}
-            onChange={(translations) =>
-              update({
-                ...phone,
-                translations,
-              })
-            }
-          />
-        </div>
-      )}
-    />
-  );
-};
-
-function ContactInput({
-  className,
-  id,
-  label,
-  onBlur,
-  onChange,
-  placeholder,
-  type = "text",
-  value,
-}: {
-  className?: string;
-  id: string;
-  label: string;
-  onBlur: () => void;
-  onChange: (value: string) => void;
-  placeholder?: string;
-  type?: "email" | "tel" | "text" | "url";
-  value: string;
-}) {
-  return (
-    <div className={className}>
-      <FieldLabel htmlFor={id}>{label}</FieldLabel>
-      <Input
-        id={id}
-        className="mt-2"
-        value={value}
-        type={type}
-        placeholder={placeholder}
-        onBlur={onBlur}
-        onChange={(event) => onChange(event.target.value)}
-      />
-    </div>
-  );
-}
-
-function ContactLabelInput({
-  id,
-  locale,
-  onBlur,
-  onChange,
-  translations,
-}: {
-  id: string;
-  locale: OrganizationLocale;
-  onBlur: () => void;
-  onChange: (translations: OrganizationContactTranslation[]) => void;
-  translations: ReadonlyArray<OrganizationContactTranslation> | undefined;
-}) {
-  const m = useOrganizationMessages();
-
-  return (
-    <ContactInput
-      id={id}
-      label={m.organization_contact_label()}
-      value={contactLabel(translations, locale)}
-      onBlur={onBlur}
-      onChange={(label) =>
-        onChange(contactTranslations(translations, locale, label))
-      }
-    />
-  );
-}
-
-const WebsitesField: FormReact.FieldComponent<
-  ReadonlyArray<OrganizationWebsiteValue>,
-  { locale: OrganizationLocale }
-> = ({ field, props }) => {
-  const m = useOrganizationMessages();
-  return (
-    <RepeatableContactField
-      addLabel={m.organization_contact_add_website()}
-      emptyValue={{
-        url: "",
-        translations: [{ locale: props.locale, label: "" }],
-      }}
-      error={Option.isSome(field.error) ? field.error.value : undefined}
-      path={field.path}
-      values={field.value}
-      onChange={field.onChange}
-      render={(website, index, update) => (
-        <div className="grid gap-3 sm:grid-cols-2">
-          <ContactInput
-            id={`${field.path}-${index}-url`}
-            label={m.organization_contact_url()}
-            placeholder="https://example.com"
-            type="url"
-            value={website.url}
-            onBlur={field.onBlur}
-            onChange={(url) => update({ ...website, url })}
-          />
-          <ContactLabelInput
-            id={`${field.path}-${index}-label`}
-            locale={props.locale}
-            translations={website.translations}
-            onBlur={field.onBlur}
-            onChange={(translations) =>
-              update({
-                ...website,
-                translations,
-              })
-            }
-          />
-        </div>
-      )}
-    />
-  );
-};
-
-function RepeatableContactField<T>({
-  addLabel,
-  emptyValue,
-  error,
-  onChange,
-  path,
-  render,
-  values,
-}: {
-  addLabel: string;
-  emptyValue: T;
-  error: string | undefined;
-  onChange: (values: ReadonlyArray<T>) => void;
-  path: string;
-  render: (value: T, index: number, onChange: (value: T) => void) => ReactNode;
-  values: ReadonlyArray<T>;
-}) {
-  const m = useOrganizationMessages();
-
-  return (
-    <Field>
-      <div className="flex flex-col gap-3">
-        {values.map((value, index) => (
-          <div
-            className="bg-muted/20 relative rounded-lg border p-4 pr-12"
-            key={`${path}-${index}`}
-          >
-            {render(value, index, (next) =>
-              onChange(
-                values.map((item, itemIndex) =>
-                  itemIndex === index ? next : item,
-                ),
-              ),
-            )}
-            <Button
-              type="button"
-              variant="ghost"
-              size="icon"
-              className="absolute top-2 right-2"
-              aria-label={m.organization_contact_remove()}
-              onClick={() =>
-                onChange(values.filter((_, itemIndex) => itemIndex !== index))
-              }
-            >
-              <Trash2 />
-            </Button>
-          </div>
-        ))}
-        <Button
-          type="button"
-          variant="outline"
-          size="sm"
-          className="self-start"
-          onClick={() => onChange([...values, emptyValue])}
-        >
-          <Plus />
-          {addLabel}
-        </Button>
-        {error ? <ErrorMessage text={error} /> : null}
-      </div>
-    </Field>
-  );
-}
-
-function SocialPlatformSelect({
-  value,
-  onChange,
-}: {
-  value: SocialPlatform;
-  onChange: (value: SocialPlatform) => void;
-}) {
-  const m = useOrganizationMessages();
-  const items = [
-    { label: "Facebook", value: "facebook" },
-    { label: "GitHub", value: "github" },
-    { label: "Instagram", value: "instagram" },
-    { label: "LinkedIn", value: "linkedin" },
-    { label: "TikTok", value: "tiktok" },
-    { label: "X", value: "x" },
-    { label: "YouTube", value: "youtube" },
-  ];
-
-  return (
-    <div>
-      <FieldLabel>{m.organization_contact_platform()}</FieldLabel>
-      <Select
-        items={items}
-        value={value}
-        onValueChange={(next) => {
-          const platform = socialPlatform(next);
-          if (platform) onChange(platform);
-        }}
-      >
-        <SelectTrigger className="mt-2 w-full">
-          <SelectValue />
-        </SelectTrigger>
-        <SelectContent>
-          {items.map((item) => (
-            <SelectItem key={item.value} value={item.value}>
-              {item.label}
-            </SelectItem>
-          ))}
-        </SelectContent>
-      </Select>
-    </div>
-  );
-}
-
-const SocialsField: FormReact.FieldComponent<
-  ReadonlyArray<OrganizationSocialValue>,
-  { locale: OrganizationLocale }
-> = ({ field, props }) => {
-  const m = useOrganizationMessages();
-
-  return (
-    <RepeatableContactField
-      addLabel={m.organization_contact_add_social()}
-      emptyValue={{
-        platform: "linkedin",
-        url: "",
-        translations: [{ locale: props.locale, label: "" }],
-      }}
-      error={Option.isSome(field.error) ? field.error.value : undefined}
-      path={field.path}
-      values={field.value}
-      onChange={field.onChange}
-      render={(social, index, update) => (
-        <div className="grid gap-3 sm:grid-cols-2">
-          <SocialPlatformSelect
-            value={social.platform}
-            onChange={(platform) => update({ ...social, platform })}
-          />
-          <ContactInput
-            id={`${field.path}-${index}-url`}
-            label={m.organization_contact_url()}
-            placeholder="https://example.com/profile"
-            type="url"
-            value={social.url}
-            onBlur={field.onBlur}
-            onChange={(url) => update({ ...social, url })}
-          />
-          <ContactLabelInput
-            id={`${field.path}-${index}-label`}
-            locale={props.locale}
-            translations={social.translations}
-            onBlur={field.onBlur}
-            onChange={(translations) =>
-              update({
-                ...social,
-                translations,
-              })
-            }
-          />
-        </div>
-      )}
-    />
-  );
-};
-
-const AddressesField: FormReact.FieldComponent<
-  ReadonlyArray<OrganizationAddressValue>,
-  { locale: OrganizationLocale }
-> = ({ field, props }) => {
-  const m = useOrganizationMessages();
-  const inputs: ReadonlyArray<{
-    key: "streetAddress" | "locality" | "region" | "postalCode" | "country";
-    label: string;
-    className?: string;
-  }> = [
-    {
-      key: "streetAddress",
-      label: m.organization_address_street(),
-      className: "sm:col-span-2",
-    },
-    { key: "locality", label: m.organization_address_locality() },
-    { key: "region", label: m.organization_address_region() },
-    { key: "postalCode", label: m.organization_address_postal_code() },
-    { key: "country", label: m.organization_address_country() },
-  ];
-
-  return (
-    <RepeatableContactField
-      addLabel={m.organization_address_add()}
-      emptyValue={{
-        translations: [{ locale: props.locale, label: "" }],
-      }}
-      error={Option.isSome(field.error) ? field.error.value : undefined}
-      path={field.path}
-      values={field.value}
-      onChange={field.onChange}
-      render={(address, index, update) => (
-        <div className="grid gap-4 sm:grid-cols-2">
-          <ContactLabelInput
-            id={`${field.path}-${index}-label`}
-            locale={props.locale}
-            translations={address.translations}
-            onBlur={field.onBlur}
-            onChange={(translations) =>
-              update({
-                ...address,
-                translations,
-              })
-            }
-          />
-          {inputs.map((input) => (
-            <ContactInput
-              {...(input.className ? { className: input.className } : {})}
-              id={`${field.path}-${index}-${input.key}`}
-              key={input.key}
-              label={input.label}
-              value={address[input.key] ?? ""}
-              onBlur={field.onBlur}
-              onChange={(value) => update({ ...address, [input.key]: value })}
-            />
-          ))}
-        </div>
-      )}
-    />
-  );
-};
-
 const organizationFormFields = {
   parentId: SelectField,
   slug: TextField,
-  emails: EmailsField,
-  phones: PhonesField,
-  websites: WebsitesField,
-  socials: SocialsField,
-  addresses: AddressesField,
+  emails: ContactEmailsField,
+  phones: ContactPhonesField,
+  websites: ContactWebsitesField,
+  socials: ContactSocialsField,
+  addresses: ContactAddressesField,
   enName: TextField,
   enLogo: ImageField,
   enIcon: ImageField,
@@ -1238,9 +793,7 @@ const decodeUploadedAsset = Schema.decodeUnknownEffect(ExtraUploadedAsset);
 const OrganizationMetadataRecord = Schema.Record(Schema.String, Schema.Json);
 
 const normalizeOrganizationMetadata = (metadata: OrganizationMetadata) =>
-  Schema.decodeUnknownEffect(Schema.fromJsonString(OrganizationMetadataRecord))(
-    metadata,
-  );
+  Schema.decodeUnknownEffect(OrganizationMetadataRecord)(metadata);
 
 const uploadImageAsset = (
   file: File,
@@ -2486,27 +2039,42 @@ function EditOrganizationSection({
             <OrganizationContactGroup
               title={m.organization_contact_email_type()}
             >
-              <form.emails locale={editingLocale} />
+              <form.emails
+                locale={editingLocale}
+                messages={organizationContactFieldMessages(m)}
+              />
             </OrganizationContactGroup>
             <OrganizationContactGroup
               title={m.organization_contact_phone_type()}
             >
-              <form.phones locale={editingLocale} />
+              <form.phones
+                locale={editingLocale}
+                messages={organizationContactFieldMessages(m)}
+              />
             </OrganizationContactGroup>
             <OrganizationContactGroup
               title={m.organization_contact_website_type()}
             >
-              <form.websites locale={editingLocale} />
+              <form.websites
+                locale={editingLocale}
+                messages={organizationContactFieldMessages(m)}
+              />
             </OrganizationContactGroup>
             <OrganizationContactGroup
               title={m.organization_contact_social_type()}
             >
-              <form.socials locale={editingLocale} />
+              <form.socials
+                locale={editingLocale}
+                messages={organizationContactFieldMessages(m)}
+              />
             </OrganizationContactGroup>
           </OrganizationFormSection>
           <Separator className="my-2" />
           <OrganizationFormSection title={m.organization_address()}>
-            <form.addresses locale={editingLocale} />
+            <form.addresses
+              locale={editingLocale}
+              messages={organizationContactFieldMessages(m)}
+            />
           </OrganizationFormSection>
           <SubmitError result={submitResult} />
           <SubmitButton form={form} />
@@ -2693,27 +2261,42 @@ function CreateOrganizationSection({
             <OrganizationContactGroup
               title={m.organization_contact_email_type()}
             >
-              <form.emails locale={editingLocale} />
+              <form.emails
+                locale={editingLocale}
+                messages={organizationContactFieldMessages(m)}
+              />
             </OrganizationContactGroup>
             <OrganizationContactGroup
               title={m.organization_contact_phone_type()}
             >
-              <form.phones locale={editingLocale} />
+              <form.phones
+                locale={editingLocale}
+                messages={organizationContactFieldMessages(m)}
+              />
             </OrganizationContactGroup>
             <OrganizationContactGroup
               title={m.organization_contact_website_type()}
             >
-              <form.websites locale={editingLocale} />
+              <form.websites
+                locale={editingLocale}
+                messages={organizationContactFieldMessages(m)}
+              />
             </OrganizationContactGroup>
             <OrganizationContactGroup
               title={m.organization_contact_social_type()}
             >
-              <form.socials locale={editingLocale} />
+              <form.socials
+                locale={editingLocale}
+                messages={organizationContactFieldMessages(m)}
+              />
             </OrganizationContactGroup>
           </OrganizationFormSection>
           <Separator className="my-2" />
           <OrganizationFormSection title={m.organization_address()}>
-            <form.addresses locale={editingLocale} />
+            <form.addresses
+              locale={editingLocale}
+              messages={organizationContactFieldMessages(m)}
+            />
           </OrganizationFormSection>
           <SubmitError result={submitResult} />
           <SubmitButton form={form} />

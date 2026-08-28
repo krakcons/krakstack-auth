@@ -15,6 +15,7 @@ import { oauthProvider } from "@better-auth/oauth-provider";
 import { apiKey } from "@better-auth/api-key";
 import { APIError } from "@better-auth/core/error";
 import { Effect, Option, Schema } from "effect";
+import { UserMetadata, UserMetadataStandard } from "@krak-stack/auth/schema";
 
 import { db } from "../../services/database";
 import { schema } from "../../db/schema";
@@ -44,6 +45,25 @@ const apiKeyRateLimit = {
   timeWindow: 1000 * 60 * 60 * 24,
   maxRequests: 1000,
 };
+const UserMetadataWrite = Schema.UndefinedOr(
+  Schema.NullOr(UserMetadata),
+).annotate({ identifier: "UserMetadataWrite" });
+
+export const validateUserMetadataWrite = (
+  metadata: typeof Schema.Unknown.Type,
+) =>
+  Schema.decodeUnknownEffect(UserMetadataWrite, {
+    onExcessProperty: "error",
+  })(metadata).pipe(
+    Effect.map(() => undefined),
+    Effect.mapError(
+      () =>
+        new APIError("BAD_REQUEST", {
+          message: "Invalid user contact metadata",
+        }),
+    ),
+  );
+
 interface OrganizationParentInput {
   readonly [key: string]: typeof Schema.Unknown.Type;
   readonly parentId?: typeof Schema.Unknown.Type;
@@ -327,6 +347,15 @@ const createAuth = ({
         allowUnlinkingAll: true,
       },
     },
+    user: {
+      additionalFields: {
+        metadata: {
+          type: "json",
+          required: false,
+          validator: { input: UserMetadataStandard },
+        },
+      },
+    },
     session: {
       cookieCache: {
         enabled: true,
@@ -336,6 +365,8 @@ const createAuth = ({
     databaseHooks: {
       user: {
         create: {
+          before: (user) =>
+            Effect.runPromise(validateUserMetadataWrite(user.metadata)),
           after: async (user) => {
             if (user.isAnonymous === true) return;
             await Effect.runPromise(
@@ -344,6 +375,10 @@ const createAuth = ({
               ),
             );
           },
+        },
+        update: {
+          before: (user) =>
+            Effect.runPromise(validateUserMetadataWrite(user.metadata)),
         },
       },
       session: {
