@@ -30,7 +30,7 @@ The components use shadcn design tokens such as `--background`, `--foreground`, 
 Wrap component consumers once near the application root:
 
 ```tsx
-import { KrakstackAuthProvider } from "@krak-stack/auth";
+import { KrakstackAuthProvider } from "@krak-stack/auth/components";
 
 <KrakstackAuthProvider
   locale="en"
@@ -40,12 +40,15 @@ import { KrakstackAuthProvider } from "@krak-stack/auth";
 </KrakstackAuthProvider>;
 ```
 
-Pass `baseUrl` or a custom `authClient` when the default same-origin client is not appropriate.
+Pass `baseUrl` when the default same-origin endpoint is not appropriate. The provider and components use the owned Effect HttpApi client internally; they do not accept a Better Auth client.
 
 ## Account controls
 
 ```tsx
-import { OrganizationSwitcher, UserButton } from "@krak-stack/auth";
+import {
+  OrganizationSwitcher,
+  UserButton,
+} from "@krak-stack/auth/components";
 
 <OrganizationSwitcher side="bottom" />
 <UserButton signOutRedirect="/" side="bottom" />
@@ -61,6 +64,6 @@ The package exports `Signin`, `VerifyEmail`, `ForgotPassword`, `ResetPassword`, 
 
 `MemberRequired` gates UI on organization membership. Treat it as a presentation guard, not the only authorization layer. Every protected backend endpoint must independently validate the session, organization, and role.
 
-## Hooks and client
+## Hooks, atoms, and contract
 
-Use `useAuthClient`, `useKrakstackAuth`, and `useKrakstackAuthProjectConfig` inside the provider. Import the latter two from `@krak-stack/auth/components`; they are not currently re-exported by the package root. `createAuthUiClient` is available when you need to construct the Better Auth client explicitly.
+Import `useKrakstackAuth`, `useKrakstackAuthProjectConfig`, and `usePermissions` from `@krak-stack/auth/components` inside the provider. For direct Effect state access, use `authSessionAtom`, `authOrganizationsAtom`, and `activeAuthOrganizationAtom` from the same subpath with `@effect/atom-react`. Use the `@krak-stack/auth/auth` HttpApi contract when a custom Effect client is required.

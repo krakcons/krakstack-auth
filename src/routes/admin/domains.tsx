@@ -3,13 +3,13 @@ import { Plus } from "lucide-react";
 import { useState } from "react";
 
 import { Button } from "@/components/ui/button";
-import { TableSearchSchemaStandard as TableSearchSchema } from "@krak-stack/registry/data-table";
+import { QueryStandard } from "@krak-stack/registry/query";
 import { SidebarPageHeader } from "@krak-stack/registry/sidebar-layout";
 import { m } from "@/paraglide/messages";
 import { DomainsTable } from "@/services/domains/client/table";
 
 export const Route = createFileRoute("/admin/domains")({
-  validateSearch: TableSearchSchema,
+  validateSearch: QueryStandard,
   component: DomainsPage,
 });
 

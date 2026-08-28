@@ -1,4 +1,4 @@
-import type { ApiKey } from "@better-auth/api-key/client";
+import type { AuthApiKey as ApiKey } from "../auth/schema.js";
 import { useAtomRefresh, useAtomSet, useAtomValue } from "@effect/atom-react";
 import { FormBuilder, FormReact } from "@lucas-barake/effect-form-react";
 import {
@@ -35,7 +35,7 @@ import {
 
 import {
   DataTable,
-  type DataTableColumnDef,
+  type DataTableColDef,
 } from "@krak-stack/registry/data-table";
 import { AppBrand } from "@krak-stack/registry/app-brand";
 import { EditingLocaleSwitcher } from "@krak-stack/registry/editing-locale-switcher";
@@ -68,23 +68,27 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Separator } from "@/components/ui/separator";
 
-import type { AuthUiClient } from "./auth-client";
-import { authClientApi } from "./auth-client-api";
-import { useKrakstackAuth } from "./auth-provider";
-import { createApiKey, parseApiKeyReferrers } from "./api-key";
-import { ApiKeyEditForm } from "./api-key-edit-form";
-import { ApiKeyPermissions } from "./api-key-permissions";
-import { ApiKeyRateLimit, apiKeyUsagePercent } from "./api-key-rate-limit";
-import { ApiKeyReferrers } from "./api-key-referrers";
+import { authClientApi, authHttpClient } from "./auth-client-api.js";
+import { authSessionAtom, notifyAuthChange } from "./auth-atoms.js";
+import { useKrakstackAuth } from "./auth-provider.js";
+import { parseApiKeyReferrers } from "./api-key.js";
+import { ApiKeyEditForm } from "./api-key-edit-form.js";
+import { ApiKeyPermissions } from "./api-key-permissions.js";
+import { ApiKeyRateLimit, apiKeyUsagePercent } from "./api-key-rate-limit.js";
+import { ApiKeyReferrers } from "./api-key-referrers.js";
+import { useOpenedOnce } from "./hooks.js";
+import { ExtraUploadedAsset } from "../extra/schema.js";
+import { assetPath, assetUrl } from "./utils.js";
+import { AdminOrganizationsTable } from "./admin-organizations.js";
+import { AdminUsersTable } from "./admin-users.js";
+import type { ProjectAccessLabelCatalog } from "../access.js";
 import {
   ContactEmailsField,
   ContactPhonesField,
   ContactSocialsField,
   ContactWebsitesField,
   type ContactFieldMessages,
-} from "./contact-fields";
-import { useOpenedOnce } from "./hooks";
-import { ExtraUploadedAsset } from "../extra/schema";
+} from "./contact-fields.js";
 import {
   decodeUserMetadata,
   type ContactEmail as ContactEmailValue,
@@ -96,11 +100,7 @@ import {
   SocialPlatform,
   USER_CONTACT_LIMIT,
   UserMetadata,
-} from "@krak-stack/auth/schema";
-import { assetPath, assetUrl } from "./utils";
-import { AdminOrganizationsTable } from "./admin-organizations";
-import { AdminUsersTable } from "./admin-users";
-import type { ProjectAccessLabelCatalog } from "../access";
+} from "../schema.js";
 
 const messages = {
   en: {
@@ -194,8 +194,11 @@ const messages = {
     user_button_aria_label: "Open user menu",
     user_button_impersonating: "Impersonating",
     user_button_logout: "Log out",
+    user_button_logout_error: "Could not log out. Try again.",
     user_button_security: "Security",
     user_button_stop_impersonating: "Stop impersonating",
+    user_button_stop_impersonating_error:
+      "Could not stop impersonating. Try again.",
     user_delete: "Delete",
     user_field_password: "Password",
     user_form_description:
@@ -344,8 +347,11 @@ const messages = {
     user_button_aria_label: "Ouvrir le menu utilisateur",
     user_button_impersonating: "Imitation",
     user_button_logout: "Se déconnecter",
+    user_button_logout_error: "Impossible de se déconnecter. Réessayez.",
     user_button_security: "Sécurité",
     user_button_stop_impersonating: "Arrêter l'imitation",
+    user_button_stop_impersonating_error:
+      "Impossible d'arrêter l'imitation. Réessayez.",
     user_delete: "Supprimer",
     user_field_password: "Mot de passe",
     user_form_description:
@@ -630,23 +636,19 @@ const apiKeyFormBuilder = FormBuilder.empty
 const isFile = (value: typeof Schema.Unknown.Type): value is File =>
   value instanceof File;
 
-const decodeUploadedAsset = Schema.decodeUnknownPromise(ExtraUploadedAsset);
-
-const uploadUserImageAsset = async (
+const uploadUserImageAsset = (
   file: File,
   m: ReturnType<typeof userButtonMessageFns>,
-  uploadUserImage: (input: {
-    payload: FormData;
-  }) => Promise<typeof Schema.Unknown.Type>,
+  baseUrl?: string,
 ) => {
   const payload = new FormData();
   payload.append("file", file);
 
-  try {
-    return await decodeUploadedAsset(await uploadUserImage({ payload }));
-  } catch {
-    throw new Error(m.user_profile_image_upload_error());
-  }
+  return authHttpClient(baseUrl).pipe(
+    Effect.flatMap((client) => client.authExtra.uploadUserImage({ payload })),
+    Effect.flatMap(Schema.decodeUnknownEffect(ExtraUploadedAsset)),
+    Effect.mapError(() => new Error(m.user_profile_image_upload_error())),
+  );
 };
 
 type TotpSetup = {
@@ -671,44 +673,27 @@ type AccountCache = {
 const requiresPasswordForAccountRevoke = (accounts: readonly LinkedAccount[]) =>
   accounts.some((account) => account.providerId === "credential");
 
-const userAccountsAtom = Atom.family((authClient: AuthUiClient) =>
+const userAccountsAtom = Atom.family((baseUrl?: string) =>
   Atom.keepAlive(
-    Atom.make(
-      Effect.tryPromise({
-        try: async (): Promise<LinkedAccount[]> => {
-          const result = await authClient.listAccounts();
-
-          if (result.error) {
-            throw new Error(result.error.message ?? "Could not load accounts.");
-          }
-
-          return result.data ?? [];
-        },
-        catch: (error) => error,
+    Atom.map(
+      authClientApi(baseUrl).query("auth", "listAccounts", {
+        reactivityKeys: ["user-accounts", baseUrl],
       }),
+      AsyncResult.map((accounts) => Array.from(accounts)),
     ),
   ),
 );
 
 const emptyAccountsAtom = Atom.make(Effect.succeed(Array<LinkedAccount>()));
 
-const userApiKeysAtom = Atom.family((authClient: AuthUiClient) =>
+const userApiKeysAtom = Atom.family((baseUrl?: string) =>
   Atom.keepAlive(
-    Atom.make(
-      Effect.tryPromise({
-        try: async (): Promise<ApiKeySummary[]> => {
-          const result = await authClient.apiKey.list({
-            query: { configId: "user" },
-          });
-
-          if (result.error) {
-            throw new Error(result.error.message ?? "Could not load API keys.");
-          }
-
-          return result.data?.apiKeys ?? [];
-        },
-        catch: (error) => error,
+    Atom.map(
+      authClientApi(baseUrl).query("auth", "apiKeyList", {
+        query: { configId: "user" },
+        reactivityKeys: ["user-api-keys", baseUrl],
       }),
+      AsyncResult.map(({ apiKeys }) => Array.from(apiKeys)),
     ),
   ),
 );
@@ -716,7 +701,6 @@ const userApiKeysAtom = Atom.family((authClient: AuthUiClient) =>
 const emptyApiKeysAtom = Atom.make(Effect.succeed(Array<ApiKeySummary>()));
 
 export type UserButtonProps = {
-  authClient?: AuthUiClient;
   baseUrl?: string | undefined;
   signOutRedirect?: string;
   side?: ComponentProps<typeof DropdownMenuContent>["side"];
@@ -738,7 +722,6 @@ export type UserButtonDialog =
   | "adminOrganizations";
 
 export const UserButton = ({
-  authClient: providedAuthClient,
   baseUrl,
   signOutRedirect = "/",
   side = "bottom",
@@ -752,11 +735,7 @@ export const UserButton = ({
   onDialogChange,
 }: UserButtonProps) => {
   const auth = useKrakstackAuth();
-  const authClient = providedAuthClient ?? auth?.authClient;
-
-  if (!authClient) {
-    throw new Error("KrakstackAuthProvider is required to use authClient.");
-  }
+  const resolvedBaseUrl = baseUrl ?? auth?.baseUrl;
 
   const labels = userButtonMessages(messages);
   const m = userButtonMessageFns(labels);
@@ -765,7 +744,15 @@ export const UserButton = ({
   const currentSiteHref = useRouterState({
     select: (state) => `${import.meta.env.VITE_SITE_URL}${state.location.href}`,
   });
-  const { data: session, isPending, refetch } = authClient.useSession();
+  const sessionAtom = authSessionAtom(resolvedBaseUrl);
+  const sessionResult = useAtomValue(sessionAtom);
+  const refreshSession = useAtomRefresh(sessionAtom);
+  const session = AsyncResult.match(sessionResult, {
+    onInitial: () => null,
+    onFailure: () => null,
+    onSuccess: ({ value }) => value,
+  });
+  const isPending = sessionResult.waiting;
   const [uncontrolledDialog, setUncontrolledDialog] =
     useState<UserButtonDialog | null>(defaultDialog);
   const [isStoppingImpersonation, setIsStoppingImpersonation] = useState(false);
@@ -775,15 +762,71 @@ export const UserButton = ({
   const shouldLoadAccounts =
     Boolean(session) &&
     (settingsDialog === "account" || settingsDialog === "security");
+  const loadedAccountsAtom = userAccountsAtom(resolvedBaseUrl);
   const accountsAtom = shouldLoadAccounts
-    ? userAccountsAtom(authClient)
+    ? loadedAccountsAtom
     : emptyAccountsAtom;
-  const accountsResult = useAtomValue(accountsAtom);
-  const refreshAccounts = useAtomRefresh(accountsAtom);
-  const uploadUserImage = useAtomSet(
-    authClientApi(baseUrl).mutation("authExtra", "uploadUserImage"),
-    { mode: "promise" },
+  const accountsResult =
+    useAtomValue<AsyncResult.AsyncResult<LinkedAccount[], unknown>>(
+      accountsAtom,
+    );
+  const refreshLoadedAccounts = useAtomRefresh(loadedAccountsAtom);
+  const refreshEmptyAccounts = useAtomRefresh(emptyAccountsAtom);
+  const refreshAccounts = shouldLoadAccounts
+    ? refreshLoadedAccounts
+    : refreshEmptyAccounts;
+  const [signOutAction] = useState(() =>
+    authClientApi(resolvedBaseUrl).runtime.fn(
+      ({
+        baseUrl,
+        redirectUrl,
+      }: {
+        baseUrl: string | undefined;
+        redirectUrl: string;
+      }) =>
+        authHttpClient(baseUrl).pipe(
+          Effect.flatMap((client) => client.auth.signOut()),
+          Effect.tap(() => Effect.sync(notifyAuthChange)),
+          Effect.flatMap(() =>
+            Effect.tryPromise(() => navigate({ href: redirectUrl })),
+          ),
+        ),
+    ),
   );
+  const signOut = useAtomSet(signOutAction);
+  const signOutResult = useAtomValue(signOutAction);
+  const [stopImpersonatingAction] = useState(() =>
+    authClientApi(resolvedBaseUrl).runtime.fn(
+      (input: {
+        baseUrl: string | undefined;
+        currentSiteHref: string;
+        refreshSession: () => void;
+      }) =>
+        Effect.gen(function* () {
+          setIsStoppingImpersonation(true);
+          yield* authHttpClient(input.baseUrl).pipe(
+            Effect.flatMap((client) => client.auth.adminStopImpersonating()),
+            Effect.tap(() => Effect.sync(notifyAuthChange)),
+            Effect.tap(() => Effect.sync(input.refreshSession)),
+            Effect.flatMap(() =>
+              Effect.tryPromise(() =>
+                navigate({ href: input.currentSiteHref }),
+              ),
+            ),
+            Effect.ensuring(
+              Effect.sync(() => setIsStoppingImpersonation(false)),
+            ),
+          );
+        }),
+    ),
+  );
+  const stopImpersonating = useAtomSet(stopImpersonatingAction);
+  const stopImpersonatingResult = useAtomValue(stopImpersonatingAction);
+  const authActionError = AsyncResult.isFailure(signOutResult)
+    ? m.user_button_logout_error()
+    : AsyncResult.isFailure(stopImpersonatingResult)
+      ? m.user_button_stop_impersonating_error()
+      : null;
 
   const accountCache: AccountCache = {
     accounts: AsyncResult.match(accountsResult, {
@@ -818,7 +861,7 @@ export const UserButton = ({
 
   const displayName = session.user.name.trim();
   const displayEmail = session.user.email.trim();
-  const displayImage = assetUrl(session.user.image, baseUrl);
+  const displayImage = assetUrl(session.user.image, resolvedBaseUrl);
   const metadata = decodeUserMetadata(session.user.metadata);
   const isImpersonating = Boolean(session.session.impersonatedBy);
   const isOrganizationImpersonating = Boolean(
@@ -828,63 +871,12 @@ export const UserButton = ({
   const canUseAdminSettings = !isOrganizationImpersonating;
   const isAdmin = hasAdminRole(session.user);
 
-  const signOut = async () => {
+  const startSignOut = () => {
     const redirectUrl = signOutRedirect.startsWith("http")
       ? signOutRedirect
       : `${import.meta.env.VITE_SITE_URL}${signOutRedirect.startsWith("/") ? signOutRedirect : `/${signOutRedirect}`}`;
 
-    await authClient.signOut();
-    await navigate({ href: redirectUrl });
-  };
-
-  const stopImpersonating = async () => {
-    setIsStoppingImpersonation(true);
-
-    try {
-      await authClient.admin.stopImpersonating();
-      await refetch();
-      await navigate({ href: currentSiteHref });
-    } finally {
-      setIsStoppingImpersonation(false);
-    }
-  };
-
-  const updateUser = async (values: UserFormType) => {
-    setFormError(null);
-    let metadata: UserMetadata;
-    try {
-      metadata = userMetadataFromForm(values);
-    } catch {
-      throw new Error(m.user_contact_validation_error());
-    }
-
-    const imageFile = isFile(values.image) ? values.image : null;
-    const image = imageFile
-      ? await (async () => {
-          const uploaded = await uploadUserImageAsset(
-            imageFile,
-            m,
-            uploadUserImage,
-          );
-
-          return assetPath(uploaded.url);
-        })()
-      : Schema.is(Schema.String)(values.image)
-        ? assetPath(values.image)
-        : null;
-    const result = await authClient.updateUser({
-      name: values.name.trim(),
-      image: image?.trim() ?? "",
-      metadata,
-    });
-
-    if (isAuthErrorResult(result)) {
-      throw new Error(result.error.message || m.user_form_update_error());
-    }
-
-    await refetch();
-
-    setSettingsDialog(null);
+    signOut({ baseUrl: resolvedBaseUrl, redirectUrl });
   };
 
   return (
@@ -985,7 +977,13 @@ export const UserButton = ({
                   {isImpersonating ? (
                     <DropdownMenuItem
                       disabled={isStoppingImpersonation}
-                      onClick={stopImpersonating}
+                      onClick={() =>
+                        stopImpersonating({
+                          baseUrl: resolvedBaseUrl,
+                          currentSiteHref,
+                          refreshSession,
+                        })
+                      }
                     >
                       <StopCircle />
                       {m.user_button_stop_impersonating()}
@@ -994,10 +992,18 @@ export const UserButton = ({
                   <DropdownMenuSeparator />
                 </>
               ) : null}
-              <DropdownMenuItem onClick={signOut}>
+              <DropdownMenuItem
+                disabled={signOutResult.waiting}
+                onClick={startSignOut}
+              >
                 <LogOutIcon />
                 {m.user_button_logout()}
               </DropdownMenuItem>
+              {authActionError ? (
+                <DropdownMenuLabel className="text-destructive text-xs font-normal">
+                  {authActionError}
+                </DropdownMenuLabel>
+              ) : null}
             </DropdownMenuGroup>
           </DropdownMenuContent>
         </DropdownMenu>
@@ -1032,22 +1038,54 @@ export const UserButton = ({
                   socials: Array.from(metadata.socials ?? []),
                 }}
                 error={formError}
-                onSubmit={async (data) => {
-                  try {
-                    await updateUser(data);
-                  } catch (error) {
-                    setFormError(
-                      error instanceof Error
-                        ? error.message
-                        : m.user_form_update_error(),
-                    );
-                  }
-                }}
+                onSubmit={(values) =>
+                  Effect.gen(function* () {
+                    setFormError(null);
+                    const metadata = yield* Effect.try({
+                      try: () => userMetadataFromForm(values),
+                      catch: () => new Error(m.user_contact_validation_error()),
+                    });
+                    const imageFile = isFile(values.image)
+                      ? values.image
+                      : null;
+                    const image = imageFile
+                      ? assetPath(
+                          (yield* uploadUserImageAsset(
+                            imageFile,
+                            m,
+                            resolvedBaseUrl,
+                          )).url,
+                        )
+                      : Schema.is(Schema.String)(values.image)
+                        ? assetPath(values.image)
+                        : null;
+                    const client = yield* authHttpClient(resolvedBaseUrl);
+                    yield* client.auth.updateUser({
+                      payload: {
+                        name: values.name.trim(),
+                        image: image?.trim() ?? "",
+                        metadata,
+                      },
+                    });
+                    notifyAuthChange();
+                    yield* Effect.sync(refreshSession);
+                    setSettingsDialog(null);
+                  }).pipe(
+                    Effect.tapError((error) =>
+                      Effect.sync(() =>
+                        setFormError(
+                          error instanceof Error
+                            ? error.message
+                            : m.user_form_update_error(),
+                        ),
+                      ),
+                    ),
+                  )
+                }
               />
               <Separator />
               <ConnectedAccounts
-                authClient={authClient}
-                baseUrl={baseUrl}
+                baseUrl={resolvedBaseUrl}
                 accountCache={accountCache}
                 googleEnabled={projectConfig?.authOptions.google ?? true}
                 currentSiteHref={currentSiteHref}
@@ -1077,13 +1115,12 @@ export const UserButton = ({
           <Separator />
           <div className="flex flex-col gap-6">
             <PasswordSettings
-              authClient={authClient}
-              baseUrl={baseUrl}
+              baseUrl={resolvedBaseUrl}
               accountCache={accountCache}
             />
             <Separator />
             <AccountSecuritySettings
-              authClient={authClient}
+              baseUrl={resolvedBaseUrl}
               accountCache={accountCache}
             />
           </div>
@@ -1099,7 +1136,7 @@ export const UserButton = ({
       >
         <DialogContent className="max-h-[85vh] min-w-0 overflow-x-hidden overflow-y-auto sm:max-w-3xl">
           <ApiKeyManager
-            authClient={authClient}
+            baseUrl={resolvedBaseUrl}
             active={settingsDialog === "apiKeys"}
             permissionLabels={auth?.accessLabels ?? undefined}
             permissions={
@@ -1167,14 +1204,12 @@ export const UserButton = ({
 };
 
 function ConnectedAccounts({
-  authClient,
   baseUrl,
   accountCache,
   googleEnabled,
   currentSiteHref,
   navigate,
 }: {
-  authClient: AuthUiClient;
   baseUrl?: string | undefined;
   accountCache: AccountCache;
   googleEnabled: boolean;
@@ -1187,6 +1222,63 @@ function ConnectedAccounts({
   const [revokingAccount, setRevokingAccount] = useState<LinkedAccount | null>(
     null,
   );
+  const [linkGoogleAction] = useState(() =>
+    authClientApi(baseUrl).runtime.fn(
+      (input: { baseUrl: string | undefined; callbackURL: string }) =>
+        Effect.gen(function* () {
+          setError(null);
+          setIsLinking(true);
+          const client = yield* authHttpClient(input.baseUrl);
+          const result = yield* client.auth.linkSocial({
+            payload: { provider: "google", callbackURL: input.callbackURL },
+          });
+          notifyAuthChange();
+          yield* Effect.tryPromise(() => accountCache.reload());
+          const redirectUrl = result.url;
+          if (redirectUrl) {
+            yield* Effect.tryPromise(() => navigate({ href: redirectUrl }));
+          } else {
+            setIsLinking(false);
+          }
+        }).pipe(
+          Effect.catch((cause) =>
+            Effect.sync(() => {
+              setError(
+                cause instanceof Error && cause.message
+                  ? cause.message
+                  : m.user_account_google_link_error(),
+              );
+              setIsLinking(false);
+            }),
+          ),
+        ),
+    ),
+  );
+  const linkGoogle = useAtomSet(linkGoogleAction);
+  const revokeAccount = (account: LinkedAccount) =>
+    authHttpClient(baseUrl).pipe(
+      Effect.tap(() => Effect.sync(() => setError(null))),
+      Effect.flatMap((client) =>
+        client.auth.unlinkAccount({
+          payload: {
+            providerId: account.providerId,
+            accountId: account.accountId,
+          },
+        }),
+      ),
+      Effect.tap(() => Effect.sync(notifyAuthChange)),
+      Effect.flatMap(() => Effect.tryPromise(() => accountCache.reload())),
+      Effect.tap(() => Effect.sync(() => setRevokingAccount(null))),
+      Effect.catch((cause) =>
+        Effect.sync(() =>
+          setError(
+            cause instanceof Error && cause.message
+              ? cause.message
+              : m.user_account_revoke_error(),
+          ),
+        ),
+      ),
+    );
   const accounts = accountCache.accounts ?? [];
 
   const googleAccount = accounts.find(
@@ -1199,45 +1291,9 @@ function ConnectedAccounts({
     return null;
   }
 
-  const linkGoogle = async () => {
+  const startLinkGoogle = () => {
     if (!googleEnabled) return;
-
-    setError(null);
-    setIsLinking(true);
-
-    const result = await authClient.linkSocial({
-      provider: "google",
-      callbackURL: currentSiteHref,
-    });
-
-    if (result.error) {
-      setError(result.error.message ?? m.user_account_google_link_error());
-      setIsLinking(false);
-      return;
-    }
-
-    if (result.data?.url) {
-      await navigate({ href: result.data.url });
-      return;
-    }
-
-    setIsLinking(false);
-  };
-
-  const revokeAccount = async (account: LinkedAccount) => {
-    setError(null);
-    const result = await authClient.unlinkAccount({
-      providerId: account.providerId,
-      accountId: account.accountId,
-    });
-
-    if (result.error) {
-      setError(result.error.message ?? m.user_account_revoke_error());
-      return;
-    }
-
-    setRevokingAccount(null);
-    await accountCache.reload();
+    linkGoogle({ baseUrl, callbackURL: currentSiteHref });
   };
 
   return (
@@ -1263,7 +1319,7 @@ function ConnectedAccounts({
               revokeLabel={m.user_account_revoke()}
               isConnecting={isLinking}
               renderDisconnected={undefined}
-              onConnect={linkGoogle}
+              onConnect={startLinkGoogle}
               onRevoke={(account) => setRevokingAccount(account)}
             />
           ) : null}
@@ -1382,11 +1438,9 @@ function GoogleLogo() {
 }
 
 function PasswordSettings({
-  authClient,
   baseUrl,
   accountCache,
 }: {
-  authClient: AuthUiClient;
   baseUrl?: string | undefined;
   accountCache: AccountCache;
 }) {
@@ -1403,21 +1457,30 @@ function PasswordSettings({
   const hasPassword = Boolean(passwordAccount);
   const requirePassword = requiresPasswordForAccountRevoke(accounts);
 
-  const revokePassword = async (account: LinkedAccount) => {
-    setError(null);
-    const result = await authClient.unlinkAccount({
-      providerId: account.providerId,
-      accountId: account.accountId,
-    });
-
-    if (result.error) {
-      setError(result.error.message ?? m.user_account_revoke_error());
-      return;
-    }
-
-    setRevokingAccount(null);
-    await accountCache.reload();
-  };
+  const revokePassword = (account: LinkedAccount) =>
+    authHttpClient(baseUrl).pipe(
+      Effect.tap(() => Effect.sync(() => setError(null))),
+      Effect.flatMap((client) =>
+        client.auth.unlinkAccount({
+          payload: {
+            providerId: account.providerId,
+            accountId: account.accountId,
+          },
+        }),
+      ),
+      Effect.tap(() => Effect.sync(notifyAuthChange)),
+      Effect.flatMap(() => Effect.tryPromise(() => accountCache.reload())),
+      Effect.tap(() => Effect.sync(() => setRevokingAccount(null))),
+      Effect.catch((cause) =>
+        Effect.sync(() =>
+          setError(
+            cause instanceof Error && cause.message
+              ? cause.message
+              : m.user_account_revoke_error(),
+          ),
+        ),
+      ),
+    );
 
   return (
     <section className="flex flex-col gap-4">
@@ -1459,13 +1522,10 @@ function PasswordSettings({
             />
           ) : null}
           <Separator />
-          <ChangePasswordForm authClient={authClient} />
+          <ChangePasswordForm baseUrl={baseUrl} />
         </div>
       ) : accountCache.accounts ? (
-        <SetPasswordForm
-          authClient={authClient}
-          onSaved={accountCache.reload}
-        />
+        <SetPasswordForm baseUrl={baseUrl} onSaved={accountCache.reload} />
       ) : !accountCache.error ? (
         <p className="text-muted-foreground text-sm">{m.user_loading()}</p>
       ) : null}
@@ -1477,37 +1537,38 @@ function PasswordSettings({
   );
 }
 
-function ChangePasswordForm({ authClient }: { authClient: AuthUiClient }) {
+function ChangePasswordForm({ baseUrl }: { baseUrl?: string | undefined }) {
   const m = useUserButtonMessages();
   const [saved, setSaved] = useState(false);
+  let reset = () => {};
   const [form] = useState(() =>
     FormReact.make(changePasswordFormBuilder, {
+      runtime: authClientApi(baseUrl).runtime,
       fields: { currentPassword: TextField, newPassword: TextField },
       mode: { validation: "onSubmit" },
       onSubmit: (_, { decoded }) =>
-        Effect.tryPromise({
-          try: async () => {
-            setSaved(false);
-            const result = await authClient.changePassword({
-              currentPassword: decoded.currentPassword,
-              newPassword: decoded.newPassword,
-            });
-            if (result.error) {
-              throw new Error(
-                result.error.message ?? m.user_account_password_change_error(),
-              );
-            }
-            reset();
-            setSaved(true);
-          },
-          catch: (cause) =>
+        authHttpClient(baseUrl).pipe(
+          Effect.tap(() => Effect.sync(() => setSaved(false))),
+          Effect.flatMap((client) =>
+            client.auth.changePassword({
+              payload: {
+                currentPassword: decoded.currentPassword,
+                newPassword: decoded.newPassword,
+              },
+            }),
+          ),
+          Effect.tap(() => Effect.sync(notifyAuthChange)),
+          Effect.tap(() => Effect.sync(() => reset())),
+          Effect.tap(() => Effect.sync(() => setSaved(true))),
+          Effect.mapError((cause) =>
             cause instanceof Error
               ? cause
               : new Error(m.user_account_password_change_error()),
-        }),
+          ),
+        ),
     }),
   );
-  const reset = useAtomSet(form.reset);
+  reset = useAtomSet(form.reset);
   const submit = useAtomSet(form.submit);
   const submitResult = useAtomValue(form.submit);
 
@@ -1556,40 +1617,38 @@ function ChangePasswordForm({ authClient }: { authClient: AuthUiClient }) {
 }
 
 function SetPasswordForm({
-  authClient,
+  baseUrl,
   onSaved,
 }: {
-  authClient: AuthUiClient;
+  baseUrl?: string | undefined;
   onSaved: () => Promise<void>;
 }) {
   const m = useUserButtonMessages();
+  let reset = () => {};
   const [form] = useState(() =>
     FormReact.make(passwordFormBuilder(true), {
+      runtime: authClientApi(baseUrl).runtime,
       fields: { password: TextField },
       mode: { validation: "onSubmit" },
       onSubmit: (_, { decoded }) =>
-        Effect.tryPromise({
-          try: async () => {
-            const result = await authClient.$fetch("/set-password", {
-              method: "POST",
-              body: { newPassword: decoded.password },
-            });
-            if (result.error) {
-              throw new Error(
-                result.error.message ?? m.user_account_password_set_error(),
-              );
-            }
-            reset();
-            await onSaved();
-          },
-          catch: (cause) =>
+        authHttpClient(baseUrl).pipe(
+          Effect.flatMap((client) =>
+            client.authExtra.setPassword({
+              payload: { newPassword: decoded.password },
+            }),
+          ),
+          Effect.tap(() => Effect.sync(notifyAuthChange)),
+          Effect.tap(() => Effect.sync(() => reset())),
+          Effect.flatMap(() => Effect.tryPromise(() => onSaved())),
+          Effect.mapError((cause) =>
             cause instanceof Error
               ? cause
               : new Error(m.user_account_password_set_error()),
-        }),
+          ),
+        ),
     }),
   );
-  const reset = useAtomSet(form.reset);
+  reset = useAtomSet(form.reset);
   const submit = useAtomSet(form.submit);
   const submitResult = useAtomValue(form.submit);
 
@@ -1627,32 +1686,30 @@ function RevokeAccountForm({
   account: LinkedAccount;
   requirePassword: boolean;
   onCancel: () => void;
-  onRevoke: (account: LinkedAccount) => Promise<void>;
+  onRevoke: (account: LinkedAccount) => Effect.Effect<void, never>;
 }) {
   const m = useUserButtonMessages();
-  const verifyPassword = useAtomSet(
-    authClientApi(baseUrl).mutation("authExtra", "verifyPassword"),
-    { mode: "promise" },
-  );
   const [form] = useState(() =>
     FormReact.make(passwordFormBuilder(requirePassword), {
+      runtime: authClientApi(baseUrl).runtime,
       fields: { password: TextField },
       mode: { validation: "onSubmit" },
       onSubmit: (_, { decoded }) =>
-        Effect.tryPromise({
-          try: async () => {
-            if (requirePassword) {
-              await verifyPassword({
-                payload: { password: decoded.password },
-              });
-            }
-            await onRevoke(account);
-          },
-          catch: (cause) =>
+        Effect.gen(function* () {
+          if (requirePassword) {
+            const client = yield* authHttpClient(baseUrl);
+            yield* client.authExtra.verifyPassword({
+              payload: { password: decoded.password },
+            });
+          }
+          yield* onRevoke(account);
+        }).pipe(
+          Effect.mapError((cause) =>
             cause instanceof Error
               ? cause
               : new Error(m.user_account_password_verify_error()),
-        }),
+          ),
+        ),
     }),
   );
   const submit = useAtomSet(form.submit);
@@ -1727,7 +1784,7 @@ const UserForm = ({
 }: {
   defaultValues: UserFormType;
   error?: string | null;
-  onSubmit: (values: UserFormType) => Promise<void>;
+  onSubmit: (values: UserFormType) => Effect.Effect<void, unknown>;
 }) => {
   const m = useUserButtonMessages();
   const [editingLocale, setEditingLocale] =
@@ -1744,13 +1801,13 @@ const UserForm = ({
       },
       mode: { validation: "onSubmit" },
       onSubmit: (_, { decoded }) =>
-        Effect.tryPromise({
-          try: () => onSubmit({ ...decoded, image: decoded.image ?? null }),
-          catch: (cause) =>
+        onSubmit({ ...decoded, image: decoded.image ?? null }).pipe(
+          Effect.mapError((cause) =>
             cause instanceof Error
               ? cause
               : new Error(m.user_form_update_error()),
-        }),
+          ),
+        ),
     }),
   );
   const submit = useAtomSet(form.submit);
@@ -1859,17 +1916,24 @@ const UserContactGroup = ({
 );
 
 function AccountSecuritySettings({
-  authClient,
+  baseUrl,
   accountCache,
 }: {
-  authClient: AuthUiClient;
+  baseUrl?: string | undefined;
   accountCache: AccountCache;
 }) {
   const m = useUserButtonMessages();
-  const session = authClient.useSession();
+  const sessionAtom = authSessionAtom(baseUrl);
+  const sessionResult = useAtomValue(sessionAtom);
+  const refreshSession = useAtomRefresh(sessionAtom);
+  const session = AsyncResult.match(sessionResult, {
+    onInitial: () => null,
+    onFailure: () => null,
+    onSuccess: ({ value }) => value,
+  });
   const [setup, setSetup] = useState<TotpSetup | null>(null);
   const [message, setMessage] = useState<string | null>(null);
-  const twoFactorEnabled = hasTwoFactorEnabled(session.data?.user);
+  const twoFactorEnabled = hasTwoFactorEnabled(session?.user);
   const requirePassword = accountCache.accounts
     ? accountCache.accounts.some(
         (account) => account.providerId === "credential",
@@ -1905,26 +1969,26 @@ function AccountSecuritySettings({
         </p>
       ) : twoFactorEnabled ? (
         <DisableTotpForm
-          authClient={authClient}
+          baseUrl={baseUrl}
           requirePassword={requirePassword}
           onDisabled={async () => {
             setMessage(m.user_two_factor_disabled_message());
-            await session.refetch();
+            await refreshSession();
           }}
         />
       ) : setup ? (
         <VerifyTotpSetup
-          authClient={authClient}
+          baseUrl={baseUrl}
           setup={setup}
           onVerified={async () => {
             setSetup(null);
             setMessage(m.user_two_factor_enabled_message());
-            await session.refetch();
+            await refreshSession();
           }}
         />
       ) : (
         <EnableTotpForm
-          authClient={authClient}
+          baseUrl={baseUrl}
           requirePassword={requirePassword}
           onEnabled={setSetup}
         />
@@ -1937,40 +2001,42 @@ function AccountSecuritySettings({
 }
 
 function EnableTotpForm({
-  authClient,
+  baseUrl,
   requirePassword,
   onEnabled,
 }: {
-  authClient: AuthUiClient;
+  baseUrl?: string | undefined;
   requirePassword: boolean;
   onEnabled: (setup: TotpSetup) => void;
 }) {
   const m = useUserButtonMessages();
   const [form] = useState(() =>
     FormReact.make(passwordFormBuilder(requirePassword), {
+      runtime: authClientApi(baseUrl).runtime,
       fields: { password: TextField },
       mode: { validation: "onSubmit" },
       onSubmit: (_, { decoded }) =>
-        Effect.tryPromise({
-          try: async () => {
-            const result = await authClient.twoFactor.enable(
-              requirePassword ? { password: decoded.password } : {},
-            );
-            if (result.error || !result.data) {
-              throw new Error(
-                result.error?.message ?? m.user_two_factor_enable_error(),
-              );
-            }
-            onEnabled({
-              totpURI: result.data.totpURI,
-              backupCodes: result.data.backupCodes,
-            });
-          },
-          catch: (cause) =>
+        authHttpClient(baseUrl).pipe(
+          Effect.flatMap((client) =>
+            client.auth.twoFactorEnable({
+              payload: requirePassword ? { password: decoded.password } : {},
+            }),
+          ),
+          Effect.tap(() => Effect.sync(notifyAuthChange)),
+          Effect.tap((result) =>
+            Effect.sync(() =>
+              onEnabled({
+                totpURI: result.totpURI,
+                backupCodes: Array.from(result.backupCodes),
+              }),
+            ),
+          ),
+          Effect.mapError((cause) =>
             cause instanceof Error
               ? cause
               : new Error(m.user_two_factor_enable_error()),
-        }),
+          ),
+        ),
     }),
   );
   const submit = useAtomSet(form.submit);
@@ -2017,37 +2083,35 @@ function EnableTotpForm({
 }
 
 function VerifyTotpSetup({
-  authClient,
+  baseUrl,
   setup,
   onVerified,
 }: {
-  authClient: AuthUiClient;
+  baseUrl?: string | undefined;
   setup: TotpSetup;
   onVerified: () => Promise<void>;
 }) {
   const m = useUserButtonMessages();
   const [form] = useState(() =>
     FormReact.make(totpCodeFormBuilder, {
+      runtime: authClientApi(baseUrl).runtime,
       fields: { code: TextField },
       mode: { validation: "onSubmit" },
       onSubmit: (_, { decoded }) =>
-        Effect.tryPromise({
-          try: async () => {
-            const result = await authClient.twoFactor.verifyTotp({
-              code: decoded.code.trim(),
-            });
-            if (result.error) {
-              throw new Error(
-                result.error.message ?? m.user_two_factor_verify_error(),
-              );
-            }
-            await onVerified();
-          },
-          catch: (cause) =>
+        authHttpClient(baseUrl).pipe(
+          Effect.flatMap((client) =>
+            client.auth.twoFactorVerifyTotp({
+              payload: { code: decoded.code.trim() },
+            }),
+          ),
+          Effect.tap(() => Effect.sync(notifyAuthChange)),
+          Effect.flatMap(() => Effect.tryPromise(() => onVerified())),
+          Effect.mapError((cause) =>
             cause instanceof Error
               ? cause
               : new Error(m.user_two_factor_verify_error()),
-        }),
+          ),
+        ),
     }),
   );
   const submit = useAtomSet(form.submit);
@@ -2101,37 +2165,35 @@ function VerifyTotpSetup({
 }
 
 function DisableTotpForm({
-  authClient,
+  baseUrl,
   requirePassword,
   onDisabled,
 }: {
-  authClient: AuthUiClient;
+  baseUrl?: string | undefined;
   requirePassword: boolean;
   onDisabled: () => Promise<void>;
 }) {
   const m = useUserButtonMessages();
   const [form] = useState(() =>
     FormReact.make(passwordFormBuilder(requirePassword), {
+      runtime: authClientApi(baseUrl).runtime,
       fields: { password: TextField },
       mode: { validation: "onSubmit" },
       onSubmit: (_, { decoded }) =>
-        Effect.tryPromise({
-          try: async () => {
-            const result = await authClient.twoFactor.disable(
-              requirePassword ? { password: decoded.password } : {},
-            );
-            if (result.error) {
-              throw new Error(
-                result.error.message ?? m.user_two_factor_disable_error(),
-              );
-            }
-            await onDisabled();
-          },
-          catch: (cause) =>
+        authHttpClient(baseUrl).pipe(
+          Effect.flatMap((client) =>
+            client.auth.twoFactorDisable({
+              payload: requirePassword ? { password: decoded.password } : {},
+            }),
+          ),
+          Effect.tap(() => Effect.sync(notifyAuthChange)),
+          Effect.flatMap(() => Effect.tryPromise(() => onDisabled())),
+          Effect.mapError((cause) =>
             cause instanceof Error
               ? cause
               : new Error(m.user_two_factor_disable_error()),
-        }),
+          ),
+        ),
     }),
   );
   const submit = useAtomSet(form.submit);
@@ -2176,21 +2238,25 @@ function DisableTotpForm({
 }
 
 function ApiKeyManager({
-  authClient,
+  baseUrl,
   active,
   permissionLabels,
   permissions = {},
 }: {
-  authClient: AuthUiClient;
+  baseUrl?: string | undefined;
   active: boolean;
   permissionLabels?: ProjectAccessLabelCatalog | undefined;
   permissions?: Readonly<Record<string, ReadonlyArray<string>>>;
 }) {
   const m = useUserButtonMessages();
   const hasOpened = useOpenedOnce(active);
-  const keysAtom = hasOpened ? userApiKeysAtom(authClient) : emptyApiKeysAtom;
-  const keysResult = useAtomValue(keysAtom);
-  const refreshKeys = useAtomRefresh(keysAtom);
+  const loadedKeysAtom = userApiKeysAtom(baseUrl);
+  const keysAtom = hasOpened ? loadedKeysAtom : emptyApiKeysAtom;
+  const keysResult =
+    useAtomValue<AsyncResult.AsyncResult<ApiKeySummary[], unknown>>(keysAtom);
+  const refreshLoadedKeys = useAtomRefresh(loadedKeysAtom);
+  const refreshEmptyKeys = useAtomRefresh(emptyApiKeysAtom);
+  const refreshKeys = hasOpened ? refreshLoadedKeys : refreshEmptyKeys;
   const [createdKey, setCreatedKey] = useState<string | null>(null);
   const [creating, setCreating] = useState(false);
   const [editingKey, setEditingKey] = useState<ApiKeySummary | null>(null);
@@ -2216,37 +2282,47 @@ function ApiKeyManager({
   selectedPermissionsRef.current = selectedPermissions;
   const [createForm] = useState(() =>
     FormReact.make(apiKeyFormBuilder, {
+      runtime: authClientApi(baseUrl).runtime,
       fields: { name: TextField, referrers: TextAreaField },
       mode: { validation: "onSubmit" },
       onSubmit: (_, { decoded }) =>
-        Effect.tryPromise({
-          try: async () => {
-            setCreatedKey(null);
-            const created = await createApiKey(
-              {
-                configId: "user",
-                name: decoded.name.trim(),
-                permissions: getSelectedPermissionObject(
-                  permissionOptionsRef.current,
-                  selectedPermissionsRef.current,
-                ),
-                referrers: parseApiKeyReferrers(
-                  decoded.referrers,
-                  m.user_api_key_referrers_error(),
-                ),
-              },
-              m.user_api_key_create_error(),
-            );
-            setCreatedKey(created.key);
-            resetCreateForm();
-            setSelectedPermissions({});
-            refreshKeys();
-          },
-          catch: (cause) =>
+        Effect.gen(function* () {
+          setCreatedKey(null);
+          const referrers = yield* Effect.try({
+            try: () =>
+              parseApiKeyReferrers(
+                decoded.referrers,
+                m.user_api_key_referrers_error(),
+              ),
+            catch: (cause) => cause,
+          });
+          const client = yield* authHttpClient(baseUrl);
+          return yield* client.authExtra.createApiKey({
+            payload: {
+              configId: "user",
+              name: decoded.name.trim(),
+              permissions: getSelectedPermissionObject(
+                permissionOptionsRef.current,
+                selectedPermissionsRef.current,
+              ),
+              referrers,
+            },
+          });
+        }).pipe(
+          Effect.tap((created) =>
+            Effect.sync(() => {
+              setCreatedKey(created.key);
+              resetCreateForm();
+              setSelectedPermissions({});
+              refreshKeys();
+            }),
+          ),
+          Effect.mapError((cause) =>
             cause instanceof Error
               ? cause
               : new Error(m.user_api_key_create_error()),
-        }),
+          ),
+        ),
     }),
   );
   const resetCreateForm = useAtomSet(createForm.reset);
@@ -2257,19 +2333,28 @@ function ApiKeyManager({
     setSelectedPermissions((current) => ({ ...current, [id]: checked }));
   };
 
-  const deleteKey = async (key: ApiKeySummary) => {
-    const result = await authClient.apiKey.delete({
-      configId: "user",
-      keyId: key.id,
-    });
-
-    if (result.error) {
-      setError(result.error.message ?? m.user_api_key_delete_error());
-      return;
-    }
-
-    refreshKeys();
-  };
+  const [deleteKeyAction] = useState(() =>
+    authClientApi(baseUrl).runtime.fn((key: ApiKeySummary) =>
+      authHttpClient(baseUrl).pipe(
+        Effect.flatMap((client) =>
+          client.auth.apiKeyDelete({
+            payload: { configId: "user", keyId: key.id },
+          }),
+        ),
+        Effect.tap(() => Effect.sync(refreshKeys)),
+        Effect.catch((cause) =>
+          Effect.sync(() =>
+            setError(
+              cause instanceof Error && cause.message
+                ? cause.message
+                : m.user_api_key_delete_error(),
+            ),
+          ),
+        ),
+      ),
+    ),
+  );
+  const deleteKey = useAtomSet(deleteKeyAction);
 
   return (
     <>
@@ -2382,8 +2467,8 @@ function ApiKeyManager({
         {!creating && !editingKey ? (
           <div className="max-w-full min-w-0 overflow-x-hidden">
             <DataTable
-              columns={apiKeyColumns({ m })}
-              data={keys}
+              columnDefs={apiKeyColumns({ m })}
+              rowData={keys}
               features={{
                 export: { baseName: m.user_api_keys_export_file_name() },
                 gallery: false,
@@ -2395,8 +2480,7 @@ function ApiKeyManager({
                   }),
                 },
               }}
-              searchState="local"
-              state={{
+              status={{
                 empty: loading ? m.user_loading() : m.table_empty(),
                 loading,
               }}
@@ -2405,6 +2489,7 @@ function ApiKeyManager({
         ) : null}
         {editingKey ? (
           <ApiKeyEditForm
+            baseUrl={baseUrl}
             key={editingKey.id}
             configId="user"
             keyData={editingKey}
@@ -2436,47 +2521,45 @@ const apiKeyColumns = ({
   m,
 }: {
   m: ReturnType<typeof userButtonMessageFns>;
-}): DataTableColumnDef<ApiKeySummary>[] => [
+}): DataTableColDef<ApiKeySummary>[] => [
   {
-    accessorKey: "name",
-    header: m.user_api_key_name(),
-    cell: ({ row }) => (
+    field: "name",
+    headerName: m.user_api_key_name(),
+    cellRenderer: ({ data }) => (
       <div className="min-w-0">
         <p className="truncate font-medium">
-          {row.original.name ?? m.user_api_key_hidden()}
+          {data.name ?? m.user_api_key_hidden()}
         </p>
       </div>
     ),
   },
   {
-    accessorKey: "enabled",
-    header: m.user_api_key_status(),
-    cell: ({ row }) => (
-      <Badge variant={row.original.enabled ? "default" : "secondary"}>
-        {row.original.enabled
-          ? m.user_api_key_enabled()
-          : m.user_api_key_disabled()}
+    field: "enabled",
+    headerName: m.user_api_key_status(),
+    cellRenderer: ({ data }) => (
+      <Badge variant={data.enabled ? "default" : "secondary"}>
+        {data.enabled ? m.user_api_key_enabled() : m.user_api_key_disabled()}
       </Badge>
     ),
   },
   {
-    id: "referrers",
-    accessorFn: (keyData) => keyData.metadata,
-    header: m.user_api_key_referrers_column(),
-    cell: ({ row }) => (
+    colId: "referrers",
+    valueGetter: ({ data }) => data.metadata,
+    headerName: m.user_api_key_referrers_column(),
+    cellRenderer: ({ data }) => (
       <ApiKeyReferrers
-        metadata={row.original.metadata}
+        metadata={data.metadata}
         unrestrictedLabel={m.user_api_key_referrers_any()}
       />
     ),
   },
   {
-    id: "rateLimit",
-    accessorFn: apiKeyUsagePercent,
-    header: m.user_api_key_rate_limit(),
-    cell: ({ row }) => (
+    colId: "rateLimit",
+    valueGetter: ({ data }) => apiKeyUsagePercent(data),
+    headerName: m.user_api_key_rate_limit(),
+    cellRenderer: ({ data }) => (
       <ApiKeyRateLimit
-        keyData={row.original}
+        keyData={data}
         messages={{
           disabled: m.user_api_key_disabled(),
           none: m.user_api_key_window_none(),
@@ -2491,10 +2574,10 @@ const apiKeyColumns = ({
     ),
   },
   {
-    accessorKey: "permissions",
-    header: m.user_api_key_permissions(),
-    cell: ({ row }) => {
-      const permissions = formatPermissions(row.original.permissions);
+    field: "permissions",
+    headerName: m.user_api_key_permissions(),
+    cellRenderer: ({ data }) => {
+      const permissions = formatPermissions(data.permissions);
 
       if (permissions.length === 0) {
         return (
@@ -2585,16 +2668,9 @@ const getSelectedPermissionObject = (
 };
 
 const TwoFactorUser = Schema.Struct({ twoFactorEnabled: Schema.Boolean });
-const AuthErrorResult = Schema.Struct({
-  error: Schema.Struct({ message: Schema.optional(Schema.String) }),
-});
 
 const hasTwoFactorEnabled = (user: typeof Schema.Unknown.Type) =>
   Option.exists(
     Schema.decodeUnknownOption(TwoFactorUser)(user),
     (decoded) => decoded.twoFactorEnabled,
   );
-
-const isAuthErrorResult = (
-  result: typeof Schema.Unknown.Type,
-): result is typeof AuthErrorResult.Type => Schema.is(AuthErrorResult)(result);

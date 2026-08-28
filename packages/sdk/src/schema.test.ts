@@ -11,7 +11,7 @@ import {
   WebsiteUrl,
   decodeOrganizationMetadata,
   decodeUserMetadata,
-} from "./schema";
+} from "./schema.js";
 
 describe("organization contact schemas", () => {
   it("validates email and website formats", () => {

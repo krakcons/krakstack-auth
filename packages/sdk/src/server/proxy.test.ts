@@ -1,6 +1,12 @@
 import { describe, expect, it } from "@effect/vitest";
+import { Effect } from "effect";
+import {
+  HttpClient,
+  HttpClientRequest,
+  HttpClientResponse,
+} from "effect/unstable/http";
 
-import { proxyAuthRequest } from "./proxy";
+import { proxyAuthRequest, proxyAuthRequestEffect } from "./proxy.js";
 
 interface CapturedRequest {
   request?: Request;
@@ -19,6 +25,41 @@ const mockFetch = (handler: FetchHandler): typeof fetch => {
 };
 
 describe("proxyAuthRequest", () => {
+  it.effect("propagates the active Effect trace to the auth service", () =>
+    Effect.gen(function* () {
+      let capturedRequest: HttpClientRequest.HttpClientRequest | undefined;
+      const httpClient = HttpClient.make((request) => {
+        capturedRequest = request;
+        return Effect.succeed(
+          HttpClientResponse.fromWeb(
+            request,
+            new Response(null, { status: 204 }),
+          ),
+        );
+      });
+      const parentSpan = yield* Effect.currentSpan;
+
+      yield* proxyAuthRequestEffect(
+        new Request("https://app.example.com/api/auth/get-session", {
+          headers: {
+            traceparent:
+              "00-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa-bbbbbbbbbbbbbbbb-01",
+          },
+        }),
+        "https://auth.example.com",
+      ).pipe(Effect.provideService(HttpClient.HttpClient, httpClient));
+
+      const traceparent = capturedRequest?.headers.traceparent;
+      expect(traceparent).toMatch(
+        new RegExp(`^00-${parentSpan.traceId}-[0-9a-f]{16}-0[01]$`),
+      );
+      expect(traceparent).not.toContain("bbbbbbbbbbbbbbbb");
+      expect(capturedRequest?.headers.b3).toMatch(
+        new RegExp(`^${parentSpan.traceId}-[0-9a-f]{16}-[01]`),
+      );
+    }).pipe(Effect.withSpan("http.server GET /api/auth/*")),
+  );
+
   it("forwards the proxied request host instead of the OAuth referer", async () => {
     const previousFetch = globalThis.fetch;
     const captured: CapturedRequest = {};
@@ -90,6 +131,37 @@ describe("proxyAuthRequest", () => {
     expect(captured.request?.headers.get("x-krakstack-forwarded-proto")).toBe(
       "https",
     );
+  });
+
+  it("does not forward caller-supplied tracing headers", async () => {
+    const previousFetch = globalThis.fetch;
+    const captured: CapturedRequest = {};
+
+    globalThis.fetch = mockFetch((request) => {
+      captured.request =
+        request instanceof Request ? request : new Request(request);
+      return Promise.resolve(new Response(null, { status: 204 }));
+    });
+
+    try {
+      await proxyAuthRequest(
+        new Request("https://app.example.com/api/auth/get-session", {
+          headers: {
+            b3: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa-bbbbbbbbbbbbbbbb-1",
+            baggage: "userId=attacker",
+            traceparent:
+              "00-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa-bbbbbbbbbbbbbbbb-01",
+          },
+        }),
+        "https://auth.example.com",
+      );
+    } finally {
+      globalThis.fetch = previousFetch;
+    }
+
+    expect(captured.request?.headers.has("traceparent")).toBe(false);
+    expect(captured.request?.headers.has("b3")).toBe(false);
+    expect(captured.request?.headers.has("baggage")).toBe(false);
   });
 
   it("does not add OAuth origin headers to organization mutations", async () => {

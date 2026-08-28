@@ -23,14 +23,14 @@ type: reference
 | `@krak-stack/auth/access`        | Typed project access catalogs and policy construction                              |
 | `@krak-stack/auth/access/matrix` | Generated project permission reference table                                       |
 | `@krak-stack/auth/api`           | Combined Effect HttpApi contracts                                                  |
+| `@krak-stack/auth/auth`          | Owned browser authentication HttpApi contract and schemas                          |
 | `@krak-stack/auth/schema`        | Shared user, organization, session, project, and API-key schemas                   |
 | `@krak-stack/auth/query`         | Query helpers for Effect Atom clients                                              |
 | `@krak-stack/auth/admin`         | Administrative API contract                                                        |
 | `@krak-stack/auth/extra`         | Browser-facing extra API contract                                                  |
-| `@krak-stack/auth/better-auth`   | Better Auth contract                                                               |
 | `@krak-stack/auth/tailwind.css`  | Tailwind source registration for component classes                                 |
 
-The package root re-exports many, but not all, component APIs. Import `useKrakstackAuth`, `useKrakstackAuthProjectConfig`, `usePermissions`, `HasPermission`, and `useHasPermission` from `@krak-stack/auth/components` until the root export surface is unified.
+Use `@krak-stack/auth/auth` when constructing an Effect `HttpApiClient` or `AtomHttpApi` client for the browser authentication endpoints. UI consumers should import the packaged components and atoms directly from `@krak-stack/auth/components`.
 
 ## Server configuration
 
@@ -50,6 +50,6 @@ Use [API middleware](/docs/middleware) for request-scoped session forwarding rat
 
 ## Component distribution status
 
-The current emitted React component bundle still imports Krakstack/shadcn UI aliases and several runtime packages from the consumer environment. Validate the packed package in the target application and follow [React components and CSS](/docs/components). The server-only subpaths have a smaller and clearer integration boundary.
+The React component bundle uses the peer dependencies declared by the package and Krakstack/shadcn UI primitives from `@krak-stack/registry`. Follow [React components and CSS](/docs/components). The server-only subpaths have a smaller and clearer integration boundary.
 
 The generated HTTP operation reference is available at [API reference](/docs/api-reference).

@@ -1,8 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { ResetPassword } from "@krak-stack/auth";
-
-import { authClient } from "@/services/auth/client";
+import { ResetPassword } from "@krak-stack/auth/components";
 
 export const Route = createFileRoute("/_auth/reset-password")({
-  component: () => <ResetPassword authClient={authClient} />,
+  component: () => <ResetPassword />,
 });

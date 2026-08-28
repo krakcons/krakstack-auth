@@ -1,6 +1,9 @@
 import { Check, Minus } from "lucide-react";
 
-import type { ProjectAccessLabelCatalog, ProjectAccessLabels } from "../access";
+import type {
+  ProjectAccessLabelCatalog,
+  ProjectAccessLabels,
+} from "../access.js";
 
 export type ProjectAccessMatrixAccess<Action extends string = string> = {
   readonly actions: ReadonlyArray<Action>;

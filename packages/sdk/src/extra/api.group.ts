@@ -22,15 +22,15 @@ import {
   ExtraVerifyApiKeyPayload,
   ExtraVerifyApiKeyResponse,
   ExtraVerifyPasswordPayload,
-} from "./schema";
+} from "./schema.js";
 
-export * from "./schema";
-export type { Organization, OrganizationMetadata } from "../schema";
+export * from "./schema.js";
+export type { Organization, OrganizationMetadata } from "../schema.js";
 
 export const ExtraApiGroup = HttpApiGroup.make("authExtra")
   .add(
     HttpApiEndpoint.get("getProjectPublicConfig", "/auth/project-config", {
-      query: ExtraProjectPublicConfigQuery,
+      query: ExtraProjectPublicConfigQuery.fields,
       success: ExtraProjectPublicConfig,
       error: [HttpApiError.InternalServerError],
     }).annotateMerge(
@@ -44,7 +44,7 @@ export const ExtraApiGroup = HttpApiGroup.make("authExtra")
   )
   .add(
     HttpApiEndpoint.patch("updateApiKey", "/auth/api-key/:keyId", {
-      params: Schema.Struct({ keyId: Schema.NonEmptyString }),
+      params: { keyId: Schema.NonEmptyString },
       payload: Schema.Struct({
         configId: ExtraUpdateApiKeyPayload.fields.configId,
         name: ExtraUpdateApiKeyPayload.fields.name,
@@ -64,7 +64,7 @@ export const ExtraApiGroup = HttpApiGroup.make("authExtra")
         title: "Update API key",
         summary: "Update an API key",
         description:
-          "Updates API key details and server-only permissions after Better Auth verifies user ownership or organization key-management access.",
+          "Updates API key details and server-only permissions after verifying user ownership or organization key-management access.",
       }),
     ),
   )
@@ -73,7 +73,7 @@ export const ExtraApiGroup = HttpApiGroup.make("authExtra")
       "getOrganizationPublicProfile",
       "/auth/organization-profile",
       {
-        query: ExtraOrganizationPublicProfileQuery,
+        query: ExtraOrganizationPublicProfileQuery.fields,
         success: ExtraOrganizationPublicProfile,
         error: [HttpApiError.NotFound, HttpApiError.InternalServerError],
       },
@@ -139,7 +139,7 @@ export const ExtraApiGroup = HttpApiGroup.make("authExtra")
         title: "Create API key",
         summary: "Create an API key with optional permissions",
         description:
-          "Creates a user or organization API key through Better Auth's server-side API so server-only fields like permissions can be set.",
+          "Creates a user or organization API key through the server API so server-only fields like permissions can be set.",
       }),
     ),
   )
@@ -153,7 +153,7 @@ export const ExtraApiGroup = HttpApiGroup.make("authExtra")
         title: "Verify API key",
         summary: "Verify a remote API key",
         description:
-          "Verifies a user or organization API key and optional permissions using Better Auth's server-side API key verifier.",
+          "Verifies a user or organization API key and optional permissions.",
       }),
     ),
   )
@@ -179,7 +179,6 @@ export const ExtraApiGroup = HttpApiGroup.make("authExtra")
   .annotateMerge(
     OpenApi.annotations({
       title: "Extra",
-      description:
-        "KrakStack-specific endpoints layered on top of Better Auth.",
+      description: "KrakStack-specific authentication endpoints.",
     }),
   );

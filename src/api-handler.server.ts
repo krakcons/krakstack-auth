@@ -1,10 +1,10 @@
 import { Effect, FileSystem, Layer, Path, Redacted, Schema } from "effect";
-import { CredentialsFromEnv } from "@distilled.cloud/cloudflare";
 import {
-  AuthMiddleware,
-  AuthService,
-  type AuthSession,
-} from "@krak-stack/auth/server";
+  context as openTelemetryContext,
+  propagation,
+} from "@opentelemetry/api";
+import { CredentialsFromEnv } from "@distilled.cloud/cloudflare";
+import { AuthService, type AuthSession } from "@krak-stack/auth/server";
 import {
   healthHandler,
   HealthService,
@@ -18,14 +18,11 @@ import {
   HttpServerRequest,
   HttpServerResponse,
 } from "effect/unstable/http";
+import { HttpApiBuilder, HttpApiError, OpenApi } from "effect/unstable/httpapi";
 import {
-  HttpApiBuilder,
-  HttpApiEndpoint,
-  HttpApiError,
-  HttpApiGroup,
-  OpenApi,
-} from "effect/unstable/httpapi";
-import { GetSessionResponse } from "@krak-stack/auth/better-auth";
+  Session as InternalSession,
+  User as InternalUser,
+} from "@krak-stack/auth/schema";
 
 import { AdminApi, FrontendApi } from "@/api";
 import { LocaleMiddlewareLive } from "@/lib/localization";
@@ -48,7 +45,7 @@ import {
   adminOAuthClientsApiHandler,
   publicOAuthClientsApiHandler,
 } from "@/services/oauth/api.builder";
-import { OpenTelemetry } from "@/services/opentelemetry";
+import { OpenTelemetryLive } from "@/services/opentelemetry";
 import { Organizations } from "@/services/organizations";
 import { Projects } from "@/services/projects";
 import {
@@ -82,13 +79,6 @@ const organizationImpersonationAllowedAuthPaths = [
   { method: "GET", path: "/api/auth/ok" },
   { method: "POST", path: "/api/auth/sign-out" },
 ] as const;
-const authMiddlewareOptions = {
-  endpoint: HttpApiEndpoint.get("betterAuth", "/api/auth/*", {
-    error: [HttpApiError.Unauthorized, HttpApiError.Forbidden],
-  }),
-  group: HttpApiGroup.make("betterAuth"),
-  credential: Redacted.make(""),
-};
 const localAuthServiceLayer = Layer.effect(
   AuthService,
   Effect.gen(function* () {
@@ -105,7 +95,16 @@ const localAuthServiceLayer = Layer.effect(
           try: () => betterAuth.api.getSession({ headers: betterAuth.headers }),
           catch: () => new HttpApiError.Unauthorized({}),
         }).pipe(
-          Effect.flatMap(Schema.decodeUnknownEffect(GetSessionResponse)),
+          Effect.flatMap(
+            Schema.decodeUnknownEffect(
+              Schema.NullOr(
+                Schema.Struct({
+                  session: InternalSession,
+                  user: InternalUser,
+                }),
+              ),
+            ),
+          ),
           Effect.mapError(() => new HttpApiError.Unauthorized({})),
           Effect.map((session): AuthSession | null =>
             session
@@ -124,22 +123,40 @@ const localAuthServiceLayer = Layer.effect(
     AuthService.layer({ apiKey: Redacted.make("local-session-lookup") }),
   ),
 );
-const authMiddlewareLayer = AuthMiddleware.layer({
-  allowedOrganizationImpersonationRoutes:
-    organizationImpersonationAllowedAuthPaths,
-  authLayer: localAuthServiceLayer,
-});
+const runAuthHandler = (
+  request: HttpServerRequest.HttpServerRequest | Request,
+) =>
+  Effect.gen(function* () {
+    const authRequest = yield* BetterAuthRequest.pipe(
+      Effect.provide(BetterAuthRequest.make(request)),
+    );
+    const parentContext = propagation.extract(
+      openTelemetryContext.active(),
+      Object.fromEntries(authRequest.headers),
+    );
+    return yield* Effect.tryPromise({
+      try: () =>
+        openTelemetryContext.with(parentContext, () =>
+          authRequest.handler(authRequest.request),
+        ),
+      catch: () => new HttpApiError.InternalServerError({}),
+    });
+  });
 
-export const authWebHandler = async (request: Request) => {
-  const authRequest = await Effect.runPromise(
-    BetterAuthRequest.pipe(Effect.provide(BetterAuthRequest.make(request))),
+export const authWebHandler = (request: Request) =>
+  Effect.runPromise(
+    runAuthHandler(request).pipe(
+      Effect.withSpan(`http.server ${request.method} /api/auth/*`, {
+        kind: "server",
+      }),
+    ),
   );
-  return await authRequest.handler(authRequest.request);
-};
 
-const authHandlerEffect = HttpEffect.fromWebHandler((request) =>
-  Promise.resolve(authWebHandler(request)),
-).pipe(
+const authHandlerEffect = Effect.gen(function* () {
+  const request = yield* HttpServerRequest.HttpServerRequest;
+  const response = yield* runAuthHandler(request);
+  return HttpServerResponse.fromWeb(response);
+}).pipe(
   Effect.catch((error) =>
     Effect.sync(() => {
       console.error("[HTTP] auth handler failed:", error);
@@ -152,14 +169,27 @@ const authHandlerEffect = HttpEffect.fromWebHandler((request) =>
 );
 const guardedAuthHandlerEffect = Effect.gen(function* () {
   const request = yield* HttpServerRequest.HttpServerRequest;
-  const middleware = yield* AuthMiddleware;
-  return yield* middleware.apiKey(
-    authHandlerEffect.pipe(
-      Effect.provideService(HttpServerRequest.HttpServerRequest, request),
-    ),
-    authMiddlewareOptions,
+  const auth = yield* AuthService;
+  const session = yield* auth
+    .getSession()
+    .pipe(Effect.catchTag("Unauthorized", () => Effect.succeed(null)));
+  const pathname = new URL(request.url, "http://localhost").pathname;
+  const allowsOrganizationImpersonation =
+    organizationImpersonationAllowedAuthPaths.some(
+      (route) => route.method === request.method && route.path === pathname,
+    );
+
+  if (
+    session?.session.impersonatedByOrganizationId &&
+    !allowsOrganizationImpersonation
+  ) {
+    return yield* new HttpApiError.Forbidden({});
+  }
+
+  return yield* authHandlerEffect.pipe(
+    Effect.provideService(HttpServerRequest.HttpServerRequest, request),
   );
-}).pipe(Effect.provide(authMiddlewareLayer));
+}).pipe(Effect.provide(localAuthServiceLayer));
 
 const logoContentType = (path: string) => {
   if (path.endsWith(".svg")) return "image/svg+xml";
@@ -311,7 +341,6 @@ const apiLayer = Layer.mergeAll(
 ).pipe(Layer.provide(platformLayer));
 
 const appServicesLayer = Layer.mergeAll(
-  OpenTelemetry.layer,
   OAuthClients.layer,
   BackendAuth.layer,
   Domains.layer,
@@ -322,7 +351,10 @@ const appServicesLayer = Layer.mergeAll(
   CloudflareLive,
 ).pipe(Layer.provideMerge(DB.layer));
 
-const apiApplicationLayer = apiLayer.pipe(Layer.provide(appServicesLayer));
+const apiApplicationLayer = Layer.mergeAll(
+  apiLayer.pipe(Layer.provide(appServicesLayer)),
+  OpenTelemetryLive,
+);
 const apiWebHandler = HttpRouter.toWebHandler<
   Layer.Success<typeof apiApplicationLayer>,
   Layer.Error<typeof apiApplicationLayer>,

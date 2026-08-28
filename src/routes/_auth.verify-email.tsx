@@ -1,8 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { VerifyEmail } from "@krak-stack/auth";
+import { VerifyEmail } from "@krak-stack/auth/components";
 import { Option, Schema } from "effect";
-
-import { authClient } from "@/services/auth/client";
 
 export const Route = createFileRoute("/_auth/verify-email")({
   validateSearch: (search) => ({
@@ -11,5 +9,5 @@ export const Route = createFileRoute("/_auth/verify-email")({
       () => "",
     ),
   }),
-  component: () => <VerifyEmail authClient={authClient} />,
+  component: () => <VerifyEmail />,
 });

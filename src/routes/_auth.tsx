@@ -2,14 +2,13 @@ import { Outlet, createFileRoute } from "@tanstack/react-router";
 import {
   KrakstackAuthProvider,
   useKrakstackAuthProjectConfig,
-} from "@krak-stack/auth";
+} from "@krak-stack/auth/components";
 import { Users } from "lucide-react";
 
 import { AppBrand } from "@krak-stack/registry/app-brand";
 import { LocaleSwitcher } from "@krak-stack/registry/locale-switcher";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { m } from "@/paraglide/messages";
-import { authClient } from "@/services/auth/client";
 import { AuthBrandingProvider } from "@/services/auth/client/branding";
 
 export const Route = createFileRoute("/_auth")({
@@ -24,10 +23,7 @@ function AuthLayout() {
   const projectId = import.meta.env.VITE_KRAKSTACK_AUTH_PROJECT_ID;
 
   return (
-    <KrakstackAuthProvider
-      authClient={authClient}
-      {...(projectId ? { projectId } : {})}
-    >
+    <KrakstackAuthProvider {...(projectId ? { projectId } : {})}>
       <AuthLayoutContent />
     </KrakstackAuthProvider>
   );
@@ -48,15 +44,27 @@ function AuthLayoutContent() {
         <style dangerouslySetInnerHTML={{ __html: projectConfig.themeCss }} />
       ) : null}
       <div className="absolute top-6 left-6 md:top-10 md:left-10">
-        <AppBrand
-          label={projectConfig?.name ?? m.sidebar_brand()}
-          subtitle={m.sidebar_brand_subtitle()}
-          icon={Users}
-          {...(brandHref ? { href: brandHref } : {})}
-          {...(projectConfig?.logoUrl
-            ? { imageSrc: projectConfig.logoUrl }
-            : {})}
-        />
+        {brandHref ? (
+          <AppBrand
+            label={projectConfig?.name ?? m.sidebar_brand()}
+            subtitle={m.sidebar_brand_subtitle()}
+            icon={Users}
+            href={brandHref}
+            {...(projectConfig?.logoUrl
+              ? { imageSrc: projectConfig.logoUrl }
+              : {})}
+          />
+        ) : (
+          <AppBrand
+            label={projectConfig?.name ?? m.sidebar_brand()}
+            subtitle={m.sidebar_brand_subtitle()}
+            icon={Users}
+            to={null}
+            {...(projectConfig?.logoUrl
+              ? { imageSrc: projectConfig.logoUrl }
+              : {})}
+          />
+        )}
       </div>
       <div className="absolute top-6 right-6 flex items-center gap-2 md:top-10 md:right-10">
         <ThemeToggle />

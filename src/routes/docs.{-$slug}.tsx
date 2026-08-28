@@ -6,60 +6,19 @@ import {
   DocsNotFound,
   DocsPage,
   DocsLayout,
-  docsSource,
-  makeDocs,
   type DocsLocale,
-} from "@/lib/docs";
-import { m } from "@/paraglide/messages";
+} from "@krak-stack/registry/docs";
+import { getDocsPages, makeAuthDocs } from "@/lib/docs";
 import { getLocale } from "@/paraglide/runtime";
 
 const docsLocale = (): DocsLocale => (getLocale() === "fr" ? "fr" : "en");
 
-const docs = makeDocs({
-  source: docsSource,
-  basePath: "/docs",
-  defaultSlug: "introduction",
-  origin: "https://auth.krakstack.net",
-  siteName: "Krakstack Auth",
-  brand: {
-    label: "Krakstack",
-    subtitle: m.docs_brand_subtitle,
-    icon: "lucide:book-open",
-    href: "/",
-  },
-  resources: {
-    label: m.docs_resources,
-    items: [
-      {
-        label: m.docs_home,
-        href: "/",
-        icon: "lucide:house",
-      },
-      {
-        label: m.docs_api_reference,
-        href: "/api/docs",
-        icon: "lucide:file-json",
-        external: true,
-      },
-    ],
-  },
-  sectionOrder: [
-    "start",
-    "integration",
-    "frontend",
-    "backend",
-    "administration",
-    "operations",
-    "reference",
-  ],
-  github: {
-    url: "https://github.com/krakcons/krakstack-auth",
-    branch: "main",
-  },
-});
+const docsShell = makeAuthDocs([]);
 
 export const Route = createFileRoute("/docs/{-$slug}")({
-  loader: ({ params }) => {
+  loader: async ({ params }) => {
+    const pages = await getDocsPages();
+    const docs = makeAuthDocs(pages);
     const resolution = docs.resolve(params.slug, docsLocale());
     if (!resolution) throw notFound();
 
@@ -67,20 +26,24 @@ export const Route = createFileRoute("/docs/{-$slug}")({
       throw redirect({ to: resolution.page.path, statusCode: 301 });
     }
 
-    return resolution;
+    return { pages, resolution };
   },
   head: ({ loaderData }) => {
-    const locale = loaderData?.page.locale ?? docsLocale();
-    return loaderData?.page
-      ? docs.getHead({ locale, page: loaderData.page })
+    const locale = loaderData?.resolution.page.locale ?? docsLocale();
+    const docs = loaderData ? makeAuthDocs(loaderData.pages) : docsShell;
+    return loaderData?.resolution.page
+      ? docs.getHead({ locale, page: loaderData.resolution.page })
       : docs.getHead({ locale });
   },
   component: DocsRoutePage,
-  notFoundComponent: () => <DocsNotFound docs={docs} locale={docsLocale()} />,
+  notFoundComponent: () => (
+    <DocsNotFound docs={docsShell} locale={docsLocale()} />
+  ),
 });
 
 function DocsRoutePage() {
-  const resolution = Route.useLoaderData();
+  const { pages, resolution } = Route.useLoaderData();
+  const docs = makeAuthDocs(pages);
 
   return (
     <DocsLayout

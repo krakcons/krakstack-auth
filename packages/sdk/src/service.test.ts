@@ -7,8 +7,8 @@ import {
 } from "effect/unstable/http";
 import { HttpApiError } from "effect/unstable/httpapi";
 
-import { AuthClientConfig } from "./config";
-import { AuthService } from "./service";
+import { AuthClientConfig } from "./config.js";
+import { AuthService } from "./service.js";
 
 const now = "2026-01-01T00:00:00.000Z";
 

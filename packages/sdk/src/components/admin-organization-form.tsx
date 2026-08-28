@@ -3,7 +3,6 @@ import { FormBuilder, FormReact } from "@lucas-barake/effect-form-react";
 import { Effect, Schema } from "effect";
 import { AsyncResult, Atom } from "effect/unstable/reactivity";
 import { useState } from "react";
-import { toast } from "sonner";
 
 import {
   ImageField,
@@ -22,11 +21,11 @@ import {
 import {
   AdminCreateOrganizationPayload,
   type AdminOrganization,
-} from "../admin/schema";
+} from "../admin/schema.js";
 
-import { authClientApi } from "./auth-client-api";
-import { type KrakstackAuthLocale, useKrakstackAuth } from "./auth-provider";
-import { assetPath, assetUrl } from "./utils";
+import { authClientApi, authHttpClient } from "./auth-client-api.js";
+import { type KrakstackAuthLocale, useKrakstackAuth } from "./auth-provider.js";
+import { assetPath, assetUrl } from "./utils.js";
 
 const defaultMessages = {
   en: {
@@ -35,10 +34,9 @@ const defaultMessages = {
     field_name: "Name",
     form_submit: "Save",
     organization_create_description:
-      "Create an organization that can be used for Better Auth membership.",
+      "Create an organization that can be used for authentication membership.",
     organization_create_error: "Unable to create organization.",
     organization_create_title: "Create organization",
-    organization_created_toast: "Organization created.",
     organization_edit_title: "Edit organization",
     organization_field_logo_url: "Logo",
     organization_parent: "Parent organization",
@@ -50,7 +48,6 @@ const defaultMessages = {
     organization_slug: "Slug",
     organization_slug_description: "Leave blank to generate one from the name.",
     organization_update_error: "Unable to update organization.",
-    organization_updated_toast: "Organization updated.",
   },
   fr: {
     admin_organization_edit_description:
@@ -58,10 +55,9 @@ const defaultMessages = {
     field_name: "Nom",
     form_submit: "Enregistrer",
     organization_create_description:
-      "Créez une organisation utilisable pour les adhésions Better Auth.",
+      "Créez une organisation utilisable pour les adhésions d'authentification.",
     organization_create_error: "Impossible de créer l'organisation.",
     organization_create_title: "Créer une organisation",
-    organization_created_toast: "Organisation créée.",
     organization_edit_title: "Modifier l'organisation",
     organization_field_logo_url: "Logo",
     organization_parent: "Organisation parente",
@@ -74,7 +70,6 @@ const defaultMessages = {
     organization_slug_description:
       "Laissez vide pour en générer un à partir du nom.",
     organization_update_error: "Impossible de mettre à jour l'organisation.",
-    organization_updated_toast: "Organisation mise à jour.",
   },
 } as const;
 
@@ -95,16 +90,6 @@ const organizationOptionsAtom = Atom.family((baseUrl?: string | undefined) =>
     reactivityKeys: ["organizations"],
   }),
 );
-const createOrganizationAtom = Atom.family((baseUrl?: string | undefined) =>
-  authClientApi(baseUrl).mutation("admin", "createOrganization"),
-);
-const updateOrganizationAtom = Atom.family((baseUrl?: string | undefined) =>
-  authClientApi(baseUrl).mutation("admin", "updateOrganization"),
-);
-const uploadOrganizationLogoAtom = Atom.family((baseUrl?: string | undefined) =>
-  authClientApi(baseUrl).mutation("authExtra", "uploadUserImage"),
-);
-
 const slugify = (value: string) =>
   value
     .trim()
@@ -133,6 +118,7 @@ const makeOrganizationForm = ({
   organization,
 }: OrganizationFormResource) =>
   FormReact.make(organizationFormBuilder, {
+    runtime: authClientApi(baseUrl).runtime,
     fields: {
       name: TextField,
       slug: TextField,
@@ -140,17 +126,15 @@ const makeOrganizationForm = ({
       parentId: SingleSearchableSelectField,
     },
     mode: { validation: "onSubmit" },
-    onSubmit: (_, { decoded, get }) =>
+    onSubmit: (_, { decoded }) =>
       Effect.gen(function* () {
+        const http = yield* authHttpClient(baseUrl);
         const logoValue = decoded.logo;
         let logo = assetPath(logoValue instanceof File ? null : logoValue);
         if (logoValue instanceof File) {
           const payload = new FormData();
           payload.append("file", logoValue);
-          const uploaded = yield* get.setResult(
-            uploadOrganizationLogoAtom(baseUrl),
-            { payload },
-          );
+          const uploaded = yield* http.authExtra.uploadUserImage({ payload });
           logo = assetPath(uploaded.url);
         }
 
@@ -167,7 +151,7 @@ const makeOrganizationForm = ({
             : { ...input, parentId: decoded.parentId },
         );
         const saved = organization
-          ? yield* get.setResult(updateOrganizationAtom(baseUrl), {
+          ? yield* http.admin.updateOrganization({
               params: { id: organization.id },
               payload: {
                 ...payload,
@@ -177,7 +161,7 @@ const makeOrganizationForm = ({
                     : decoded.parentId,
               },
             })
-          : yield* get.setResult(createOrganizationAtom(baseUrl), { payload });
+          : yield* http.admin.createOrganization({ payload });
 
         return saved;
       }),
@@ -207,11 +191,6 @@ export function AdminOrganizationForm({
   const submitResult = useAtomValue(form.submit);
   useAtomSubscribe(form.submit, (result) => {
     if (!AsyncResult.isSuccess(result)) return;
-    toast.success(
-      organization
-        ? m.organization_updated_toast
-        : m.organization_created_toast,
-    );
     onSaved(result.value);
     onClose();
   });

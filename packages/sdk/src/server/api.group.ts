@@ -5,7 +5,7 @@ import {
   HttpApiGroup,
 } from "effect/unstable/httpapi";
 
-import { Member, Organization, User } from "../schema";
+import { Member, Organization, User } from "../schema.js";
 import {
   ServerActiveOrganization,
   ServerCreateDomainPayload,
@@ -23,12 +23,12 @@ import {
   ServerOrganizationsResponse,
   ServerUserIdParams,
   ServerUsersResponse,
-} from "./schema";
+} from "./schema.js";
 
 export const ServerUsersApiGroup = HttpApiGroup.make("users")
   .add(
     HttpApiEndpoint.get("listUsersByIds", "/users", {
-      query: ServerIdsQuery,
+      query: ServerIdsQuery.fields,
       success: ServerUsersResponse,
       error: [HttpApiError.Unauthorized, HttpApiError.InternalServerError],
     }).annotateMerge(
@@ -42,7 +42,7 @@ export const ServerUsersApiGroup = HttpApiGroup.make("users")
   )
   .add(
     HttpApiEndpoint.get("getUser", "/users/:id", {
-      params: ServerIdParams,
+      params: ServerIdParams.fields,
       success: User,
       error: [
         HttpApiError.Unauthorized,
@@ -63,7 +63,7 @@ export const ServerUsersApiGroup = HttpApiGroup.make("users")
       "getUserActiveOrganization",
       "/organizations/user/:userId/active",
       {
-        params: ServerUserIdParams,
+        params: ServerUserIdParams.fields,
         success: ServerActiveOrganization,
         error: [HttpApiError.Unauthorized, HttpApiError.InternalServerError],
       },
@@ -86,7 +86,7 @@ export const ServerUsersApiGroup = HttpApiGroup.make("users")
 export const ServerOrganizationsApiGroup = HttpApiGroup.make("organizations")
   .add(
     HttpApiEndpoint.get("listOrganizations", "/organizations", {
-      query: ServerOrganizationsQuery,
+      query: ServerOrganizationsQuery.fields,
       success: ServerOrganizationsResponse,
       error: [
         HttpApiError.BadRequest,
@@ -104,7 +104,7 @@ export const ServerOrganizationsApiGroup = HttpApiGroup.make("organizations")
   )
   .add(
     HttpApiEndpoint.get("getOrganization", "/organizations/:id", {
-      params: ServerIdParams,
+      params: ServerIdParams.fields,
       success: Organization,
       error: [
         HttpApiError.Unauthorized,
@@ -125,7 +125,7 @@ export const ServerOrganizationsApiGroup = HttpApiGroup.make("organizations")
       "getOrganizationChildren",
       "/organizations/:organizationId/children",
       {
-        params: ServerOrganizationIdParams,
+        params: ServerOrganizationIdParams.fields,
         success: ServerOrganizationChildrenResponse,
         error: [HttpApiError.Unauthorized, HttpApiError.InternalServerError],
       },
@@ -143,7 +143,7 @@ export const ServerOrganizationsApiGroup = HttpApiGroup.make("organizations")
       "getActiveMember",
       "/organizations/:organizationId/members/:userId",
       {
-        params: ServerMemberParams,
+        params: ServerMemberParams.fields,
         success: Member,
         error: [
           HttpApiError.Unauthorized,
@@ -165,7 +165,7 @@ export const ServerOrganizationsApiGroup = HttpApiGroup.make("organizations")
       "listOrganizationMembers",
       "/organizations/:organizationId/members",
       {
-        params: ServerOrganizationIdParams,
+        params: ServerOrganizationIdParams.fields,
         success: ServerMembersResponse,
         error: [HttpApiError.Unauthorized, HttpApiError.InternalServerError],
       },
@@ -207,7 +207,7 @@ export const ServerDomainsApiGroup = HttpApiGroup.make("domains")
   )
   .add(
     HttpApiEndpoint.get("getDomain", "/domains/:id", {
-      params: ServerDomainIdParams,
+      params: ServerDomainIdParams.fields,
       success: ServerDomain,
       error: [
         HttpApiError.Unauthorized,
@@ -218,7 +218,7 @@ export const ServerDomainsApiGroup = HttpApiGroup.make("domains")
   )
   .add(
     HttpApiEndpoint.get("getDomainByHost", "/domains/by-host/:hostname", {
-      params: ServerDomainHostParams,
+      params: ServerDomainHostParams.fields,
       success: ServerDomain,
       error: [
         HttpApiError.Unauthorized,
@@ -229,7 +229,7 @@ export const ServerDomainsApiGroup = HttpApiGroup.make("domains")
   )
   .add(
     HttpApiEndpoint.get("getDomainRecords", "/domains/:id/records", {
-      params: ServerDomainIdParams,
+      params: ServerDomainIdParams.fields,
       success: ServerDomainRecordsResponse,
       error: [
         HttpApiError.Unauthorized,
@@ -240,7 +240,7 @@ export const ServerDomainsApiGroup = HttpApiGroup.make("domains")
   )
   .add(
     HttpApiEndpoint.delete("deleteDomain", "/domains/:id", {
-      params: ServerDomainIdParams,
+      params: ServerDomainIdParams.fields,
       success: ServerDomain,
       error: [
         HttpApiError.Unauthorized,

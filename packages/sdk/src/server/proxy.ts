@@ -1,5 +1,18 @@
+import { Effect } from "effect";
+import {
+  Cookies,
+  FetchHttpClient,
+  Headers as HttpHeaders,
+  HttpClient,
+  HttpClientRequest,
+  HttpServerRequest,
+  HttpServerResponse,
+} from "effect/unstable/http";
+
 const blockedRequestHeaders = [
   "accept-encoding",
+  "b3",
+  "baggage",
   "connection",
   "content-length",
   "forwarded",
@@ -9,11 +22,18 @@ const blockedRequestHeaders = [
   "proxy-authorization",
   "te",
   "trailer",
+  "traceparent",
+  "tracestate",
   "transfer-encoding",
   "upgrade",
   "cdn-loop",
   "x-krakstack-forwarded-host",
   "x-krakstack-forwarded-proto",
+  "x-b3-flags",
+  "x-b3-parentspanid",
+  "x-b3-sampled",
+  "x-b3-spanid",
+  "x-b3-traceid",
 ] as const;
 
 const hostOnlyCookie = (cookie: string) =>
@@ -104,11 +124,7 @@ const proxyHeaders = (request: Request) => {
   return headers;
 };
 
-export const proxyAuthRequest = async (
-  request: Request,
-  baseUrl: string | URL,
-  options?: ProxyAuthRequestOptions,
-) => {
+const proxyRequest = (request: Request, baseUrl: string | URL) => {
   const target = new URL(request.url);
   const authUrl = new URL(baseUrl);
   const init: RequestInit = {
@@ -125,8 +141,54 @@ export const proxyAuthRequest = async (
     init.body = request.body;
   }
 
-  const response = await fetch(new Request(target, init), {
+  return new Request(target, init);
+};
+
+export const proxyAuthRequest = async (
+  request: Request,
+  baseUrl: string | URL,
+  options?: ProxyAuthRequestOptions,
+) => {
+  const response = await fetch(proxyRequest(request, baseUrl), {
     redirect: "manual",
   });
+
   return proxyResponse(request, response, options);
 };
+
+export const proxyAuthRequestEffect = (
+  request: Request,
+  baseUrl: string | URL,
+  options?: ProxyAuthRequestOptions,
+) =>
+  Effect.gen(function* () {
+    const response = yield* HttpClient.execute(
+      HttpClientRequest.fromWeb(proxyRequest(request, baseUrl)),
+    ).pipe(
+      Effect.provideService(FetchHttpClient.RequestInit, {
+        redirect: "manual",
+      }),
+    );
+    const cookieDomain = sharedCookieDomain(request, options);
+    const cookies = Cookies.fromSetCookie(
+      Cookies.toSetCookieHeaders(response.cookies).map((cookie) =>
+        cookieForDomain(cookie, cookieDomain),
+      ),
+    );
+
+    return HttpServerResponse.stream(response.stream, {
+      status: response.status,
+      headers: HttpHeaders.remove(response.headers, "set-cookie"),
+      cookies,
+    });
+  });
+
+export const proxyAuthHttpEffect = (
+  baseUrl: string | URL,
+  options?: ProxyAuthRequestOptions,
+) =>
+  Effect.gen(function* () {
+    const request = yield* HttpServerRequest.HttpServerRequest;
+    const webRequest = yield* HttpServerRequest.toWeb(request);
+    return yield* proxyAuthRequestEffect(webRequest, baseUrl, options);
+  });

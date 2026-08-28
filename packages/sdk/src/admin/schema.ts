@@ -1,6 +1,6 @@
 import { Schema } from "effect";
 
-import { PaginatedResponse, Query } from "../query";
+import { PaginatedResponse, Query } from "../query.js";
 
 import {
   ServerCreateDomainPayload,
@@ -8,7 +8,7 @@ import {
   ServerDomainIdParams,
   ServerDomainRecordsResponse,
   ServerUpdateDomainPayload,
-} from "../server/schema";
+} from "../server/schema.js";
 
 export const AdminListQuery = Schema.Struct({
   ...Query.fields,
@@ -361,4 +361,4 @@ export {
   ServerDomainRecordsResponse,
   ServerUpdateDomainPayload,
 };
-export { SortParamsFromString } from "../query";
+export { SortParamsFromString } from "../query.js";

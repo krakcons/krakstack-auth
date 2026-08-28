@@ -11,13 +11,13 @@ import {
   HttpApiGroup,
 } from "effect/unstable/httpapi";
 
-import { CurrentActor, defineProjectAccess } from "../access";
+import { CurrentActor, defineProjectAccess } from "../access.js";
 import {
   AuthService,
   type AuthSession,
   type AuthSessionWithOrganization,
-} from "../service";
-import { ActorRequired } from "./actor";
+} from "../service.js";
+import { ActorRequired } from "./actor.js";
 
 const now = new Date("2026-01-01T00:00:00.000Z");
 

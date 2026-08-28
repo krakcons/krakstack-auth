@@ -3,7 +3,7 @@ import { describe, expect, it } from "@effect/vitest";
 import {
   invitationDisplayStatus,
   isInvitationExpired,
-} from "./invitation-expiration";
+} from "./invitation-expiration.js";
 
 const now = new Date("2026-07-15T12:00:00.000Z").getTime();
 

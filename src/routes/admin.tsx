@@ -9,6 +9,7 @@ import {
   Users,
 } from "lucide-react";
 import { Suspense } from "react";
+import { Effect } from "effect";
 
 import { m } from "@/paraglide/messages";
 import { ThemeToggle } from "@/components/theme-toggle";
@@ -19,13 +20,13 @@ import {
   type NavGroup,
   useSidebarLayout,
 } from "@krak-stack/registry/sidebar-layout";
-import { authBaseUrl, authClient } from "@/services/auth/client";
+import { authBaseUrl, getAuthSession } from "@/services/auth/client";
 import {
   MemberRequired,
   KrakstackAuthProvider,
   OrganizationSwitcher,
   UserButton,
-} from "@krak-stack/auth";
+} from "@krak-stack/auth/components";
 
 const krakOrganizationId = import.meta.env.VITE_KRAKSTACK_AUTH_ORGANIZATION_ID;
 const testApiKeyPermissions = {
@@ -40,11 +41,9 @@ export const Route = createFileRoute("/admin")({
     meta: [{ name: "robots", content: "noindex,nofollow" }],
   }),
   beforeLoad: async () => {
-    const session = await authClient.getSession({
-      query: { disableCookieCache: true },
-    });
+    const session = await Effect.runPromise(getAuthSession());
 
-    if (!session.data?.user) {
+    if (!session?.user) {
       throw redirect({ to: "/sign-in" });
     }
   },
@@ -54,7 +53,6 @@ export const Route = createFileRoute("/admin")({
 function Admin() {
   return (
     <KrakstackAuthProvider
-      authClient={authClient}
       baseUrl={authBaseUrl}
       projectId={import.meta.env.VITE_KRAKSTACK_AUTH_PROJECT_ID}
     >
@@ -104,22 +102,13 @@ const adminNavGroups: NavGroup[] = [
 ];
 
 function AdminContent() {
-  const session = authClient.useSession();
-
   if (!krakOrganizationId) {
     throw new Error("VITE_KRAKSTACK_AUTH_ORGANIZATION_ID is required.");
   }
 
-  if (session.isPending && !session.data) {
-    return <AdminAccessLoading />;
-  }
-
   return (
     <Suspense fallback={<AdminAccessLoading />}>
-      <MemberRequired
-        authClient={authClient}
-        organizationId={krakOrganizationId}
-      >
+      <MemberRequired organizationId={krakOrganizationId}>
         <SidebarLayout
           sidebarHeader={<AdminOrganizationSwitcher />}
           headerActions={
@@ -127,7 +116,6 @@ function AdminContent() {
               <ThemeToggle />
               <LocaleSwitcher />
               <UserButton
-                authClient={authClient}
                 baseUrl={authBaseUrl}
                 {...(import.meta.env.DEV
                   ? { apiKeyPermissions: testApiKeyPermissions }
@@ -153,7 +141,6 @@ function AdminOrganizationSwitcher() {
 
   return (
     <OrganizationSwitcher
-      authClient={authClient}
       baseUrl={authBaseUrl}
       {...(import.meta.env.DEV
         ? { apiKeyPermissions: testApiKeyPermissions }

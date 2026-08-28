@@ -1,16 +1,18 @@
-import { useAtomSet, useAtomValue } from "@effect/atom-react";
-import type { ValidateFromPath } from "@tanstack/react-router";
+import { useAtomSet, useAtomSubscribe, useAtomValue } from "@effect/atom-react";
+import { Cause, Effect, Schema } from "effect";
 import { Atom, AsyncResult } from "effect/unstable/reactivity";
 import { Building2, Pencil, Trash2 } from "lucide-react";
 import { useState } from "react";
-import { toast } from "sonner";
 
 import {
   DataTable,
-  type DataTableColumnDef,
+  type DataTableColDef,
   DataTableListSummary,
-  type TableParams,
 } from "@krak-stack/registry/data-table";
+import {
+  SortParamsFromString,
+  type QueryType,
+} from "@krak-stack/registry/query";
 import { ErrorMessage } from "@krak-stack/registry/effect-form";
 import { AppBrand } from "@krak-stack/registry/app-brand";
 import {
@@ -24,11 +26,11 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 
-import type { AdminOrganization } from "../admin/schema";
-import { AdminOrganizationForm } from "./admin-organization-form";
-import { authClientApi } from "./auth-client-api";
-import { type KrakstackAuthLocale, useKrakstackAuth } from "./auth-provider";
-import { assetUrl, organizationBranding } from "./utils";
+import type { AdminOrganization } from "../admin/schema.js";
+import { AdminOrganizationForm } from "./admin-organization-form.js";
+import { authClientApi, authHttpClient } from "./auth-client-api.js";
+import { type KrakstackAuthLocale, useKrakstackAuth } from "./auth-provider.js";
+import { assetUrl, organizationBranding } from "./utils.js";
 
 const defaultMessages = {
   en: {
@@ -45,7 +47,6 @@ const defaultMessages = {
       "Are you sure you want to delete {name}? This action cannot be undone.",
     organization_delete_error: "Unable to delete organization.",
     organization_delete_title: "Delete organization",
-    organization_deleted_toast: "Organization deleted.",
     organization_fetch_error: "Unable to load organizations.",
   },
   fr: {
@@ -62,7 +63,6 @@ const defaultMessages = {
       "Êtes-vous sûr de vouloir supprimer {name} ? Cette action est irréversible.",
     organization_delete_error: "Impossible de supprimer l'organisation.",
     organization_delete_title: "Supprimer l'organisation",
-    organization_deleted_toast: "Organisation supprimée.",
     organization_fetch_error: "Impossible de charger les organisations.",
   },
 } as const;
@@ -94,56 +94,71 @@ interface AdminOrganizationsQuery {
   projectId?: string;
 }
 
-const organizationsQuery = (search: TableParams, projectId?: string | null) => {
+const AdminOrganizationsFamilyKey = Schema.fromJsonString(
+  Schema.Struct({
+    query: Schema.Struct({
+      page: Schema.Number,
+      pageSize: Schema.Number,
+      globalFilter: Schema.optional(Schema.String),
+      sort: Schema.optional(Schema.String),
+      projectId: Schema.optional(Schema.String),
+    }),
+    reloadKey: Schema.Number,
+  }),
+).annotate({ identifier: "AdminOrganizationsFamilyKey" });
+
+const organizationsQuery = (search: QueryType, projectId?: string | null) => {
   let query: AdminOrganizationsQuery = {
     page: search.page ?? 0,
     pageSize: search.pageSize ?? 10,
   };
   if (search.globalFilter)
     query = { ...query, globalFilter: search.globalFilter };
-  if (search.sort) query = { ...query, sort: search.sort };
+  if (search.sort)
+    query = {
+      ...query,
+      sort: Schema.encodeSync(SortParamsFromString)(search.sort),
+    };
   if (projectId) query = { ...query, projectId };
 
-  return {
-    query,
-    key: JSON.stringify(query),
-  };
+  return query;
 };
 
-const organizationsAtom = Atom.family(
-  ({
-    baseUrl,
-    projectId,
+const adminOrganizationsFamilyKey = (
+  search: QueryType,
+  projectId: string | null | undefined,
+  reloadKey: number,
+) =>
+  JSON.stringify({
+    query: organizationsQuery(search, projectId),
     reloadKey,
-    search,
-  }: {
-    baseUrl?: string | undefined;
-    projectId?: string | null | undefined;
-    reloadKey: number;
-    search: TableParams;
-  }) => {
-    const request = organizationsQuery(search, projectId);
+  });
 
+const organizationsAtom = Atom.family((baseUrl?: string | undefined) =>
+  Atom.family((key: string) => {
+    const { query, reloadKey } = Schema.decodeUnknownSync(
+      AdminOrganizationsFamilyKey,
+    )(key);
     return authClientApi(baseUrl).query("admin", "listOrganizations", {
-      query: request.query,
+      query,
       timeToLive: "1 minute",
       reactivityKeys: [
         "organizations",
-        ...(projectId ? [`project:${projectId}`] : []),
+        ...(query.projectId ? [`project:${query.projectId}`] : []),
       ],
-      serializationKey: `organizations:${reloadKey}:${request.key}`,
+      serializationKey: `organizations:${reloadKey}:${JSON.stringify(query)}`,
     });
-  },
+  }),
 );
 
 export function AdminOrganizationsTable({
-  from,
+  onSearchChange,
   reloadKey = 0,
   search,
 }: {
-  from?: ValidateFromPath;
+  onSearchChange?: (search: QueryType) => void;
   reloadKey?: number;
-  search?: TableParams;
+  search?: QueryType;
 }) {
   const auth = useKrakstackAuth();
   const locale = auth?.locale ?? "en";
@@ -155,23 +170,20 @@ export function AdminOrganizationsTable({
     useState<AdminOrganization | null>(null);
   const [deletingOrganization, setDeletingOrganization] =
     useState<AdminOrganization | null>(null);
-  const [localSearch, setLocalSearch] = useState<TableParams>({
-    globalFilter: "",
+  const [localSearch, setLocalSearch] = useState<QueryType>({
+    page: 0,
+    pageSize: 10,
   });
   const tableSearch = search ?? localSearch;
   const result = useAtomValue(
-    organizationsAtom({
-      baseUrl,
-      projectId,
-      reloadKey: reloadKey + refreshKey,
-      search: tableSearch,
-    }),
+    organizationsAtom(baseUrl)(
+      adminOrganizationsFamilyKey(
+        tableSearch,
+        projectId,
+        reloadKey + refreshKey,
+      ),
+    ),
   );
-  const deleteOrganization = useAtomSet(
-    authClientApi(baseUrl).mutation("admin", "deleteOrganization"),
-    { mode: "promise" },
-  );
-
   const organizations = AsyncResult.match(result, {
     onInitial: () => [],
     onFailure: () => [],
@@ -197,13 +209,14 @@ export function AdminOrganizationsTable({
     <div className="flex flex-col gap-4">
       {error ? <ErrorMessage text={error} /> : null}
       <DataTable
-        columns={organizationColumns(m, locale, baseUrl)}
-        data={organizations}
+        columnDefs={organizationColumns(m, locale, baseUrl)}
+        rowData={organizations}
         features={{
-          columnVisibility: { default: { id: false } },
+          columnVisibility: true,
           export: { baseName: "organizations" },
           gallery: false,
           pagination: { mode: "server", rowCount: total },
+          refresh: () => setRefreshKey((current) => current + 1),
           rowActions: {
             items: [
               {
@@ -221,16 +234,16 @@ export function AdminOrganizationsTable({
             ],
           },
         }}
-        {...(from ? { routeFrom: from } : {})}
-        {...(!search
-          ? {
-              search: tableSearch,
-              onSearchChange: setLocalSearch,
-              searchState: "local" as const,
-            }
-          : {})}
-        onRefresh={() => setRefreshKey((current) => current + 1)}
-        state={{ loading: isLoading }}
+        initialState={tableSearch}
+        onStateChange={({ page, pageSize, globalFilter, sort }) => {
+          const nextSearch = { page, pageSize, globalFilter, sort };
+          if (onSearchChange) {
+            onSearchChange(nextSearch);
+          } else {
+            setLocalSearch(nextSearch);
+          }
+        }}
+        status={{ loading: isLoading }}
       />
       {editingOrganization ? (
         <AdminOrganizationForm
@@ -243,12 +256,9 @@ export function AdminOrganizationsTable({
         <DeleteOrganizationDialog
           labels={m}
           organization={deletingOrganization}
+          baseUrl={baseUrl}
           onClose={() => setDeletingOrganization(null)}
-          onDelete={async () => {
-            await deleteOrganization({
-              params: { id: deletingOrganization.id },
-            });
-            toast.success(m.organization_deleted_toast);
+          onDeleted={() => {
             setDeletingOrganization(null);
             setRefreshKey((current) => current + 1);
           }}
@@ -262,27 +272,18 @@ const organizationColumns = (
   m: AdminOrganizationsLabels,
   locale: KrakstackAuthLocale,
   baseUrl?: string | undefined,
-): DataTableColumnDef<AdminOrganization>[] => [
+): DataTableColDef<AdminOrganization>[] => [
   {
-    accessorKey: "id",
-    header: m.admin_column_id,
-    cell: ({ row }) => (
-      <span className="text-muted-foreground font-mono text-xs">
-        {row.original.id}
-      </span>
-    ),
-  },
-  {
-    accessorKey: "name",
-    header: m.admin_column_organization,
-    cell: ({ row }) => {
-      const display = organizationDisplay(row.original, locale, baseUrl);
+    field: "name",
+    headerName: m.admin_column_organization,
+    cellRenderer: ({ data }) => {
+      const display = organizationDisplay(data, locale, baseUrl);
 
       return (
         <AppBrand
           to={null}
           label={display.name}
-          subtitle={row.original.slug}
+          subtitle={data.slug}
           icon={Building2}
           className="min-w-56"
           {...(display.image ? { imageSrc: display.image } : {})}
@@ -291,23 +292,23 @@ const organizationColumns = (
     },
   },
   {
-    accessorKey: "memberCount",
-    header: m.admin_column_members,
-    cell: ({ row }) => (
+    field: "memberCount",
+    headerName: m.admin_column_members,
+    cellRenderer: ({ data }) => (
       <OrganizationMembers
         baseUrl={baseUrl}
-        members={row.original.memberPreviews ?? []}
-        total={row.original.memberCount ?? 0}
+        members={data.memberPreviews ?? []}
+        total={data.memberCount ?? 0}
       />
     ),
   },
   {
-    accessorKey: "projects",
-    header: m.admin_column_projects,
-    cell: ({ row }) => (
+    field: "projects",
+    headerName: m.admin_column_projects,
+    cellRenderer: ({ data }) => (
       <DataTableListSummary
         emptyLabel="-"
-        items={(row.original.projects ?? []).map((project) => {
+        items={(data.projects ?? []).map((project) => {
           const logo = assetUrl(project.logo, baseUrl);
           return {
             label: project.name,
@@ -324,11 +325,11 @@ const organizationColumns = (
     ),
   },
   {
-    accessorKey: "createdAt",
-    header: m.admin_column_created,
-    cell: ({ row }) => (
+    field: "createdAt",
+    headerName: m.admin_column_created,
+    cellRenderer: ({ data }) => (
       <span className="text-muted-foreground text-sm">
-        {new Date(row.original.createdAt).toLocaleDateString()}
+        {new Date(data.createdAt).toLocaleDateString()}
       </span>
     ),
   },
@@ -373,18 +374,34 @@ function OrganizationMembers({
 }
 
 function DeleteOrganizationDialog({
+  baseUrl,
   labels: m,
   organization,
   onClose,
-  onDelete,
+  onDeleted,
 }: {
+  baseUrl?: string | undefined;
   labels: AdminOrganizationsLabels;
   organization: AdminOrganization;
   onClose: () => void;
-  onDelete: () => Promise<void>;
+  onDeleted: () => void;
 }) {
-  const [error, setError] = useState("");
-  const [isPending, setIsPending] = useState(false);
+  const [deleteOrganizationAtom] = useState(() =>
+    authClientApi(baseUrl).runtime.fn((id: string) =>
+      Effect.flatMap(authHttpClient(baseUrl), (http) =>
+        http.admin.deleteOrganization({ params: { id } }),
+      ),
+    ),
+  );
+  const deleteOrganization = useAtomSet(deleteOrganizationAtom);
+  const result = useAtomValue(deleteOrganizationAtom);
+  useAtomSubscribe(deleteOrganizationAtom, (current) => {
+    if (AsyncResult.isSuccess(current)) onDeleted();
+  });
+  const error = AsyncResult.isFailure(result)
+    ? Cause.squash(result.cause)
+    : undefined;
+  const isPending = !AsyncResult.isInitial(result) && result.waiting;
 
   return (
     <AlertDialog open onOpenChange={(open) => !open && onClose()}>
@@ -398,27 +415,24 @@ function DeleteOrganizationDialog({
             )}
           </AlertDialogDescription>
         </AlertDialogHeader>
-        {error ? <ErrorMessage text={error} /> : null}
+        {error ? (
+          <ErrorMessage
+            text={
+              error instanceof Error
+                ? error.message
+                : m.organization_delete_error
+            }
+          />
+        ) : null}
         <AlertDialogFooter>
           <AlertDialogCancel disabled={isPending}>
             {m.organization_delete_cancel}
           </AlertDialogCancel>
           <AlertDialogAction
             disabled={isPending}
-            onClick={async (event) => {
+            onClick={(event) => {
               event.preventDefault();
-              setError("");
-              setIsPending(true);
-              try {
-                await onDelete();
-              } catch (cause) {
-                setError(
-                  cause instanceof Error
-                    ? cause.message
-                    : m.organization_delete_error,
-                );
-                setIsPending(false);
-              }
+              deleteOrganization(organization.id);
             }}
           >
             {m.organization_delete_confirm}

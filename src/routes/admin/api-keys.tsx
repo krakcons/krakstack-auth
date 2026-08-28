@@ -19,8 +19,7 @@ import { toast } from "sonner";
 
 import {
   DataTable,
-  type DataTableColumnDef,
-  TableSearchSchemaStandard as TableSearchSchema,
+  type DataTableColDef,
 } from "@krak-stack/registry/data-table";
 import { SidebarPageHeader } from "@krak-stack/registry/sidebar-layout";
 import { Badge } from "@/components/ui/badge";
@@ -43,10 +42,11 @@ import { Separator } from "@/components/ui/separator";
 import { AdminApiClient } from "@/lib/admin-api-client";
 import { ApiClient } from "@/lib/api-client";
 import { m } from "@/paraglide/messages";
+import { Query, QueryStandard } from "@krak-stack/registry/query";
 import { parseApiKeyReferrers } from "@/services/auth/api-key-referrers";
 
 export const Route = createFileRoute("/admin/api-keys")({
-  validateSearch: TableSearchSchema,
+  validateSearch: QueryStandard,
   component: ApiKeysPage,
 });
 
@@ -76,6 +76,8 @@ const apiKeysAtom = Atom.family((reloadKey: number) =>
 );
 
 function ApiKeysPage() {
+  const navigate = Route.useNavigate();
+  const search = Route.useSearch();
   const deleteApiKey = useAtomSet(deleteApiKeyAtom, { mode: "promise" });
   const resetApiKeyRateLimit = useAtomSet(resetApiKeyRateLimitAtom, {
     mode: "promise",
@@ -193,8 +195,8 @@ function ApiKeysPage() {
           <p className="text-destructive text-sm">{error ?? loadError}</p>
         ) : null}
         <DataTable
-          columns={apiKeyColumns()}
-          data={keys}
+          columnDefs={apiKeyColumns()}
+          rowData={keys}
           features={{
             export: { baseName: "api-keys" },
             gallery: false,
@@ -235,9 +237,15 @@ function ApiKeysPage() {
               ],
             },
           }}
-          {...(loading
-            ? { state: { empty: m.admin_api_keys_loading(), loading: true } }
-            : {})}
+          initialState={search}
+          onStateChange={(state) =>
+            void navigate({
+              search: Schema.encodeSync(Query)(state),
+            })
+          }
+          status={
+            loading ? { loading: true, empty: m.admin_api_keys_loading() } : {}
+          }
         />
       </div>
       <Dialog
@@ -498,51 +506,47 @@ function ApiKeyForm({
   );
 }
 
-const apiKeyColumns = (): DataTableColumnDef<ApiKeySummary>[] => [
+const apiKeyColumns = (): DataTableColDef<ApiKeySummary>[] => [
   {
-    accessorKey: "name",
-    header: m.admin_api_key_name(),
-    cell: ({ row }) => (
+    field: "name",
+    headerName: m.admin_api_key_name(),
+    cellRenderer: ({ data }) => (
       <div className="min-w-0">
         <p className="truncate font-medium">
-          {row.original.name ?? m.admin_api_key_unnamed()}
+          {data.name ?? m.admin_api_key_unnamed()}
         </p>
         <p className="text-muted-foreground text-sm">
-          {row.original.start
-            ? m.admin_api_key_starts_with({ start: row.original.start })
+          {data.start
+            ? m.admin_api_key_starts_with({ start: data.start })
             : m.admin_api_key_hidden()}
         </p>
       </div>
     ),
   },
   {
-    accessorKey: "configId",
-    header: m.admin_api_key_type(),
-    cell: ({ row }) => (
-      <Badge variant="secondary">
-        {apiKeyTypeLabel(row.original.configId)}
+    field: "configId",
+    headerName: m.admin_api_key_type(),
+    cellRenderer: ({ data }) => (
+      <Badge variant="secondary">{apiKeyTypeLabel(data.configId)}</Badge>
+    ),
+  },
+  {
+    field: "enabled",
+    headerName: m.admin_api_key_status(),
+    cellRenderer: ({ data }) => (
+      <Badge variant={data.enabled ? "default" : "secondary"}>
+        {data.enabled ? m.admin_api_key_enabled() : m.admin_api_key_disabled()}
       </Badge>
     ),
   },
   {
-    accessorKey: "enabled",
-    header: m.admin_api_key_status(),
-    cell: ({ row }) => (
-      <Badge variant={row.original.enabled ? "default" : "secondary"}>
-        {row.original.enabled
-          ? m.admin_api_key_enabled()
-          : m.admin_api_key_disabled()}
-      </Badge>
-    ),
-  },
-  {
-    id: "referrers",
-    accessorFn: (keyData) => keyData.referrers.join(", "),
-    header: m.admin_api_key_referrers_column(),
-    cell: ({ row }) =>
-      row.original.referrers.length > 0 ? (
+    colId: "referrers",
+    valueGetter: ({ data }) => data.referrers.join(", "),
+    headerName: m.admin_api_key_referrers_column(),
+    cellRenderer: ({ data }) =>
+      data.referrers.length > 0 ? (
         <div className="flex max-w-sm flex-wrap gap-1.5">
-          {row.original.referrers.map((referrer) => (
+          {data.referrers.map((referrer) => (
             <Badge key={referrer} variant="secondary">
               {referrer}
             </Badge>
@@ -555,22 +559,22 @@ const apiKeyColumns = (): DataTableColumnDef<ApiKeySummary>[] => [
       ),
   },
   {
-    id: "rateLimit",
-    accessorFn: (keyData) => usagePercent(keyData),
-    header: m.admin_api_key_rate_limit(),
-    cell: ({ row }) => <ApiKeyRateLimit keyData={row.original} />,
+    colId: "rateLimit",
+    valueGetter: ({ data }) => usagePercent(data),
+    headerName: m.admin_api_key_rate_limit(),
+    cellRenderer: ({ data }) => <ApiKeyRateLimit keyData={data} />,
   },
   {
-    accessorKey: "lastRequest",
-    header: m.admin_api_key_last_used(),
-    cell: ({ row }) => formatDateTime(row.original.lastRequest),
+    field: "lastRequest",
+    headerName: m.admin_api_key_last_used(),
+    cellRenderer: ({ data }) => formatDateTime(data.lastRequest),
   },
   {
-    accessorKey: "createdAt",
-    header: m.admin_api_key_created(),
-    cell: ({ row }) => (
+    field: "createdAt",
+    headerName: m.admin_api_key_created(),
+    cellRenderer: ({ data }) => (
       <span className="text-muted-foreground text-sm">
-        {new Date(row.original.createdAt).toLocaleDateString()}
+        {new Date(data.createdAt).toLocaleDateString()}
       </span>
     ),
   },

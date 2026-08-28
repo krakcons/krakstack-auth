@@ -2,21 +2,23 @@ import { createFileRoute } from "@tanstack/react-router";
 import {
   AdminOrganizationForm,
   AdminOrganizationsTable,
-} from "@krak-stack/auth";
+} from "@krak-stack/auth/components";
 import { Plus } from "lucide-react";
+import { Schema } from "effect";
 import { useState } from "react";
 
-import { TableSearchSchemaStandard as TableSearchSchema } from "@krak-stack/registry/data-table";
+import { Query, QueryStandard } from "@krak-stack/registry/query";
 import { SidebarPageHeader } from "@krak-stack/registry/sidebar-layout";
 import { Button } from "@/components/ui/button";
 import { m } from "@/paraglide/messages";
 
 export const Route = createFileRoute("/admin/organizations")({
-  validateSearch: TableSearchSchema,
+  validateSearch: QueryStandard,
   component: OrganizationsPage,
 });
 
 function OrganizationsPage() {
+  const navigate = Route.useNavigate();
   const search = Route.useSearch();
   const [creatingOrganization, setCreatingOrganization] = useState(false);
   const [reloadKey, setReloadKey] = useState(0);
@@ -35,9 +37,13 @@ function OrganizationsPage() {
         }
       />
       <AdminOrganizationsTable
-        from="/admin/organizations"
         reloadKey={reloadKey}
         search={search}
+        onSearchChange={(nextSearch) =>
+          void navigate({
+            search: Schema.encodeSync(Query)(nextSearch),
+          })
+        }
       />
       {creatingOrganization ? (
         <AdminOrganizationForm

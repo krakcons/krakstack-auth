@@ -1,6 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 
-import { docsSource } from "@/lib/docs";
+import { makeAuthDocs } from "@/lib/docs";
 
 const origin = "https://auth.krakstack.net";
 
@@ -11,8 +11,11 @@ const escapeXml = (value: string) =>
     .replaceAll(">", "&gt;")
     .replaceAll('"', "&quot;");
 
-const sitemap = () => {
-  const pages = docsSource.getPages("en");
+const sitemap = async () => {
+  const { loadMdxDocsDirectory } =
+    await import("@krak-stack/registry/docs/server");
+  const docs = makeAuthDocs(await loadMdxDocsDirectory("src/content/docs"));
+  const pages = docs.pages("en");
   const paths = ["/", ...pages.map((page) => page.path)];
   const urls = paths.flatMap((path) =>
     (["en", "fr"] as const).map((locale) => {
@@ -35,8 +38,8 @@ ${urls.join("\n")}
 export const Route = createFileRoute("/sitemap.xml")({
   server: {
     handlers: {
-      GET: () =>
-        new Response(sitemap(), {
+      GET: async () =>
+        new Response(await sitemap(), {
           headers: {
             "cache-control": "public, max-age=3600",
             "content-type": "application/xml; charset=utf-8",

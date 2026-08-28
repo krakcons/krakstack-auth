@@ -1,45 +1,15 @@
-export * from "./schema";
-export * as Query from "./query";
-export * as Roles from "./roles";
-export { AuthClientApi, AuthServiceApi } from "./api";
-export { AuthService, type AuthServiceLayerOptions } from "./service";
-export { AuthClientConfig } from "./config";
-export { proxyAuthRequest } from "./server/proxy";
+export * from "./schema.js";
+export * as Query from "./query.js";
+export * as Roles from "./roles.js";
+export { AuthClientApi, AuthServiceApi } from "./api.js";
+export { AuthService, type AuthServiceLayerOptions } from "./service.js";
+export { AuthClientConfig } from "./config.js";
 export {
-  OrganizationSwitcher,
-  MemberRequired,
-  ProjectAccessMatrix,
-  KrakstackAuthProvider,
-  ForgotPassword,
-  ResetPassword,
-  Signin,
-  TwoFactor,
-  VerifyEmail,
-  AdminOrganizationForm,
-  AdminOrganizationsTable,
-  AdminUsersTable,
-  UserButton,
-  assetUrl,
-  createAuthUiClient,
-  type AuthUiClient,
-  type MemberRequiredMessages,
-  type MemberRequiredProps,
-  type ProjectAccessMatrixAccess,
-  type ProjectAccessMatrixMessages,
-  type ProjectAccessLabels,
-  type ProjectAccessLabelCatalog,
-  type KrakstackAuthContextValue,
-  type KrakstackAuthLocale,
-  type KrakstackAuthProviderProps,
-  type OrganizationSwitcherDialog,
-  type OrganizationSwitcherFeatures,
-  type OrganizationSwitcherProps,
-  type UserButtonDialog,
-  type UserButtonProps,
-  useAuthClient,
-  useAdminUsersTotal,
-} from "./components";
-export * as BetterAuth from "./better-auth/api.group";
-export * as Extra from "./extra/api.group";
-export * as Server from "./server";
-export * as Admin from "./admin/api.group";
+  proxyAuthHttpEffect,
+  proxyAuthRequest,
+  proxyAuthRequestEffect,
+} from "./server/proxy.js";
+export * as Auth from "./auth/api.group.js";
+export * as Extra from "./extra/api.group.js";
+export * as Server from "./server/index.js";
+export * as Admin from "./admin/api.group.js";

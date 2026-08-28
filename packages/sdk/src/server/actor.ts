@@ -5,9 +5,9 @@ import {
   ApiKeyPermissionGrant,
   CurrentActor,
   type ProjectAccessDefinition,
-} from "../access";
-import { parseRoleList } from "../roles";
-import { AuthService } from "../service";
+} from "../access.js";
+import { parseRoleList } from "../roles.js";
+import { AuthService } from "../service.js";
 
 const activeMemberRoles = ({
   organizationId,

@@ -1,10 +1,10 @@
-import type { ApiKey } from "@better-auth/api-key/client";
+import type { AuthApiKey as ApiKey } from "../auth/schema.js";
 import { useAtomSet, useAtomValue } from "@effect/atom-react";
 import { FormBuilder, FormReact } from "@lucas-barake/effect-form-react";
 import { Effect, Schema } from "effect";
 import { useRef, useState } from "react";
 
-import type { ProjectAccessLabelCatalog } from "../access";
+import type { ProjectAccessLabelCatalog } from "../access.js";
 
 import {
   CheckboxField,
@@ -13,10 +13,11 @@ import {
   TextAreaField,
   TextField,
 } from "@krak-stack/registry/effect-form";
-import { parseApiKeyReferrers, updateApiKey } from "./api-key";
-import { ApiKeyPermissions } from "./api-key-permissions";
-import { apiKeyReferrers } from "./api-key-referrers";
-import { ExtraApiKeyPermissions } from "../extra/schema";
+import { parseApiKeyReferrers } from "./api-key.js";
+import { authClientApi, authHttpClient } from "./auth-client-api.js";
+import { ApiKeyPermissions } from "./api-key-permissions.js";
+import { apiKeyReferrers } from "./api-key-referrers.js";
+import { ExtraApiKeyPermissions } from "../extra/schema.js";
 
 type ApiKeySummary = Omit<ApiKey, "key">;
 
@@ -64,6 +65,7 @@ export type ApiKeyEditMessages = {
 };
 
 export const ApiKeyEditForm = ({
+  baseUrl,
   configId,
   keyData,
   messages,
@@ -71,6 +73,7 @@ export const ApiKeyEditForm = ({
   permissionLabels,
   onSaved,
 }: {
+  baseUrl?: string | undefined;
   configId: "organization" | "user";
   keyData: ApiKeySummary;
   messages: ApiKeyEditMessages;
@@ -103,6 +106,7 @@ export const ApiKeyEditForm = ({
   permissionsRef.current = permissions;
   const [form] = useState(() =>
     FormReact.make(editApiKeyFormBuilder, {
+      runtime: authClientApi(baseUrl).runtime,
       fields: {
         name: TextField,
         enabled: CheckboxField,
@@ -111,40 +115,42 @@ export const ApiKeyEditForm = ({
       },
       mode: { validation: "onSubmit" },
       onSubmit: (_, { decoded }) =>
-        Effect.tryPromise({
-          try: async () => {
-            const referrers = parseApiKeyReferrers(
-              decoded.referrers,
-              messages.referrersError,
-            );
-            const selectedGrant: Record<string, string[]> = {};
-            for (const project of Object.keys(permissionsRef.current)) {
-              selectedGrant[project] = [];
-            }
-            for (const option of permissionOptionsRef.current) {
-              if (!decoded.permissions[option.id]) continue;
-              selectedGrant[option.project] = [
-                ...(selectedGrant[option.project] ?? []),
-                option.action,
-              ];
-            }
-            await updateApiKey(
-              {
-                configId,
-                keyId: keyData.id,
-                name: decoded.name.trim(),
-                enabled: decoded.enabled,
-                permissions: selectedGrant,
-                referrers,
-              },
-              messages.updateError,
-            );
-
-            onSaved();
-          },
-          catch: (cause) =>
+        Effect.gen(function* () {
+          const referrers = yield* Effect.try({
+            try: () =>
+              parseApiKeyReferrers(decoded.referrers, messages.referrersError),
+            catch: (cause) =>
+              cause instanceof Error ? cause : new Error(messages.updateError),
+          });
+          const selectedGrant: Record<string, string[]> = {};
+          for (const project of Object.keys(permissionsRef.current)) {
+            selectedGrant[project] = [];
+          }
+          for (const option of permissionOptionsRef.current) {
+            if (!decoded.permissions[option.id]) continue;
+            selectedGrant[option.project] = [
+              ...(selectedGrant[option.project] ?? []),
+              option.action,
+            ];
+          }
+          const client = yield* authHttpClient(baseUrl);
+          const updated = yield* client.authExtra.updateApiKey({
+            params: { keyId: keyData.id },
+            payload: {
+              configId,
+              name: decoded.name.trim(),
+              enabled: decoded.enabled,
+              permissions: selectedGrant,
+              referrers,
+            },
+          });
+          yield* Effect.sync(onSaved);
+          return updated;
+        }).pipe(
+          Effect.mapError((cause) =>
             cause instanceof Error ? cause : new Error(messages.updateError),
-        }),
+          ),
+        ),
     }),
   );
   const submit = useAtomSet(form.submit);

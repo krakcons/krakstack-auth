@@ -1,6 +1,6 @@
 import { Schema } from "effect";
 
-import { Member, Organization, User } from "../schema";
+import { Member, Organization, User } from "../schema.js";
 
 export const ServerIdsQuery = Schema.Struct({
   ids: Schema.NonEmptyString,

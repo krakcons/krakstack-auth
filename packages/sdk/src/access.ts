@@ -1,6 +1,6 @@
 import { Context, Effect, Schema } from "effect";
 
-import { parseRoleList } from "./roles";
+import { parseRoleList } from "./roles.js";
 
 export const ApiKeyPermissionGrant = Schema.Record(
   Schema.String,
@@ -8,7 +8,7 @@ export const ApiKeyPermissionGrant = Schema.Record(
 ).annotate({
   identifier: "ApiKeyPermissionGrant",
   title: "API key permission grant",
-  description: "Better Auth resource and action permissions assigned to a key.",
+  description: "Resource and action permissions assigned to an API key.",
 });
 
 export type ApiKeyPermissionGrant = typeof ApiKeyPermissionGrant.Type;
@@ -50,10 +50,9 @@ export const CurrentActor = Context.Service<CurrentActor>(
   "@krak-stack/auth/CurrentActor",
 );
 
-export class Forbidden extends Schema.ErrorClass<Forbidden>("Forbidden")(
-  {
-    _tag: Schema.tag("Forbidden"),
-  },
+export class Forbidden extends Schema.TaggedError<Forbidden>()(
+  "Forbidden",
+  {},
   {
     identifier: "Forbidden",
     title: "Forbidden",

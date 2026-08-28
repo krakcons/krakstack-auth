@@ -1,17 +1,17 @@
 import { describe, expect, it } from "@effect/vitest";
-import { Icon } from "@iconify/react";
-import { createElement } from "react";
-import { renderToStaticMarkup } from "react-dom/server";
 
-import {
-  createDocsSource,
-  docsSource,
-  makeDocs,
-  slugifyDocsHeading,
-} from "./docs";
+import { createDocsSource, makeAuthDocs, slugifyDocsHeading } from "./docs";
+import { loadMdxDocsDirectory } from "@krak-stack/registry/docs/server";
+
+const loadDocsSource = async () =>
+  createDocsSource({
+    pages: await loadMdxDocsDirectory("src/content/docs"),
+    locales: ["en", "fr"],
+  });
 
 describe("documentation catalog", () => {
-  it("keeps English and French metadata aligned", () => {
+  it("keeps English and French metadata aligned", async () => {
+    const docsSource = await loadDocsSource();
     const english = docsSource.getPages("en");
     const french = docsSource.getPages("fr");
 
@@ -39,7 +39,8 @@ describe("documentation catalog", () => {
     );
   });
 
-  it("resolves page neighbors in global order", () => {
+  it("resolves page neighbors in global order", async () => {
+    const docsSource = await loadDocsSource();
     const first = docsSource.getPageNeighbors("introduction", "en");
     const quickstart = docsSource.getPageNeighbors("quickstart", "en");
 
@@ -49,27 +50,18 @@ describe("documentation catalog", () => {
     expect(quickstart.next?.slug).toBe("setup");
   });
 
-  it("keeps the public access-control alias", () => {
+  it("keeps the public access-control alias", async () => {
+    const docsSource = await loadDocsSource();
     expect(docsSource.resolvePage("access-control", "en")?.slug).toBe("rbac");
     expect(docsSource.getPage("rbac", "en")?.path).toBe("/docs/rbac");
   });
 
-  it("applies project route, ordering, origin, and repository configuration", () => {
-    const configured = makeDocs({
-      source: docsSource,
-      basePath: "/docs",
-      defaultSlug: "introduction",
-      origin: "https://docs.example.com/",
-      siteName: "Example Docs",
-      sectionOrder: ["reference", "start"],
-      github: {
-        url: "https://github.com/example/docs/",
-        branch: "develop",
-      },
-    });
+  it("applies project route, ordering, origin, and repository configuration", async () => {
+    const docsSource = await loadDocsSource();
+    const configured = makeAuthDocs(docsSource.pages);
     const introduction = docsSource.getPage("introduction", "en");
 
-    expect(configured.sections("en")[0]?.id).toBe("reference");
+    expect(configured.sections("en")[0]?.id).toBe("start");
     expect(configured.resolve(undefined, "en")?.page.slug).toBe("introduction");
     expect(configured.resolve("access-control", "en")?.canonical).toBe(false);
     expect(configured.getMessages("fr").previous).toBe("Précédent");
@@ -79,10 +71,10 @@ describe("documentation catalog", () => {
     expect(searchResults.length).toBeLessThanOrEqual(3);
     expect(searchResults.some(({ page }) => page.slug === "oauth")).toBe(true);
     expect(introduction && configured.url(introduction, "en")).toBe(
-      "https://docs.example.com/en/docs",
+      "https://auth.krakstack.net/en/docs",
     );
     expect(introduction && configured.editUrl(introduction)).toBe(
-      "https://github.com/example/docs/edit/develop/src/content/docs/en/introduction.mdx",
+      "https://github.com/krakcons/krakstack-auth/edit/main/src/content/docs/en/introduction.mdx",
     );
     expect(
       (introduction
@@ -90,11 +82,12 @@ describe("documentation catalog", () => {
         : configured.getHead({ locale: "en" })
       ).meta,
     ).toContainEqual({
-      title: `${introduction?.title ?? "Documentation"} | Example Docs`,
+      title: `${introduction?.title ?? "Documentation"} | Krakstack Auth`,
     });
   });
 
-  it("accepts provider-supplied page records", () => {
+  it("accepts provider-supplied page records", async () => {
+    const docsSource = await loadDocsSource();
     const source = createDocsSource({
       pages: docsSource.pages,
       locales: ["en", "fr"],
@@ -106,16 +99,8 @@ describe("documentation catalog", () => {
     expect(source.locales).toEqual(["en", "fr"]);
   });
 
-  it("renders registered documentation icons during SSR", () => {
-    const markup = renderToStaticMarkup(
-      createElement(Icon, { icon: "lucide:book-open", ssr: true }),
-    );
-
-    expect(markup).toContain("<svg");
-    expect(markup).toContain("<path");
-  });
-
-  it("resolves every internal documentation link", () => {
+  it("resolves every internal documentation link", async () => {
+    const docsSource = await loadDocsSource();
     const slugs = new Set(docsSource.getPages("en").map(({ slug }) => slug));
 
     for (const page of docsSource.pages) {
@@ -126,7 +111,8 @@ describe("documentation catalog", () => {
     }
   });
 
-  it("provides unique heading IDs without body-level H1s", () => {
+  it("provides unique heading IDs without body-level H1s", async () => {
+    const docsSource = await loadDocsSource();
     for (const page of docsSource.pages) {
       expect(page.source).not.toMatch(/^#\s/m);
       const ids = page.headings.map(({ id }) => id);

@@ -1,4 +1,6 @@
 import { useAtomSet, useAtomValue } from "@effect/atom-react";
+import { useNavigate, useSearch } from "@tanstack/react-router";
+import { Schema } from "effect";
 import { Atom, AsyncResult } from "effect/unstable/reactivity";
 import { Eye, FolderKanban, Pencil, Trash2 } from "lucide-react";
 import { useState } from "react";
@@ -6,10 +8,11 @@ import { toast } from "sonner";
 
 import {
   DataTable,
-  type DataTableColumnDef,
+  type DataTableColDef,
 } from "@krak-stack/registry/data-table";
 import { ErrorMessage } from "@krak-stack/registry/effect-form";
 import { AppBrand } from "@krak-stack/registry/app-brand";
+import { Query } from "@krak-stack/registry/query";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -40,6 +43,8 @@ const projectsAtom = Atom.family((reloadKey: number) =>
 const deleteProjectAtom = AdminApiClient.mutation("projects", "deleteProject");
 
 export function ProjectsTable({ reloadKey = 0 }: { reloadKey?: number }) {
+  const navigate = useNavigate({ from: "/admin/projects" });
+  const search = useSearch({ from: "/admin/projects" });
   const result = useAtomValue(projectsAtom(reloadKey));
   const deleteProject = useAtomSet(deleteProjectAtom, { mode: "promise" });
   const [projects, setProjects] = useState<Project[] | null>(null);
@@ -62,8 +67,8 @@ export function ProjectsTable({ reloadKey = 0 }: { reloadKey?: number }) {
     <div className="flex flex-col gap-4">
       {error ? <ErrorMessage text={error} /> : null}
       <DataTable
-        columns={projectColumns()}
-        data={rows}
+        columnDefs={projectColumns()}
+        rowData={rows}
         features={{
           export: { baseName: "projects" },
           gallery: false,
@@ -94,7 +99,12 @@ export function ProjectsTable({ reloadKey = 0 }: { reloadKey?: number }) {
             ],
           },
         }}
-        routeFrom="/admin/projects"
+        initialState={search}
+        onStateChange={(state) =>
+          void navigate({
+            search: Schema.encodeSync(Query)(state),
+          })
+        }
       />
       {editingProject ? (
         <ProjectForm
@@ -125,18 +135,18 @@ export function ProjectsTable({ reloadKey = 0 }: { reloadKey?: number }) {
   );
 }
 
-const projectColumns = (): DataTableColumnDef<Project>[] => [
+const projectColumns = (): DataTableColDef<Project>[] => [
   {
-    accessorKey: "name",
-    header: m.project(),
-    cell: ({ row }) => {
-      const logo = assetUrl(row.original.logo, authBaseUrl);
+    field: "name",
+    headerName: m.project(),
+    cellRenderer: ({ data }) => {
+      const logo = assetUrl(data.logo, authBaseUrl);
 
       return (
         <AppBrand
           to={null}
-          label={row.original.name}
-          subtitle={row.original.id}
+          label={data.name}
+          subtitle={data.id}
           icon={FolderKanban}
           className="min-w-56"
           {...(logo ? { imageSrc: logo } : {})}
@@ -145,36 +155,36 @@ const projectColumns = (): DataTableColumnDef<Project>[] => [
     },
   },
   {
-    id: "authOptions",
-    header: m.oauth_client_auth_options(),
-    cell: ({ row }) => (
+    colId: "authOptions",
+    headerName: m.oauth_client_auth_options(),
+    cellRenderer: ({ data }) => (
       <div className="flex flex-wrap gap-1.5">
-        {row.original.data.authOptions?.emailPassword !== false ? (
+        {data.data.authOptions?.emailPassword !== false ? (
           <Badge variant="secondary">
             {m.oauth_client_auth_email_password()}
           </Badge>
         ) : null}
-        {row.original.data.authOptions?.emailOtp !== false ? (
+        {data.data.authOptions?.emailOtp !== false ? (
           <Badge variant="secondary">{m.oauth_client_auth_email_otp()}</Badge>
         ) : null}
-        {row.original.data.authOptions?.google !== false ? (
+        {data.data.authOptions?.google !== false ? (
           <Badge variant="secondary">{m.oauth_client_auth_google()}</Badge>
         ) : null}
       </div>
     ),
   },
   {
-    id: "branding",
-    header: m.oauth_client_branding(),
-    cell: ({ row }) => (
+    colId: "branding",
+    headerName: m.oauth_client_branding(),
+    cellRenderer: ({ data }) => (
       <div className="flex flex-wrap gap-1.5">
-        {row.original.logo ? (
+        {data.logo ? (
           <Badge variant="outline">{m.oauth_client_logo_configured()}</Badge>
         ) : null}
-        {row.original.data.branding?.themeCss ? (
+        {data.data.branding?.themeCss ? (
           <Badge variant="outline">{m.oauth_client_theme_configured()}</Badge>
         ) : null}
-        {!row.original.logo && !row.original.data.branding?.themeCss ? (
+        {!data.logo && !data.data.branding?.themeCss ? (
           <span className="text-muted-foreground text-sm">
             {m.admin_none()}
           </span>

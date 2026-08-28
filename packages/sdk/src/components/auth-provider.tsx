@@ -1,5 +1,10 @@
-import { useAtomSuspense } from "@effect/atom-react";
+import {
+  useAtomRefresh,
+  useAtomSuspense,
+  useAtomValue,
+} from "@effect/atom-react";
 import { useRouterState } from "@tanstack/react-router";
+import { AsyncResult } from "effect/unstable/reactivity";
 import {
   createContext,
   type ReactNode,
@@ -11,14 +16,19 @@ import {
   useState,
 } from "react";
 
-import { createAuthUiClient, type AuthUiClient } from "./auth-client";
-import { authClientApi } from "./auth-client-api";
-import type { ExtraProjectPublicConfig } from "../extra/schema";
+import {
+  activeAuthOrganizationAtom,
+  AUTH_CLIENT_CHANGE_EVENT,
+  authSessionAtom,
+  isAuthClientStorageEvent,
+} from "./auth-atoms.js";
+import { authClientApi } from "./auth-client-api.js";
+import type { ExtraProjectPublicConfig } from "../extra/schema.js";
 import type {
   ProjectAccessCatalog,
   ProjectAccessLabelCatalog,
-} from "../access";
-import { parseRoleList } from "../roles";
+} from "../access.js";
+import { parseRoleList } from "../roles.js";
 
 export type KrakstackAuthLocale = "en" | "fr";
 
@@ -27,7 +37,6 @@ export type KrakstackAuthProviderProps = {
   locale?: KrakstackAuthLocale | undefined;
   baseUrl?: string | undefined;
   projectId?: string | null | undefined;
-  authClient?: AuthUiClient | undefined;
   access?: ProjectAccessCatalog | undefined;
   accessLabels?: ProjectAccessLabelCatalog | undefined;
 };
@@ -36,7 +45,6 @@ export type KrakstackAuthContextValue = {
   locale: KrakstackAuthLocale;
   baseUrl?: string | undefined;
   projectId?: string | null | undefined;
-  authClient: AuthUiClient;
   projectConfig: ExtraProjectPublicConfig | null;
   access: ProjectAccessCatalog | null;
   accessLabels: ProjectAccessLabelCatalog | null;
@@ -61,6 +69,27 @@ export const listenForSessionRevalidation = (
 
   return () => {
     target.removeEventListener("pageshow", onPageShow);
+  };
+};
+
+const listenForAuthChanges = (revalidate: () => void) => {
+  const onStorage = (event: StorageEvent) => {
+    if (isAuthClientStorageEvent(event)) revalidate();
+  };
+  const onVisible = () => {
+    if (document.visibilityState === "visible") revalidate();
+  };
+
+  window.addEventListener(AUTH_CLIENT_CHANGE_EVENT, revalidate);
+  window.addEventListener("storage", onStorage);
+  window.addEventListener("online", revalidate);
+  document.addEventListener("visibilitychange", onVisible);
+
+  return () => {
+    window.removeEventListener(AUTH_CLIENT_CHANGE_EVENT, revalidate);
+    window.removeEventListener("storage", onStorage);
+    window.removeEventListener("online", revalidate);
+    document.removeEventListener("visibilitychange", onVisible);
   };
 };
 
@@ -152,7 +181,6 @@ export function KrakstackAuthProvider({
   locale = "en",
   baseUrl,
   projectId,
-  authClient,
   access,
   accessLabels,
 }: KrakstackAuthProviderProps) {
@@ -161,18 +189,16 @@ export function KrakstackAuthProvider({
   });
   const resolvedProjectId =
     projectId ?? getSearchParam(searchString, "projectId");
-  const resolvedAuthClient = useMemo(
-    () => authClient ?? createAuthUiClient(baseUrl),
-    [authClient, baseUrl],
-  );
   const projectConfig = useProjectConfig(baseUrl, projectId);
   const [authRefreshVersion, setAuthRefreshVersion] = useState(0);
   const refreshAuth = useCallback(() => {
     setAuthRefreshVersion((current) => current + 1);
   }, []);
-  const session = resolvedAuthClient.useSession();
+  const sessionAtom = authSessionAtom(baseUrl);
+  useAtomValue(sessionAtom);
+  const refreshSession = useAtomRefresh(sessionAtom);
   const revalidateSession = useEffectEvent(async () => {
-    await session.refetch();
+    await refreshSession();
     refreshAuth();
   });
 
@@ -188,9 +214,16 @@ export function KrakstackAuthProvider({
     [],
   );
 
+  useEffect(
+    () =>
+      listenForAuthChanges(() => {
+        void revalidateSession();
+      }),
+    [],
+  );
+
   const value = useMemo(
     () => ({
-      authClient: resolvedAuthClient,
       baseUrl,
       locale,
       projectId: resolvedProjectId,
@@ -201,7 +234,6 @@ export function KrakstackAuthProvider({
       refreshAuth,
     }),
     [
-      resolvedAuthClient,
       baseUrl,
       locale,
       resolvedProjectId,
@@ -222,16 +254,6 @@ export function KrakstackAuthProvider({
 
 export const useKrakstackAuth = () => useContext(KrakstackAuthContext);
 
-export const useAuthClient = (): AuthUiClient => {
-  const auth = useKrakstackAuth();
-
-  if (!auth?.authClient) {
-    throw new Error("KrakstackAuthProvider is required to use authClient.");
-  }
-
-  return auth.authClient;
-};
-
 export const useKrakstackAuthProjectConfig = () =>
   useKrakstackAuth()?.projectConfig ?? null;
 
@@ -241,10 +263,18 @@ export const usePermissions = () => {
     throw new Error("KrakstackAuthProvider is required to use permissions.");
   }
 
-  const session = auth.authClient.useSession();
-  const activeOrganization = auth.authClient.useActiveOrganization();
-  const memberRole = activeOrganization.data?.members.find(
-    (member) => member.userId === session.data?.user.id,
+  const sessionResult = useAtomValue(authSessionAtom(auth.baseUrl));
+  const session = AsyncResult.getOrElse(sessionResult, () => null);
+  const organizationId = session?.session.activeOrganizationId ?? null;
+  const activeOrganizationResult = useAtomValue(
+    activeAuthOrganizationAtom(auth.baseUrl)(organizationId),
+  );
+  const activeOrganization = AsyncResult.getOrElse(
+    activeOrganizationResult,
+    () => null,
+  );
+  const memberRole = activeOrganization?.members.find(
+    (member) => member.userId === session?.user.id,
   )?.role;
   const actions = new Set<string>();
 
@@ -255,7 +285,11 @@ export const usePermissions = () => {
   }
 
   return {
-    loading: session.isPending || activeOrganization.isPending,
+    loading:
+      sessionResult._tag === "Initial" ||
+      sessionResult.waiting ||
+      activeOrganizationResult._tag === "Initial" ||
+      activeOrganizationResult.waiting,
     permissions: auth.access
       ? new Set(
           Array.from(actions, (action) => `${auth.access?.project}:${action}`),

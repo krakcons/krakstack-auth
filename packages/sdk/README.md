@@ -17,6 +17,7 @@ Choose a narrow package subpath for the runtime boundary:
 | `@krak-stack/auth/access`        | Typed project access definitions                                      |
 | `@krak-stack/auth/access/matrix` | Generated permission matrix                                           |
 | `@krak-stack/auth/api`           | Combined Effect HttpApi contracts                                     |
+| `@krak-stack/auth/auth`          | Browser authentication HttpApi group and schemas                      |
 | `@krak-stack/auth/schema`        | Shared schemas                                                        |
 | `@krak-stack/auth/admin`         | Administrative API contract                                           |
 | `@krak-stack/auth/extra`         | Browser-facing extra API contract                                     |
@@ -48,7 +49,7 @@ Use `AuthMiddleware.layer()` to provide request headers and configuration in an 
 
 ## React Components
 
-The current emitted component bundle expects Krakstack/shadcn UI aliases and additional consumer runtime packages. Validate the packed package in the target application before adopting the UI surface. The server-only entry points have a smaller integration boundary.
+The component bundle uses the optional peer dependencies declared in `package.json` and Krakstack/shadcn UI primitives from `@krak-stack/registry`. Install the component peers used by your application; server-only consumers only need `effect`.
 
 When components are configured, register their Tailwind source:
 
@@ -57,12 +58,12 @@ When components are configured, register their Tailwind source:
 @import "@krak-stack/auth/tailwind.css";
 ```
 
-`createAuthUiClient` sends credentials by default so hosted KrakStack Auth UI can resolve sessions when embedded in consumer apps on a different origin. Pass `{ credentials: "omit" }` only for intentionally anonymous or custom clients.
+The React components use the exported Effect query atoms and the owned authentication HTTP group. Browser requests include credentials so hosted components can resolve sessions across configured origins.
 
 `UserButton` accepts `menuActions` for app-owned menu items such as dashboard or workspace links:
 
 ```tsx
-import { UserButton } from "@krak-stack/auth";
+import { UserButton } from "@krak-stack/auth/components";
 import { DropdownMenuItem } from "@/components/ui/dropdown-menu";
 
 <UserButton

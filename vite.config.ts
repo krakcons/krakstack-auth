@@ -20,6 +20,12 @@ const config = defineConfig({
       {
         find: /^@krak-stack\/auth$/,
         replacement: fileURLToPath(
+          new URL("./packages/sdk/src/index.ts", import.meta.url),
+        ),
+      },
+      {
+        find: /^@krak-stack\/auth\/components$/,
+        replacement: fileURLToPath(
           new URL("./packages/sdk/src/components/index.ts", import.meta.url),
         ),
       },
@@ -42,12 +48,9 @@ const config = defineConfig({
         ),
       },
       {
-        find: /^@krak-stack\/auth\/better-auth$/,
+        find: /^@krak-stack\/auth\/auth$/,
         replacement: fileURLToPath(
-          new URL(
-            "./packages/sdk/src/better-auth/api.group.ts",
-            import.meta.url,
-          ),
+          new URL("./packages/sdk/src/auth/api.group.ts", import.meta.url),
         ),
       },
       {

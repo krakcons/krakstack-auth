@@ -1,4 +1,4 @@
-import type { ApiKey } from "@better-auth/api-key/client";
+import type { AuthApiKey as ApiKey } from "../auth/schema.js";
 
 import { Badge } from "@/components/ui/badge";
 

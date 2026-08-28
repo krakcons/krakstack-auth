@@ -20,7 +20,7 @@ Mount `KrakstackAuthProvider` above every auth page. For the recommended proxy s
 
 ```tsx
 import { Outlet, createRootRoute } from "@tanstack/react-router";
-import { KrakstackAuthProvider } from "@krak-stack/auth";
+import { KrakstackAuthProvider } from "@krak-stack/auth/components";
 
 export const Route = createRootRoute({
   component: () => (
@@ -41,10 +41,10 @@ The provider loads project branding and enabled authentication methods. Pass the
 Create a pathless `_auth` layout for shared page chrome and to redirect users who are already signed in. Preserve a validated `redirect` query parameter so users return to their original destination.
 
 ```tsx
-import { Outlet, createFileRoute, redirect } from "@tanstack/react-router";
+import { useAtomSuspense } from "@effect/atom-react";
+import { Navigate, Outlet, createFileRoute } from "@tanstack/react-router";
+import { authSessionAtom } from "@krak-stack/auth/components";
 import { Schema } from "effect";
-
-import { authClient } from "@/services/auth/client";
 
 const AuthSearch = Schema.toStandardSchemaV1(
   Schema.Struct({
@@ -62,24 +62,28 @@ const safeReturnPath = (value: string | undefined) => {
 
 export const Route = createFileRoute("/_auth")({
   validateSearch: AuthSearch,
-  beforeLoad: async ({ search }) => {
-    const session = await authClient.getSession();
-    if (session.data) {
-      throw redirect({
-        href: safeReturnPath(search.redirect),
-        reloadDocument: true,
-      });
-    }
-  },
-  component: () => (
+  component: AuthLayout,
+});
+
+function AuthLayout() {
+  const search = Route.useSearch();
+  const session = useAtomSuspense(authSessionAtom(), {
+    suspendOnWaiting: true,
+  }).value;
+
+  if (session) {
+    return <Navigate href={safeReturnPath(search.redirect)} reloadDocument />;
+  }
+
+  return (
     <main className="mx-auto flex min-h-screen max-w-md items-center px-4">
       <Outlet />
     </main>
-  ),
-});
+  );
+}
 ```
 
-The schema validates the search shape; `safeReturnPath` enforces the security boundary. Never send an untrusted absolute or protocol-relative URL to `redirect({ href })`.
+The schema validates the search shape; `safeReturnPath` enforces the security boundary. Never send an untrusted absolute or protocol-relative URL to `<Navigate href>`.
 
 ## Add the form routes
 
@@ -95,7 +99,7 @@ Create these public paths. The components link and redirect to one another using
 A minimal TanStack Router page follows the same pattern for each component:
 
 ```tsx
-import { Signin } from "@krak-stack/auth";
+import { Signin } from "@krak-stack/auth/components";
 import { createFileRoute } from "@tanstack/react-router";
 
 export const Route = createFileRoute("/_auth/sign-in")({
@@ -114,21 +118,26 @@ Repeat this route with `VerifyEmail`, `ResetPassword`, and `TwoFactor`. There is
 Use a parent route guard to redirect unauthenticated visitors for navigation and user experience:
 
 ```tsx
-import { createFileRoute, redirect } from "@tanstack/react-router";
-
-import { authClient } from "@/services/auth/client";
+import { useAtomSuspense } from "@effect/atom-react";
+import { Navigate, Outlet, createFileRoute } from "@tanstack/react-router";
+import { authSessionAtom } from "@krak-stack/auth/components";
 
 export const Route = createFileRoute("/_protected")({
-  beforeLoad: async ({ location }) => {
-    const session = await authClient.getSession();
-    if (!session.data?.user) {
-      throw redirect({
-        to: "/sign-in",
-        search: { redirect: location.href },
-      });
-    }
-  },
+  component: ProtectedLayout,
 });
+
+function ProtectedLayout() {
+  const location = Route.useLocation();
+  const session = useAtomSuspense(authSessionAtom(), {
+    suspendOnWaiting: true,
+  }).value;
+
+  if (!session?.user) {
+    return <Navigate to="/sign-in" search={{ redirect: location.href }} />;
+  }
+
+  return <Outlet />;
+}
 ```
 
 Route guards are not authorization. A user can call backend endpoints without visiting the page, so every protected API operation must also use `AuthService.requireUser()`, `requireOrganization()`, or `requireUserOrganization()`.
@@ -138,7 +147,7 @@ Route guards are not authorization. A user can call backend endpoints without vi
 Use `MemberRequired` when a page should explain missing organization access and allow a pending invitation to be accepted:
 
 ```tsx
-import { MemberRequired } from "@krak-stack/auth";
+import { MemberRequired } from "@krak-stack/auth/components";
 
 <MemberRequired
   organizationId={organizationId}

@@ -15,11 +15,11 @@ import {
 import { HttpApiClient } from "effect/unstable/httpapi";
 import { HttpApiError } from "effect/unstable/httpapi";
 
-import { AuthServiceApi } from "./api";
-import { AuthClientConfig, type ClientConfig } from "./config";
-import { ExtraVerifiedApiKey } from "./extra/schema";
-import type { GetSessionResponse } from "./better-auth/api.group";
-import type { Session, User } from "./schema";
+import { AuthServiceApi } from "./api.js";
+import { AuthClientConfig, type ClientConfig } from "./config.js";
+import { ExtraVerifiedApiKey } from "./extra/schema.js";
+import type { GetSessionResponse } from "./auth/api.group.js";
+import type { Session, User } from "./schema.js";
 
 type ExtraVerifiedApiKeyType = typeof ExtraVerifiedApiKey.Type;
 
@@ -118,9 +118,8 @@ const withRequiredOrganization = <A extends AuthSession>(
     : Effect.fail(unauthorized());
 };
 
-const isBetterAuthSessionRequest = (
-  request: HttpClientRequest.HttpClientRequest,
-) => request.url.endsWith("/api/auth/get-session");
+const isAuthSessionRequest = (request: HttpClientRequest.HttpClientRequest) =>
+  request.url.endsWith("/api/auth/get-session");
 
 class SessionLookup extends Context.Service<
   SessionLookup,
@@ -153,7 +152,7 @@ export class AuthService extends Context.Service<AuthService>()(
         const config = yield* AuthClientConfig;
         const http = yield* HttpClient.HttpClient;
         const httpClient = HttpClient.mapRequest(http, (request) =>
-          isBetterAuthSessionRequest(request)
+          isAuthSessionRequest(request)
             ? request
             : HttpClientRequest.bearerToken(
                 request,
@@ -179,7 +178,7 @@ export class AuthService extends Context.Service<AuthService>()(
         > =>
           Cache.get(sessionCache, sessionCacheKey).pipe(
             Effect.provideService(SessionLookup, {
-              getSession: api.auth.getSession,
+              getSession: () => api.auth.getSession({ query: {} }),
             }),
             Effect.mapError(serviceUnavailable),
             Effect.map((authSession) =>

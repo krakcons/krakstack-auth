@@ -10,7 +10,7 @@ import {
   defineProjectAccessLabels,
   policy,
   withPolicy,
-} from "./access";
+} from "./access.js";
 
 const Access = defineProjectAccess({
   project: "test-project",

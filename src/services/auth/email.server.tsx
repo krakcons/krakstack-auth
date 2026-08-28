@@ -6,6 +6,9 @@ import type { SesEmailNotification } from "@krak-stack/registry/notification-cha
 import { render } from "@react-email/components";
 import { Effect, Layer, Option, Schema } from "effect";
 import * as FetchHttpClient from "effect/unstable/http/FetchHttpClient";
+import { mkdir, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { resolve } from "node:path";
 
 import { OTPEmail } from "@/emails/OTP";
 import { ResetPasswordEmail } from "@/emails/ResetPassword";
@@ -23,6 +26,25 @@ const fallbackFrom =
   process.env.NOTIFICATION_EMAIL_FROM ??
   `${fallbackAppName} <no-reply@krakstack.local>`;
 const projectContextCookie = "krakstack-auth.project_context";
+const localOtpDirectory =
+  process.env.NODE_ENV === "production"
+    ? undefined
+    : (process.env.AUTH_LOCAL_OTP_DIRECTORY ??
+      resolve(tmpdir(), "krakstack-auth-otp"));
+
+const writeLocalOtp = async (email: string, type: string, otp: string) => {
+  if (!localOtpDirectory) return;
+
+  await mkdir(localOtpDirectory, { mode: 0o700, recursive: true });
+  await writeFile(
+    resolve(
+      localOtpDirectory,
+      `${encodeURIComponent(email.toLowerCase())}.${type}.txt`,
+    ),
+    otp,
+    { mode: 0o600 },
+  );
+};
 
 const sesConfigured = Boolean(
   process.env.SES_ACCESS_KEY_ID &&
@@ -325,6 +347,7 @@ export const sendEmailVerificationOtpEmail = async ({
     | "forget-password"
     | "change-email";
 }) => {
+  await writeLocalOtp(to, type, otp);
   const locale = localeFromRequest(request);
   const identity = await resolveEmailIdentity(request, locale);
   const isPasswordReset = type === "forget-password";

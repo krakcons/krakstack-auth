@@ -1,22 +1,25 @@
 {
   "$schema": "https://raw.githubusercontent.com/Effect-TS/tsgo/refs/heads/main/schema.json",
   "include": ["**/*.ts", "**/*.tsx"],
+  "exclude": [
+    "packages/sdk/src/**/*.test.ts",
+    "packages/sdk/src/**/*.test.tsx"
+  ],
   "compilerOptions": {
     "target": "ES2022",
     "jsx": "react-jsx",
     "module": "ESNext",
     "paths": {
       "@/*": ["./src/*"],
-      "@krak-stack/auth": ["./packages/sdk/src/components/index.ts"],
+      "@krak-stack/auth": ["./packages/sdk/src/index.ts"],
+      "@krak-stack/auth/components": ["./packages/sdk/src/components/index.ts"],
       "@krak-stack/auth/admin": ["./packages/sdk/src/admin/api.group.ts"],
       "@krak-stack/auth/api": ["./packages/sdk/src/api.ts"],
       "@krak-stack/auth/extra": ["./packages/sdk/src/extra/api.group.ts"],
       "@krak-stack/auth/query": ["./packages/sdk/src/query.ts"],
       "@krak-stack/auth/roles": ["./packages/sdk/src/roles.ts"],
       "@krak-stack/auth/schema": ["./packages/sdk/src/schema.ts"],
-      "@krak-stack/auth/better-auth": [
-        "./packages/sdk/src/better-auth/api.group.ts"
-      ],
+      "@krak-stack/auth/auth": ["./packages/sdk/src/auth/api.group.ts"],
       "@krak-stack/auth/server": ["./packages/sdk/src/server/index.ts"]
     },
     "lib": ["ES2022", "DOM", "DOM.Iterable"],
