@@ -11,7 +11,11 @@ export {
   ServerOrganizationsApiGroup,
   ServerUsersApiGroup,
 } from "./api.group.js";
-export { proxyAuthRequest } from "./proxy.js";
+export {
+  proxyAuthHttpEffect,
+  proxyAuthRequest,
+  proxyAuthRequestEffect,
+} from "./proxy.js";
 export type { ProxyAuthRequestOptions } from "./proxy.js";
 export { ActorRequired } from "./actor.js";
 export type { ActorConstraint } from "./actor.js";

@@ -69,6 +69,8 @@ export const Route = createFileRoute("/api/auth/$")({
 
 La cible provient uniquement de la configuration serveur de confiance. Ne transformez jamais cette route en proxy ouvert contrôlé par l'appelant.
 
+Les applications qui utilisent déjà un routeur HTTP Effect peuvent composer le proxy avec leur couche HttpApi existante. Consultez [Composer avec une API Effect](/docs/proxy#composer-avec-une-api-effect).
+
 ## Vérifier la frontière
 
 Démarrez l'application et ouvrez :

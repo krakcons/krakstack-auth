@@ -1,4 +1,8 @@
 import { Effect, FileSystem, Layer, Path, Redacted, Schema } from "effect";
+import {
+  context as openTelemetryContext,
+  propagation,
+} from "@opentelemetry/api";
 import { CredentialsFromEnv } from "@distilled.cloud/cloudflare";
 import { AuthService, type AuthSession } from "@krak-stack/auth/server";
 import {
@@ -41,7 +45,7 @@ import {
   adminOAuthClientsApiHandler,
   publicOAuthClientsApiHandler,
 } from "@/services/oauth/api.builder";
-import { OpenTelemetry } from "@/services/opentelemetry";
+import { OpenTelemetryLive } from "@/services/opentelemetry";
 import { Organizations } from "@/services/organizations";
 import { Projects } from "@/services/projects";
 import {
@@ -119,16 +123,40 @@ const localAuthServiceLayer = Layer.effect(
     AuthService.layer({ apiKey: Redacted.make("local-session-lookup") }),
   ),
 );
-export const authWebHandler = async (request: Request) => {
-  const authRequest = await Effect.runPromise(
-    BetterAuthRequest.pipe(Effect.provide(BetterAuthRequest.make(request))),
-  );
-  return await authRequest.handler(authRequest.request);
-};
+const runAuthHandler = (
+  request: HttpServerRequest.HttpServerRequest | Request,
+) =>
+  Effect.gen(function* () {
+    const authRequest = yield* BetterAuthRequest.pipe(
+      Effect.provide(BetterAuthRequest.make(request)),
+    );
+    const parentContext = propagation.extract(
+      openTelemetryContext.active(),
+      Object.fromEntries(authRequest.headers),
+    );
+    return yield* Effect.tryPromise({
+      try: () =>
+        openTelemetryContext.with(parentContext, () =>
+          authRequest.handler(authRequest.request),
+        ),
+      catch: () => new HttpApiError.InternalServerError({}),
+    });
+  });
 
-const authHandlerEffect = HttpEffect.fromWebHandler((request) =>
-  Promise.resolve(authWebHandler(request)),
-).pipe(
+export const authWebHandler = (request: Request) =>
+  Effect.runPromise(
+    runAuthHandler(request).pipe(
+      Effect.withSpan(`http.server ${request.method} /api/auth/*`, {
+        kind: "server",
+      }),
+    ),
+  );
+
+const authHandlerEffect = Effect.gen(function* () {
+  const request = yield* HttpServerRequest.HttpServerRequest;
+  const response = yield* runAuthHandler(request);
+  return HttpServerResponse.fromWeb(response);
+}).pipe(
   Effect.catch((error) =>
     Effect.sync(() => {
       console.error("[HTTP] auth handler failed:", error);
@@ -313,7 +341,6 @@ const apiLayer = Layer.mergeAll(
 ).pipe(Layer.provide(platformLayer));
 
 const appServicesLayer = Layer.mergeAll(
-  OpenTelemetry.layer,
   OAuthClients.layer,
   BackendAuth.layer,
   Domains.layer,
@@ -324,7 +351,10 @@ const appServicesLayer = Layer.mergeAll(
   CloudflareLive,
 ).pipe(Layer.provideMerge(DB.layer));
 
-const apiApplicationLayer = apiLayer.pipe(Layer.provide(appServicesLayer));
+const apiApplicationLayer = Layer.mergeAll(
+  apiLayer.pipe(Layer.provide(appServicesLayer)),
+  OpenTelemetryLive,
+);
 const apiWebHandler = HttpRouter.toWebHandler<
   Layer.Success<typeof apiApplicationLayer>,
   Layer.Error<typeof apiApplicationLayer>,

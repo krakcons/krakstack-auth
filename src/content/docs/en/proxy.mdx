@@ -42,6 +42,41 @@ export const Route = createFileRoute("/api/auth/$")({
 
 Keep the wildcard path unchanged so every Better Auth endpoint is forwarded. Do not implement a generic open proxy; the target must come from trusted server configuration.
 
+## Compose with an Effect API
+
+If the application already sends `/api/*` requests through an Effect HTTP router, add the auth proxy to the same router instead of creating a dedicated TanStack Start route:
+
+```ts
+import { proxyAuthHttpEffect } from "@krak-stack/auth/server";
+import { Layer } from "effect";
+import { FetchHttpClient, HttpRouter } from "effect/unstable/http";
+import { HttpApiBuilder } from "effect/unstable/httpapi";
+
+const authUrl = process.env.KRAKSTACK_AUTH_URL;
+if (!authUrl) throw new Error("KRAKSTACK_AUTH_URL is required");
+
+const authProxyLayer = HttpRouter.add(
+  "*",
+  "/api/auth/*",
+  proxyAuthHttpEffect(authUrl, {
+    cookieDomain: "example.com",
+  }),
+).pipe(HttpRouter.provideRequest(FetchHttpClient.layer));
+
+const apiLayer = Layer.mergeAll(
+  HttpApiBuilder.layer(Api).pipe(Layer.provide(apiHandlers)),
+  authProxyLayer,
+);
+```
+
+Replace `Api` and `apiHandlers` with the application's existing HttpApi and handler layers. The application's general `/api/*` server route must pass the request to the Effect router.
+
+Keep the proxy beside `HttpApiBuilder.layer(Api)` rather than adding it to an `HttpApiGroup`. The proxy is an opaque wildcard transport that must preserve raw Better Auth requests and responses; it is not a typed application endpoint or an OpenAPI contract. Explicit HttpApi endpoints can remain in the same Effect router and the `/api/auth/*` route handles the remaining Better Auth traffic.
+
+`proxyAuthHttpEffect` uses Effect `HttpClient`, which automatically creates a client span and injects its W3C and B3 trace headers into the upstream request. The auth service's Effect server tracer extracts that context, so both services remain in one distributed trace. Use this helper instead of wrapping `proxyAuthRequest` in `HttpEffect.fromWebHandler`, which crosses into a Promise callback before Effect `HttpClient` can propagate the active span.
+
+Omit `cookieDomain` for host-only cookies. Set it only when trusted applications on subdomains of the same root domain must share auth cookies.
+
 ## Use the browser contract
 
 The packaged components and atoms use the application origin by default, so no Better Auth client needs to be created. For a custom Effect client, import the owned browser contract:
