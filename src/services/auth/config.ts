@@ -34,7 +34,7 @@ import {
 import { organizationImpersonation } from "@/services/auth/plugins/organization-impersonation";
 import { mergeOrganizationMetadata } from "@/services/auth/organization-metadata";
 import { organizationAuthRoles } from "@/services/auth/organization-access";
-import { DB } from "@/services/database";
+import { DB, runWithDatabase } from "@/services/database";
 import { connectProjectSession } from "@/services/projects/connections";
 
 const isDev = process.env.NODE_ENV === "development";
@@ -197,12 +197,12 @@ const connectSessionProject = async (
   );
 
   try {
-    await Effect.runPromise(
+    await runWithDatabase(
       connectProjectSession({
         projectId,
         userId: session.userId,
         activeOrganizationId,
-      }).pipe(Effect.provide(DB.layer)),
+      }),
     );
   } catch (error) {
     console.error("Failed to connect auth session to project", error);
@@ -369,11 +369,7 @@ const createAuth = ({
             Effect.runPromise(validateUserMetadataWrite(user.metadata)),
           after: async (user) => {
             if (user.isAnonymous === true) return;
-            await Effect.runPromise(
-              provisionPersonalOrganization(user).pipe(
-                Effect.provide(DB.layer),
-              ),
-            );
+            await runWithDatabase(provisionPersonalOrganization(user));
           },
         },
         update: {
@@ -384,7 +380,7 @@ const createAuth = ({
       session: {
         create: {
           before: async (session) => {
-            return await Effect.runPromise(
+            return await runWithDatabase(
               Effect.gen(function* () {
                 const database = yield* DB;
                 const sessionUser = yield* database.query.user.findFirst({
@@ -408,7 +404,7 @@ const createAuth = ({
                     activeOrganizationId: organizationId,
                   },
                 };
-              }).pipe(Effect.provide(DB.layer)),
+              }),
             );
           },
           after: connectSessionProject,
@@ -483,10 +479,8 @@ const createAuth = ({
         organizationHooks: {
           beforeCreateOrganization: async ({ organization, user }) => {
             const parentId = organizationParentId(organization);
-            await Effect.runPromise(
-              validateOrganizationParent({ parentId, userId: user.id }).pipe(
-                Effect.provide(DB.layer),
-              ),
+            await runWithDatabase(
+              validateOrganizationParent({ parentId, userId: user.id }),
             );
             const slugPart = personalOrganizationSlugPart(user);
             const personalSlugs = [
@@ -504,7 +498,7 @@ const createAuth = ({
             };
           },
           beforeUpdateOrganization: async ({ organization, member }) => {
-            return await Effect.runPromise(
+            return await runWithDatabase(
               Effect.gen(function* () {
                 yield* validateOrganizationParent({
                   organizationId: member.organizationId,
@@ -528,7 +522,7 @@ const createAuth = ({
                   );
                 }
                 return { data };
-              }).pipe(Effect.provide(DB.layer)),
+              }),
             );
           },
           beforeDeleteOrganization: async ({ organization }) => {

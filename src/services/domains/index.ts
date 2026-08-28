@@ -12,7 +12,7 @@ import {
   normalizeOAuthClientDomains,
   parseCsv,
 } from "@/lib/domain-utils";
-import { DB } from "@/services/database";
+import { DB, runWithDatabase } from "@/services/database";
 import type {
   ServerCreateDomainPayload,
   ServerDomain,
@@ -682,10 +682,11 @@ export class Domains extends Context.Service<Domains>()("Domains", {
     };
   }),
 }) {
-  static readonly layer = Layer.effect(this, this.make).pipe(
-    Layer.provide(DB.layer),
+  static readonly baseLayer = Layer.effect(this, this.make).pipe(
     Layer.provide(CloudflareLive),
   );
+
+  static readonly layer = this.baseLayer.pipe(Layer.provide(DB.layer));
 
   static readonly testLayer = Layer.effect(this, this.make).pipe(
     Layer.provideMerge(DB.testLayer),
@@ -693,7 +694,7 @@ export class Domains extends Context.Service<Domains>()("Domains", {
 }
 
 const runDomains = <A, E>(effect: Effect.Effect<A, E, Domains>) =>
-  Effect.runPromise(effect.pipe(Effect.provide(Domains.layer)));
+  runWithDatabase(effect.pipe(Effect.provide(Domains.baseLayer)));
 
 export const registeredAuthDomainForRequest = (request: Request) =>
   runDomains(
