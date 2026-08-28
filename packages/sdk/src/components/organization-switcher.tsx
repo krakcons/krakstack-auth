@@ -861,7 +861,7 @@ const organizationDisplay = (
       translation?.name ||
       organization?.name ||
       m.organization_switcher_label(),
-    subtitle: organization?.slug ?? m.organization_switcher_label(),
+    subtitle: organization?.slug ?? "",
     image: assetUrl(translation?.icon || translation?.logo, baseUrl),
   };
 };
@@ -1183,9 +1183,7 @@ export function OrganizationSwitcher({
     onFailure: () => null,
     onSuccess: ({ value }) => value,
   });
-  const activeOrganizationId = session?.session.activeOrganizationId ?? null;
-  const activeOrganizationAtom =
-    activeAuthOrganizationAtom(baseUrl)(activeOrganizationId);
+  const activeOrganizationAtom = activeAuthOrganizationAtom(baseUrl)(null);
   const activeOrganizationResult = useAtomValue(activeOrganizationAtom);
   const activeOrganization = AsyncResult.match(activeOrganizationResult, {
     onInitial: () => null,
@@ -1287,6 +1285,9 @@ export function OrganizationSwitcher({
 
   const active = activeOrganization;
   const activeName = active?.name;
+  const activeLoading =
+    activeOrganizationResult._tag === "Initial" ||
+    activeOrganizationResult.waiting;
   const visibleOrganizations = organizations.filter(
     (organization) =>
       !allowedOrganizationIds ||
@@ -1348,7 +1349,9 @@ export function OrganizationSwitcher({
                   label={
                     activeName
                       ? activeDisplay.name
-                      : m.organization_switcher_label()
+                      : activeLoading
+                        ? m.organization_loading()
+                        : m.organization_switcher_label()
                   }
                   subtitle={activeSubtitle}
                   icon={Building2}
