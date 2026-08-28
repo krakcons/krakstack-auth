@@ -3,7 +3,6 @@ import { FormBuilder, FormReact } from "@lucas-barake/effect-form-react";
 import { Effect, Schema } from "effect";
 import { AsyncResult, Atom } from "effect/unstable/reactivity";
 import { useState } from "react";
-import { toast } from "sonner";
 
 import {
   ImageField,
@@ -38,7 +37,6 @@ const defaultMessages = {
       "Create an organization that can be used for authentication membership.",
     organization_create_error: "Unable to create organization.",
     organization_create_title: "Create organization",
-    organization_created_toast: "Organization created.",
     organization_edit_title: "Edit organization",
     organization_field_logo_url: "Logo",
     organization_parent: "Parent organization",
@@ -50,7 +48,6 @@ const defaultMessages = {
     organization_slug: "Slug",
     organization_slug_description: "Leave blank to generate one from the name.",
     organization_update_error: "Unable to update organization.",
-    organization_updated_toast: "Organization updated.",
   },
   fr: {
     admin_organization_edit_description:
@@ -61,7 +58,6 @@ const defaultMessages = {
       "Créez une organisation utilisable pour les adhésions d'authentification.",
     organization_create_error: "Impossible de créer l'organisation.",
     organization_create_title: "Créer une organisation",
-    organization_created_toast: "Organisation créée.",
     organization_edit_title: "Modifier l'organisation",
     organization_field_logo_url: "Logo",
     organization_parent: "Organisation parente",
@@ -74,7 +70,6 @@ const defaultMessages = {
     organization_slug_description:
       "Laissez vide pour en générer un à partir du nom.",
     organization_update_error: "Impossible de mettre à jour l'organisation.",
-    organization_updated_toast: "Organisation mise à jour.",
   },
 } as const;
 
@@ -196,11 +191,6 @@ export function AdminOrganizationForm({
   const submitResult = useAtomValue(form.submit);
   useAtomSubscribe(form.submit, (result) => {
     if (!AsyncResult.isSuccess(result)) return;
-    toast.success(
-      organization
-        ? m.organization_updated_toast
-        : m.organization_created_toast,
-    );
     onSaved(result.value);
     onClose();
   });

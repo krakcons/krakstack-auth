@@ -3,7 +3,6 @@ import { Cause, Effect, Schema } from "effect";
 import { Atom, AsyncResult } from "effect/unstable/reactivity";
 import { Building2, Pencil, Trash2 } from "lucide-react";
 import { useState } from "react";
-import { toast } from "sonner";
 
 import {
   DataTable,
@@ -48,7 +47,6 @@ const defaultMessages = {
       "Are you sure you want to delete {name}? This action cannot be undone.",
     organization_delete_error: "Unable to delete organization.",
     organization_delete_title: "Delete organization",
-    organization_deleted_toast: "Organization deleted.",
     organization_fetch_error: "Unable to load organizations.",
   },
   fr: {
@@ -65,7 +63,6 @@ const defaultMessages = {
       "Êtes-vous sûr de vouloir supprimer {name} ? Cette action est irréversible.",
     organization_delete_error: "Impossible de supprimer l'organisation.",
     organization_delete_title: "Supprimer l'organisation",
-    organization_deleted_toast: "Organisation supprimée.",
     organization_fetch_error: "Impossible de charger les organisations.",
   },
 } as const;
@@ -262,7 +259,6 @@ export function AdminOrganizationsTable({
           baseUrl={baseUrl}
           onClose={() => setDeletingOrganization(null)}
           onDeleted={() => {
-            toast.success(m.organization_deleted_toast);
             setDeletingOrganization(null);
             setRefreshKey((current) => current + 1);
           }}

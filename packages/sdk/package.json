@@ -1,6 +1,6 @@
 {
   "name": "@krak-stack/auth",
-  "version": "0.2.3",
+  "version": "0.2.4",
   "description": "Effect HttpApi clients and schemas for KrakStack Auth.",
   "license": "MIT",
   "files": [
@@ -74,19 +74,41 @@
     "prepack": "bun run build",
     "type:check": "tsc -p tsconfig.json --noEmit"
   },
-  "dependencies": {
-    "@krak-stack/registry": "0.1.24",
-    "react-qr-code": "^2.2.0"
-  },
   "peerDependencies": {
     "@effect/atom-react": "4.0.0-rc.112",
+    "@krak-stack/registry": "^0.1.25",
     "@lucas-barake/effect-form-react": "^0.26.0-beta.5",
     "@tanstack/react-router": "^1.170.15",
-    "@tanstack/react-table": "^9.1.2",
     "effect": "4.0.0-rc.112",
     "input-otp": "^1.4.2",
-    "lucide-react": "^1.17.0",
-    "react": "^19.2.7",
-    "sonner": "^2.0.7"
+    "lucide-react": "^1.18.0",
+    "react": "^19.2.0",
+    "react-qr-code": "^2.2.0"
+  },
+  "peerDependenciesMeta": {
+    "@effect/atom-react": {
+      "optional": true
+    },
+    "@krak-stack/registry": {
+      "optional": true
+    },
+    "@lucas-barake/effect-form-react": {
+      "optional": true
+    },
+    "@tanstack/react-router": {
+      "optional": true
+    },
+    "input-otp": {
+      "optional": true
+    },
+    "lucide-react": {
+      "optional": true
+    },
+    "react": {
+      "optional": true
+    },
+    "react-qr-code": {
+      "optional": true
+    }
   }
 }

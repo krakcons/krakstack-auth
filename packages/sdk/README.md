@@ -49,7 +49,7 @@ Use `AuthMiddleware.layer()` to provide request headers and configuration in an 
 
 ## React Components
 
-The component bundle uses the peer dependencies declared in `package.json` and Krakstack/shadcn UI primitives from `@krak-stack/registry`. The server-only entry points have a smaller integration boundary.
+The component bundle uses the optional peer dependencies declared in `package.json` and Krakstack/shadcn UI primitives from `@krak-stack/registry`. Install the component peers used by your application; server-only consumers only need `effect`.
 
 When components are configured, register their Tailwind source:
 
