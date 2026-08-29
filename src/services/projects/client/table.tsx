@@ -4,7 +4,6 @@ import { Schema } from "effect";
 import { Atom, AsyncResult } from "effect/unstable/reactivity";
 import { Eye, FolderKanban, Pencil, Trash2 } from "lucide-react";
 import { useState } from "react";
-import { toast } from "sonner";
 
 import {
   DataTable,
@@ -232,7 +231,6 @@ function DeleteProjectDialog({
                   reactivityKeys: ["projects"],
                 });
                 onDeleted(deleted);
-                toast.success(m.project_deleted_toast());
                 onClose();
               } catch (cause) {
                 setError(

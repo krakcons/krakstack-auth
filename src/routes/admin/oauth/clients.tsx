@@ -1,7 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { Copy, Plus } from "lucide-react";
+import { Check, Copy, Plus } from "lucide-react";
 import { useState } from "react";
-import { toast } from "sonner";
 
 import { QueryStandard } from "@krak-stack/registry/query";
 import { SidebarPageHeader } from "@krak-stack/registry/sidebar-layout";
@@ -71,11 +70,6 @@ function OAuthClientCredentialsDialog({
   client: OAuthClientFormSaved & { clientSecret: string };
   onClose: () => void;
 }) {
-  const copy = async (value: string) => {
-    await navigator.clipboard.writeText(value);
-    toast.success(m.admin_client_copied());
-  };
-
   return (
     <Dialog open onOpenChange={(open) => !open && onClose()}>
       <DialogContent>
@@ -90,13 +84,11 @@ function OAuthClientCredentialsDialog({
             label={m.admin_client_id_label()}
             copyLabel={m.admin_copy_client_id()}
             value={client.clientId}
-            onCopy={copy}
           />
           <CredentialField
             label={m.admin_client_secret_label()}
             copyLabel={m.admin_copy_client_secret()}
             value={client.clientSecret}
-            onCopy={copy}
           />
           <p className="text-muted-foreground text-sm">
             {m.admin_client_secret_warning()}
@@ -111,13 +103,13 @@ function CredentialField({
   label,
   copyLabel,
   value,
-  onCopy,
 }: {
   label: string;
   copyLabel: string;
   value: string;
-  onCopy: (value: string) => Promise<void>;
 }) {
+  const [copied, setCopied] = useState(false);
+
   return (
     <div className="grid gap-1.5">
       <span className="text-sm font-medium">{label}</span>
@@ -128,12 +120,23 @@ function CredentialField({
         <Button
           type="button"
           variant="outline"
-          onClick={() => void onCopy(value)}
+          onClick={() =>
+            void navigator.clipboard
+              .writeText(value)
+              .then(() => setCopied(true))
+          }
         >
-          <Copy data-icon="inline-start" />
-          {copyLabel}
+          {copied ? (
+            <Check data-icon="inline-start" />
+          ) : (
+            <Copy data-icon="inline-start" />
+          )}
+          {copied ? m.admin_client_copied() : copyLabel}
         </Button>
       </div>
+      <span className="sr-only" role="status">
+        {copied ? m.admin_client_copied() : ""}
+      </span>
     </div>
   );
 }

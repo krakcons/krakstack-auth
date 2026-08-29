@@ -5,7 +5,6 @@ import {
 } from "@tanstack/react-router";
 import type { QueryClient } from "@tanstack/react-query";
 
-import { Toaster } from "@/components/ui/sonner";
 import { ThemeProvider } from "@krak-stack/registry/theme-switcher";
 import { m } from "../paraglide/messages.js";
 import { getLocale } from "../paraglide/runtime.js";
@@ -85,7 +84,6 @@ function RootDocument({ children }: { children: React.ReactNode }) {
       </head>
       <body>
         <ThemeProvider>{children}</ThemeProvider>
-        <Toaster />
         <Scripts />
       </body>
     </html>

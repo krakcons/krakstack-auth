@@ -5,7 +5,6 @@ import { Effect, Schema } from "effect";
 import { Atom, AsyncResult } from "effect/unstable/reactivity";
 import { Building2, FolderKanban, Pencil, Trash2 } from "lucide-react";
 import { useState } from "react";
-import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
 import {
@@ -249,7 +248,6 @@ function DomainDialog({
   useAtomSubscribe(form.submit, (result) => {
     if (!AsyncResult.isSuccess(result)) return;
     onSaved(result.value);
-    toast.success(domain ? m.domain_updated_toast() : m.domain_created_toast());
     onClose();
   });
 

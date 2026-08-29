@@ -3,7 +3,6 @@ import { FormBuilder, FormReact } from "@lucas-barake/effect-form-react";
 import { Schema } from "effect";
 import { AsyncResult } from "effect/unstable/reactivity";
 import { useState } from "react";
-import { toast } from "sonner";
 
 import {
   MultiSelectField,
@@ -141,9 +140,6 @@ export function OAuthClientForm({
   const submitResult = useAtomValue(form.submit);
   useAtomSubscribe(form.submit, (result) => {
     if (!AsyncResult.isSuccess(result)) return;
-    toast.success(
-      client ? m.oauth_client_updated_toast() : m.admin_client_created_toast(),
-    );
     onSaved(result.value);
     onClose();
   });

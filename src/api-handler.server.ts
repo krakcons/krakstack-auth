@@ -143,15 +143,6 @@ const runAuthHandler = (
     });
   });
 
-export const authWebHandler = (request: Request) =>
-  Effect.runPromise(
-    runAuthHandler(request).pipe(
-      Effect.withSpan(`http.server ${request.method} /api/auth/*`, {
-        kind: "server",
-      }),
-    ),
-  );
-
 const authHandlerEffect = Effect.gen(function* () {
   const request = yield* HttpServerRequest.HttpServerRequest;
   const response = yield* runAuthHandler(request);
@@ -366,4 +357,3 @@ const apiWebHandler = HttpRouter.toWebHandler<
 export const apiHandler = corsMiddleware((request) =>
   apiWebHandler.handler(request),
 );
-export const disposeApiHandler = apiWebHandler.dispose;

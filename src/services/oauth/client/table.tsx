@@ -4,7 +4,6 @@ import { Schema } from "effect";
 import { Atom, AsyncResult } from "effect/unstable/reactivity";
 import { FolderKanban, KeyRound, Pencil, Trash2 } from "lucide-react";
 import { useState } from "react";
-import { toast } from "sonner";
 
 import {
   DataTable,
@@ -241,7 +240,6 @@ function DeleteOAuthClientDialog({
                   params: { clientId: client.clientId },
                   reactivityKeys: ["oauth-clients"],
                 });
-                toast.success(m.admin_client_deleted_toast());
                 onDeleted(deleted);
                 onClose();
               } catch (cause) {

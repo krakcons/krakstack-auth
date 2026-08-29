@@ -15,7 +15,6 @@ import {
   Trash2,
 } from "lucide-react";
 import { useState } from "react";
-import { toast } from "sonner";
 
 import {
   DataTable,
@@ -116,15 +115,12 @@ function ApiKeysPage() {
 
     await navigator.clipboard.writeText(createdKey);
     setCopiedKey(true);
-    toast.success(m.admin_api_key_copied());
-    window.setTimeout(() => setCopiedKey(false), 2000);
   };
 
   const deleteKey = async (key: ApiKeySummary) => {
     try {
       setError(null);
       await deleteApiKey({ params: { id: key.id } });
-      toast.success(m.admin_api_key_deleted_toast());
       setReloadKey((value) => value + 1);
     } catch (cause) {
       setError(
@@ -137,7 +133,6 @@ function ApiKeysPage() {
     try {
       setError(null);
       await resetApiKeyRateLimit({ params: { id: key.id } });
-      toast.success(m.admin_api_key_rate_limit_reset_toast());
       setReloadKey((value) => value + 1);
     } catch (cause) {
       setError(
@@ -156,11 +151,6 @@ function ApiKeysPage() {
       } else {
         await disableApiKeyRateLimit({ params: { id: key.id } });
       }
-      toast.success(
-        enabled
-          ? m.admin_api_key_rate_limit_enabled_toast()
-          : m.admin_api_key_rate_limit_disabled_toast(),
-      );
       setReloadKey((value) => value + 1);
     } catch (cause) {
       setError(
@@ -312,6 +302,9 @@ function ApiKeysPage() {
                     ? m.admin_api_key_copied()
                     : m.admin_api_key_copy()}
                 </Button>
+                <span className="sr-only" role="status">
+                  {copiedKey ? m.admin_api_key_copied() : ""}
+                </span>
               </div>
             </>
           ) : null}
@@ -454,11 +447,9 @@ function ApiKeyForm({
   useAtomSubscribe(form.submit, (result) => {
     if (!AsyncResult.isSuccess(result)) return;
     if (apiKey) {
-      toast.success(m.admin_api_key_updated_toast());
       onSaved();
       return;
     }
-    toast.success(m.admin_api_key_created_toast());
     reset();
     onCreated(result.value);
   });

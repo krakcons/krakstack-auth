@@ -1,6 +1,5 @@
 import { and, eq, inArray, ne } from "drizzle-orm";
 import { Context, Effect, Layer } from "effect";
-import { getDomain } from "tldts";
 import { CredentialsFromEnv } from "@distilled.cloud/cloudflare";
 import * as CustomHostnames from "@distilled.cloud/cloudflare/custom-hostnames";
 import * as FetchHttpClient from "effect/unstable/http/FetchHttpClient";
@@ -94,14 +93,6 @@ const sharedCookieDomain = (
   }
 
   return common.length >= 2 ? `.${common.join(".")}` : undefined;
-};
-
-const fallbackCookieDomain = (host: string) => {
-  const hostname = normalizeAuthHost(host)?.split(":")[0];
-  if (!hostname) return undefined;
-
-  const domain = getDomain(hostname);
-  return domain ? `.${domain}` : undefined;
 };
 
 const originsForHosts = (hosts: Iterable<string>, protocol: string) => {
@@ -354,7 +345,6 @@ export class Domains extends Context.Service<Domains>()("Domains", {
               domain?.hostname,
               domain?.rootHostname,
             ),
-            fallbackCookieDomain: fallbackCookieDomain(requestHost),
           }),
         } satisfies AuthDomainContext;
       },
@@ -413,10 +403,7 @@ export class Domains extends Context.Service<Domains>()("Domains", {
     const cookieDomainForRequest = Effect.fn("Domains.cookieDomainForRequest")(
       function* ({ request }: { request: Request }) {
         const context = yield* contextForRequest({ request });
-        return (
-          context?.cookieDomain ??
-          fallbackCookieDomain(hostFromRequest(request) ?? "")
-        );
+        return context?.cookieDomain;
       },
     );
 

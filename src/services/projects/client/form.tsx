@@ -3,7 +3,6 @@ import { FormBuilder, FormReact } from "@lucas-barake/effect-form-react";
 import { Effect, Schema } from "effect";
 import { AsyncResult } from "effect/unstable/reactivity";
 import { useState } from "react";
-import { toast } from "sonner";
 
 import {
   CheckboxField,
@@ -119,9 +118,6 @@ export function ProjectForm({
   const submitResult = useAtomValue(form.submit);
   useAtomSubscribe(form.submit, (result) => {
     if (!AsyncResult.isSuccess(result)) return;
-    toast.success(
-      project ? m.project_updated_toast() : m.project_created_toast(),
-    );
     onSaved(result.value);
     onClose();
   });
