@@ -1,6 +1,20 @@
 import { Link, createFileRoute } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import {
+  areaY,
+  barX,
+  colorLegend,
+  defineChart,
+  group,
+  lineY,
+} from "@tanstack/charts";
+import { decorative } from "@tanstack/charts/mark/decorative";
+import { Chart } from "@tanstack/charts/react";
+import { scaleBand } from "@tanstack/charts/scales/band";
+import { scaleLinear } from "@tanstack/charts/scales/linear";
+import { scalePoint } from "@tanstack/charts/scales/point";
+import { tooltip } from "@tanstack/charts/tooltip";
+import {
   Building2,
   FolderKanban,
   Globe2,
@@ -8,7 +22,7 @@ import {
   KeySquare,
   Users,
 } from "lucide-react";
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { Schema } from "effect";
 
 import { m } from "@/paraglide/messages";
@@ -90,18 +104,6 @@ const formatDay = (value: string, locale: string) =>
     timeZone: "UTC",
   });
 
-const chartTickIndices = (length: number) => {
-  if (length <= 1) return length === 1 ? [0] : [];
-  const tickCount = Math.min(5, length);
-  return Array.from(
-    new Set(
-      Array.from({ length: tickCount }, (_, index) =>
-        Math.round((index * (length - 1)) / (tickCount - 1)),
-      ),
-    ),
-  );
-};
-
 function TrendChart({
   data,
   title,
@@ -111,6 +113,54 @@ function TrendChart({
   title: string;
   valueLabel: string;
 }) {
+  const locale = getLocale();
+  const definition = useMemo(
+    () =>
+      defineChart({
+        marks: [
+          decorative(
+            areaY(data, {
+              x: "date",
+              y1: 0,
+              y2: "count",
+              fill: "var(--chart-1)",
+              fillOpacity: 0.18,
+            }),
+          ),
+          lineY(data, {
+            x: "date",
+            y: "count",
+            points: true,
+            stroke: "var(--chart-1)",
+            strokeWidth: 2.5,
+          }),
+        ],
+        x: {
+          scale: () => scalePoint<string>().padding(0.15),
+          axis: {
+            ticks: { format: (value) => formatDay(String(value), locale) },
+          },
+        },
+        y: {
+          scale: scaleLinear,
+          nice: true,
+          grid: true,
+          axis: {
+            ticks: {
+              count: 5,
+              format: (value) => Number(value).toLocaleString(locale),
+            },
+          },
+        },
+        tooltip: {
+          use: tooltip,
+          format: (point) =>
+            `${formatDay(point.datum.date, locale)}: ${point.datum.count.toLocaleString(locale)}`,
+        },
+      }),
+    [data, locale],
+  );
+
   if (data.length === 0) {
     return (
       <p className="text-muted-foreground flex min-h-64 items-center justify-center text-sm">
@@ -119,108 +169,14 @@ function TrendChart({
     );
   }
 
-  const locale = getLocale();
-  const width = 720;
-  const height = 260;
-  const padding = { top: 16, right: 16, bottom: 34, left: 44 };
-  const innerWidth = width - padding.left - padding.right;
-  const innerHeight = height - padding.top - padding.bottom;
-  const dataMax = Math.max(1, ...data.map(({ count }) => count));
-  const tickStep = Math.max(1, Math.ceil(dataMax / 4));
-  const domainMax = tickStep * 4;
-  const baseline = padding.top + innerHeight;
-  const points = data.map(({ count }, index) => ({
-    x:
-      padding.left +
-      (data.length === 1
-        ? innerWidth / 2
-        : (index / (data.length - 1)) * innerWidth),
-    y: padding.top + innerHeight - (count / domainMax) * innerHeight,
-  }));
-  const linePath = points
-    .map(({ x, y }, index) => `${index === 0 ? "M" : "L"} ${x} ${y}`)
-    .join(" ");
-  const areaPath = `${linePath} L ${points.at(-1)?.x ?? padding.left} ${baseline} L ${points[0]?.x ?? padding.left} ${baseline} Z`;
-
   return (
     <figure className="grid gap-3">
-      <svg
-        aria-label={title}
-        className="h-auto min-h-64 w-full"
-        preserveAspectRatio="xMidYMid meet"
-        role="img"
-        viewBox={`0 0 ${width} ${height}`}
-      >
-        {[0, 1, 2, 3, 4].map((index) => {
-          const value = tickStep * index;
-          const y = baseline - (value / domainMax) * innerHeight;
-          return (
-            <g key={value}>
-              <line
-                className="stroke-border/60"
-                x1={padding.left}
-                x2={width - padding.right}
-                y1={y}
-                y2={y}
-              />
-              <text
-                className="fill-muted-foreground text-[11px]"
-                dominantBaseline="middle"
-                textAnchor="end"
-                x={padding.left - 9}
-                y={y}
-              >
-                {value.toLocaleString(locale)}
-              </text>
-            </g>
-          );
-        })}
-        <path d={areaPath} fill="var(--chart-1)" fillOpacity="0.2" />
-        <path
-          d={linePath}
-          fill="none"
-          stroke="var(--chart-1)"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-          strokeWidth="2.5"
-          vectorEffect="non-scaling-stroke"
-        />
-        {points.map(({ x, y }, index) => (
-          <circle
-            className="fill-background stroke-[var(--chart-1)]"
-            cx={x}
-            cy={y}
-            key={data[index]?.date}
-            r="3"
-            strokeWidth="2"
-            vectorEffect="non-scaling-stroke"
-          >
-            <title>{`${formatDay(data[index]?.date ?? "", locale)}: ${data[index]?.count.toLocaleString(locale)}`}</title>
-          </circle>
-        ))}
-        {chartTickIndices(data.length).map((index) => {
-          const point = points[index];
-          const datum = data[index];
-          if (!point || !datum) return null;
-          return (
-            <text
-              className="fill-muted-foreground text-[11px]"
-              key={datum.date}
-              textAnchor={
-                index === 0
-                  ? "start"
-                  : index === data.length - 1
-                    ? "end"
-                    : "middle"
-              }
-              x={point.x}
-              y={height - 9}
-            >
-              {formatDay(datum.date, locale)}
-            </text>
-          );
-        })}
-      </svg>
+      <Chart
+        ariaLabel={title}
+        className="text-muted-foreground min-h-64"
+        definition={definition}
+        height={260}
+      />
       <details className="text-sm">
         <summary className="text-muted-foreground hover:text-foreground w-fit cursor-pointer">
           {m.admin_chart_view_data()}
@@ -260,6 +216,73 @@ function ProjectConnectionBars({
 }: {
   data: ReadonlyArray<ProjectConnection>;
 }) {
+  const locale = getLocale();
+  const usersLabel = m.admin_project_connections_users();
+  const organizationsLabel = m.admin_project_connections_organizations();
+  const definition = useMemo(() => {
+    const rows = data.flatMap((project) => [
+      {
+        projectId: project.projectId,
+        projectName: project.projectName,
+        connectionType: usersLabel,
+        count: project.users,
+      },
+      {
+        projectId: project.projectId,
+        projectName: project.projectName,
+        connectionType: organizationsLabel,
+        count: project.organizations,
+      },
+    ]);
+
+    return defineChart({
+      marks: [
+        barX(rows, {
+          x: "count",
+          y: "projectName",
+          z: "connectionType",
+          color: "connectionType",
+          key: (row) => `${row.projectId}:${row.connectionType}`,
+          layout: group({ padding: 0.16 }),
+          inset: 1,
+          radius: 3,
+        }),
+      ],
+      x: {
+        scale: scaleLinear,
+        nice: true,
+        grid: true,
+        axis: {
+          ticks: {
+            count: 5,
+            format: (value) => Number(value).toLocaleString(locale),
+          },
+        },
+      },
+      y: {
+        scale: () => scaleBand<string>().padding(0.2),
+      },
+      color: {
+        domain: [usersLabel, organizationsLabel],
+        range: ["var(--chart-1)", "oklch(0.78 0.09 72)"],
+        legend: colorLegend(),
+      },
+      focus: "group-y",
+      tooltip: {
+        use: tooltip,
+        anchor: "group-center",
+        formatGroup: (points) =>
+          [
+            points[0]?.datum.projectName ?? "",
+            ...points.map(
+              (point) =>
+                `${point.datum.connectionType}: ${point.datum.count.toLocaleString(locale)}`,
+            ),
+          ].join("\n"),
+      },
+    });
+  }, [data, locale, organizationsLabel, usersLabel]);
+
   if (data.length === 0) {
     return (
       <p className="text-muted-foreground flex min-h-64 items-center justify-center text-sm">
@@ -268,57 +291,53 @@ function ProjectConnectionBars({
     );
   }
 
-  const locale = getLocale();
-  const maximum = Math.max(
-    1,
-    ...data.flatMap(({ users, organizations }) => [users, organizations]),
-  );
-
   return (
-    <ul className="grid gap-5">
-      {data.map((project) => (
-        <li className="grid gap-2" key={project.projectId}>
-          <strong className="truncate text-sm font-medium">
-            {project.projectName}
-          </strong>
-          {[
-            {
-              label: m.admin_project_connections_users(),
-              value: project.users,
-              color: "var(--chart-1)",
-            },
-            {
-              label: m.admin_project_connections_organizations(),
-              value: project.organizations,
-              color: "oklch(0.78 0.09 72)",
-            },
-          ].map(({ label, value, color }) => (
-            <div
-              className="grid grid-cols-[minmax(6rem,9rem)_1fr_auto] items-center gap-3 text-sm"
-              key={label}
-            >
-              <span className="text-muted-foreground truncate">{label}</span>
-              <div
-                aria-label={`${project.projectName}, ${label}: ${value.toLocaleString(locale)}`}
-                className="bg-muted h-2.5 overflow-hidden rounded-full"
-                role="img"
-              >
-                <div
-                  className="h-full rounded-full"
-                  style={{
-                    backgroundColor: color,
-                    width: `${(value / maximum) * 100}%`,
-                  }}
-                />
-              </div>
-              <span className="min-w-8 text-right font-mono font-medium tabular-nums">
-                {value.toLocaleString(locale)}
-              </span>
-            </div>
-          ))}
-        </li>
-      ))}
-    </ul>
+    <figure className="grid gap-3">
+      <Chart
+        ariaLabel={m.admin_project_connections_chart_title()}
+        className="text-muted-foreground min-h-64"
+        definition={definition}
+        height={Math.max(260, data.length * 64)}
+      />
+      <details className="text-sm">
+        <summary className="text-muted-foreground hover:text-foreground w-fit cursor-pointer">
+          {m.admin_chart_view_data()}
+        </summary>
+        <div className="mt-3 max-h-64 overflow-auto rounded-md border">
+          <table className="w-full border-collapse text-left">
+            <caption className="sr-only">
+              {m.admin_project_connections_chart_title()}
+            </caption>
+            <thead className="bg-muted/60 sticky top-0">
+              <tr>
+                <th className="px-3 py-2 font-medium" scope="col">
+                  {m.project()}
+                </th>
+                <th className="px-3 py-2 text-right font-medium" scope="col">
+                  {usersLabel}
+                </th>
+                <th className="px-3 py-2 text-right font-medium" scope="col">
+                  {organizationsLabel}
+                </th>
+              </tr>
+            </thead>
+            <tbody>
+              {data.map((project) => (
+                <tr className="border-t" key={project.projectId}>
+                  <td className="px-3 py-2">{project.projectName}</td>
+                  <td className="px-3 py-2 text-right tabular-nums">
+                    {project.users.toLocaleString(locale)}
+                  </td>
+                  <td className="px-3 py-2 text-right tabular-nums">
+                    {project.organizations.toLocaleString(locale)}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </details>
+    </figure>
   );
 }
 
