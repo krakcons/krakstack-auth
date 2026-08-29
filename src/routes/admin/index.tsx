@@ -1,12 +1,11 @@
 import { Link, createFileRoute } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
-import { areaY, barY, d3Curve, defineChart, group } from "@tanstack/charts";
+import { areaY, barY, defineChart, group } from "@tanstack/charts";
 import { Chart } from "@tanstack/charts/react";
 import { scaleBand } from "@tanstack/charts/scales/band";
 import { scaleLinear } from "@tanstack/charts/scales/linear";
 import { scalePoint } from "@tanstack/charts/scales/point";
 import { tooltip } from "@tanstack/charts/tooltip";
-import { curveMonotoneX } from "d3-shape";
 import {
   Building2,
   FolderKanban,
@@ -124,7 +123,6 @@ function TrendChart({
           fillOpacity: 0.2,
           stroke: "var(--chart-1)",
           strokeWidth: 2,
-          curve: d3Curve(curveMonotoneX),
         }),
       ],
       x: {
