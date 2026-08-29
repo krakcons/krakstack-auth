@@ -1,14 +1,6 @@
 import { Link, createFileRoute } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
-import {
-  areaY,
-  barX,
-  colorLegend,
-  defineChart,
-  group,
-  lineY,
-} from "@tanstack/charts";
-import { decorative } from "@tanstack/charts/mark/decorative";
+import { areaY, barY, defineChart, group } from "@tanstack/charts";
 import { Chart } from "@tanstack/charts/react";
 import { scaleBand } from "@tanstack/charts/scales/band";
 import { scaleLinear } from "@tanstack/charts/scales/linear";
@@ -26,7 +18,6 @@ import { useMemo, useState } from "react";
 import { Schema } from "effect";
 
 import { m } from "@/paraglide/messages";
-import { getLocale } from "@/paraglide/runtime";
 import { SidebarPageHeader } from "@krak-stack/registry/sidebar-layout";
 import { StatsCard } from "@krak-stack/registry/stats-card";
 import {
@@ -97,12 +88,15 @@ function useDashboardStats(range: ChartRange) {
   });
 }
 
-const formatDay = (value: string, locale: string) =>
-  new Date(`${value}T00:00:00Z`).toLocaleDateString(locale, {
+const formatDay = (value: string) =>
+  new Date(`${value}T00:00:00Z`).toLocaleDateString(undefined, {
     month: "short",
     day: "numeric",
     timeZone: "UTC",
   });
+
+const chartDomainMax = (dataMax: number) =>
+  Math.max(1, Math.ceil(dataMax * 1.1));
 
 function TrendChart({
   data,
@@ -113,101 +107,67 @@ function TrendChart({
   title: string;
   valueLabel: string;
 }) {
-  const locale = getLocale();
-  const definition = useMemo(
-    () =>
-      defineChart({
-        marks: [
-          decorative(
-            areaY(data, {
-              x: "date",
-              y1: 0,
-              y2: "count",
-              fill: "var(--chart-1)",
-              fillOpacity: 0.18,
-            }),
-          ),
-          lineY(data, {
-            x: "date",
-            y: "count",
-            points: true,
-            stroke: "var(--chart-1)",
-            strokeWidth: 2.5,
-          }),
-        ],
-        x: {
-          scale: () => scalePoint<string>().padding(0.15),
-          axis: {
-            ticks: { format: (value) => formatDay(String(value), locale) },
-          },
-        },
-        y: {
-          scale: scaleLinear,
-          nice: true,
-          grid: true,
-          axis: {
-            ticks: {
-              count: 5,
-              format: (value) => Number(value).toLocaleString(locale),
-            },
-          },
-        },
-        tooltip: {
-          use: tooltip,
-          format: (point) =>
-            `${formatDay(point.datum.date, locale)}: ${point.datum.count.toLocaleString(locale)}`,
-        },
-      }),
-    [data, locale],
-  );
-
-  if (data.length === 0) {
-    return (
-      <p className="text-muted-foreground flex min-h-64 items-center justify-center text-sm">
-        {m.admin_chart_no_data()}
-      </p>
+  const definition = useMemo(() => {
+    const domainMax = chartDomainMax(
+      Math.max(0, ...data.map(({ count }) => count)),
     );
-  }
+    const yScale = scaleLinear().domain([0, domainMax]);
+
+    return defineChart({
+      marks: [
+        areaY(data, {
+          x: "date",
+          y1: 0,
+          y2: "count",
+          fill: "var(--chart-1)",
+          fillOpacity: 0.2,
+          stroke: "var(--chart-1)",
+          strokeWidth: 2,
+        }),
+      ],
+      x: {
+        scale: scalePoint<string>,
+        grid: false,
+        axis: {
+          line: false,
+          ticks: {
+            size: 0,
+            padding: 10,
+            format: (value) => formatDay(String(value)),
+          },
+        },
+      },
+      y: {
+        scale: yScale,
+        grid: true,
+        axis: {
+          line: false,
+          ticks: {
+            values: yScale.ticks(5).filter(Number.isInteger),
+            size: 0,
+          },
+        },
+      },
+      tooltip: {
+        use: tooltip,
+        items: [
+          {
+            channel: "y",
+            label: valueLabel,
+            text: (point) => point.datum.count.toLocaleString(),
+          },
+        ],
+      },
+    });
+  }, [data, valueLabel]);
 
   return (
-    <figure className="grid gap-3">
-      <Chart
-        ariaLabel={title}
-        className="text-muted-foreground min-h-64"
-        definition={definition}
-        height={260}
-      />
-      <details className="text-sm">
-        <summary className="text-muted-foreground hover:text-foreground w-fit cursor-pointer">
-          {m.admin_chart_view_data()}
-        </summary>
-        <div className="mt-3 max-h-64 overflow-auto rounded-md border">
-          <table className="w-full border-collapse text-left">
-            <caption className="sr-only">{title}</caption>
-            <thead className="bg-muted/60 sticky top-0">
-              <tr>
-                <th className="px-3 py-2 font-medium" scope="col">
-                  {m.admin_chart_date()}
-                </th>
-                <th className="px-3 py-2 text-right font-medium" scope="col">
-                  {valueLabel}
-                </th>
-              </tr>
-            </thead>
-            <tbody>
-              {data.map(({ date, count }) => (
-                <tr className="border-t" key={date}>
-                  <td className="px-3 py-2">{formatDay(date, locale)}</td>
-                  <td className="px-3 py-2 text-right tabular-nums">
-                    {count.toLocaleString(locale)}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </details>
-    </figure>
+    <Chart
+      ariaLabel={title}
+      className="text-muted-foreground min-h-[260px] w-full text-xs"
+      definition={definition}
+      height={260}
+    />
   );
 }
 
@@ -216,7 +176,6 @@ function ProjectConnectionBars({
 }: {
   data: ReadonlyArray<ProjectConnection>;
 }) {
-  const locale = getLocale();
   const usersLabel = m.admin_project_connections_users();
   const organizationsLabel = m.admin_project_connections_organizations();
   const definition = useMemo(() => {
@@ -234,110 +193,65 @@ function ProjectConnectionBars({
         count: project.organizations,
       },
     ]);
+    const domainMax = chartDomainMax(
+      Math.max(0, ...rows.map(({ count }) => count)),
+    );
+    const yScale = scaleLinear().domain([0, domainMax]);
 
     return defineChart({
       marks: [
-        barX(rows, {
-          x: "count",
-          y: "projectName",
+        barY(rows, {
+          x: "projectName",
+          y: "count",
           z: "connectionType",
           color: "connectionType",
           key: (row) => `${row.projectId}:${row.connectionType}`,
-          layout: group({ padding: 0.16 }),
-          inset: 1,
-          radius: 3,
+          layout: group(),
+          radius: 4,
         }),
       ],
       x: {
-        scale: scaleLinear,
-        nice: true,
-        grid: true,
+        scale: () =>
+          scaleBand<string>()
+            .domain(data.map(({ projectName }) => projectName))
+            .padding(0.1),
+        grid: false,
         axis: {
+          line: false,
           ticks: {
-            count: 5,
-            format: (value) => Number(value).toLocaleString(locale),
+            size: 0,
+            padding: 10,
           },
+          tickLabels: { thin: false },
         },
       },
       y: {
-        scale: () => scaleBand<string>().padding(0.2),
+        scale: yScale,
+        grid: true,
+        axis: {
+          line: false,
+          ticks: {
+            values: yScale.ticks(5).filter(Number.isInteger),
+            size: 0,
+          },
+        },
       },
       color: {
         domain: [usersLabel, organizationsLabel],
         range: ["var(--chart-1)", "oklch(0.78 0.09 72)"],
-        legend: colorLegend(),
       },
-      focus: "group-y",
-      tooltip: {
-        use: tooltip,
-        anchor: "group-center",
-        formatGroup: (points) =>
-          [
-            points[0]?.datum.projectName ?? "",
-            ...points.map(
-              (point) =>
-                `${point.datum.connectionType}: ${point.datum.count.toLocaleString(locale)}`,
-            ),
-          ].join("\n"),
-      },
+      focus: "group-x",
+      tooltip,
     });
-  }, [data, locale, organizationsLabel, usersLabel]);
-
-  if (data.length === 0) {
-    return (
-      <p className="text-muted-foreground flex min-h-64 items-center justify-center text-sm">
-        {m.admin_chart_no_data()}
-      </p>
-    );
-  }
+  }, [data, organizationsLabel, usersLabel]);
 
   return (
-    <figure className="grid gap-3">
-      <Chart
-        ariaLabel={m.admin_project_connections_chart_title()}
-        className="text-muted-foreground min-h-64"
-        definition={definition}
-        height={Math.max(260, data.length * 64)}
-      />
-      <details className="text-sm">
-        <summary className="text-muted-foreground hover:text-foreground w-fit cursor-pointer">
-          {m.admin_chart_view_data()}
-        </summary>
-        <div className="mt-3 max-h-64 overflow-auto rounded-md border">
-          <table className="w-full border-collapse text-left">
-            <caption className="sr-only">
-              {m.admin_project_connections_chart_title()}
-            </caption>
-            <thead className="bg-muted/60 sticky top-0">
-              <tr>
-                <th className="px-3 py-2 font-medium" scope="col">
-                  {m.project()}
-                </th>
-                <th className="px-3 py-2 text-right font-medium" scope="col">
-                  {usersLabel}
-                </th>
-                <th className="px-3 py-2 text-right font-medium" scope="col">
-                  {organizationsLabel}
-                </th>
-              </tr>
-            </thead>
-            <tbody>
-              {data.map((project) => (
-                <tr className="border-t" key={project.projectId}>
-                  <td className="px-3 py-2">{project.projectName}</td>
-                  <td className="px-3 py-2 text-right tabular-nums">
-                    {project.users.toLocaleString(locale)}
-                  </td>
-                  <td className="px-3 py-2 text-right tabular-nums">
-                    {project.organizations.toLocaleString(locale)}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </details>
-    </figure>
+    <Chart
+      ariaLabel={m.admin_project_connections_chart_title()}
+      className="text-muted-foreground min-h-[300px] w-full text-xs"
+      definition={definition}
+      height={300}
+    />
   );
 }
 
