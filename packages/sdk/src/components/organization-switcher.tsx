@@ -228,6 +228,8 @@ const messages = {
     organization_role_owner: "Owner",
     organization_role_support: "Support",
     organization_slug: "Slug",
+    organization_slug_identifier_description:
+      "A unique, URL-friendly identifier for your organization.",
     organization_slug_description: "Leave blank to generate one from the name.",
     organization_switcher_empty: "You do not belong to any organizations yet.",
     organization_switcher_label: "Organization",
@@ -235,7 +237,7 @@ const messages = {
     organization_switcher_no_other_organizations: "No other organizations.",
     organization_switcher_personal: "Personal",
     organization_translation_description:
-      "Localized organization details stored in metadata.",
+      "Customize your organization’s name, logo, and icon for each language.",
     organization_translation_name: "Name",
     organization_update_error: "Could not update the organization.",
     table_empty: "No results.",
@@ -387,6 +389,8 @@ const messages = {
     organization_role_owner: "Propriétaire",
     organization_role_support: "Support",
     organization_slug: "Slug",
+    organization_slug_identifier_description:
+      "Un identifiant unique pour votre organisation, adapté aux URL.",
     organization_slug_description:
       "Laissez vide pour en générer un à partir du nom.",
     organization_switcher_empty:
@@ -396,7 +400,7 @@ const messages = {
     organization_switcher_no_other_organizations: "Aucune autre organisation.",
     organization_switcher_personal: "Personnel",
     organization_translation_description:
-      "Détails localisés de l'organisation stockés dans les métadonnées.",
+      "Personnalisez le nom, le logo et l’icône de votre organisation pour chaque langue.",
     organization_translation_name: "Nom",
     organization_update_error: "Impossible de mettre à jour l'organisation.",
     table_empty: "Aucun résultat.",
@@ -874,28 +878,6 @@ const organizationSwitcherSubtitle = (
   organization?.userId
     ? `${m.organization_switcher_personal()} · ${subtitle}`
     : subtitle;
-
-const organizationParentOptions = (
-  organizations: readonly OrganizationSummary[],
-  m: ReturnType<typeof organizationMessageFns>,
-  excludedOrganizationId?: string,
-) => [
-  {
-    label: m.organization_parent_none(),
-    value: noParentOrganization,
-  },
-  ...organizations
-    .filter(
-      (organization) =>
-        organization.id !== excludedOrganizationId &&
-        !organization.userId &&
-        !organization.parentId,
-    )
-    .map((organization) => ({
-      label: organizationDisplay(organization, m).name,
-      value: organization.id,
-    })),
-];
 
 const organizationFormDefaults = (
   organization?: OrganizationSummary,
@@ -1556,7 +1538,6 @@ export function OrganizationSwitcher({
           <CreateOrganizationSection
             baseUrl={baseUrl}
             editingLocale={editingOrganizationLocale}
-            organizations={visibleOrganizations}
             onCreated={async (organization) => {
               setDialog(null);
               let activated = false;
@@ -1997,8 +1978,6 @@ function EditOrganizationSection({
             submit();
           }}
         >
-          <form.slug label={m.organization_slug()} required />
-          <Separator className="my-2" />
           <OrganizationFormSection
             title={m.organization_profile()}
             description={m.organization_translation_description()}
@@ -2053,6 +2032,12 @@ function EditOrganizationSection({
             </FieldSet>
           </OrganizationFormSection>
           <Separator className="my-2" />
+          <form.slug
+            label={m.organization_slug()}
+            description={m.organization_slug_identifier_description()}
+            required
+          />
+          <Separator className="my-2" />
           <OrganizationFormSection title={m.organization_contact()}>
             <OrganizationContactGroup
               title={m.organization_contact_email_type()}
@@ -2105,12 +2090,10 @@ function EditOrganizationSection({
 function CreateOrganizationSection({
   baseUrl,
   editingLocale,
-  organizations,
   onCreated,
 }: {
   baseUrl?: string | undefined;
   editingLocale: OrganizationLocale;
-  organizations: readonly OrganizationSummary[];
   onCreated: (organization: OrganizationSummary) => Promise<void>;
 }) {
   const m = useOrganizationMessages();
@@ -2137,15 +2120,7 @@ function CreateOrganizationSection({
           );
           const normalizedMetadata =
             yield* normalizeOrganizationMetadata(metadata);
-          const createPayload =
-            value.parentId === noParentOrganization
-              ? { name, slug, metadata: normalizedMetadata }
-              : {
-                  name,
-                  slug,
-                  metadata: normalizedMetadata,
-                  parentId: value.parentId,
-                };
+          const createPayload = { name, slug, metadata: normalizedMetadata };
           const created = yield* client.auth
             .organizationCreate({ payload: createPayload })
             .pipe(
@@ -2211,16 +2186,6 @@ function CreateOrganizationSection({
             submit();
           }}
         >
-          <form.slug
-            label={m.organization_slug()}
-            description={m.organization_slug_description()}
-          />
-          <form.parentId
-            label={m.organization_parent()}
-            description={m.organization_parent_description()}
-            options={organizationParentOptions(organizations, m)}
-          />
-          <Separator className="my-2" />
           <OrganizationFormSection
             title={m.organization_profile()}
             description={m.organization_translation_description()}
@@ -2274,6 +2239,11 @@ function CreateOrganizationSection({
               />
             </FieldSet>
           </OrganizationFormSection>
+          <Separator className="my-2" />
+          <form.slug
+            label={m.organization_slug()}
+            description={`${m.organization_slug_identifier_description()} ${m.organization_slug_description()}`}
+          />
           <Separator className="my-2" />
           <OrganizationFormSection title={m.organization_contact()}>
             <OrganizationContactGroup
