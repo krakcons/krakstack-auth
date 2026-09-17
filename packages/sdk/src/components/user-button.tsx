@@ -2027,7 +2027,6 @@ function EnableTotpForm({
               payload: requirePassword ? { password: decoded.password } : {},
             }),
           ),
-          Effect.tap(() => Effect.sync(notifyAuthChange)),
           Effect.tap((result) =>
             Effect.sync(() =>
               onEnabled({

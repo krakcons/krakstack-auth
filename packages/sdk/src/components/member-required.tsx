@@ -1,8 +1,12 @@
-import { useAtomSet, useAtomSuspense } from "@effect/atom-react";
+import {
+  useAtomRefresh,
+  useAtomSet,
+  useAtomSuspense,
+} from "@effect/atom-react";
 import { Effect, Schema } from "effect";
 import { Atom } from "effect/unstable/reactivity";
 import { Check, Loader2, Mail, ShieldAlert } from "lucide-react";
-import { type ReactNode, useEffect, useState } from "react";
+import { type ReactNode, useEffect, useRef, useState } from "react";
 
 import { Button } from "@/components/ui/button";
 import { CopyButton } from "@krak-stack/registry/copy-button";
@@ -228,78 +232,77 @@ const accessAtom = Atom.family((baseUrl?: string | undefined) =>
     );
     const { locale, organizationId } = Schema.decodeUnknownSync(AccessKey)(key);
 
-    return Atom.keepAlive(
-      authClientApi(baseUrl).runtime.atom((get) =>
-        Effect.gen(function* () {
-          const client = yield* authHttpClient(baseUrl);
-          const allowed = yield* client.auth
-            .organizationSetActive({ payload: { organizationId } })
-            .pipe(
-              Effect.as(true),
-              Effect.catch((error) =>
-                error instanceof AuthForbidden
-                  ? Effect.succeed(false)
-                  : Effect.fail(error),
-              ),
+    return Atom.optimistic(
+      Atom.keepAlive(
+        authClientApi(baseUrl).runtime.atom((get) =>
+          Effect.gen(function* () {
+            const client = yield* authHttpClient(baseUrl);
+            const allowed = yield* client.auth
+              .organizationSetActive({ payload: { organizationId } })
+              .pipe(
+                Effect.as(true),
+                Effect.catch((error) =>
+                  error instanceof AuthForbidden
+                    ? Effect.succeed(false)
+                    : Effect.fail(error),
+                ),
+              );
+
+            if (allowed) {
+              get.refresh(authSessionAtom(baseUrl));
+              yield* get.result(authSessionAtom(baseUrl), {
+                suspendOnWaiting: true,
+              });
+              return { allowed: true } satisfies AccessResult;
+            }
+
+            const profileKey = JSON.stringify({ locale, organizationId });
+            const { organization, invitations } = yield* Effect.all(
+              {
+                organization: get
+                  .result(organizationProfileAtom(baseUrl)(profileKey), {
+                    suspendOnWaiting: true,
+                  })
+                  .pipe(
+                    Effect.matchCause({
+                      onFailure: () => null,
+                      onSuccess: (value) => value,
+                    }),
+                  ),
+                invitations: get.result(invitationsAtom(baseUrl)(key), {
+                  suspendOnWaiting: true,
+                }),
+              },
+              { concurrency: "unbounded" },
             );
 
-          if (allowed) {
-            get.refresh(authSessionAtom(baseUrl));
-            yield* get.result(authSessionAtom(baseUrl), {
-              suspendOnWaiting: true,
-            });
-            return { allowed: true } satisfies AccessResult;
-          }
-
-          const profileKey = JSON.stringify({ locale, organizationId });
-          const { organization, invitations } = yield* Effect.all(
-            {
-              organization: get
-                .result(organizationProfileAtom(baseUrl)(profileKey), {
-                  suspendOnWaiting: true,
-                })
-                .pipe(
-                  Effect.matchCause({
-                    onFailure: () => null,
-                    onSuccess: (value) => value,
-                  }),
-                ),
-              invitations: get.result(invitationsAtom(baseUrl)(key), {
-                suspendOnWaiting: true,
-              }),
-            },
-            { concurrency: "unbounded" },
-          );
-
-          return {
-            allowed: false,
-            organization,
-            invitation:
-              invitations.find((item) =>
-                invitationMatches(item, organizationId),
-              ) ?? null,
-          } satisfies AccessResult;
-        }),
+            return {
+              allowed: false,
+              organization,
+              invitation:
+                invitations.find((item) =>
+                  invitationMatches(item, organizationId),
+                ) ?? null,
+            } satisfies AccessResult;
+          }),
+        ),
       ),
     );
   }),
 );
 
 const accessAtomKey = ({
-  authRefreshVersion,
   baseUrl,
   locale,
   organizationId,
   userId,
 }: {
-  authRefreshVersion: number;
   baseUrl?: string | undefined;
   locale?: KrakstackAuthLocale | undefined;
   organizationId: string;
   userId?: string | undefined;
 }) =>
   JSON.stringify({
-    authRefreshVersion,
     baseUrl,
     locale,
     organizationId,
@@ -318,28 +321,23 @@ export function MemberRequired({
   const locale = auth?.locale;
   const refreshAuth = auth?.refreshAuth;
   const session = useAtomSuspense(authSessionAtom(baseUrl), {
-    suspendOnWaiting: true,
+    suspendOnWaiting: false,
   }).value;
   const userId = session?.user.id;
   const currentAccessKey = accessAtomKey({
-    authRefreshVersion,
     baseUrl,
     locale,
     organizationId,
     userId,
   });
-  const [allowedAccessKey, setAllowedAccessKey] = useState<string | null>(null);
-
-  if (allowedAccessKey === currentAccessKey) return <>{children}</>;
-
   return (
     <MemberRequiredGate
       accessKey={currentAccessKey}
+      authRefreshVersion={authRefreshVersion}
       baseUrl={baseUrl}
       contactEmail={contactEmail}
       locale={locale}
       messages={messages}
-      onAccessAllowed={() => setAllowedAccessKey(currentAccessKey)}
       organizationId={organizationId}
       refreshAuth={refreshAuth}
     >
@@ -350,28 +348,31 @@ export function MemberRequired({
 
 function MemberRequiredGate({
   accessKey,
+  authRefreshVersion,
   baseUrl,
   contactEmail,
   children,
   locale,
   messages,
-  onAccessAllowed,
   organizationId,
   refreshAuth,
 }: {
   accessKey: string;
+  authRefreshVersion: number;
   baseUrl?: string | undefined;
   contactEmail?: string | undefined;
   children?: ReactNode;
   locale?: KrakstackAuthLocale | undefined;
   messages?: MemberRequiredMessages | undefined;
-  onAccessAllowed: () => void;
   organizationId: string;
   refreshAuth?: (() => void) | undefined;
 }) {
   const m = labels(locale, messages);
-  const accessResult = useAtomSuspense(accessAtom(baseUrl)(accessKey), {
-    suspendOnWaiting: true,
+  const queryAtom = accessAtom(baseUrl)(accessKey);
+  const refreshAccess = useAtomRefresh(queryAtom);
+  const lastAuthRefreshVersion = useRef(authRefreshVersion);
+  const accessResult = useAtomSuspense(queryAtom, {
+    suspendOnWaiting: false,
   });
   const acceptInvitationMutation = useAtomSet(acceptInvitationAtom(baseUrl));
   const [accepting, setAccepting] = useState(false);
@@ -383,10 +384,10 @@ function MemberRequiredGate({
   );
 
   useEffect(() => {
-    if (!access.allowed) return;
-
-    onAccessAllowed();
-  }, [access.allowed, onAccessAllowed]);
+    if (lastAuthRefreshVersion.current === authRefreshVersion) return;
+    lastAuthRefreshVersion.current = authRefreshVersion;
+    refreshAccess();
+  }, [authRefreshVersion, refreshAccess]);
 
   if (access.allowed) return <>{children}</>;
 
@@ -422,8 +423,8 @@ function MemberRequiredGate({
         );
       },
       onSuccess: () => {
-        refreshAuth?.();
-        onAccessAllowed();
+        if (refreshAuth) refreshAuth();
+        else refreshAccess();
         setAccepting(false);
       },
     });
