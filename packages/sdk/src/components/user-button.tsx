@@ -1,5 +1,10 @@
 import type { AuthApiKey as ApiKey } from "../auth/schema.js";
-import { useAtomRefresh, useAtomSet, useAtomValue } from "@effect/atom-react";
+import {
+  RegistryContext,
+  useAtomRefresh,
+  useAtomSet,
+  useAtomValue,
+} from "@effect/atom-react";
 import { FormBuilder, FormReact } from "@lucas-barake/effect-form-react";
 import {
   type UseNavigateResult,
@@ -7,13 +12,14 @@ import {
   useRouterState,
 } from "@tanstack/react-router";
 import { Effect, Option, Predicate, Schema } from "effect";
-import { AsyncResult, Atom } from "effect/unstable/reactivity";
+import { AsyncResult, Atom, AtomRegistry } from "effect/unstable/reactivity";
 import {
   ArrowLeft,
   Building2,
   KeyRound,
   Loader2,
   LogOutIcon,
+  Mail,
   Pencil,
   Plus,
   ShieldCheck,
@@ -30,6 +36,7 @@ import {
   createContext,
   useContext,
   useRef,
+  useEffect,
   useState,
 } from "react";
 
@@ -54,6 +61,7 @@ import { CopyButton } from "@krak-stack/registry/copy-button";
 import {
   Dialog,
   DialogContent,
+  DialogFooter,
   DialogDescription,
   DialogHeader,
   DialogTitle,
@@ -107,10 +115,13 @@ const messages = {
   en: {
     table_empty: "No results.",
     user_account_cancel: "Cancel",
+    user_account_back: "Back",
+    user_two_factor_manage: "Manage",
+    user_account_change: "Change",
     user_account_confirm_revoke: "Revoke account",
     user_account_connected: "Connected",
     user_account_current_password: "Current password",
-    user_account_google_connect: "Connect Google",
+    user_account_google_connect: "Set up",
     user_account_google_description:
       "Use your Google account as a sign-in option.",
     user_account_google_link_error: "Could not connect Google.",
@@ -129,6 +140,7 @@ const messages = {
     user_account_password_description:
       "Use an email and password as a sign-in option.",
     user_account_password_set: "Set password",
+    user_account_password_setup: "Set up",
     user_account_password_set_error: "Could not set your password.",
     user_account_password_title: "Password",
     user_account_password_verify_error: "Could not verify your password.",
@@ -136,10 +148,13 @@ const messages = {
     user_account_revoke_description:
       "Revoke {provider} from this account. You will not be able to use it to sign in unless you connect it again.",
     user_account_revoke_error: "Could not revoke this account.",
-    user_accounts_description:
-      "Connect external sign-in providers to this account.",
+    user_accounts_description: "Manage your password and connected accounts.",
     user_accounts_load_error: "Could not load connected accounts.",
-    user_accounts_title: "Accounts",
+    user_accounts_title: "Sign-in methods",
+    user_account_email_otp_title: "Email OTP",
+    user_account_email_otp_status: "Always available",
+    user_account_email_otp_description:
+      "Sign in with a one-time code sent to your email.",
     user_api_key_copied: "Copied",
     user_api_key_copy: "Copy",
     user_api_key_back: "Back",
@@ -246,6 +261,7 @@ const messages = {
     user_two_factor_disabled_message: "Two-factor authentication is disabled.",
     user_two_factor_enable_error: "Could not start two-factor setup.",
     user_two_factor_enable_submit: "Enable",
+    user_confirm_password: "Confirm password",
     user_two_factor_enabled: "Enabled",
     user_two_factor_enabled_message: "Two-factor authentication is enabled.",
     user_two_factor_scan_description:
@@ -257,10 +273,13 @@ const messages = {
   fr: {
     table_empty: "Aucun résultat.",
     user_account_cancel: "Annuler",
+    user_account_back: "Retour",
+    user_two_factor_manage: "Gérer",
+    user_account_change: "Modifier",
     user_account_confirm_revoke: "Révoquer le compte",
     user_account_connected: "Connecté",
     user_account_current_password: "Mot de passe actuel",
-    user_account_google_connect: "Connecter Google",
+    user_account_google_connect: "Configurer",
     user_account_google_description:
       "Utilisez votre compte Google comme option de connexion.",
     user_account_google_link_error: "Impossible de connecter Google.",
@@ -281,6 +300,7 @@ const messages = {
     user_account_password_description:
       "Utilisez un courriel et un mot de passe comme option de connexion.",
     user_account_password_set: "Définir le mot de passe",
+    user_account_password_setup: "Configurer",
     user_account_password_set_error:
       "Impossible de définir votre mot de passe.",
     user_account_password_title: "Mot de passe",
@@ -291,9 +311,13 @@ const messages = {
       "Révoquez {provider} de ce compte. Vous ne pourrez plus l'utiliser pour vous connecter, sauf si vous le reconnectez.",
     user_account_revoke_error: "Impossible de révoquer ce compte.",
     user_accounts_description:
-      "Connectez des fournisseurs de connexion externes à ce compte.",
+      "Gérez votre mot de passe et vos comptes connectés.",
     user_accounts_load_error: "Impossible de charger les comptes connectés.",
-    user_accounts_title: "Comptes",
+    user_accounts_title: "Méthodes de connexion",
+    user_account_email_otp_title: "Code à usage unique par e-mail",
+    user_account_email_otp_status: "Toujours disponible",
+    user_account_email_otp_description:
+      "Connectez-vous avec un code à usage unique envoyé à votre adresse e-mail.",
     user_api_key_copied: "Copié",
     user_api_key_copy: "Copier",
     user_api_key_back: "Retour",
@@ -405,6 +429,7 @@ const messages = {
     user_two_factor_enable_error:
       "Impossible de démarrer la configuration à deux facteurs.",
     user_two_factor_enable_submit: "Activer",
+    user_confirm_password: "Confirmer le mot de passe",
     user_two_factor_enabled: "Activée",
     user_two_factor_enabled_message:
       "L'authentification à deux facteurs est activée.",
@@ -679,12 +704,14 @@ const requiresPasswordForAccountRevoke = (accounts: readonly LinkedAccount[]) =>
   accounts.some((account) => account.providerId === "credential");
 
 const userAccountsAtom = Atom.family((baseUrl?: string) =>
-  Atom.keepAlive(
-    Atom.map(
-      authClientApi(baseUrl).query("auth", "listAccounts", {
-        reactivityKeys: ["user-accounts", baseUrl],
-      }),
-      AsyncResult.map((accounts) => Array.from(accounts)),
+  Atom.optimistic(
+    Atom.keepAlive(
+      Atom.map(
+        authClientApi(baseUrl).query("auth", "listAccounts", {
+          reactivityKeys: ["user-accounts", baseUrl],
+        }),
+        AsyncResult.map((accounts) => Array.from(accounts)),
+      ),
     ),
   ),
 );
@@ -761,6 +788,13 @@ export const UserButton = ({
   const [uncontrolledDialog, setUncontrolledDialog] =
     useState<UserButtonDialog | null>(defaultDialog);
   const [isStoppingImpersonation, setIsStoppingImpersonation] = useState(false);
+  const [changingPassword, setChangingPassword] = useState(false);
+  const [settingPassword, setSettingPassword] = useState(false);
+  const [totpSetup, setTotpSetup] = useState<TotpSetup | null>(null);
+  const [managingTwoFactor, setManagingTwoFactor] = useState(false);
+  const [revokingAccount, setRevokingAccount] = useState<LinkedAccount | null>(
+    null,
+  );
   const settingsDialog =
     controlledDialog !== undefined ? controlledDialog : uncontrolledDialog;
   const [formError, setFormError] = useState<string | null>(null);
@@ -775,11 +809,7 @@ export const UserButton = ({
     useAtomValue<AsyncResult.AsyncResult<LinkedAccount[], unknown>>(
       accountsAtom,
     );
-  const refreshLoadedAccounts = useAtomRefresh(loadedAccountsAtom);
-  const refreshEmptyAccounts = useAtomRefresh(emptyAccountsAtom);
-  const refreshAccounts = shouldLoadAccounts
-    ? refreshLoadedAccounts
-    : refreshEmptyAccounts;
+  const registry = useContext(RegistryContext);
   const [signOutAction] = useState(() =>
     authClientApi(resolvedBaseUrl).runtime.fn(
       ({
@@ -844,7 +874,14 @@ export const UserButton = ({
       onFailure: () => m.user_accounts_load_error(),
       onSuccess: () => null,
     }),
-    reload: async () => refreshAccounts(),
+    reload: async () => {
+      registry.refresh(loadedAccountsAtom);
+      await Effect.runPromise(
+        AtomRegistry.getResult(registry, loadedAccountsAtom, {
+          suspendOnWaiting: true,
+        }),
+      );
+    },
   };
 
   const setSettingsDialog = (
@@ -890,12 +927,12 @@ export const UserButton = ({
         <DropdownMenu>
           <DropdownMenuTrigger
             render={
-              <Button variant="outline" size="icon">
+              <Button variant="outline" size="icon" className="overflow-hidden">
                 {displayImage ? (
                   <img
                     src={displayImage}
                     alt={displayName || displayEmail}
-                    className="size-full rounded-md object-cover"
+                    className="size-full object-cover"
                   />
                 ) : (
                   <UserIcon className="size-4.5" />
@@ -1021,88 +1058,65 @@ export const UserButton = ({
           );
         }}
       >
-        <DialogContent className="max-h-[85vh] min-w-0 overflow-x-hidden overflow-y-auto sm:max-w-3xl">
-          <DialogHeader>
-            <DialogTitle className="text-2xl">
-              {m.user_form_title()}
-            </DialogTitle>
-            <DialogDescription>{m.user_form_description()}</DialogDescription>
-          </DialogHeader>
-          <Separator />
-          {isPending ? (
-            <p className="text-muted-foreground text-sm">{m.user_loading()}</p>
-          ) : (
-            <div className="flex flex-col gap-6">
-              <UserForm
-                defaultValues={{
-                  name: displayName ?? "",
-                  image: displayImage || null,
-                  emails: Array.from(metadata.emails ?? []),
-                  phones: Array.from(metadata.phones ?? []),
-                  websites: Array.from(metadata.websites ?? []),
-                  socials: Array.from(metadata.socials ?? []),
-                }}
-                error={formError}
-                onSubmit={(values) =>
-                  Effect.gen(function* () {
-                    setFormError(null);
-                    const metadata = yield* Effect.try({
-                      try: () => userMetadataFromForm(values),
-                      catch: () => new Error(m.user_contact_validation_error()),
-                    });
-                    const imageFile = isFile(values.image)
-                      ? values.image
-                      : null;
-                    const image = imageFile
-                      ? assetPath(
-                          (yield* uploadUserImageAsset(
-                            imageFile,
-                            m,
-                            resolvedBaseUrl,
-                          )).url,
-                        )
-                      : Schema.is(Schema.String)(values.image)
-                        ? assetPath(values.image)
-                        : null;
-                    const client = yield* authHttpClient(resolvedBaseUrl);
-                    yield* client.auth.updateUser({
-                      payload: {
-                        name: values.name.trim(),
-                        image: image?.trim() ?? "",
-                        metadata,
-                      },
-                    });
-                    notifyAuthChange();
-                    yield* Effect.sync(refreshSession);
-                    setSettingsDialog(null);
-                  }).pipe(
-                    Effect.tapError((error) =>
-                      Effect.sync(() =>
-                        setFormError(
-                          error instanceof Error
-                            ? error.message
-                            : m.user_form_update_error(),
-                        ),
-                      ),
-                    ),
+        <UserForm
+          defaultValues={{
+            name: displayName ?? "",
+            image: displayImage || null,
+            emails: Array.from(metadata.emails ?? []),
+            phones: Array.from(metadata.phones ?? []),
+            websites: Array.from(metadata.websites ?? []),
+            socials: Array.from(metadata.socials ?? []),
+          }}
+          error={formError}
+          onSubmit={(values) =>
+            Effect.gen(function* () {
+              setFormError(null);
+              const metadata = yield* Effect.try({
+                try: () => userMetadataFromForm(values),
+                catch: () => new Error(m.user_contact_validation_error()),
+              });
+              const imageFile = isFile(values.image) ? values.image : null;
+              const image = imageFile
+                ? assetPath(
+                    (yield* uploadUserImageAsset(imageFile, m, resolvedBaseUrl))
+                      .url,
                   )
-                }
-              />
-              <Separator />
-              <ConnectedAccounts
-                baseUrl={resolvedBaseUrl}
-                accountCache={accountCache}
-                googleEnabled={projectConfig?.authOptions.google ?? true}
-                currentSiteHref={currentSiteHref}
-                navigate={navigate}
-              />
-            </div>
-          )}
-        </DialogContent>
+                : Schema.is(Schema.String)(values.image)
+                  ? assetPath(values.image)
+                  : null;
+              const client = yield* authHttpClient(resolvedBaseUrl);
+              yield* client.auth.updateUser({
+                payload: {
+                  name: values.name.trim(),
+                  image: image?.trim() ?? "",
+                  metadata,
+                },
+              });
+              notifyAuthChange();
+              yield* Effect.sync(refreshSession);
+              setSettingsDialog(null);
+            }).pipe(
+              Effect.tapError((error) =>
+                Effect.sync(() =>
+                  setFormError(
+                    error instanceof Error
+                      ? error.message
+                      : m.user_form_update_error(),
+                  ),
+                ),
+              ),
+            )
+          }
+        />
       </Dialog>
       <Dialog
         open={canManageUserSettings && settingsDialog === "security"}
         onOpenChange={(open) => {
+          setChangingPassword(false);
+          setSettingPassword(false);
+          setTotpSetup(null);
+          setManagingTwoFactor(false);
+          setRevokingAccount(null);
           setSettingsDialog((current) =>
             open ? "security" : current === "security" ? null : current,
           );
@@ -1111,24 +1125,143 @@ export const UserButton = ({
         <DialogContent className="max-h-[85vh] overflow-y-auto sm:max-w-3xl">
           <DialogHeader>
             <DialogTitle className="text-2xl">
-              {m.user_security_title()}
+              {changingPassword
+                ? m.user_account_password_change_title()
+                : settingPassword
+                  ? m.user_account_password_set()
+                  : revokingAccount
+                    ? m.user_account_revoke()
+                    : managingTwoFactor
+                      ? m.user_two_factor_title()
+                      : m.user_security_title()}
             </DialogTitle>
             <DialogDescription>
-              {m.user_security_description()}
+              {changingPassword
+                ? m.user_account_password_change_description()
+                : settingPassword
+                  ? m.user_account_password_description()
+                  : revokingAccount
+                    ? m.user_account_revoke_description({
+                        provider: providerName(revokingAccount.providerId, m),
+                      })
+                    : managingTwoFactor
+                      ? m.user_two_factor_description()
+                      : m.user_security_description()}
             </DialogDescription>
+            {changingPassword ||
+            settingPassword ||
+            revokingAccount ||
+            managingTwoFactor ? (
+              <Button
+                className="mt-2 w-fit"
+                type="button"
+                variant="secondary"
+                onClick={() => {
+                  setChangingPassword(false);
+                  setSettingPassword(false);
+                  setTotpSetup(null);
+                  setManagingTwoFactor(false);
+                  setRevokingAccount(null);
+                }}
+              >
+                <ArrowLeft />
+                {m.user_account_back()}
+              </Button>
+            ) : null}
           </DialogHeader>
           <Separator />
-          <div className="flex flex-col gap-6">
-            <PasswordSettings
+          {changingPassword ? (
+            <ChangePasswordForm baseUrl={resolvedBaseUrl} />
+          ) : settingPassword ? (
+            <SetPasswordForm
               baseUrl={resolvedBaseUrl}
-              accountCache={accountCache}
+              onSaved={async () => {
+                await accountCache.reload();
+                setSettingPassword(false);
+              }}
             />
-            <Separator />
+          ) : revokingAccount ? (
+            <RevokeAccountForm
+              baseUrl={resolvedBaseUrl}
+              account={revokingAccount}
+              requirePassword={requiresPasswordForAccountRevoke(
+                accountCache.accounts ?? [],
+              )}
+              onCancel={() => setRevokingAccount(null)}
+              onRevoked={async () => {
+                await accountCache.reload();
+                setRevokingAccount(null);
+              }}
+            />
+          ) : totpSetup ? (
+            <VerifyTotpSetup
+              baseUrl={resolvedBaseUrl}
+              setup={totpSetup}
+              onVerified={async () => {
+                await refreshSession();
+                setTotpSetup(null);
+                setManagingTwoFactor(false);
+              }}
+            />
+          ) : managingTwoFactor ? (
             <AccountSecuritySettings
               baseUrl={resolvedBaseUrl}
               accountCache={accountCache}
+              onSetup={setTotpSetup}
             />
-          </div>
+          ) : (
+            <div className="flex flex-col gap-6">
+              <ConnectedAccounts
+                onChangePassword={() => setChangingPassword(true)}
+                onSetupPassword={() => setSettingPassword(true)}
+                onRevokeAccount={setRevokingAccount}
+                baseUrl={resolvedBaseUrl}
+                accountCache={accountCache}
+                googleEnabled={projectConfig?.authOptions.google ?? true}
+                currentSiteHref={currentSiteHref}
+                navigate={navigate}
+              />
+              <Separator />
+              <section className="flex flex-col gap-6">
+                <div className="flex flex-wrap items-start justify-between gap-3">
+                  <div className="flex flex-col gap-1.5">
+                    <h2 className="text-sm leading-none font-medium">
+                      {m.user_two_factor_title()}
+                    </h2>
+                    <p className="text-muted-foreground text-xs">
+                      {m.user_two_factor_description()}
+                    </p>
+                  </div>
+                  <Badge
+                    variant={
+                      hasTwoFactorEnabled(session?.user)
+                        ? "default"
+                        : "secondary"
+                    }
+                  >
+                    {hasTwoFactorEnabled(session?.user)
+                      ? m.user_two_factor_enabled()
+                      : m.user_two_factor_disabled()}
+                  </Badge>
+                </div>
+                {hasTwoFactorEnabled(session?.user) ? (
+                  <AccountSecuritySettings
+                    baseUrl={resolvedBaseUrl}
+                    accountCache={accountCache}
+                    onSetup={setTotpSetup}
+                  />
+                ) : (
+                  <Button
+                    type="button"
+                    className="self-start"
+                    onClick={() => setManagingTwoFactor(true)}
+                  >
+                    {m.user_two_factor_enable_submit()}
+                  </Button>
+                )}
+              </section>
+            </div>
+          )}
         </DialogContent>
       </Dialog>
       <Dialog
@@ -1139,7 +1272,7 @@ export const UserButton = ({
           );
         }}
       >
-        <DialogContent className="max-h-[85vh] min-w-0 overflow-x-hidden overflow-y-auto sm:max-w-3xl">
+        <DialogContent className="max-h-[85vh] min-w-0 overflow-x-hidden overflow-y-auto sm:max-w-[calc(100%-2rem)]">
           <ApiKeyManager
             baseUrl={resolvedBaseUrl}
             active={settingsDialog === "apiKeys"}
@@ -1209,12 +1342,18 @@ export const UserButton = ({
 };
 
 function ConnectedAccounts({
+  onSetupPassword,
+  onRevokeAccount,
+  onChangePassword,
   baseUrl,
   accountCache,
   googleEnabled,
   currentSiteHref,
   navigate,
 }: {
+  onSetupPassword: () => void;
+  onRevokeAccount: (account: LinkedAccount) => void;
+  onChangePassword: () => void;
   baseUrl?: string | undefined;
   accountCache: AccountCache;
   googleEnabled: boolean;
@@ -1224,9 +1363,6 @@ function ConnectedAccounts({
   const m = useUserButtonMessages();
   const [error, setError] = useState<string | null>(null);
   const [isLinking, setIsLinking] = useState(false);
-  const [revokingAccount, setRevokingAccount] = useState<LinkedAccount | null>(
-    null,
-  );
   const [linkGoogleAction] = useState(() =>
     authClientApi(baseUrl).runtime.fn(
       (input: { baseUrl: string | undefined; callbackURL: string }) =>
@@ -1260,41 +1396,12 @@ function ConnectedAccounts({
     ),
   );
   const linkGoogle = useAtomSet(linkGoogleAction);
-  const revokeAccount = (account: LinkedAccount) =>
-    authHttpClient(baseUrl).pipe(
-      Effect.tap(() => Effect.sync(() => setError(null))),
-      Effect.flatMap((client) =>
-        client.auth.unlinkAccount({
-          payload: {
-            providerId: account.providerId,
-            accountId: account.accountId,
-          },
-        }),
-      ),
-      Effect.tap(() => Effect.sync(notifyAuthChange)),
-      Effect.flatMap(() => Effect.tryPromise(() => accountCache.reload())),
-      Effect.tap(() => Effect.sync(() => setRevokingAccount(null))),
-      Effect.catch((cause) =>
-        Effect.sync(() =>
-          setError(
-            cause instanceof Error && cause.message
-              ? cause.message
-              : m.user_account_revoke_error(),
-          ),
-        ),
-      ),
-    );
   const accounts = accountCache.accounts ?? [];
 
   const googleAccount = accounts.find(
     (account) => account.providerId === "google",
   );
-  const requirePassword = requiresPasswordForAccountRevoke(accounts);
   const showGoogleAccount = googleEnabled || Boolean(googleAccount);
-
-  if (accountCache.accounts && (accounts.length === 0 || !showGoogleAccount)) {
-    return null;
-  }
 
   const startLinkGoogle = () => {
     if (!googleEnabled) return;
@@ -1311,6 +1418,26 @@ function ConnectedAccounts({
           {m.user_accounts_description()}
         </p>
       </div>
+      <div className="flex min-w-0 items-center gap-3 rounded-lg border p-4">
+        <span className="bg-background flex size-9 shrink-0 items-center justify-center rounded-full border">
+          <Mail className="size-5" aria-hidden="true" />
+        </span>
+        <div className="min-w-0">
+          <div className="flex flex-wrap items-center gap-2">
+            <p className="font-medium">{m.user_account_email_otp_title()}</p>
+            <Badge>{m.user_account_email_otp_status()}</Badge>
+          </div>
+          <p className="text-muted-foreground text-sm">
+            {m.user_account_email_otp_description()}
+          </p>
+        </div>
+      </div>
+      <PasswordSettings
+        onSetupPassword={onSetupPassword}
+        accountCache={accountCache}
+        onChangePassword={onChangePassword}
+        onRevokeAccount={onRevokeAccount}
+      />
       {accountCache.accounts ? (
         <>
           {showGoogleAccount ? (
@@ -1325,16 +1452,7 @@ function ConnectedAccounts({
               isConnecting={isLinking}
               renderDisconnected={undefined}
               onConnect={startLinkGoogle}
-              onRevoke={(account) => setRevokingAccount(account)}
-            />
-          ) : null}
-          {revokingAccount ? (
-            <RevokeAccountForm
-              baseUrl={baseUrl}
-              account={revokingAccount}
-              requirePassword={requirePassword}
-              onCancel={() => setRevokingAccount(null)}
-              onRevoke={revokeAccount}
+              onRevoke={onRevokeAccount}
             />
           ) : null}
         </>
@@ -1443,101 +1561,78 @@ function GoogleLogo() {
 }
 
 function PasswordSettings({
-  baseUrl,
+  onSetupPassword,
+  onRevokeAccount,
+  onChangePassword,
   accountCache,
 }: {
-  baseUrl?: string | undefined;
+  onSetupPassword: () => void;
+  onRevokeAccount: (account: LinkedAccount) => void;
+  onChangePassword: () => void;
   accountCache: AccountCache;
 }) {
-  const [error, setError] = useState<string | null>(null);
-  const [revokingAccount, setRevokingAccount] = useState<LinkedAccount | null>(
-    null,
-  );
   const m = useUserButtonMessages();
   const accounts = accountCache.accounts ?? [];
 
   const passwordAccount = accounts.find(
     (account) => account.providerId === "credential",
   );
-  const hasPassword = Boolean(passwordAccount);
-  const requirePassword = requiresPasswordForAccountRevoke(accounts);
-
-  const revokePassword = (account: LinkedAccount) =>
-    authHttpClient(baseUrl).pipe(
-      Effect.tap(() => Effect.sync(() => setError(null))),
-      Effect.flatMap((client) =>
-        client.auth.unlinkAccount({
-          payload: {
-            providerId: account.providerId,
-            accountId: account.accountId,
-          },
-        }),
-      ),
-      Effect.tap(() => Effect.sync(notifyAuthChange)),
-      Effect.flatMap(() => Effect.tryPromise(() => accountCache.reload())),
-      Effect.tap(() => Effect.sync(() => setRevokingAccount(null))),
-      Effect.catch((cause) =>
-        Effect.sync(() =>
-          setError(
-            cause instanceof Error && cause.message
-              ? cause.message
-              : m.user_account_revoke_error(),
-          ),
-        ),
-      ),
-    );
 
   return (
     <section className="flex flex-col gap-4">
-      <div className="flex flex-col gap-1.5">
-        <h2 className="text-sm leading-none font-medium">
-          {m.user_account_password_title()}
-        </h2>
-        <p className="text-muted-foreground text-sm">
-          {m.user_account_password_description()}
-        </p>
-      </div>
-      {accountCache.accounts && hasPassword && passwordAccount ? (
+      {accountCache.accounts ? (
         <div className="flex flex-col gap-4">
           <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border p-4">
-            <div className="flex flex-col gap-1">
-              <div className="flex flex-wrap items-center gap-2">
-                <p className="font-medium">{m.user_account_password_title()}</p>
-                <Badge>{m.user_account_connected()}</Badge>
+            <div className="flex min-w-0 items-center gap-3">
+              <span className="bg-background flex size-9 shrink-0 items-center justify-center rounded-full border text-sm font-semibold">
+                <KeyRound className="size-5" aria-hidden="true" />
+              </span>
+              <div className="flex flex-col gap-1">
+                <div className="flex flex-wrap items-center gap-2">
+                  <p className="font-medium">
+                    {m.user_account_password_title()}
+                  </p>
+                  {passwordAccount ? (
+                    <Badge>{m.user_account_connected()}</Badge>
+                  ) : null}
+                </div>
+                <p className="text-muted-foreground text-sm">
+                  {passwordAccount
+                    ? m.user_account_password_connected_description()
+                    : m.user_account_password_description()}
+                </p>
               </div>
-              <p className="text-muted-foreground text-sm">
-                {m.user_account_password_connected_description()}
-              </p>
             </div>
-            <Button
-              type="button"
-              variant="outline"
-              onClick={() => setRevokingAccount(passwordAccount)}
-            >
-              {m.user_account_revoke()}
-            </Button>
+            {passwordAccount ? (
+              <div className="flex items-center gap-2">
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={onChangePassword}
+                >
+                  {m.user_account_change()}
+                </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => onRevokeAccount(passwordAccount)}
+                >
+                  {m.user_account_revoke()}
+                </Button>
+              </div>
+            ) : (
+              <Button type="button" variant="outline" onClick={onSetupPassword}>
+                {m.user_account_password_setup()}
+              </Button>
+            )}
           </div>
-          {revokingAccount ? (
-            <RevokeAccountForm
-              baseUrl={baseUrl}
-              account={revokingAccount}
-              requirePassword={requirePassword}
-              onCancel={() => setRevokingAccount(null)}
-              onRevoke={revokePassword}
-            />
-          ) : null}
-          <Separator />
-          <ChangePasswordForm baseUrl={baseUrl} />
         </div>
-      ) : accountCache.accounts ? (
-        <SetPasswordForm baseUrl={baseUrl} onSaved={accountCache.reload} />
       ) : !accountCache.error ? (
         <p className="text-muted-foreground text-sm">{m.user_loading()}</p>
       ) : null}
       {accountCache.error ? (
         <p className="text-destructive text-sm">{accountCache.error}</p>
       ) : null}
-      {error ? <p className="text-destructive text-sm">{error}</p> : null}
     </section>
   );
 }
@@ -1587,14 +1682,6 @@ function ChangePasswordForm({ baseUrl }: { baseUrl?: string | undefined }) {
           submit();
         }}
       >
-        <div className="flex flex-col gap-1">
-          <h3 className="text-sm font-medium">
-            {m.user_account_password_change_title()}
-          </h3>
-          <p className="text-muted-foreground text-sm">
-            {m.user_account_password_change_description()}
-          </p>
-        </div>
         <form.currentPassword
           label={m.user_account_current_password()}
           type="password"
@@ -1629,7 +1716,6 @@ function SetPasswordForm({
   onSaved: () => Promise<void>;
 }) {
   const m = useUserButtonMessages();
-  let reset = () => {};
   const [form] = useState(() =>
     FormReact.make(passwordFormBuilder(true), {
       runtime: authClientApi(baseUrl).runtime,
@@ -1643,7 +1729,6 @@ function SetPasswordForm({
             }),
           ),
           Effect.tap(() => Effect.sync(notifyAuthChange)),
-          Effect.tap(() => Effect.sync(() => reset())),
           Effect.flatMap(() => Effect.tryPromise(() => onSaved())),
           Effect.mapError((cause) =>
             cause instanceof Error
@@ -1653,7 +1738,6 @@ function SetPasswordForm({
         ),
     }),
   );
-  reset = useAtomSet(form.reset);
   const submit = useAtomSet(form.submit);
   const submitResult = useAtomValue(form.submit);
 
@@ -1685,13 +1769,13 @@ function RevokeAccountForm({
   account,
   requirePassword,
   onCancel,
-  onRevoke,
+  onRevoked,
 }: {
   baseUrl?: string | undefined;
   account: LinkedAccount;
   requirePassword: boolean;
   onCancel: () => void;
-  onRevoke: (account: LinkedAccount) => Effect.Effect<void, never>;
+  onRevoked: () => Promise<void>;
 }) {
   const m = useUserButtonMessages();
   const [form] = useState(() =>
@@ -1701,13 +1785,28 @@ function RevokeAccountForm({
       mode: { validation: "onSubmit" },
       onSubmit: (_, { decoded }) =>
         Effect.gen(function* () {
+          const client = yield* authHttpClient(baseUrl);
           if (requirePassword) {
-            const client = yield* authHttpClient(baseUrl);
             yield* client.authExtra.verifyPassword({
               payload: { password: decoded.password },
             });
           }
-          yield* onRevoke(account);
+          yield* client.auth
+            .unlinkAccount({
+              payload: {
+                providerId: account.providerId,
+                accountId: account.accountId,
+              },
+            })
+            .pipe(
+              Effect.mapError((cause) =>
+                cause instanceof Error
+                  ? cause
+                  : new Error(m.user_account_revoke_error()),
+              ),
+            );
+          yield* Effect.sync(notifyAuthChange);
+          yield* Effect.tryPromise(onRevoked);
         }).pipe(
           Effect.mapError((cause) =>
             cause instanceof Error
@@ -1723,21 +1822,13 @@ function RevokeAccountForm({
   return (
     <form.Initialize defaultValues={{ password: "" }}>
       <form
-        className="bg-muted/40 flex flex-col gap-3 rounded-lg border p-4"
+        className="flex w-full flex-col gap-3 sm:max-w-md"
         onSubmit={(event) => {
           event.preventDefault();
           event.stopPropagation();
           submit();
         }}
       >
-        <div className="flex flex-col gap-1">
-          <h3 className="text-sm font-medium">{m.user_account_revoke()}</h3>
-          <p className="text-muted-foreground text-sm">
-            {m.user_account_revoke_description({
-              provider: providerName(account.providerId, m),
-            })}
-          </p>
-        </div>
         {requirePassword ? (
           <form.password
             label={m.user_field_password()}
@@ -1752,9 +1843,7 @@ function RevokeAccountForm({
             {m.user_account_cancel()}
           </Button>
           {requirePassword ? (
-            <SubmitButton form={form}>
-              {m.user_account_confirm_revoke()}
-            </SubmitButton>
+            <SubmitButton form={form}>{m.user_confirm_password()}</SubmitButton>
           ) : (
             <Button
               type="button"
@@ -1818,92 +1907,103 @@ const UserForm = ({
   const submit = useAtomSet(form.submit);
 
   return (
-    <section className="flex flex-col gap-4">
-      <div className="flex flex-col gap-1.5">
-        <h2 className="text-sm leading-none font-medium">
-          {m.user_profile_title()}
-        </h2>
-        <p className="text-muted-foreground text-sm">
-          {m.user_profile_description()}
-        </p>
-      </div>
-      <form.Initialize defaultValues={defaultValues}>
-        <form
-          className="flex flex-col gap-4"
-          onSubmit={(event) => {
-            event.preventDefault();
-            event.stopPropagation();
-            submit();
-          }}
-        >
-          <form.image
-            label={m.user_profile_photo_upload_label()}
-            size={{
-              width: 96,
-              height: 96,
-              suggestedWidth: 512,
-              suggestedHeight: 512,
-            }}
-          />
-          <form.name
-            label={m.user_form_name_label()}
-            autoComplete="name"
-            required
-          />
-          <Separator />
-          <div className="flex flex-col gap-4">
-            <div className="flex flex-wrap items-start justify-between gap-3">
-              <div className="flex flex-col gap-1.5">
-                <h3 className="text-sm leading-none font-medium">
-                  {m.user_contact_title()}
-                </h3>
-                <p className="text-muted-foreground text-sm">
-                  {m.user_contact_description()}
-                </p>
-              </div>
-              <EditingLocaleSwitcher
-                value={editingLocale}
-                onValueChange={setEditingLocale}
-              />
+    <form.Initialize defaultValues={defaultValues}>
+      <form
+        onSubmit={(event) => {
+          event.preventDefault();
+          event.stopPropagation();
+          submit();
+        }}
+      >
+        <DialogContent className="grid max-h-[85vh] min-w-0 grid-rows-[auto_minmax(0,1fr)_auto] gap-0 overflow-hidden sm:max-w-3xl">
+          <DialogHeader className="pb-6">
+            <DialogTitle className="text-2xl">
+              {m.user_form_title()}
+            </DialogTitle>
+            <DialogDescription>{m.user_form_description()}</DialogDescription>
+          </DialogHeader>
+          <div className="-mx-6 flex min-h-0 flex-col gap-4 overflow-y-auto px-6 pb-6">
+            <div className="flex flex-col gap-1.5">
+              <h2 className="text-sm leading-none font-medium">
+                {m.user_profile_title()}
+              </h2>
+              <p className="text-muted-foreground text-sm">
+                {m.user_profile_description()}
+              </p>
             </div>
-            <UserContactGroup title={m.user_contact_email_type()}>
-              <form.emails
-                locale={editingLocale}
-                maxItems={USER_CONTACT_LIMIT}
-                messages={userContactFieldMessages(m)}
-              />
-            </UserContactGroup>
-            <UserContactGroup title={m.user_contact_phone_type()}>
-              <form.phones
-                locale={editingLocale}
-                maxItems={USER_CONTACT_LIMIT}
-                messages={userContactFieldMessages(m)}
-              />
-            </UserContactGroup>
-            <UserContactGroup title={m.user_contact_website_type()}>
-              <form.websites
-                locale={editingLocale}
-                maxItems={USER_CONTACT_LIMIT}
-                messages={userContactFieldMessages(m)}
-              />
-            </UserContactGroup>
-            <UserContactGroup title={m.user_contact_social_type()}>
-              <form.socials
-                locale={editingLocale}
-                maxItems={USER_CONTACT_LIMIT}
-                messages={userContactFieldMessages(m)}
-              />
-            </UserContactGroup>
+            <form.image
+              label={m.user_profile_photo_upload_label()}
+              size={{
+                width: 96,
+                height: 96,
+                suggestedWidth: 512,
+                suggestedHeight: 512,
+              }}
+            />
+            <form.name
+              label={m.user_form_name_label()}
+              autoComplete="name"
+              required
+            />
+            <Separator />
+            <div className="flex flex-col gap-4">
+              <div className="flex flex-wrap items-start justify-between gap-3">
+                <div className="flex flex-col gap-1.5">
+                  <h3 className="text-sm leading-none font-medium">
+                    {m.user_contact_title()}
+                  </h3>
+                  <p className="text-muted-foreground text-sm">
+                    {m.user_contact_description()}
+                  </p>
+                </div>
+                <EditingLocaleSwitcher
+                  value={editingLocale}
+                  onValueChange={setEditingLocale}
+                />
+              </div>
+              <UserContactGroup title={m.user_contact_email_type()}>
+                <form.emails
+                  locale={editingLocale}
+                  maxItems={USER_CONTACT_LIMIT}
+                  messages={userContactFieldMessages(m)}
+                />
+              </UserContactGroup>
+              <UserContactGroup title={m.user_contact_phone_type()}>
+                <form.phones
+                  locale={editingLocale}
+                  maxItems={USER_CONTACT_LIMIT}
+                  messages={userContactFieldMessages(m)}
+                />
+              </UserContactGroup>
+              <UserContactGroup title={m.user_contact_website_type()}>
+                <form.websites
+                  locale={editingLocale}
+                  maxItems={USER_CONTACT_LIMIT}
+                  messages={userContactFieldMessages(m)}
+                />
+              </UserContactGroup>
+              <UserContactGroup title={m.user_contact_social_type()}>
+                <form.socials
+                  locale={editingLocale}
+                  maxItems={USER_CONTACT_LIMIT}
+                  messages={userContactFieldMessages(m)}
+                />
+              </UserContactGroup>
+            </div>
           </div>
-          {error && (
-            <p role="alert" className="text-destructive text-sm">
-              {error}
-            </p>
-          )}
-          <SubmitButton form={form} />
-        </form>
-      </form.Initialize>
-    </section>
+          <DialogFooter className="-mx-6 -mb-6 border-t px-6 py-4">
+            <div className="flex flex-col gap-3">
+              {error && (
+                <p role="alert" className="text-destructive text-sm">
+                  {error}
+                </p>
+              )}
+              <SubmitButton form={form} />
+            </div>
+          </DialogFooter>
+        </DialogContent>
+      </form>
+    </form.Initialize>
   );
 };
 
@@ -1923,9 +2023,11 @@ const UserContactGroup = ({
 function AccountSecuritySettings({
   baseUrl,
   accountCache,
+  onSetup,
 }: {
   baseUrl?: string | undefined;
   accountCache: AccountCache;
+  onSetup: (setup: TotpSetup) => void;
 }) {
   const m = useUserButtonMessages();
   const sessionAtom = authSessionAtom(baseUrl);
@@ -1936,7 +2038,6 @@ function AccountSecuritySettings({
     onFailure: () => null,
     onSuccess: ({ value }) => value,
   });
-  const [setup, setSetup] = useState<TotpSetup | null>(null);
   const [message, setMessage] = useState<string | null>(null);
   const twoFactorEnabled = hasTwoFactorEnabled(session?.user);
   const requirePassword = accountCache.accounts
@@ -1947,21 +2048,6 @@ function AccountSecuritySettings({
 
   return (
     <div className="flex flex-col gap-6">
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div className="flex flex-col gap-1.5">
-          <h2 className="text-sm leading-none font-medium">
-            {m.user_two_factor_title()}
-          </h2>
-          <p className="text-muted-foreground text-xs">
-            {m.user_two_factor_description()}
-          </p>
-        </div>
-        <Badge variant={twoFactorEnabled ? "default" : "secondary"}>
-          {twoFactorEnabled
-            ? m.user_two_factor_enabled()
-            : m.user_two_factor_disabled()}
-        </Badge>
-      </div>
       {requirePassword === null ? (
         <p
           className={
@@ -1981,21 +2067,11 @@ function AccountSecuritySettings({
             await refreshSession();
           }}
         />
-      ) : setup ? (
-        <VerifyTotpSetup
-          baseUrl={baseUrl}
-          setup={setup}
-          onVerified={async () => {
-            setSetup(null);
-            setMessage(m.user_two_factor_enabled_message());
-            await refreshSession();
-          }}
-        />
       ) : (
         <EnableTotpForm
           baseUrl={baseUrl}
           requirePassword={requirePassword}
-          onEnabled={setSetup}
+          onEnabled={onSetup}
         />
       )}
       {message ? (
@@ -2045,6 +2121,13 @@ function EnableTotpForm({
   );
   const submit = useAtomSet(form.submit);
   const submitResult = useAtomValue(form.submit);
+  const startedPasswordlessSetup = useRef(false);
+
+  useEffect(() => {
+    if (requirePassword || startedPasswordlessSetup.current) return;
+    startedPasswordlessSetup.current = true;
+    submit();
+  }, [requirePassword, submit]);
 
   return (
     <form.Initialize defaultValues={{ password: "" }}>
@@ -2066,9 +2149,7 @@ function EnableTotpForm({
         ) : null}
         <SubmitError result={submitResult} />
         {requirePassword ? (
-          <SubmitButton form={form}>
-            {m.user_two_factor_enable_submit()}
-          </SubmitButton>
+          <SubmitButton form={form}>{m.user_confirm_password()}</SubmitButton>
         ) : (
           <Button
             type="button"
@@ -2223,7 +2304,7 @@ function DisableTotpForm({
         ) : null}
         <SubmitError result={submitResult} />
         {requirePassword ? (
-          <SubmitButton form={form} />
+          <SubmitButton form={form}>{m.user_confirm_password()}</SubmitButton>
         ) : (
           <Button
             type="button"

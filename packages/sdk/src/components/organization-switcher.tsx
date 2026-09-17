@@ -60,6 +60,7 @@ import { CopyButton } from "@krak-stack/registry/copy-button";
 import {
   Dialog,
   DialogContent,
+  DialogFooter,
   DialogDescription,
   DialogHeader,
   DialogTitle,
@@ -1519,43 +1520,42 @@ export function OrganizationSwitcher({
           );
         }}
       >
-        <DialogContent className="max-h-[85vh] overflow-y-auto sm:max-w-2xl">
-          <DialogHeader>
-            <DialogTitle className="text-2xl">
-              {m.organization_create_title()}
-            </DialogTitle>
-            <DialogDescription>
-              {m.organization_create_description()}
-            </DialogDescription>
-            <div className="pt-2">
-              <EditingLocaleSwitcher
-                value={editingOrganizationLocale}
-                onValueChange={setEditingOrganizationLocale}
-              />
-            </div>
-          </DialogHeader>
-          <Separator />
-          <CreateOrganizationSection
-            baseUrl={baseUrl}
-            editingLocale={editingOrganizationLocale}
-            onCreated={async (organization) => {
-              setDialog(null);
-              let activated = false;
-              try {
-                await Effect.runPromise(setActiveOrganization(organization.id));
-                activated = true;
-                notifyAuthChange();
-              } catch {
-                // Creation succeeded even if activating the organization did not.
-              }
-              await refresh();
-              if (activated) {
-                onCreate?.(organization);
-                onChange?.(organization);
-              }
-            }}
-          />
-        </DialogContent>
+        <CreateOrganizationSection
+          header={
+            <DialogHeader>
+              <DialogTitle className="text-2xl">
+                {m.organization_create_title()}
+              </DialogTitle>
+              <DialogDescription>
+                {m.organization_create_description()}
+              </DialogDescription>
+              <div className="pt-2">
+                <EditingLocaleSwitcher
+                  value={editingOrganizationLocale}
+                  onValueChange={setEditingOrganizationLocale}
+                />
+              </div>
+            </DialogHeader>
+          }
+          baseUrl={baseUrl}
+          editingLocale={editingOrganizationLocale}
+          onCreated={async (organization) => {
+            setDialog(null);
+            let activated = false;
+            try {
+              await Effect.runPromise(setActiveOrganization(organization.id));
+              activated = true;
+              notifyAuthChange();
+            } catch {
+              // Creation succeeded even if activating the organization did not.
+            }
+            await refresh();
+            if (activated) {
+              onCreate?.(organization);
+              onChange?.(organization);
+            }
+          }}
+        />
       </Dialog>
       <Dialog
         open={dialog === "manage" && canUpdateOrganization}
@@ -1565,31 +1565,30 @@ export function OrganizationSwitcher({
           );
         }}
       >
-        <DialogContent className="max-h-[85vh] overflow-y-auto sm:max-w-2xl">
-          <DialogHeader>
-            <DialogTitle className="text-2xl">
-              {m.organization_switcher_manage()}
-            </DialogTitle>
-            <DialogDescription>
-              {m.organization_edit_description()}
-            </DialogDescription>
-            <div className="pt-2">
-              <EditingLocaleSwitcher
-                value={editingOrganizationLocale}
-                onValueChange={setEditingOrganizationLocale}
-              />
-            </div>
-          </DialogHeader>
-          <Separator />
-          {activeOrganization && canUpdateOrganization ? (
-            <EditOrganizationSection
-              baseUrl={baseUrl}
-              editingLocale={editingOrganizationLocale}
-              organization={activeOrganization}
-              onUpdated={refresh}
-            />
-          ) : null}
-        </DialogContent>
+        {activeOrganization && canUpdateOrganization ? (
+          <EditOrganizationSection
+            header={
+              <DialogHeader>
+                <DialogTitle className="text-2xl">
+                  {m.organization_switcher_manage()}
+                </DialogTitle>
+                <DialogDescription>
+                  {m.organization_edit_description()}
+                </DialogDescription>
+                <div className="pt-2">
+                  <EditingLocaleSwitcher
+                    value={editingOrganizationLocale}
+                    onValueChange={setEditingOrganizationLocale}
+                  />
+                </div>
+              </DialogHeader>
+            }
+            baseUrl={baseUrl}
+            editingLocale={editingOrganizationLocale}
+            organization={activeOrganization}
+            onUpdated={refresh}
+          />
+        ) : null}
       </Dialog>
       <Dialog
         open={dialog === "members"}
@@ -1624,7 +1623,7 @@ export function OrganizationSwitcher({
           );
         }}
       >
-        <DialogContent className="max-h-[85vh] min-w-0 overflow-x-hidden overflow-y-auto sm:max-w-3xl">
+        <DialogContent className="max-h-[85vh] min-w-0 overflow-x-hidden overflow-y-auto sm:max-w-[calc(100%-2rem)]">
           {activeOrganization ? (
             <OrganizationApiKeyManager
               baseUrl={baseUrl}
@@ -1904,11 +1903,13 @@ const userInvitationRowActions = ({
 ];
 
 function EditOrganizationSection({
+  header,
   baseUrl,
   editingLocale,
   organization,
   onUpdated,
 }: {
+  header: ReactNode;
   baseUrl?: string | undefined;
   editingLocale: OrganizationLocale;
   organization: OrganizationSummary;
@@ -1968,130 +1969,138 @@ function EditOrganizationSection({
   const submitResult = useAtomValue(form.submit);
 
   return (
-    <section className="flex flex-col gap-4">
-      <form.Initialize defaultValues={defaultValues}>
-        <form
-          className="flex w-full flex-col gap-4"
-          onSubmit={(event) => {
-            event.preventDefault();
-            event.stopPropagation();
-            submit();
-          }}
-        >
-          <OrganizationFormSection
-            title={m.organization_profile()}
-            description={m.organization_translation_description()}
-          >
-            <FieldSet
-              disabled={editingLocale !== "en"}
-              className={editingLocale === "en" ? "contents" : "hidden"}
+    <form.Initialize defaultValues={defaultValues}>
+      <form
+        onSubmit={(event) => {
+          event.preventDefault();
+          event.stopPropagation();
+          submit();
+        }}
+      >
+        <DialogContent className="grid max-h-[85vh] grid-rows-[auto_minmax(0,1fr)_auto] gap-0 overflow-hidden sm:max-w-2xl">
+          <div className="pb-6">{header}</div>
+          <div className="-mx-6 flex min-h-0 flex-col gap-4 overflow-y-auto px-6 pb-6">
+            <OrganizationFormSection
+              title={m.organization_profile()}
+              description={m.organization_translation_description()}
             >
-              <form.enName label={m.organization_translation_name()} />
-              <form.enLogo
-                label={m.organization_logo()}
-                size={{
-                  width: 175,
-                  height: 50,
-                  suggestedWidth: 350,
-                  suggestedHeight: 100,
-                }}
-              />
-              <form.enIcon
-                label={m.organization_icon()}
-                size={{
-                  width: 96,
-                  height: 96,
-                  suggestedWidth: 512,
-                  suggestedHeight: 512,
-                }}
-              />
-            </FieldSet>
-            <FieldSet
-              disabled={editingLocale !== "fr"}
-              className={editingLocale === "fr" ? "contents" : "hidden"}
-            >
-              <form.frName label={m.organization_translation_name()} />
-              <form.frLogo
-                label={m.organization_logo()}
-                size={{
-                  width: 175,
-                  height: 50,
-                  suggestedWidth: 350,
-                  suggestedHeight: 100,
-                }}
-              />
-              <form.frIcon
-                label={m.organization_icon()}
-                size={{
-                  width: 96,
-                  height: 96,
-                  suggestedWidth: 512,
-                  suggestedHeight: 512,
-                }}
-              />
-            </FieldSet>
-          </OrganizationFormSection>
-          <Separator className="my-2" />
-          <form.slug
-            label={m.organization_slug()}
-            description={m.organization_slug_identifier_description()}
-            required
-          />
-          <Separator className="my-2" />
-          <OrganizationFormSection title={m.organization_contact()}>
-            <OrganizationContactGroup
-              title={m.organization_contact_email_type()}
-            >
-              <form.emails
-                locale={editingLocale}
-                messages={organizationContactFieldMessages(m)}
-              />
-            </OrganizationContactGroup>
-            <OrganizationContactGroup
-              title={m.organization_contact_phone_type()}
-            >
-              <form.phones
-                locale={editingLocale}
-                messages={organizationContactFieldMessages(m)}
-              />
-            </OrganizationContactGroup>
-            <OrganizationContactGroup
-              title={m.organization_contact_website_type()}
-            >
-              <form.websites
-                locale={editingLocale}
-                messages={organizationContactFieldMessages(m)}
-              />
-            </OrganizationContactGroup>
-            <OrganizationContactGroup
-              title={m.organization_contact_social_type()}
-            >
-              <form.socials
-                locale={editingLocale}
-                messages={organizationContactFieldMessages(m)}
-              />
-            </OrganizationContactGroup>
-          </OrganizationFormSection>
-          <Separator className="my-2" />
-          <OrganizationFormSection title={m.organization_address()}>
-            <form.addresses
-              locale={editingLocale}
-              messages={organizationContactFieldMessages(m)}
+              <FieldSet
+                disabled={editingLocale !== "en"}
+                className={editingLocale === "en" ? "contents" : "hidden"}
+              >
+                <form.enName label={m.organization_translation_name()} />
+                <form.enLogo
+                  label={m.organization_logo()}
+                  size={{
+                    width: 175,
+                    height: 50,
+                    suggestedWidth: 350,
+                    suggestedHeight: 100,
+                  }}
+                />
+                <form.enIcon
+                  label={m.organization_icon()}
+                  size={{
+                    width: 96,
+                    height: 96,
+                    suggestedWidth: 512,
+                    suggestedHeight: 512,
+                  }}
+                />
+              </FieldSet>
+              <FieldSet
+                disabled={editingLocale !== "fr"}
+                className={editingLocale === "fr" ? "contents" : "hidden"}
+              >
+                <form.frName label={m.organization_translation_name()} />
+                <form.frLogo
+                  label={m.organization_logo()}
+                  size={{
+                    width: 175,
+                    height: 50,
+                    suggestedWidth: 350,
+                    suggestedHeight: 100,
+                  }}
+                />
+                <form.frIcon
+                  label={m.organization_icon()}
+                  size={{
+                    width: 96,
+                    height: 96,
+                    suggestedWidth: 512,
+                    suggestedHeight: 512,
+                  }}
+                />
+              </FieldSet>
+            </OrganizationFormSection>
+            <Separator className="my-2" />
+            <form.slug
+              label={m.organization_slug()}
+              description={m.organization_slug_identifier_description()}
+              required
             />
-          </OrganizationFormSection>
-          <SubmitError result={submitResult} />
-          <SubmitButton form={form} />
-        </form>
-      </form.Initialize>
-    </section>
+            <Separator className="my-2" />
+            <OrganizationFormSection title={m.organization_contact()}>
+              <OrganizationContactGroup
+                title={m.organization_contact_email_type()}
+              >
+                <form.emails
+                  locale={editingLocale}
+                  messages={organizationContactFieldMessages(m)}
+                />
+              </OrganizationContactGroup>
+              <OrganizationContactGroup
+                title={m.organization_contact_phone_type()}
+              >
+                <form.phones
+                  locale={editingLocale}
+                  messages={organizationContactFieldMessages(m)}
+                />
+              </OrganizationContactGroup>
+              <OrganizationContactGroup
+                title={m.organization_contact_website_type()}
+              >
+                <form.websites
+                  locale={editingLocale}
+                  messages={organizationContactFieldMessages(m)}
+                />
+              </OrganizationContactGroup>
+              <OrganizationContactGroup
+                title={m.organization_contact_social_type()}
+              >
+                <form.socials
+                  locale={editingLocale}
+                  messages={organizationContactFieldMessages(m)}
+                />
+              </OrganizationContactGroup>
+            </OrganizationFormSection>
+            <Separator className="my-2" />
+            <OrganizationFormSection title={m.organization_address()}>
+              <form.addresses
+                locale={editingLocale}
+                messages={organizationContactFieldMessages(m)}
+              />
+            </OrganizationFormSection>
+          </div>
+          <DialogFooter className="-mx-6 -mb-6 border-t px-6 py-4">
+            <div className="flex flex-col gap-3">
+              <SubmitError result={submitResult} />
+              <SubmitButton form={form} />
+            </div>
+          </DialogFooter>
+        </DialogContent>
+      </form>
+    </form.Initialize>
   );
 }
 
 function CreateOrganizationSection({
+  header,
   baseUrl,
   editingLocale,
   onCreated,
 }: {
+  header: ReactNode;
   baseUrl?: string | undefined;
   editingLocale: OrganizationLocale;
   onCreated: (organization: OrganizationSummary) => Promise<void>;
@@ -2176,121 +2185,127 @@ function CreateOrganizationSection({
   }, [defaultLocale, setSlug, values]);
 
   return (
-    <section className="flex flex-col gap-4">
-      <form.Initialize defaultValues={defaultValues}>
-        <form
-          className="flex w-full flex-col gap-4"
-          onSubmit={(event) => {
-            event.preventDefault();
-            event.stopPropagation();
-            submit();
-          }}
-        >
-          <OrganizationFormSection
-            title={m.organization_profile()}
-            description={m.organization_translation_description()}
-          >
-            <FieldSet
-              disabled={editingLocale !== "en"}
-              className={editingLocale === "en" ? "contents" : "hidden"}
+    <form.Initialize defaultValues={defaultValues}>
+      <form
+        onSubmit={(event) => {
+          event.preventDefault();
+          event.stopPropagation();
+          submit();
+        }}
+      >
+        <DialogContent className="grid max-h-[85vh] grid-rows-[auto_minmax(0,1fr)_auto] gap-0 overflow-hidden sm:max-w-2xl">
+          <div className="pb-6">{header}</div>
+          <div className="-mx-6 flex min-h-0 flex-col gap-4 overflow-y-auto px-6 pb-6">
+            <OrganizationFormSection
+              title={m.organization_profile()}
+              description={m.organization_translation_description()}
             >
-              <form.enName label={m.organization_translation_name()} />
-              <form.enLogo
-                label={m.organization_logo()}
-                size={{
-                  width: 175,
-                  height: 50,
-                  suggestedWidth: 350,
-                  suggestedHeight: 100,
-                }}
-              />
-              <form.enIcon
-                label={m.organization_icon()}
-                size={{
-                  width: 96,
-                  height: 96,
-                  suggestedWidth: 512,
-                  suggestedHeight: 512,
-                }}
-              />
-            </FieldSet>
-            <FieldSet
-              disabled={editingLocale !== "fr"}
-              className={editingLocale === "fr" ? "contents" : "hidden"}
-            >
-              <form.frName label={m.organization_translation_name()} />
-              <form.frLogo
-                label={m.organization_logo()}
-                size={{
-                  width: 175,
-                  height: 50,
-                  suggestedWidth: 350,
-                  suggestedHeight: 100,
-                }}
-              />
-              <form.frIcon
-                label={m.organization_icon()}
-                size={{
-                  width: 96,
-                  height: 96,
-                  suggestedWidth: 512,
-                  suggestedHeight: 512,
-                }}
-              />
-            </FieldSet>
-          </OrganizationFormSection>
-          <Separator className="my-2" />
-          <form.slug
-            label={m.organization_slug()}
-            description={`${m.organization_slug_identifier_description()} ${m.organization_slug_description()}`}
-          />
-          <Separator className="my-2" />
-          <OrganizationFormSection title={m.organization_contact()}>
-            <OrganizationContactGroup
-              title={m.organization_contact_email_type()}
-            >
-              <form.emails
-                locale={editingLocale}
-                messages={organizationContactFieldMessages(m)}
-              />
-            </OrganizationContactGroup>
-            <OrganizationContactGroup
-              title={m.organization_contact_phone_type()}
-            >
-              <form.phones
-                locale={editingLocale}
-                messages={organizationContactFieldMessages(m)}
-              />
-            </OrganizationContactGroup>
-            <OrganizationContactGroup
-              title={m.organization_contact_website_type()}
-            >
-              <form.websites
-                locale={editingLocale}
-                messages={organizationContactFieldMessages(m)}
-              />
-            </OrganizationContactGroup>
-            <OrganizationContactGroup
-              title={m.organization_contact_social_type()}
-            >
-              <form.socials
-                locale={editingLocale}
-                messages={organizationContactFieldMessages(m)}
-              />
-            </OrganizationContactGroup>
-          </OrganizationFormSection>
-          <Separator className="my-2" />
-          <OrganizationFormSection title={m.organization_address()}>
-            <form.addresses
-              locale={editingLocale}
-              messages={organizationContactFieldMessages(m)}
+              <FieldSet
+                disabled={editingLocale !== "en"}
+                className={editingLocale === "en" ? "contents" : "hidden"}
+              >
+                <form.enName label={m.organization_translation_name()} />
+                <form.enLogo
+                  label={m.organization_logo()}
+                  size={{
+                    width: 175,
+                    height: 50,
+                    suggestedWidth: 350,
+                    suggestedHeight: 100,
+                  }}
+                />
+                <form.enIcon
+                  label={m.organization_icon()}
+                  size={{
+                    width: 96,
+                    height: 96,
+                    suggestedWidth: 512,
+                    suggestedHeight: 512,
+                  }}
+                />
+              </FieldSet>
+              <FieldSet
+                disabled={editingLocale !== "fr"}
+                className={editingLocale === "fr" ? "contents" : "hidden"}
+              >
+                <form.frName label={m.organization_translation_name()} />
+                <form.frLogo
+                  label={m.organization_logo()}
+                  size={{
+                    width: 175,
+                    height: 50,
+                    suggestedWidth: 350,
+                    suggestedHeight: 100,
+                  }}
+                />
+                <form.frIcon
+                  label={m.organization_icon()}
+                  size={{
+                    width: 96,
+                    height: 96,
+                    suggestedWidth: 512,
+                    suggestedHeight: 512,
+                  }}
+                />
+              </FieldSet>
+            </OrganizationFormSection>
+            <Separator className="my-2" />
+            <form.slug
+              label={m.organization_slug()}
+              description={`${m.organization_slug_identifier_description()} ${m.organization_slug_description()}`}
             />
-          </OrganizationFormSection>
-          <SubmitError result={submitResult} />
-          <SubmitButton form={form} />
-        </form>
-      </form.Initialize>
-    </section>
+            <Separator className="my-2" />
+            <OrganizationFormSection title={m.organization_contact()}>
+              <OrganizationContactGroup
+                title={m.organization_contact_email_type()}
+              >
+                <form.emails
+                  locale={editingLocale}
+                  messages={organizationContactFieldMessages(m)}
+                />
+              </OrganizationContactGroup>
+              <OrganizationContactGroup
+                title={m.organization_contact_phone_type()}
+              >
+                <form.phones
+                  locale={editingLocale}
+                  messages={organizationContactFieldMessages(m)}
+                />
+              </OrganizationContactGroup>
+              <OrganizationContactGroup
+                title={m.organization_contact_website_type()}
+              >
+                <form.websites
+                  locale={editingLocale}
+                  messages={organizationContactFieldMessages(m)}
+                />
+              </OrganizationContactGroup>
+              <OrganizationContactGroup
+                title={m.organization_contact_social_type()}
+              >
+                <form.socials
+                  locale={editingLocale}
+                  messages={organizationContactFieldMessages(m)}
+                />
+              </OrganizationContactGroup>
+            </OrganizationFormSection>
+            <Separator className="my-2" />
+            <OrganizationFormSection title={m.organization_address()}>
+              <form.addresses
+                locale={editingLocale}
+                messages={organizationContactFieldMessages(m)}
+              />
+            </OrganizationFormSection>
+          </div>
+          <DialogFooter className="-mx-6 -mb-6 border-t px-6 py-4">
+            <div className="flex flex-col gap-3">
+              <SubmitError result={submitResult} />
+              <SubmitButton form={form} />
+            </div>
+          </DialogFooter>
+        </DialogContent>
+      </form>
+    </form.Initialize>
   );
 }
 
