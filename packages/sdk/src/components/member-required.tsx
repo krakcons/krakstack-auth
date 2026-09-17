@@ -250,9 +250,6 @@ const accessAtom = Atom.family((baseUrl?: string | undefined) =>
 
             if (allowed) {
               get.refresh(authSessionAtom(baseUrl));
-              yield* get.result(authSessionAtom(baseUrl), {
-                suspendOnWaiting: true,
-              });
               return { allowed: true } satisfies AccessResult;
             }
 
