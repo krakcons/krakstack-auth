@@ -39,6 +39,13 @@ const toWebRequest = (request: HttpServerRequest.HttpServerRequest | Request) =>
     ? Effect.succeed(request)
     : HttpServerRequest.toWeb(request);
 
+export const withAuthRequestHeaders = (request: Request, headers: Headers) =>
+  // HttpApi handlers have decoded the body; raw handlers still need it intact.
+  new Request(request.bodyUsed ? request.url : request, {
+    headers,
+    method: request.method,
+  });
+
 export const restoreProxyAuthOrigin = Effect.fn("Auth.restoreProxyOrigin")(
   function* (request: Request, verifyApiKey: ProxyApiKeyVerifier) {
     const origin = yield* readProxyOrigin(request);
@@ -88,7 +95,7 @@ export const restoreProxyAuthOrigin = Effect.fn("Auth.restoreProxyOrigin")(
       headers.set("x-forwarded-host", origin.value.host);
       headers.set("x-forwarded-proto", origin.value.protocol);
     }
-    return new Request(request, { headers, method: request.method });
+    return withAuthRequestHeaders(request, headers);
   },
 );
 
