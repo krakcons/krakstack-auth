@@ -1,4 +1,4 @@
-import { Effect } from "effect";
+import { Effect, type Redacted } from "effect";
 import {
   Cookies,
   FetchHttpClient,
@@ -8,6 +8,11 @@ import {
   HttpServerRequest,
   HttpServerResponse,
 } from "effect/unstable/http";
+import {
+  AuthProxyError,
+  authProxyKeyHeader,
+  proxyOriginHeaders,
+} from "./proxy-origin.js";
 
 const blockedRequestHeaders = [
   "accept-encoding",
@@ -41,6 +46,7 @@ const hostOnlyCookie = (cookie: string) =>
 
 export interface ProxyAuthRequestOptions {
   cookieDomain?: string;
+  apiKey?: Redacted.Redacted<string>;
 }
 
 const normalizedCookieDomain = (domain: string) =>
@@ -99,36 +105,38 @@ const forwardedUrl = (request: Request) => {
   return new URL(request.url);
 };
 
-const preservesOAuthOrigin = (pathname: string) =>
-  pathname === "/api/auth/sign-in/social" ||
-  pathname.startsWith("/api/auth/callback/");
-
 const proxyHeaders = (request: Request) => {
   const headers = new Headers(request.headers);
   const url = forwardedUrl(request);
 
   for (const header of blockedRequestHeaders) headers.delete(header);
   for (const header of Array.from(headers.keys())) {
-    if (header.startsWith("cf-") || header.startsWith("x-forwarded-")) {
+    if (
+      header.startsWith("cf-") ||
+      header.startsWith("x-forwarded-") ||
+      header.startsWith("x-krakstack-")
+    ) {
       headers.delete(header);
     }
   }
 
   headers.set("x-forwarded-host", url.host);
   headers.set("x-forwarded-proto", url.protocol.replace(":", ""));
-  if (preservesOAuthOrigin(url.pathname)) {
-    headers.set("x-krakstack-forwarded-host", url.host);
-    headers.set("x-krakstack-forwarded-proto", url.protocol.replace(":", ""));
-  }
 
   return headers;
 };
 
-const proxyRequest = (request: Request, baseUrl: string | URL) => {
+const proxyRequest = (
+  request: Request,
+  baseUrl: string | URL,
+  originHeaders: Headers,
+) => {
   const target = new URL(request.url);
   const authUrl = new URL(baseUrl);
+  const headers = proxyHeaders(request);
+  originHeaders.forEach((value, name) => headers.set(name, value));
   const init: RequestInit = {
-    headers: proxyHeaders(request),
+    headers,
     method: request.method,
   };
 
@@ -149,7 +157,10 @@ export const proxyAuthRequest = async (
   baseUrl: string | URL,
   options?: ProxyAuthRequestOptions,
 ) => {
-  const response = await fetch(proxyRequest(request, baseUrl), {
+  const originHeaders = await Effect.runPromise(
+    proxyOriginHeaders(request, options?.apiKey),
+  );
+  const response = await fetch(proxyRequest(request, baseUrl, originHeaders), {
     redirect: "manual",
   });
 
@@ -162,9 +173,16 @@ export const proxyAuthRequestEffect = (
   options?: ProxyAuthRequestOptions,
 ) =>
   Effect.gen(function* () {
+    const originHeaders = yield* proxyOriginHeaders(request, options?.apiKey);
+    const redactedNames = yield* HttpHeaders.CurrentRedactedNames;
     const response = yield* HttpClient.execute(
-      HttpClientRequest.fromWeb(proxyRequest(request, baseUrl)),
+      HttpClientRequest.fromWeb(proxyRequest(request, baseUrl, originHeaders)),
     ).pipe(
+      Effect.provideService(HttpHeaders.CurrentRedactedNames, [
+        ...redactedNames,
+        authProxyKeyHeader,
+      ]),
+      Effect.mapError(() => new AuthProxyError({ reason: "upstream" })),
       Effect.provideService(FetchHttpClient.RequestInit, {
         redirect: "manual",
       }),

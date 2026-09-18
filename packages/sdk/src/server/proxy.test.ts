@@ -1,12 +1,28 @@
 import { describe, expect, it } from "@effect/vitest";
-import { Effect } from "effect";
+import { Effect, Redacted } from "effect";
 import {
   HttpClient,
   HttpClientRequest,
   HttpClientResponse,
 } from "effect/unstable/http";
 
-import { proxyAuthRequest, proxyAuthRequestEffect } from "./proxy.js";
+import {
+  proxyAuthRequest as sendProxyRequest,
+  proxyAuthRequestEffect as sendProxyRequestEffect,
+  type ProxyAuthRequestOptions,
+} from "./proxy.js";
+
+const apiKey = Redacted.make("svc_test-only-service-key");
+const proxyAuthRequest = (
+  request: Request,
+  baseUrl: string,
+  options?: ProxyAuthRequestOptions,
+) => sendProxyRequest(request, baseUrl, { ...options, apiKey });
+const proxyAuthRequestEffect = (
+  request: Request,
+  baseUrl: string,
+  options?: ProxyAuthRequestOptions,
+) => sendProxyRequestEffect(request, baseUrl, { ...options, apiKey });
 
 interface CapturedRequest {
   request?: Request;
@@ -25,6 +41,68 @@ const mockFetch = (handler: FetchHandler): typeof fetch => {
 };
 
 describe("proxyAuthRequest", () => {
+  it.effect("preserves the tenant origin across auth endpoints", () =>
+    Effect.gen(function* () {
+      const paths = [
+        "/email-otp/send-verification-otp",
+        "/email-otp/request-password-reset",
+        "/email-otp/request-email-change",
+        "/forget-password/email-otp",
+        "/request-password-reset",
+        "/send-verification-email",
+        "/sign-in/email",
+        "/sign-up/email",
+        "/two-factor/send-otp",
+        "/get-session",
+        "/future-endpoint",
+      ];
+
+      for (const path of paths) {
+        let capturedRequest: HttpClientRequest.HttpClientRequest | undefined;
+        const httpClient = HttpClient.make((request) => {
+          capturedRequest = request;
+          return Effect.succeed(
+            HttpClientResponse.fromWeb(
+              request,
+              new Response(null, { status: 204 }),
+            ),
+          );
+        });
+
+        yield* proxyAuthRequestEffect(
+          new Request(`https://dev-test2.krakconsultants.net/api/auth${path}`, {
+            method: "POST",
+            headers: {
+              "x-forwarded-host": "attacker.example.com",
+              "x-krakstack-forwarded-host": "attacker.example.com",
+              "x-krakstack-forwarded-proto": "http",
+              "x-krakstack-proxy-key": "attacker-key",
+              authorization: "Bearer user-token",
+              cookie: "session=user-session",
+            },
+          }),
+          "https://auth.krakstack.net",
+        ).pipe(Effect.provideService(HttpClient.HttpClient, httpClient));
+
+        expect(
+          capturedRequest?.headers["x-krakstack-forwarded-host"],
+          path,
+        ).toBe("dev-test2.krakconsultants.net");
+        expect(
+          capturedRequest?.headers["x-krakstack-forwarded-proto"],
+          path,
+        ).toBe("https");
+        expect(capturedRequest?.headers["x-krakstack-proxy-key"]).toBe(
+          Redacted.value(apiKey),
+        );
+        expect(capturedRequest?.headers.authorization).toBe(
+          "Bearer user-token",
+        );
+        expect(capturedRequest?.headers.cookie).toBe("session=user-session");
+      }
+    }),
+  );
+
   it.effect("propagates the active Effect trace to the auth service", () =>
     Effect.gen(function* () {
       let capturedRequest: HttpClientRequest.HttpClientRequest | undefined;
@@ -164,7 +242,7 @@ describe("proxyAuthRequest", () => {
     expect(captured.request?.headers.has("baggage")).toBe(false);
   });
 
-  it("does not add OAuth origin headers to organization mutations", async () => {
+  it("preserves the app origin for organization mutations", async () => {
     const previousFetch = globalThis.fetch;
     const captured: CapturedRequest = {};
 
@@ -193,10 +271,10 @@ describe("proxyAuthRequest", () => {
       "localhost:3002",
     );
     expect(captured.request?.headers.get("x-krakstack-forwarded-host")).toBe(
-      null,
+      "localhost:3002",
     );
     expect(captured.request?.headers.get("x-krakstack-forwarded-proto")).toBe(
-      null,
+      "http",
     );
   });
 

@@ -12,7 +12,39 @@ type: how-to
 
 # Configuration du proxy
 
-La méthode proxy expose `/api/auth/*` sur votre application et transmet ces requêtes au service central. `proxyAuthRequest` retire les en-têtes de connexion, Cloudflare et de transfert non fiables, puis fournit `x-forwarded-host` et `x-forwarded-proto`.
+La méthode proxy expose `/api/auth/*` sur votre application et transmet ces requêtes au service central. Le SDK remplace les en-têtes proxy fournis par l'appelant par le nom d'hôte, le protocole et la clé API de service existante. Auth valide cette clé et sa permission pour le projet du domaine avant d'utiliser l'origine transmise pour l'authentification ou la personnalisation des courriels.
+
+## Autoriser le proxy
+
+Utilisez la clé API de service déjà configurée sur le serveur de l'application :
+
+```dotenv
+KRAKSTACK_AUTH_SERVICE_API_KEY=svc_...
+```
+
+Les trois fonctions proxy lisent automatiquement cette variable. Vous pouvez aussi ajouter `apiKey: Redacted.make(serviceKey)` aux options (`Redacted` provient de `effect`). Gardez la clé côté serveur et utilisez HTTPS entre l'application et Auth en production. Le proxy échoue si sa clé manque.
+
+Un administrateur Auth doit accorder à cette clé la permission `auth:proxy` pour l'identifiant du projet, avec l'API existante de création ou de modification des clés de service. Ajoutez cette permission aux autorisations existantes :
+
+```json
+{
+  "permissions": {
+    "project_your_id": ["auth:proxy"]
+  }
+}
+```
+
+Inscrivez chaque nom d'hôte applicatif, y compris les hôtes locaux avec leur port, comme domaine actif du projet. Auth déduit la permission requise de cette inscription, et non d'un identifiant de projet fourni par l'appelant. Le nom d'hôte doit correspondre à une seule inscription active. Les restrictions de référents existantes de la clé s'appliquent aussi à l'origine applicative transmise.
+
+L'en-tête dédié `x-krakstack-proxy-key` authentifie le proxy sans remplacer les témoins, le jeton bearer ou la clé API de l'utilisateur. Auth retire les identifiants du proxy avant de transmettre la requête à Better Auth. La vérification utilise les contrôles existants de validité, d'expiration, de permissions et de limitation de débit; les requêtes proxy comptent dans le quota de vérification de la clé. Les identifiants invalides et les domaines non autorisés sont rejetés. Les en-têtes de transfert standards seuls ne peuvent pas établir l'origine du proxy; les requêtes directes utilisent leur propre hôte.
+
+### Déployer le changement
+
+1. Accordez à la clé de service existante la permission `auth:proxy` du projet et vérifiez les inscriptions actives des domaines.
+2. Publiez le SDK mis à jour et préparez le déploiement de chaque application proxy. Il joint automatiquement la clé de service existante.
+3. Déployez le service Auth mis à jour, puis immédiatement les applications proxy dans un déploiement coordonné. Auth doit retirer et masquer l'en-tête contenant la clé avant que les applications commencent à le transmettre; les anciennes versions ne fournissent pas cette protection.
+
+Pendant un déploiement avec des versions différentes, les anciens en-têtes d'origine personnalisés sans clé de service sont rejetés et les anciens proxys qui transmettent uniquement les en-têtes standards perdent leur contexte de domaine. Aucun secret proxy ni aucune configuration de signature supplémentaire n'est nécessaire; la rotation et la révocation utilisent la gestion existante des clés API.
 
 ## Ajouter la route générique
 

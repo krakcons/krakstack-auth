@@ -4,7 +4,11 @@ import {
   propagation,
 } from "@opentelemetry/api";
 import { CredentialsFromEnv } from "@distilled.cloud/cloudflare";
-import { AuthService, type AuthSession } from "@krak-stack/auth/server";
+import {
+  AuthService,
+  authProxyKeyHeader,
+  type AuthSession,
+} from "@krak-stack/auth/server";
 import {
   healthHandler,
   HealthService,
@@ -12,6 +16,7 @@ import {
 import * as FetchHttpClient from "effect/unstable/http/FetchHttpClient";
 import {
   Etag,
+  Headers,
   HttpEffect,
   HttpPlatform,
   HttpRouter,
@@ -148,6 +153,11 @@ const authHandlerEffect = Effect.gen(function* () {
   const response = yield* runAuthHandler(request);
   return HttpServerResponse.fromWeb(response);
 }).pipe(
+  Effect.catchTag("Unauthorized", () =>
+    Effect.succeed(
+      HttpServerResponse.jsonUnsafe({ error: "Unauthorized" }, { status: 401 }),
+    ),
+  ),
   Effect.catch((error) =>
     Effect.sync(() => {
       console.error("[HTTP] auth handler failed:", error);
@@ -345,6 +355,13 @@ const appServicesLayer = Layer.mergeAll(
 const apiApplicationLayer = Layer.mergeAll(
   apiLayer.pipe(Layer.provide(appServicesLayer)),
   OpenTelemetryLive,
+  Layer.succeed(Headers.CurrentRedactedNames, [
+    "authorization",
+    "cookie",
+    "set-cookie",
+    "x-api-key",
+    authProxyKeyHeader,
+  ]),
 );
 const apiWebHandler = HttpRouter.toWebHandler<
   Layer.Success<typeof apiApplicationLayer>,

@@ -17,6 +17,13 @@ export {
   proxyAuthRequestEffect,
 } from "./proxy.js";
 export type { ProxyAuthRequestOptions } from "./proxy.js";
+export {
+  AuthProxyError,
+  authProxyKeyHeader,
+  proxyOriginHeaders,
+  readProxyOrigin,
+  stripProxyOriginHeaders,
+} from "./proxy-origin.js";
 export { ActorRequired } from "./actor.js";
 export type { ActorConstraint } from "./actor.js";
 export {

@@ -2,6 +2,16 @@ import { Schema } from "effect";
 
 import { Member, Organization, User } from "../schema.js";
 
+export const AuthProxyOrigin = Schema.Struct({
+  apiKey: Schema.RedactedFromValue(Schema.NonEmptyString),
+  host: Schema.String.check(
+    Schema.isPattern(
+      /^(?:[a-z0-9](?:[a-z0-9.-]*[a-z0-9])?|\[[a-f0-9:]+\])(?::[0-9]{1,5})?$/,
+    ),
+  ),
+  protocol: Schema.Literals(["http", "https"]),
+}).annotate({ identifier: "AuthProxyOrigin" });
+
 export const ServerIdsQuery = Schema.Struct({
   ids: Schema.NonEmptyString,
 }).annotate({
