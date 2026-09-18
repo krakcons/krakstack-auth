@@ -330,6 +330,7 @@ export const sendTwoFactorOtpEmail = async ({
         code={otp}
         title={m.verify_email_title({}, { locale })}
         description={m.email_otp_verification_description({}, { locale })}
+        extra={m.email_otp_expiry({}, { locale })}
       />,
     ),
   });
@@ -386,6 +387,7 @@ export const sendEmailVerificationOtpEmail = async ({
             ? m.email_reset_password_description({}, { locale })
             : m.email_otp_verification_description({}, { locale })
         }
+        extra={m.email_otp_expiry({}, { locale })}
       />,
     ),
   });

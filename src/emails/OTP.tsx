@@ -10,7 +10,7 @@ export const OTPEmail = ({
   code = "123456",
   title = m.verify_email_title(),
   description = m.email_otp_verification_description(),
-  extra,
+  extra = m.email_otp_expiry(),
   logo = "/favicon.ico",
   theme,
 }: {

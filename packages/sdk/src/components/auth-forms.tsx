@@ -303,7 +303,9 @@ export const resolveInitialAuthMethod = ({
   return emailOtp ? "emailOtp" : "password";
 };
 
-export function Signin(props: AuthFormProps) {
+export function Signin(
+  props: AuthFormProps & { otpExpiryDescription?: string | undefined },
+) {
   const {
     baseUrl,
     labels: m,
@@ -681,6 +683,11 @@ export function Signin(props: AuthFormProps) {
               {emailSubmitted && selectedAuthMethod === "emailOtp" ? (
                 <div className="flex flex-col gap-2">
                   <form.otp label={m.sign_in_email_otp_code} />
+                  {props.otpExpiryDescription ? (
+                    <p className="text-muted-foreground text-sm">
+                      {props.otpExpiryDescription}
+                    </p>
+                  ) : null}
                   <div className="flex flex-wrap gap-x-4 gap-y-2 text-sm">
                     {otpSentTo ? (
                       <Button
