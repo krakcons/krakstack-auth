@@ -18,6 +18,7 @@ import { useState } from "react";
 
 import {
   DataTable,
+  DataTableListSummary,
   type DataTableColDef,
 } from "@krak-stack/registry/data-table";
 import { SidebarPageHeader } from "@krak-stack/registry/sidebar-layout";
@@ -554,6 +555,24 @@ const apiKeyColumns = (): DataTableColDef<ApiKeySummary>[] => [
     valueGetter: ({ data }) => usagePercent(data),
     headerName: m.admin_api_key_rate_limit(),
     cellRenderer: ({ data }) => <ApiKeyRateLimit keyData={data} />,
+  },
+  {
+    field: "permissions",
+    headerName: m.admin_api_key_permissions(),
+    cellRenderer: ({ data }) => (
+      <DataTableListSummary
+        items={Object.entries(data.permissions).flatMap(([resource, actions]) =>
+          actions.map((action) => `${resource}:${action}`),
+        )}
+        emptyLabel={
+          data.configId === "service" &&
+          Object.keys(data.permissions).length === 0
+            ? m.admin_api_key_permissions_all()
+            : m.admin_api_key_permissions_none()
+        }
+        visibleCount={1}
+      />
+    ),
   },
   {
     field: "lastRequest",

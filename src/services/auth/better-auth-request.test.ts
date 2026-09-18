@@ -12,8 +12,10 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)(
   () => {
     for (const scenario of [
       "valid",
+      "unrestricted",
       "wrong-project",
       "invalid-key",
+      "invalid-grants",
       "referrer-denied",
       "inactive",
       "unregistered",
@@ -80,18 +82,19 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)(
                 verificationCalls++;
                 expect(body.configId).toBe("service");
                 expect(body.key).toBe(Redacted.value(apiKey));
-                expect(body.permissions).toEqual({
-                  [projectId]: ["auth:proxy"],
+                expect(body).toEqual({
+                  key: Redacted.value(apiKey),
+                  configId: "service",
                 });
                 return {
-                  valid:
-                    scenario !== "invalid-key" &&
-                    Boolean(
-                      body.permissions[permittedProject]?.includes(
-                        "auth:proxy",
-                      ),
-                    ),
+                  valid: scenario !== "invalid-key",
                   key: {
+                    permissions:
+                      scenario === "invalid-grants"
+                        ? "invalid"
+                        : scenario === "unrestricted"
+                          ? {}
+                          : { [permittedProject]: ["auth:proxy"] },
                     metadata: {
                       allowedOrigins:
                         scenario === "referrer-denied"
@@ -102,7 +105,7 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)(
                 };
               },
             );
-            if (scenario !== "valid") {
+            if (scenario !== "valid" && scenario !== "unrestricted") {
               expect(yield* Effect.flip(restore)).toMatchObject({
                 _tag: "AuthProxyError",
                 reason: "invalid",

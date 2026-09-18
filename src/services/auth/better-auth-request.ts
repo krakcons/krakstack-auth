@@ -1,4 +1,5 @@
-import { Context, Effect, Layer, Option, Redacted } from "effect";
+import { Context, Effect, Layer, Option, Redacted, Schema } from "effect";
+import { ApiKeyPermissionGrant } from "@krak-stack/auth/access";
 import { HttpServerRequest } from "effect/unstable/http";
 import { HttpApiError } from "effect/unstable/httpapi";
 import {
@@ -13,14 +14,17 @@ import {
   apiKeyAllowedOrigins,
   requestMatchesAllowedOrigins,
 } from "@/services/auth/api-key-referrers";
+import { serviceApiKeyAllowsProxy } from "@/services/auth/api-key-permissions";
 
 type ProxyApiKeyVerifier = (input: {
   body: {
     key: string;
     configId: "service";
-    permissions: Record<string, string[]>;
   };
-}) => Promise<{ valid: boolean; key?: { metadata?: unknown } | null }>;
+}) => Promise<{
+  valid: boolean;
+  key?: { metadata?: unknown; permissions?: unknown } | null;
+}>;
 
 type BetterAuthRequestContext = {
   readonly auth: Auth;
@@ -59,7 +63,6 @@ export const restoreProxyAuthOrigin = Effect.fn("Auth.restoreProxyOrigin")(
             body: {
               key: Redacted.value(origin.value.apiKey),
               configId: "service",
-              permissions: { [projectId]: ["auth:proxy"] },
             },
           }),
         catch: () => new AuthProxyError({ reason: "invalid" }),
@@ -74,6 +77,14 @@ export const restoreProxyAuthOrigin = Effect.fn("Auth.restoreProxyOrigin")(
         )
       )
         return yield* new AuthProxyError({ reason: "invalid" });
+      const permissions = yield* Schema.decodeUnknownEffect(
+        Schema.NullOr(ApiKeyPermissionGrant),
+      )(result.key.permissions ?? null).pipe(
+        Effect.mapError(() => new AuthProxyError({ reason: "invalid" })),
+      );
+      if (!serviceApiKeyAllowsProxy(permissions, projectId)) {
+        return yield* new AuthProxyError({ reason: "invalid" });
+      }
       headers.set("x-forwarded-host", origin.value.host);
       headers.set("x-forwarded-proto", origin.value.protocol);
     }

@@ -12,7 +12,7 @@ type: how-to
 
 # Proxy setup
 
-The proxy method exposes `/api/auth/*` on your application and forwards those requests to the central service. The SDK replaces caller-supplied proxy headers with the original hostname, protocol, and your existing service API key. Auth validates that key and its permission for the hostname's project before using the forwarded origin for authentication or email branding.
+The proxy method exposes `/api/auth/*` on your application and forwards those requests to the central service. The SDK replaces caller-supplied proxy headers with the original hostname, protocol, and your existing service API key. Auth validates that key and any configured permission restrictions before using the forwarded origin for authentication or email branding.
 
 ## Authorize the proxy
 
@@ -24,7 +24,9 @@ KRAKSTACK_AUTH_SERVICE_API_KEY=svc_...
 
 All three proxy helpers read this variable automatically. You can also pass `apiKey: Redacted.make(serviceKey)` in the helper's options (`Redacted` comes from `effect`). Keep the key server-only and use HTTPS between the application and Auth in production. The proxy fails if its key is missing.
 
-An Auth administrator must grant this key `auth:proxy` for the application's project ID using the existing service-key create/update API. Add this permission alongside the key's existing grants:
+Service keys with no permissions configured (null or an empty object) have all permissions by default. They can proxy requests for any registered project; no additional grant is needed. The admin dashboard displays **All permissions** for these keys and lists explicit grants using the same list summary as SDK API-key tables.
+
+When a service key has a non-empty permissions object, proxy access is restricted to explicit `auth:proxy` grants for the relevant project IDs. An Auth administrator can configure these through the service-key create/update API:
 
 ```json
 {
@@ -34,13 +36,13 @@ An Auth administrator must grant this key `auth:proxy` for the application's pro
 }
 ```
 
-Register each application hostname, including local hosts with their ports, as an active domain of that project. Auth derives the required project permission from that registration, not from a project ID supplied by the caller. The hostname must have exactly one active registration. Existing key referrer restrictions also apply to the forwarded application origin.
+Register each application hostname, including local hosts with their ports, as an active domain of its project. Auth derives the project from that registration, not from a project ID supplied by the caller. The hostname must have exactly one active registration. An explicit empty action list for a project does not grant proxy access. Existing key referrer restrictions also apply to the forwarded application origin.
 
 The dedicated `x-krakstack-proxy-key` header authenticates the proxy without replacing the user's cookies, bearer token, or API key. Auth removes proxy credentials before handing the request to Better Auth. Key verification uses the existing service-key validity, expiry, permissions, and rate-limit checks; proxied requests count toward that key's verification quota. Invalid credentials and unauthorized domains are rejected. Standard forwarding headers alone cannot establish a proxy origin; direct requests use their own host.
 
 ### Roll out the change
 
-1. Grant the existing service key the project's `auth:proxy` permission and verify active domain registrations.
+1. Verify active domain registrations. If the service key has explicit permission restrictions, include the project's `auth:proxy` grant.
 2. Publish the updated SDK and prepare each proxy application's deployment. It attaches the existing service key automatically.
 3. Deploy the updated Auth service, then immediately deploy the updated proxy applications as a coordinated rollout. Auth must strip and redact the credential header before applications start sending it; older Auth deployments do not provide that protection.
 

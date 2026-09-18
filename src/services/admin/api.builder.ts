@@ -40,6 +40,7 @@ import {
 import { Domains } from "@/services/domains";
 import { DB } from "@/services/database";
 import { Organizations } from "@/services/organizations";
+import { ApiKeyPermissionsJson } from "@/services/admin/schema";
 
 const internalServerError = (cause: unknown) => {
   console.error("Failed to fetch dashboard stats:", cause);
@@ -168,25 +169,32 @@ const organizationFilter = (globalFilter: string | undefined) => {
   );
 };
 
-const serviceApiKeyRow = (value: typeof apikey.$inferSelect) => ({
-  id: value.id,
-  configId: value.configId,
-  name: value.name,
-  start: value.start,
-  referenceId: value.referenceId,
-  prefix: value.prefix,
-  enabled: value.enabled ?? false,
-  rateLimitEnabled: value.rateLimitEnabled ?? false,
-  rateLimitTimeWindow: value.rateLimitTimeWindow,
-  rateLimitMax: value.rateLimitMax,
-  requestCount: value.requestCount ?? 0,
-  remaining: value.remaining,
-  lastRequest: value.lastRequest,
-  expiresAt: value.expiresAt,
-  referrers: apiKeyAllowedOrigins(value.metadata),
-  createdAt: value.createdAt,
-  updatedAt: value.updatedAt,
-});
+const serviceApiKeyRow = (value: typeof apikey.$inferSelect) =>
+  Schema.decodeUnknownEffect(ApiKeyPermissionsJson)(
+    value.permissions ?? "{}",
+  ).pipe(
+    Effect.mapError(internalServerError),
+    Effect.map((permissions) => ({
+      id: value.id,
+      configId: value.configId,
+      name: value.name,
+      start: value.start,
+      referenceId: value.referenceId,
+      prefix: value.prefix,
+      enabled: value.enabled ?? false,
+      rateLimitEnabled: value.rateLimitEnabled ?? false,
+      rateLimitTimeWindow: value.rateLimitTimeWindow,
+      rateLimitMax: value.rateLimitMax,
+      requestCount: value.requestCount ?? 0,
+      remaining: value.remaining,
+      lastRequest: value.lastRequest,
+      expiresAt: value.expiresAt,
+      referrers: apiKeyAllowedOrigins(value.metadata),
+      permissions: permissions ?? {},
+      createdAt: value.createdAt,
+      updatedAt: value.updatedAt,
+    })),
+  );
 
 export const adminApiHandler = HttpApiBuilder.group(
   AdminApi,
@@ -350,7 +358,7 @@ export const adminApiHandler = HttpApiBuilder.group(
             .orderBy(desc(apikey.createdAt))
             .pipe(Effect.mapError(internalServerError));
 
-          return keys.map(serviceApiKeyRow);
+          return yield* Effect.forEach(keys, serviceApiKeyRow);
         }),
       )
       .handle("deleteApiKey", ({ params }) =>
@@ -363,7 +371,7 @@ export const adminApiHandler = HttpApiBuilder.group(
             .pipe(Effect.mapError(internalServerError));
 
           if (!key) return yield* new HttpApiError.NotFound({});
-          return serviceApiKeyRow(key);
+          return yield* serviceApiKeyRow(key);
         }),
       )
       .handle("updateApiKey", ({ params, payload }) =>
@@ -408,7 +416,7 @@ export const adminApiHandler = HttpApiBuilder.group(
             .pipe(Effect.mapError(internalServerError));
 
           if (!key) return yield* new HttpApiError.NotFound({});
-          return serviceApiKeyRow(key);
+          return yield* serviceApiKeyRow(key);
         }),
       )
       .handle("resetApiKeyRateLimit", ({ params }) =>
@@ -422,7 +430,7 @@ export const adminApiHandler = HttpApiBuilder.group(
             .pipe(Effect.mapError(internalServerError));
 
           if (!key) return yield* new HttpApiError.NotFound({});
-          return serviceApiKeyRow(key);
+          return yield* serviceApiKeyRow(key);
         }),
       )
       .handle("enableApiKeyRateLimit", ({ params }) =>
@@ -436,7 +444,7 @@ export const adminApiHandler = HttpApiBuilder.group(
             .pipe(Effect.mapError(internalServerError));
 
           if (!key) return yield* new HttpApiError.NotFound({});
-          return serviceApiKeyRow(key);
+          return yield* serviceApiKeyRow(key);
         }),
       )
       .handle("disableApiKeyRateLimit", ({ params }) =>
@@ -450,7 +458,7 @@ export const adminApiHandler = HttpApiBuilder.group(
             .pipe(Effect.mapError(internalServerError));
 
           if (!key) return yield* new HttpApiError.NotFound({});
-          return serviceApiKeyRow(key);
+          return yield* serviceApiKeyRow(key);
         }),
       )
       .handle("listUsers", ({ query }) =>

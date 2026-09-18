@@ -12,7 +12,7 @@ type: how-to
 
 # Configuration du proxy
 
-La méthode proxy expose `/api/auth/*` sur votre application et transmet ces requêtes au service central. Le SDK remplace les en-têtes proxy fournis par l'appelant par le nom d'hôte, le protocole et la clé API de service existante. Auth valide cette clé et sa permission pour le projet du domaine avant d'utiliser l'origine transmise pour l'authentification ou la personnalisation des courriels.
+La méthode proxy expose `/api/auth/*` sur votre application et transmet ces requêtes au service central. Le SDK remplace les en-têtes proxy fournis par l'appelant par le nom d'hôte, le protocole et la clé API de service existante. Auth valide cette clé et les restrictions de permissions configurées avant d'utiliser l'origine transmise pour l'authentification ou la personnalisation des courriels.
 
 ## Autoriser le proxy
 
@@ -24,7 +24,9 @@ KRAKSTACK_AUTH_SERVICE_API_KEY=svc_...
 
 Les trois fonctions proxy lisent automatiquement cette variable. Vous pouvez aussi ajouter `apiKey: Redacted.make(serviceKey)` aux options (`Redacted` provient de `effect`). Gardez la clé côté serveur et utilisez HTTPS entre l'application et Auth en production. Le proxy échoue si sa clé manque.
 
-Un administrateur Auth doit accorder à cette clé la permission `auth:proxy` pour l'identifiant du projet, avec l'API existante de création ou de modification des clés de service. Ajoutez cette permission aux autorisations existantes :
+Les clés de service sans permissions configurées (null ou objet vide) disposent de toutes les permissions par défaut. Elles peuvent transmettre les requêtes pour tout projet inscrit, sans autorisation supplémentaire. Le tableau de bord affiche **Toutes les permissions** pour ces clés et présente les permissions explicites avec le même résumé de liste que les tableaux de clés du SDK.
+
+Lorsqu'une clé de service possède un objet de permissions non vide, l'accès proxy est limité aux permissions `auth:proxy` explicites des projets concernés. Un administrateur Auth peut les configurer avec l'API de création ou de modification des clés de service :
 
 ```json
 {
@@ -34,13 +36,13 @@ Un administrateur Auth doit accorder à cette clé la permission `auth:proxy` po
 }
 ```
 
-Inscrivez chaque nom d'hôte applicatif, y compris les hôtes locaux avec leur port, comme domaine actif du projet. Auth déduit la permission requise de cette inscription, et non d'un identifiant de projet fourni par l'appelant. Le nom d'hôte doit correspondre à une seule inscription active. Les restrictions de référents existantes de la clé s'appliquent aussi à l'origine applicative transmise.
+Inscrivez chaque nom d'hôte applicatif, y compris les hôtes locaux avec leur port, comme domaine actif de son projet. Auth déduit le projet de cette inscription, et non d'un identifiant fourni par l'appelant. Le nom d'hôte doit correspondre à une seule inscription active. Une liste d'actions explicitement vide pour un projet n'accorde pas l'accès proxy. Les restrictions de référents existantes de la clé s'appliquent aussi à l'origine applicative transmise.
 
 L'en-tête dédié `x-krakstack-proxy-key` authentifie le proxy sans remplacer les témoins, le jeton bearer ou la clé API de l'utilisateur. Auth retire les identifiants du proxy avant de transmettre la requête à Better Auth. La vérification utilise les contrôles existants de validité, d'expiration, de permissions et de limitation de débit; les requêtes proxy comptent dans le quota de vérification de la clé. Les identifiants invalides et les domaines non autorisés sont rejetés. Les en-têtes de transfert standards seuls ne peuvent pas établir l'origine du proxy; les requêtes directes utilisent leur propre hôte.
 
 ### Déployer le changement
 
-1. Accordez à la clé de service existante la permission `auth:proxy` du projet et vérifiez les inscriptions actives des domaines.
+1. Vérifiez les inscriptions actives des domaines. Si la clé de service possède des restrictions explicites, ajoutez la permission `auth:proxy` du projet.
 2. Publiez le SDK mis à jour et préparez le déploiement de chaque application proxy. Il joint automatiquement la clé de service existante.
 3. Déployez le service Auth mis à jour, puis immédiatement les applications proxy dans un déploiement coordonné. Auth doit retirer et masquer l'en-tête contenant la clé avant que les applications commencent à le transmettre; les anciennes versions ne fournissent pas cette protection.
 

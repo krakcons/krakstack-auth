@@ -1,4 +1,5 @@
 import { Schema } from "effect";
+import { ApiKeyPermissionGrant } from "../access.js";
 
 import { PaginatedResponse, Query } from "../query.js";
 
@@ -157,6 +158,7 @@ export const AdminApiKey = Schema.Struct({
   lastRequest: Schema.NullOr(Schema.Date),
   expiresAt: Schema.NullOr(Schema.Date),
   referrers: Schema.Array(Schema.String),
+  permissions: ApiKeyPermissionGrant,
   createdAt: Schema.Date,
   updatedAt: Schema.Date,
 }).annotate({
@@ -180,6 +182,7 @@ export const AdminApiKey = Schema.Struct({
       lastRequest: null,
       expiresAt: null,
       referrers: ["https://app.example.com"],
+      permissions: { "project-id": ["auth:proxy"] },
       createdAt: new Date("2026-01-01T00:00:00.000Z"),
       updatedAt: new Date("2026-01-01T00:00:00.000Z"),
     },
