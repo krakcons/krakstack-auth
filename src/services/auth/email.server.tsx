@@ -102,10 +102,13 @@ const emailThemeFromCss = (css: string | undefined) => {
 
 const SesLive = Layer.mergeAll(
   FetchHttpClient.layer,
-  AwsCredentials.fromCredentials({
-    accessKeyId: process.env.SES_ACCESS_KEY_ID ?? "",
-    secretAccessKey: process.env.SES_SECRET_ACCESS_KEY ?? "",
-  }),
+  AwsCredentials.fromCredentials(
+    {
+      accessKeyId: process.env.SES_ACCESS_KEY_ID ?? "",
+      secretAccessKey: process.env.SES_SECRET_ACCESS_KEY ?? "",
+    },
+    process.env.SES_REGION ?? "ca-central-1",
+  ),
   Layer.succeed(
     AwsRegion.Region,
     Effect.succeed(process.env.SES_REGION ?? "ca-central-1"),
