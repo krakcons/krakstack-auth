@@ -92,6 +92,7 @@ const defaultMessages = {
     sign_in_email_as: "Signing in as {email}",
     sign_in_email_otp_code: "Email code",
     sign_in_email_otp_error: "Unable to verify the sign-in code.",
+    sign_in_otp_expiry: "Your code expires 5 minutes after it's sent.",
     sign_in_email_otp_resend: "Resend code",
     sign_in_email_otp_resend_countdown: "Resend in {seconds}s",
     sign_in_email_otp_send_error: "Unable to send the sign-in code.",
@@ -157,6 +158,7 @@ const defaultMessages = {
     sign_in_email_as: "Connexion avec {email}",
     sign_in_email_otp_code: "Code courriel",
     sign_in_email_otp_error: "Impossible de vérifier le code de connexion.",
+    sign_in_otp_expiry: "Votre code expire 5 minutes après son envoi.",
     sign_in_email_otp_resend: "Renvoyer le code",
     sign_in_email_otp_resend_countdown: "Renvoyer dans {seconds} s",
     sign_in_email_otp_send_error: "Impossible d'envoyer le code de connexion.",
@@ -303,9 +305,7 @@ export const resolveInitialAuthMethod = ({
   return emailOtp ? "emailOtp" : "password";
 };
 
-export function Signin(
-  props: AuthFormProps & { otpExpiryDescription?: string | undefined },
-) {
+export function Signin(props: AuthFormProps) {
   const {
     baseUrl,
     labels: m,
@@ -683,11 +683,9 @@ export function Signin(
               {emailSubmitted && selectedAuthMethod === "emailOtp" ? (
                 <div className="flex flex-col gap-2">
                   <form.otp label={m.sign_in_email_otp_code} />
-                  {props.otpExpiryDescription ? (
-                    <p className="text-muted-foreground text-sm">
-                      {props.otpExpiryDescription}
-                    </p>
-                  ) : null}
+                  <p className="text-muted-foreground text-sm">
+                    {m.sign_in_otp_expiry}
+                  </p>
                   <div className="flex flex-wrap gap-x-4 gap-y-2 text-sm">
                     {otpSentTo ? (
                       <Button
