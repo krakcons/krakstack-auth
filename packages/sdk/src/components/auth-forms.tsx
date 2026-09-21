@@ -1428,22 +1428,13 @@ const getSearchParam = (searchString: string, key: string) =>
 
 const getBrowserAuthHost = () => globalThis.window?.location.host ?? null;
 
-const navigateTarget = (
+export const navigateTarget = (
   target: string,
   navigate: ReturnType<typeof useNavigate>,
 ) => {
-  if (shouldUseDocumentRedirect(target)) {
-    navigate({ href: target });
-  } else {
-    navigate({ to: target });
-  }
-};
-
-const shouldUseDocumentRedirect = (target: string) => {
-  if (target.startsWith("/api/")) return true;
-  if (target.startsWith("/")) return false;
-  if (target.startsWith(window.location.origin)) return true;
-  return target.startsWith("http://") || target.startsWith("https://");
+  // Return destinations are complete URLs, including any search and hash.
+  // API callbacks must reach the server rather than the client route tree.
+  return navigate({ href: target, reloadDocument: target.startsWith("/api/") });
 };
 
 const nameFromEmail = (email: string) => {
