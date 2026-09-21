@@ -1,19 +1,50 @@
-import { Atom } from "effect/unstable/reactivity";
+import { Option } from "effect";
+import { AsyncResult, Atom } from "effect/unstable/reactivity";
 
 import { authClientApi } from "./auth-client-api.js";
 
 const LAST_LOGIN_METHOD_COOKIE = "krakstack-auth.last_used_login_method";
 export const AUTH_CLIENT_CHANGE_EVENT = "krakstack-auth:change";
-const AUTH_CLIENT_CHANGE_STORAGE_KEY = "krakstack-auth.change";
+
+const authRevalidationSignal = Atom.make<Event | null>((get) => {
+  if (globalThis.window) {
+    const onChange = (event: Event) => get.setSelf(event);
+    window.addEventListener(AUTH_CLIENT_CHANGE_EVENT, onChange);
+    get.addFinalizer(() =>
+      window.removeEventListener(AUTH_CLIENT_CHANGE_EVENT, onChange),
+    );
+  }
+  return null;
+});
+
+// Each registry subscribes once; query refreshes stay inside the atom graph.
+const refreshOnAuthSignal = Atom.makeRefreshOnSignal(authRevalidationSignal);
+
+export const refreshOnAuthChange = <A>(atom: Atom.Atom<A>): Atom.Atom<A> => {
+  const reactive = refreshOnAuthSignal(atom);
+  // The built-in visibility helper is browser-only.
+  return globalThis.window ? Atom.refreshOnWindowFocus(reactive) : reactive;
+};
 
 export const authSessionAtom = Atom.family((baseUrl?: string) =>
   Atom.optimistic(
-    authClientApi(baseUrl).query("auth", "getSession", {
-      query: {},
-      timeToLive: "1 minute",
-      reactivityKeys: ["auth-session"],
-    }),
-  ),
+    authClientApi(baseUrl)
+      .query("auth", "getSession", {
+        query: {},
+        timeToLive: "1 minute",
+        reactivityKeys: ["auth-session"],
+      })
+      .pipe(
+        Atom.map((result) => {
+          const unauthorized = AsyncResult.error(result).pipe(
+            Option.exists((error) => error._tag === "AuthUnauthorized"),
+          );
+          return unauthorized && !result.waiting
+            ? AsyncResult.success(null)
+            : result;
+        }),
+      ),
+  ).pipe(refreshOnAuthChange),
 );
 
 export const authOrganizationsAtom = Atom.family((baseUrl?: string) =>
@@ -22,7 +53,7 @@ export const authOrganizationsAtom = Atom.family((baseUrl?: string) =>
       timeToLive: "1 minute",
       reactivityKeys: ["auth-organizations"],
     }),
-  ),
+  ).pipe(refreshOnAuthChange),
 );
 
 export const activeAuthOrganizationAtom = Atom.family((baseUrl?: string) =>
@@ -33,7 +64,7 @@ export const activeAuthOrganizationAtom = Atom.family((baseUrl?: string) =>
         timeToLive: "1 minute",
         reactivityKeys: ["auth-active-organization", organizationId ?? "none"],
       }),
-    ),
+    ).pipe(refreshOnAuthChange),
   ),
 );
 
@@ -55,15 +86,4 @@ export const getLastUsedLoginMethod = () => {
 
 export const notifyAuthChange = () => {
   globalThis.window?.dispatchEvent(new Event(AUTH_CLIENT_CHANGE_EVENT));
-  try {
-    globalThis.localStorage?.setItem(
-      AUTH_CLIENT_CHANGE_STORAGE_KEY,
-      String(Date.now()),
-    );
-  } catch {
-    // Storage may be unavailable in privacy-restricted browser contexts.
-  }
 };
-
-export const isAuthClientStorageEvent = (event: StorageEvent) =>
-  event.key === AUTH_CLIENT_CHANGE_STORAGE_KEY;

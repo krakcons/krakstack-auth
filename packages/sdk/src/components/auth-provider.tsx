@@ -1,27 +1,16 @@
-import {
-  useAtomRefresh,
-  useAtomSuspense,
-  useAtomValue,
-} from "@effect/atom-react";
+import { useAtomSuspense, useAtomValue } from "@effect/atom-react";
 import { useRouterState } from "@tanstack/react-router";
 import { AsyncResult } from "effect/unstable/reactivity";
 import {
   createContext,
   type ReactNode,
-  useCallback,
   useContext,
   useEffect,
-  useEffectEvent,
   useMemo,
-  useState,
+  useRef,
 } from "react";
 
-import {
-  activeAuthOrganizationAtom,
-  AUTH_CLIENT_CHANGE_EVENT,
-  authSessionAtom,
-  isAuthClientStorageEvent,
-} from "./auth-atoms.js";
+import { activeAuthOrganizationAtom, authSessionAtom } from "./auth-atoms.js";
 import { authClientApi } from "./auth-client-api.js";
 import type { ExtraProjectPublicConfig } from "../extra/schema.js";
 import type {
@@ -48,8 +37,6 @@ export type KrakstackAuthContextValue = {
   projectConfig: ExtraProjectPublicConfig | null;
   access: ProjectAccessCatalog | null;
   accessLabels: ProjectAccessLabelCatalog | null;
-  authRefreshVersion: number;
-  refreshAuth: () => void;
 };
 
 const KrakstackAuthContext = createContext<KrakstackAuthContextValue | null>(
@@ -57,42 +44,6 @@ const KrakstackAuthContext = createContext<KrakstackAuthContextValue | null>(
 );
 
 const PROJECT_CONTEXT_COOKIE = "krakstack-auth.project_context";
-export const listenForSessionRevalidation = (
-  target: EventTarget,
-  revalidate: () => void,
-) => {
-  const onPageShow = (event: Event) => {
-    if ("persisted" in event && event.persisted === true) revalidate();
-  };
-
-  target.addEventListener("pageshow", onPageShow);
-
-  return () => {
-    target.removeEventListener("pageshow", onPageShow);
-  };
-};
-
-const listenForAuthChanges = (revalidate: () => void) => {
-  const onStorage = (event: StorageEvent) => {
-    if (isAuthClientStorageEvent(event)) revalidate();
-  };
-  const onVisible = () => {
-    if (document.visibilityState === "visible") revalidate();
-  };
-
-  window.addEventListener(AUTH_CLIENT_CHANGE_EVENT, revalidate);
-  window.addEventListener("storage", onStorage);
-  window.addEventListener("online", revalidate);
-  document.addEventListener("visibilitychange", onVisible);
-
-  return () => {
-    window.removeEventListener(AUTH_CLIENT_CHANGE_EVENT, revalidate);
-    window.removeEventListener("storage", onStorage);
-    window.removeEventListener("online", revalidate);
-    document.removeEventListener("visibilitychange", onVisible);
-  };
-};
-
 const setProjectContextCookie = (projectId: string | null | undefined) => {
   if (!globalThis.document) return;
 
@@ -190,37 +141,24 @@ export function KrakstackAuthProvider({
   const resolvedProjectId =
     projectId ?? getSearchParam(searchString, "projectId");
   const projectConfig = useProjectConfig(baseUrl, projectId);
-  const [authRefreshVersion, setAuthRefreshVersion] = useState(0);
-  const refreshAuth = useCallback(() => {
-    setAuthRefreshVersion((current) => current + 1);
-  }, []);
   const sessionAtom = authSessionAtom(baseUrl);
-  useAtomValue(sessionAtom);
-  const refreshSession = useAtomRefresh(sessionAtom);
-  const revalidateSession = useEffectEvent(async () => {
-    await refreshSession();
-    refreshAuth();
-  });
+  const sessionResult = useAtomValue(sessionAtom);
+  const wasAuthenticated = useRef(false);
+
+  useEffect(() => {
+    if (!AsyncResult.isSuccess(sessionResult) || sessionResult.waiting) return;
+    if (sessionResult.value) {
+      wasAuthenticated.current = true;
+    } else if (wasAuthenticated.current) {
+      // Reset route guards and all nested registries after cross-project logout.
+      wasAuthenticated.current = false;
+      window.location.reload();
+    }
+  }, [sessionResult]);
 
   useEffect(() => {
     setProjectContextCookie(resolvedProjectId);
   }, [resolvedProjectId]);
-
-  useEffect(
-    () =>
-      listenForSessionRevalidation(window, () => {
-        void revalidateSession();
-      }),
-    [],
-  );
-
-  useEffect(
-    () =>
-      listenForAuthChanges(() => {
-        void revalidateSession();
-      }),
-    [],
-  );
 
   const value = useMemo(
     () => ({
@@ -230,19 +168,8 @@ export function KrakstackAuthProvider({
       projectConfig,
       access: access ?? null,
       accessLabels: accessLabels ?? null,
-      authRefreshVersion,
-      refreshAuth,
     }),
-    [
-      baseUrl,
-      locale,
-      resolvedProjectId,
-      projectConfig,
-      access,
-      accessLabels,
-      authRefreshVersion,
-      refreshAuth,
-    ],
+    [baseUrl, locale, resolvedProjectId, projectConfig, access, accessLabels],
   );
 
   return (

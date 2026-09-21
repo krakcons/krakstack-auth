@@ -1,4 +1,4 @@
-import { useAtomRefresh, useAtomSet, useAtomValue } from "@effect/atom-react";
+import { useAtomSet, useAtomValue } from "@effect/atom-react";
 import { useNavigate, useRouter } from "@tanstack/react-router";
 import { Atom, AsyncResult } from "effect/unstable/reactivity";
 import { Effect, Option, Schema } from "effect";
@@ -241,7 +241,6 @@ export function AdminUsersTable({
   const baseUrl = auth?.baseUrl;
   const sessionAtom = authSessionAtom(baseUrl);
   const sessionResult = useAtomValue(sessionAtom);
-  const refetchSession = useAtomRefresh(sessionAtom);
   const session = AsyncResult.match(sessionResult, {
     onInitial: () => null,
     onFailure: () => null,
@@ -268,8 +267,6 @@ export function AdminUsersTable({
         const client = yield* authHttpClient(baseUrl);
         yield* client.auth.adminImpersonateUser({ payload: { userId } });
         notifyAuthChange();
-        auth?.refreshAuth();
-        refetchSession();
         yield* Effect.tryPromise({
           try: async () => {
             await navigate({ to: "/" });
@@ -310,8 +307,6 @@ export function AdminUsersTable({
             payload: { organizationId, actorUserId, targetUserId },
           });
           notifyAuthChange();
-          auth?.refreshAuth();
-          refetchSession();
           yield* Effect.tryPromise({
             try: async () => {
               await navigate({ to: "/" });

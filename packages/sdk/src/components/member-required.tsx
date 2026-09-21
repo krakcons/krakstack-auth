@@ -1,12 +1,8 @@
-import {
-  useAtomRefresh,
-  useAtomSet,
-  useAtomSuspense,
-} from "@effect/atom-react";
+import { useAtomSet, useAtomSuspense } from "@effect/atom-react";
 import { Effect, Schema } from "effect";
 import { Atom } from "effect/unstable/reactivity";
 import { Check, Loader2, Mail, ShieldAlert } from "lucide-react";
-import { type ReactNode, useEffect, useRef, useState } from "react";
+import { type ReactNode, useState } from "react";
 
 import { Button } from "@/components/ui/button";
 import { CopyButton } from "@krak-stack/registry/copy-button";
@@ -19,7 +15,11 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 
-import { authSessionAtom, notifyAuthChange } from "./auth-atoms.js";
+import {
+  authSessionAtom,
+  notifyAuthChange,
+  refreshOnAuthChange,
+} from "./auth-atoms.js";
 import { authClientApi, authHttpClient } from "./auth-client-api.js";
 import { type KrakstackAuthLocale, useKrakstackAuth } from "./auth-provider.js";
 import { AuthForbidden } from "../auth/schema.js";
@@ -213,10 +213,12 @@ const organizationProfileAtom = Atom.family((baseUrl?: string | undefined) =>
 
 const invitationsAtom = Atom.family((baseUrl?: string | undefined) =>
   Atom.family((accessKey: string) =>
-    authClientApi(baseUrl).query("auth", "organizationListUserInvitations", {
-      query: {},
-      serializationKey: `member-invitations:${accessKey}`,
-    }),
+    authClientApi(baseUrl)
+      .query("auth", "organizationListUserInvitations", {
+        query: {},
+        serializationKey: `member-invitations:${accessKey}`,
+      })
+      .pipe(refreshOnAuthChange),
   ),
 );
 
@@ -284,7 +286,7 @@ const accessAtom = Atom.family((baseUrl?: string | undefined) =>
           }),
         ),
       ),
-    );
+    ).pipe(refreshOnAuthChange);
   }),
 );
 
@@ -314,9 +316,7 @@ export function MemberRequired({
 }: MemberRequiredProps) {
   const auth = useKrakstackAuth();
   const baseUrl = auth?.baseUrl;
-  const authRefreshVersion = auth?.authRefreshVersion ?? 0;
   const locale = auth?.locale;
-  const refreshAuth = auth?.refreshAuth;
   const session = useAtomSuspense(authSessionAtom(baseUrl), {
     suspendOnWaiting: false,
   }).value;
@@ -330,13 +330,11 @@ export function MemberRequired({
   return (
     <MemberRequiredGate
       accessKey={currentAccessKey}
-      authRefreshVersion={authRefreshVersion}
       baseUrl={baseUrl}
       contactEmail={contactEmail}
       locale={locale}
       messages={messages}
       organizationId={organizationId}
-      refreshAuth={refreshAuth}
     >
       {children}
     </MemberRequiredGate>
@@ -345,29 +343,23 @@ export function MemberRequired({
 
 function MemberRequiredGate({
   accessKey,
-  authRefreshVersion,
   baseUrl,
   contactEmail,
   children,
   locale,
   messages,
   organizationId,
-  refreshAuth,
 }: {
   accessKey: string;
-  authRefreshVersion: number;
   baseUrl?: string | undefined;
   contactEmail?: string | undefined;
   children?: ReactNode;
   locale?: KrakstackAuthLocale | undefined;
   messages?: MemberRequiredMessages | undefined;
   organizationId: string;
-  refreshAuth?: (() => void) | undefined;
 }) {
   const m = labels(locale, messages);
   const queryAtom = accessAtom(baseUrl)(accessKey);
-  const refreshAccess = useAtomRefresh(queryAtom);
-  const lastAuthRefreshVersion = useRef(authRefreshVersion);
   const accessResult = useAtomSuspense(queryAtom, {
     suspendOnWaiting: false,
   });
@@ -379,12 +371,6 @@ function MemberRequiredGate({
   const invitationNow = useInvitationExpirationClock(
     access.allowed || !access.invitation ? [] : [access.invitation],
   );
-
-  useEffect(() => {
-    if (lastAuthRefreshVersion.current === authRefreshVersion) return;
-    lastAuthRefreshVersion.current = authRefreshVersion;
-    refreshAccess();
-  }, [authRefreshVersion, refreshAccess]);
 
   if (access.allowed) return <>{children}</>;
 
@@ -420,8 +406,6 @@ function MemberRequiredGate({
         );
       },
       onSuccess: () => {
-        if (refreshAuth) refreshAuth();
-        else refreshAccess();
         setAccepting(false);
       },
     });

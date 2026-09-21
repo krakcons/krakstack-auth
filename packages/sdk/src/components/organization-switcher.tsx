@@ -31,7 +31,6 @@ import {
   createContext,
   useContext,
   useEffect,
-  useEffectEvent,
   useRef,
   useState,
 } from "react";
@@ -107,6 +106,7 @@ import {
   authOrganizationsAtom,
   authSessionAtom,
   notifyAuthChange,
+  refreshOnAuthChange,
 } from "./auth-atoms.js";
 import { useKrakstackAuth } from "./auth-provider.js";
 import { parseApiKeyReferrers } from "./api-key.js";
@@ -600,11 +600,13 @@ const normalizeInvitationRole = (role: string) => {
 };
 
 const userInvitationsAtom = Atom.family((baseUrl?: string | undefined) =>
-  authClientApi(baseUrl).query("auth", "organizationListUserInvitations", {
-    query: {},
-    timeToLive: "1 minute",
-    reactivityKeys: ["auth-user-invitations"],
-  }),
+  authClientApi(baseUrl)
+    .query("auth", "organizationListUserInvitations", {
+      query: {},
+      timeToLive: "1 minute",
+      reactivityKeys: ["auth-user-invitations"],
+    })
+    .pipe(refreshOnAuthChange),
 );
 
 const invitationOrganizationProfileAtom = Atom.family(
@@ -1183,9 +1185,6 @@ export function OrganizationSwitcher({
     onFailure: () => m.organization_switcher_empty(),
     onSuccess: () => null,
   });
-  const refreshSession = useAtomRefresh(sessionAtom);
-  const refreshOrganizations = useAtomRefresh(organizationsAtom);
-  const refreshActiveOrganization = useAtomRefresh(activeOrganizationAtom);
   const setActiveOrganization = (organizationId: string) =>
     authHttpClient(baseUrl).pipe(
       Effect.flatMap((client) =>
@@ -1194,7 +1193,6 @@ export function OrganizationSwitcher({
         }),
       ),
     );
-  const lastAuthRefreshVersion = useRef(auth?.authRefreshVersion ?? 0);
   const [uncontrolledDialog, setUncontrolledDialog] =
     useState<OrganizationSwitcherDialog | null>(defaultDialog);
   const [editingOrganizationLocale, setEditingOrganizationLocale] =
@@ -1203,7 +1201,6 @@ export function OrganizationSwitcher({
     controlledDialog !== undefined ? controlledDialog : uncontrolledDialog;
   const invitationsAtom = userInvitationsAtom(baseUrl);
   const invitationsResult = useAtomValue(invitationsAtom);
-  const refreshUserInvitations = useAtomRefresh(invitationsAtom);
   const userInvitations = AsyncResult.match(invitationsResult, {
     onInitial: () => [],
     onFailure: () => [],
@@ -1245,23 +1242,6 @@ export function OrganizationSwitcher({
   };
   const openCreate = () => setDialog("create");
 
-  const refresh = async () => {
-    refreshOrganizations();
-    refreshActiveOrganization();
-    refreshSession();
-  };
-  const refreshOnSessionChanged = useEffectEvent(() => {
-    void refresh();
-  });
-
-  useEffect(() => {
-    const version = auth?.authRefreshVersion ?? 0;
-    if (version === lastAuthRefreshVersion.current) return;
-
-    lastAuthRefreshVersion.current = version;
-    refreshOnSessionChanged();
-  }, [auth?.authRefreshVersion]);
-
   if (!session) {
     return <>{renderUnauthenticated?.()}</>;
   }
@@ -1288,14 +1268,12 @@ export function OrganizationSwitcher({
     canSwitchOrganizations;
 
   const refreshAfterInvitationAction = async (previousActiveId?: string) => {
-    refreshUserInvitations();
-    await refresh();
+    notifyAuthChange();
 
     if (!canSwitchOrganizations && previousActiveId) {
       try {
         await Effect.runPromise(setActiveOrganization(previousActiveId));
         notifyAuthChange();
-        await refresh();
         onChange?.(
           organizations.find(
             (organization) => organization.id === previousActiveId,
@@ -1409,7 +1387,6 @@ export function OrganizationSwitcher({
                             );
                             if (!result) return;
                             notifyAuthChange();
-                            await refresh();
                             onChange?.(organization);
                           } catch {
                             // Switching previously failed silently in this menu.
@@ -1545,11 +1522,10 @@ export function OrganizationSwitcher({
             try {
               await Effect.runPromise(setActiveOrganization(organization.id));
               activated = true;
-              notifyAuthChange();
             } catch {
               // Creation succeeded even if activating the organization did not.
             }
-            await refresh();
+            notifyAuthChange();
             if (activated) {
               onCreate?.(organization);
               onChange?.(organization);
@@ -1586,7 +1562,6 @@ export function OrganizationSwitcher({
             baseUrl={baseUrl}
             editingLocale={editingOrganizationLocale}
             organization={activeOrganization}
-            onUpdated={refresh}
           />
         ) : null}
       </Dialog>
@@ -1606,9 +1581,8 @@ export function OrganizationSwitcher({
               organization={activeOrganization}
               currentUserId={session.user.id}
               active={dialog === "members"}
-              onLeft={async () => {
+              onLeft={() => {
                 setDialog(null);
-                await refresh();
                 onChange?.(null);
               }}
             />
@@ -1710,7 +1684,6 @@ function UserInvitationsManager({
           ),
         ),
       );
-      notifyAuthChange();
       await onActionComplete(activeOrganizationId);
     } catch (cause) {
       setActionError(
@@ -1907,13 +1880,11 @@ function EditOrganizationSection({
   baseUrl,
   editingLocale,
   organization,
-  onUpdated,
 }: {
   header: ReactNode;
   baseUrl?: string | undefined;
   editingLocale: OrganizationLocale;
   organization: OrganizationSummary;
-  onUpdated: () => Promise<void>;
 }) {
   const m = useOrganizationMessages();
   const [defaultLocale] = useState(currentOrganizationLocale);
@@ -1951,10 +1922,6 @@ function EditOrganizationSection({
             },
           });
           yield* Effect.sync(notifyAuthChange);
-          yield* Effect.tryPromise({
-            try: onUpdated,
-            catch: (cause) => cause,
-          });
           return updated;
         }).pipe(
           Effect.mapError((cause) =>
@@ -2359,7 +2326,7 @@ function OrganizationMembersManager({
   organization: OrganizationSummary;
   currentUserId: string;
   active: boolean;
-  onLeft: () => Promise<void>;
+  onLeft: () => void;
 }) {
   const m = useOrganizationMessages();
   const hasOpened = useOpenedOnce(active);
@@ -2560,7 +2527,7 @@ function OrganizationMembersManager({
         ),
       );
       notifyAuthChange();
-      await onLeft();
+      onLeft();
     } catch (cause) {
       setError(
         organizationFailureMessage(cause, m.organization_member_leave_error()),
