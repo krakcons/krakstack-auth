@@ -5,7 +5,7 @@ import { Effect, Option, Schema } from "effect";
 import { Atom, AsyncResult } from "effect/unstable/reactivity";
 import { REGEXP_ONLY_DIGITS } from "input-otp";
 import { KeyRound, Loader2, Mail } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import { Button, buttonVariants } from "@/components/ui/button";
 import {
@@ -208,10 +208,17 @@ type AuthFormProps = {
 
 const useAuthFormOptions = ({ baseUrl, locale }: AuthFormProps) => {
   const auth = useKrakstackAuth();
+  const resolvedLocale = locale ?? auth?.locale ?? "en";
+  const localeRef = useRef(resolvedLocale);
+  useEffect(() => {
+    localeRef.current = resolvedLocale;
+  }, [resolvedLocale]);
 
   return {
     baseUrl: baseUrl ?? auth?.baseUrl,
-    labels: labels(locale ?? auth?.locale ?? "en"),
+    // Form atoms retain their initial handlers; resolve the locale when sending.
+    locale: () => localeRef.current,
+    labels: labels(resolvedLocale),
     projectConfig: auth?.projectConfig,
   };
 };
@@ -308,6 +315,7 @@ export const resolveInitialAuthMethod = ({
 export function Signin(props: AuthFormProps) {
   const {
     baseUrl,
+    locale,
     labels: m,
     projectConfig: providedProjectConfig,
   } = useAuthFormOptions(props);
@@ -405,7 +413,7 @@ export function Signin(props: AuthFormProps) {
       ) =>
         Effect.gen(function* () {
           const email = value.email.trim();
-          const sendEmailOtp = authHttpClient(baseUrl).pipe(
+          const sendEmailOtp = authHttpClient(baseUrl, locale).pipe(
             Effect.flatMap((client) =>
               client.auth.sendVerificationOtp({
                 payload: { email, type: "sign-in" },
@@ -451,7 +459,7 @@ export function Signin(props: AuthFormProps) {
               yield* sendEmailOtp;
               return;
             }
-            yield* authHttpClient(baseUrl).pipe(
+            yield* authHttpClient(baseUrl, locale).pipe(
               Effect.flatMap((client) =>
                 client.auth.signInEmailOtp({
                   payload: {
@@ -479,7 +487,7 @@ export function Signin(props: AuthFormProps) {
                 password: value.password,
                 callbackURL: redirectTarget,
               };
-          const result = yield* authHttpClient(baseUrl).pipe(
+          const result = yield* authHttpClient(baseUrl, locale).pipe(
             Effect.flatMap((client) => client.auth.signInEmail({ payload })),
           );
           if (hasTwoFactorRedirect(result)) {
@@ -526,7 +534,7 @@ export function Signin(props: AuthFormProps) {
               callbackURL: socialRedirectTarget,
               errorCallbackURL: "/sign-in",
             };
-        const result = yield* authHttpClient(baseUrl).pipe(
+        const result = yield* authHttpClient(baseUrl, locale).pipe(
           Effect.flatMap((client) => client.auth.signInSocial({ payload })),
         );
         notifyAuthChange();
@@ -651,6 +659,7 @@ export function Signin(props: AuthFormProps) {
                   <form.password
                     label={m.field_password}
                     type="password"
+                    autoFocus
                     autoComplete="current-password"
                     required
                   />
@@ -766,6 +775,7 @@ export function Signin(props: AuthFormProps) {
 export function VerifyEmail(props: AuthFormProps) {
   const {
     baseUrl,
+    locale,
     labels: m,
     projectConfig: providedProjectConfig,
   } = useAuthFormOptions(props);
@@ -793,7 +803,7 @@ export function VerifyEmail(props: AuthFormProps) {
       onSubmit: (action: "verify" | "resend", { decoded: value }) =>
         Effect.gen(function* () {
           if (action === "resend") {
-            yield* authHttpClient(baseUrl).pipe(
+            yield* authHttpClient(baseUrl, locale).pipe(
               Effect.flatMap((client) =>
                 client.auth.sendVerificationOtp({
                   payload: {
@@ -807,7 +817,7 @@ export function VerifyEmail(props: AuthFormProps) {
             return;
           }
 
-          yield* authHttpClient(baseUrl).pipe(
+          yield* authHttpClient(baseUrl, locale).pipe(
             Effect.flatMap((client) =>
               client.auth.verifyEmailOtp({
                 payload: {
@@ -899,7 +909,7 @@ export function VerifyEmail(props: AuthFormProps) {
 }
 
 export function ForgotPassword(props: AuthFormProps) {
-  const { baseUrl, labels: m } = useAuthFormOptions(props);
+  const { baseUrl, locale, labels: m } = useAuthFormOptions(props);
   const searchString = useRouterState({
     select: (state) => state.location.searchStr,
   });
@@ -913,7 +923,7 @@ export function ForgotPassword(props: AuthFormProps) {
       onSubmit: (_, { decoded: value }) =>
         Effect.gen(function* () {
           setSubmitted(false);
-          yield* authHttpClient(baseUrl).pipe(
+          yield* authHttpClient(baseUrl, locale).pipe(
             Effect.flatMap((client) =>
               client.auth.requestPasswordReset({
                 payload: {
@@ -1001,7 +1011,7 @@ function ResetPasswordForm({
   token,
   ...props
 }: AuthFormProps & { token: string }) {
-  const { baseUrl, labels: m } = useAuthFormOptions(props);
+  const { baseUrl, locale, labels: m } = useAuthFormOptions(props);
   const navigate = useNavigate();
   const onSuccess = () => navigate({ to: "/sign-in" });
   const [form] = useState(() =>
@@ -1011,7 +1021,7 @@ function ResetPasswordForm({
       mode: { validation: "onSubmit" },
       onSubmit: (_, { decoded: value }) =>
         Effect.gen(function* () {
-          yield* authHttpClient(baseUrl).pipe(
+          yield* authHttpClient(baseUrl, locale).pipe(
             Effect.flatMap((client) =>
               client.auth.resetPassword({
                 payload: {
@@ -1072,6 +1082,7 @@ function ResetPasswordForm({
 export function TwoFactor(props: AuthFormProps) {
   const {
     baseUrl,
+    locale,
     labels: m,
     projectConfig: providedProjectConfig,
   } = useAuthFormOptions(props);
@@ -1108,7 +1119,7 @@ export function TwoFactor(props: AuthFormProps) {
       ) =>
         Effect.gen(function* () {
           if (action.type === "sendEmailCode") {
-            yield* authHttpClient(baseUrl).pipe(
+            yield* authHttpClient(baseUrl, locale).pipe(
               Effect.flatMap((client) =>
                 client.auth.twoFactorSendOtp({ payload: {} }),
               ),
@@ -1126,7 +1137,7 @@ export function TwoFactor(props: AuthFormProps) {
                 oauth_query: oauthQuery,
               }
             : { code, trustDevice: value.trustDevice };
-          const result = yield* authHttpClient(baseUrl).pipe(
+          const result = yield* authHttpClient(baseUrl, locale).pipe(
             Effect.flatMap((client) =>
               action.mode === "backup"
                 ? client.auth.twoFactorVerifyBackupCode({

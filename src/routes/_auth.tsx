@@ -1,8 +1,5 @@
 import { Outlet, createFileRoute } from "@tanstack/react-router";
-import {
-  KrakstackAuthProvider,
-  useKrakstackAuthProjectConfig,
-} from "@krak-stack/auth/components";
+import { useKrakstackAuthProjectConfig } from "@krak-stack/auth/components";
 import { Users } from "lucide-react";
 
 import { AppBrand } from "@krak-stack/registry/app-brand";
@@ -20,16 +17,6 @@ export const Route = createFileRoute("/_auth")({
 });
 
 function AuthLayout() {
-  const projectId = import.meta.env.VITE_KRAKSTACK_AUTH_PROJECT_ID;
-
-  return (
-    <KrakstackAuthProvider {...(projectId ? { projectId } : {})}>
-      <AuthLayoutContent />
-    </KrakstackAuthProvider>
-  );
-}
-
-function AuthLayoutContent() {
   const projectConfig = useKrakstackAuthProjectConfig();
   const brandHref = projectConfig?.rootDomain
     ? `//${projectConfig.rootDomain}`

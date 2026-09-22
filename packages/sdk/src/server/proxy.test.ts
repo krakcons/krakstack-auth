@@ -78,12 +78,14 @@ describe("proxyAuthRequest", () => {
               "x-krakstack-forwarded-proto": "http",
               "x-krakstack-proxy-key": "attacker-key",
               authorization: "Bearer user-token",
+              "accept-language": "fr",
               cookie: "session=user-session",
             },
           }),
           "https://auth.krakstack.net",
         ).pipe(Effect.provideService(HttpClient.HttpClient, httpClient));
 
+        expect(capturedRequest?.headers["accept-language"], path).toBe("fr");
         expect(
           capturedRequest?.headers["x-krakstack-forwarded-host"],
           path,

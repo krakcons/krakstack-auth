@@ -1,5 +1,9 @@
 import { Effect } from "effect";
-import { FetchHttpClient, HttpClient } from "effect/unstable/http";
+import {
+  FetchHttpClient,
+  HttpClient,
+  HttpClientRequest,
+} from "effect/unstable/http";
 import { AtomHttpApi } from "effect/unstable/reactivity";
 import { HttpApi, HttpApiClient } from "effect/unstable/httpapi";
 
@@ -23,10 +27,25 @@ const withCredentials = (client: HttpClient.HttpClient) =>
     client.preprocess,
   );
 
-export const authHttpClient = (baseUrl?: string | undefined) =>
+export const authHttpClient = (
+  baseUrl?: string | undefined,
+  getLocale?: (() => "en" | "fr") | undefined,
+) =>
   HttpApiClient.make(AuthClientApi, {
     baseUrl: authClientApiUrl(baseUrl),
-    transformClient: withCredentials,
+    transformClient: (client) =>
+      withCredentials(client).pipe(
+        HttpClient.mapRequest((request) => {
+          const requestLocale = getLocale?.();
+          return requestLocale
+            ? HttpClientRequest.setHeader(
+                request,
+                "accept-language",
+                requestLocale,
+              )
+            : request;
+        }),
+      ),
   }).pipe(Effect.provide(FetchHttpClient.layer));
 
 type AuthClientApiGroups =

@@ -1,9 +1,17 @@
 import {
+  ClientOnly,
   HeadContent,
+  Outlet,
   Scripts,
   createRootRouteWithContext,
+  useRouterState,
 } from "@tanstack/react-router";
 import type { QueryClient } from "@tanstack/react-query";
+import { Suspense } from "react";
+import { KrakstackAuthProvider } from "@krak-stack/auth/components";
+import { Loading } from "@krak-stack/registry/loading";
+import { authBaseUrl } from "@/services/auth/client";
+import { authAccessLabels } from "@/services/auth/access-labels";
 
 import { ThemeProvider } from "@krak-stack/registry/theme-switcher";
 import { m } from "../paraglide/messages.js";
@@ -74,7 +82,40 @@ export const Route = createRootRouteWithContext<{
       : [],
   }),
   shellComponent: RootDocument,
+  component: RootContent,
 });
+
+function RootContent() {
+  const needsAuth = useRouterState({
+    select: (state) =>
+      state.matches.some(
+        (match) =>
+          match.routeId === "/_auth" ||
+          match.routeId === "/admin" ||
+          match.routeId === "/previews",
+      ),
+  });
+
+  if (!needsAuth) return <Outlet />;
+
+  const projectId = import.meta.env.VITE_KRAKSTACK_AUTH_PROJECT_ID;
+  const loading = <Loading variant="centered" />;
+
+  return (
+    <ClientOnly fallback={loading}>
+      <Suspense fallback={loading}>
+        <KrakstackAuthProvider
+          locale={getLocale()}
+          baseUrl={authBaseUrl}
+          accessLabels={authAccessLabels()}
+          {...(projectId ? { projectId } : {})}
+        >
+          <Outlet />
+        </KrakstackAuthProvider>
+      </Suspense>
+    </ClientOnly>
+  );
+}
 
 function RootDocument({ children }: { children: React.ReactNode }) {
   return (
