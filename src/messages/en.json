@@ -1,4 +1,6 @@
 {
+  "organization_impersonate_member": "Impersonate member",
+  "organization_impersonate_member_error": "Unable to impersonate the member and activate this organization.",
   "app_name": "Krakstack Auth",
   "app_initials": "KS",
   "app_tagline": "Central identity server",

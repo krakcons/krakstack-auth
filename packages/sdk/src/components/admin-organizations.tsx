@@ -1,7 +1,8 @@
 import { useAtomSet, useAtomSubscribe, useAtomValue } from "@effect/atom-react";
+import { useNavigate, useRouter } from "@tanstack/react-router";
 import { Cause, Effect, Schema } from "effect";
 import { Atom, AsyncResult } from "effect/unstable/reactivity";
-import { Building2, Pencil, Trash2 } from "lucide-react";
+import { Building2, Pencil, Trash2, UserCog } from "lucide-react";
 import { useState } from "react";
 
 import {
@@ -15,6 +16,7 @@ import {
 } from "@krak-stack/registry/query";
 import { ErrorMessage } from "@krak-stack/registry/effect-form";
 import { AppBrand } from "@krak-stack/registry/app-brand";
+import * as messages from "@/paraglide/messages";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -31,6 +33,7 @@ import { AdminOrganizationForm } from "./admin-organization-form.js";
 import { authClientApi, authHttpClient } from "./auth-client-api.js";
 import { type KrakstackAuthLocale, useKrakstackAuth } from "./auth-provider.js";
 import { assetUrl, organizationBranding } from "./utils.js";
+import { notifyAuthChange } from "./auth-atoms.js";
 
 const defaultMessages = {
   en: {
@@ -165,6 +168,39 @@ export function AdminOrganizationsTable({
   const m = labels(locale);
   const baseUrl = auth?.baseUrl;
   const projectId = auth?.projectId;
+  const navigate = useNavigate();
+  const router = useRouter();
+  const [impersonateAtom] = useState(() =>
+    authClientApi(baseUrl).runtime.fn(
+      ({
+        userId,
+        organizationId,
+      }: {
+        userId: string;
+        organizationId: string;
+      }) =>
+        Effect.gen(function* () {
+          const client = yield* authHttpClient(baseUrl);
+          yield* client.auth.adminImpersonateUser({ payload: { userId } });
+          yield* client.auth
+            .organizationSetActive({ payload: { organizationId } })
+            .pipe(
+              Effect.tapError(() => client.auth.adminStopImpersonating({})),
+              Effect.ensuring(Effect.sync(notifyAuthChange)),
+            );
+          yield* Effect.tryPromise({
+            try: async () => {
+              await navigate({ to: "/" });
+              await router.invalidate();
+            },
+            catch: (cause) =>
+              cause instanceof Error ? cause : new Error(String(cause)),
+          });
+        }),
+    ),
+  );
+  const impersonate = useAtomSet(impersonateAtom);
+  const impersonateResult = useAtomValue(impersonateAtom);
   const [refreshKey, setRefreshKey] = useState(0);
   const [editingOrganization, setEditingOrganization] =
     useState<AdminOrganization | null>(null);
@@ -208,8 +244,19 @@ export function AdminOrganizationsTable({
   return (
     <div className="flex flex-col gap-4">
       {error ? <ErrorMessage text={error} /> : null}
+      {AsyncResult.isFailure(impersonateResult) ? (
+        <ErrorMessage
+          text={messages.organization_impersonate_member_error({}, { locale })}
+        />
+      ) : null}
       <DataTable
-        columnDefs={organizationColumns(m, locale, baseUrl)}
+        columnDefs={organizationColumns(
+          m,
+          locale,
+          baseUrl,
+          impersonate,
+          impersonateResult.waiting,
+        )}
         rowData={organizations}
         features={{
           columnVisibility: true,
@@ -271,7 +318,9 @@ export function AdminOrganizationsTable({
 const organizationColumns = (
   m: AdminOrganizationsLabels,
   locale: KrakstackAuthLocale,
-  baseUrl?: string | undefined,
+  baseUrl: string | undefined,
+  impersonate: (input: { userId: string; organizationId: string }) => void,
+  isImpersonating: boolean,
 ): DataTableColDef<AdminOrganization>[] => [
   {
     field: "name",
@@ -294,13 +343,30 @@ const organizationColumns = (
   {
     field: "memberCount",
     headerName: m.admin_column_members,
-    cellRenderer: ({ data }) => (
-      <OrganizationMembers
-        baseUrl={baseUrl}
-        members={data.memberPreviews ?? []}
-        total={data.memberCount ?? 0}
-      />
-    ),
+    type: "list",
+    typeOptions: {
+      emptyLabel: "0",
+      display: "icon",
+      getItems: (row) =>
+        (row.memberPreviews ?? []).map((member) => ({
+          value: member.id,
+          label: member.name,
+          imageSrc: assetUrl(member.image, baseUrl),
+        })),
+      getTotalCount: (row) => row.memberCount ?? 0,
+      actionsLabel: m.admin_column_members,
+      itemActions: [
+        {
+          name: messages.organization_impersonate_member({}, { locale }),
+          icon: <UserCog className="size-4" />,
+          disabled: () => isImpersonating,
+          onClick: ({ item, row }) => {
+            if (item.value)
+              impersonate({ userId: item.value, organizationId: row.id });
+          },
+        },
+      ],
+    },
   },
   {
     field: "projects",
@@ -320,7 +386,7 @@ const organizationColumns = (
             ),
           };
         })}
-        variant="icon"
+        display="icon"
       />
     ),
   },
@@ -342,36 +408,6 @@ const initials = (name: string) =>
     .map((part) => part[0])
     .join("")
     .toUpperCase();
-
-function OrganizationMembers({
-  baseUrl,
-  members,
-  total,
-}: {
-  baseUrl?: string | undefined;
-  members: NonNullable<AdminOrganization["memberPreviews"]>;
-  total: number;
-}) {
-  return (
-    <DataTableListSummary
-      emptyLabel="0"
-      items={members.map((member) => {
-        const image = assetUrl(member.image, baseUrl);
-        return {
-          label: member.name,
-          value: member.id,
-          icon: image ? (
-            <img alt="" className="size-full object-cover" src={image} />
-          ) : (
-            initials(member.name)
-          ),
-        };
-      })}
-      totalCount={total}
-      variant="icon"
-    />
-  );
-}
 
 function DeleteOrganizationDialog({
   baseUrl,

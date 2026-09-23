@@ -1,4 +1,6 @@
 {
+  "organization_impersonate_member": "Emprunter l’identité d’un membre",
+  "organization_impersonate_member_error": "Impossible d’emprunter l’identité du membre et d’activer cette organisation.",
   "app_name": "Krakstack Auth",
   "app_initials": "KS",
   "app_tagline": "Serveur central d'identité",

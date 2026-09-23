@@ -39,7 +39,7 @@ import {
   DataTable,
   type DataTableColDef,
   DataTableListSummary,
-  DataTableRelationshipCell,
+  DataTableListCell,
 } from "@krak-stack/registry/data-table";
 import {
   CheckboxField,
@@ -2772,14 +2772,14 @@ const memberColumns = ({
       }
 
       return (
-        <DataTableRelationshipCell
+        <DataTableListCell
           emptyLabel={m.organization_member_role()}
           manageLabel={m.organization_member_role()}
           options={organizationRoles.map((role) => ({
             label: organizationRoleLabel(role, m),
             value: role,
           }))}
-          value={roleOptions}
+          items={roleOptions}
           onAdd={(value) => {
             if (!isOrganizationRole(value)) return;
             onRoleChange(member, Array.from(new Set([...roles, value])));

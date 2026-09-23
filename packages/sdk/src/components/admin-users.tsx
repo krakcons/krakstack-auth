@@ -518,7 +518,7 @@ const userColumns = (
             ),
           };
         })}
-        variant="icon"
+        display="icon"
       />
     ),
   },
@@ -540,7 +540,7 @@ const userColumns = (
             ),
           };
         })}
-        variant="icon"
+        display="icon"
       />
     ),
   },
