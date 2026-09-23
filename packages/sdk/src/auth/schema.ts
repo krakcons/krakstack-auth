@@ -73,6 +73,10 @@ export const AuthStatusResponse = Schema.Struct({
   status: Schema.Boolean,
 }).annotate({ identifier: "AuthStatusResponse", title: "Status response" });
 
+export const SignOutPayload = Schema.Struct({}).annotate({
+  identifier: "SignOutPayload",
+});
+
 export const AuthSuccessResponse = Schema.Struct({
   success: Schema.Boolean,
 }).annotate({ identifier: "AuthSuccessResponse", title: "Success response" });
@@ -713,6 +717,11 @@ export const AdminUserIdPayload = Schema.Struct({
 }).annotate({
   identifier: "AdminUserIdPayload",
   title: "Admin user ID payload",
+});
+
+export const AdminStopImpersonatingPayload = Schema.Struct({}).annotate({
+  identifier: "AdminStopImpersonatingPayload",
+  title: "Stop impersonating payload",
 });
 
 export const AdminBanUserPayload = Schema.Struct({

@@ -7,6 +7,7 @@ import {
 
 import {
   AdminBanUserPayload,
+  AdminStopImpersonatingPayload,
   AdminUserIdPayload,
   AdminUserResponse,
   AuthBadRequest,
@@ -61,6 +62,7 @@ import {
   SignInEmailResponse,
   SignInResponse,
   SignInSocialPayload,
+  SignOutPayload,
   SocialRedirectResponse,
   TwoFactorBackupVerifyPayload,
   TwoFactorDisablePayload,
@@ -105,6 +107,7 @@ export const AuthApiGroup = HttpApiGroup.make("auth")
   )
   .add(
     HttpApiEndpoint.post("signOut", "/sign-out", {
+      payload: SignOutPayload,
       success: AuthSuccessResponse,
       error: errors,
     }).annotateMerge(docs("Sign out", "Ends the current browser session.")),
@@ -514,6 +517,7 @@ export const AuthApiGroup = HttpApiGroup.make("auth")
       "adminStopImpersonating",
       "/admin/stop-impersonating",
       {
+        payload: AdminStopImpersonatingPayload,
         success: AuthSessionResponse,
         error: errors,
       },

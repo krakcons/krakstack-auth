@@ -185,7 +185,9 @@ export function AdminOrganizationsTable({
           yield* client.auth
             .organizationSetActive({ payload: { organizationId } })
             .pipe(
-              Effect.tapError(() => client.auth.adminStopImpersonating({})),
+              Effect.tapError(() =>
+                client.auth.adminStopImpersonating({ payload: {} }),
+              ),
               Effect.ensuring(Effect.sync(notifyAuthChange)),
             );
           yield* Effect.tryPromise({

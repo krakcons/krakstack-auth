@@ -820,7 +820,7 @@ export const UserButton = ({
         redirectUrl: string;
       }) =>
         authHttpClient(baseUrl).pipe(
-          Effect.flatMap((client) => client.auth.signOut()),
+          Effect.flatMap((client) => client.auth.signOut({ payload: {} })),
           Effect.tap(() => Effect.sync(notifyAuthChange)),
           Effect.flatMap(() =>
             Effect.tryPromise(() => navigate({ href: redirectUrl })),
@@ -840,7 +840,9 @@ export const UserButton = ({
         Effect.gen(function* () {
           setIsStoppingImpersonation(true);
           yield* authHttpClient(input.baseUrl).pipe(
-            Effect.flatMap((client) => client.auth.adminStopImpersonating()),
+            Effect.flatMap((client) =>
+              client.auth.adminStopImpersonating({ payload: {} }),
+            ),
             Effect.tap(() => Effect.sync(notifyAuthChange)),
             Effect.tap(() => Effect.sync(input.refreshSession)),
             Effect.flatMap(() =>

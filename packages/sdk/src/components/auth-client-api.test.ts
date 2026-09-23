@@ -5,6 +5,43 @@ import { FetchHttpClient } from "effect/unstable/http";
 import { authHttpClient } from "./auth-client-api.js";
 
 describe("auth email request locale", () => {
+  it.effect("sends JSON bodies for empty Better Auth actions", () =>
+    Effect.gen(function* () {
+      const requests: Request[] = [];
+      const capture: typeof fetch = async (input, init) => {
+        requests.push(new Request(input, init));
+        return Response.json({}, { status: 500 });
+      };
+      const client = yield* authHttpClient("https://auth.example.com");
+
+      yield* client.auth
+        .adminStopImpersonating({ payload: {} })
+        .pipe(
+          Effect.provideService(FetchHttpClient.Fetch, capture),
+          Effect.exit,
+        );
+      yield* client.auth
+        .signOut({ payload: {} })
+        .pipe(
+          Effect.provideService(FetchHttpClient.Fetch, capture),
+          Effect.exit,
+        );
+
+      expect(requests).toHaveLength(2);
+      expect(
+        requests.every(
+          (request) =>
+            request.headers.get("content-type") === "application/json",
+        ),
+      ).toBe(true);
+      expect(
+        yield* Effect.promise(() =>
+          Promise.all(requests.map((request) => request.text())),
+        ),
+      ).toEqual(["{}", "{}"]);
+    }),
+  );
+
   it.effect(
     "reads the latest language for requests from an existing client",
     () =>
