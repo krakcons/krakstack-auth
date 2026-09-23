@@ -36,7 +36,7 @@
     "@effect/platform-browser": "4.0.0-rc.112",
     "@effect/sql-pg": "4.0.0-rc.112",
     "@krak-stack/auth": "workspace:*",
-    "@krak-stack/registry": "0.1.30",
+    "@krak-stack/registry": "0.1.31",
     "@lucas-barake/effect-form-react": "0.26.0-beta.5",
     "@opentelemetry/api": "^1.9.1",
     "@opentelemetry/exporter-trace-otlp-http": "^0.219.0",
