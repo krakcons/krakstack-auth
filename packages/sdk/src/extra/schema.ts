@@ -260,6 +260,30 @@ export const ExtraProjectPublicConfig = Schema.Struct({
   ],
 });
 
+export const ExtraAssociatedProjectsQuery = Schema.Struct({
+  organizationId: Schema.optional(Schema.String),
+}).annotate({
+  identifier: "ExtraAssociatedProjectsQuery",
+  title: "Associated projects query",
+  description:
+    "Optionally scopes associated projects to an organization the current user belongs to.",
+});
+
+export const ExtraAssociatedProject = Schema.Struct({
+  id: Schema.String,
+  name: Schema.String,
+}).annotate({
+  identifier: "ExtraAssociatedProject",
+  title: "Associated project",
+});
+
+export const ExtraAssociatedProjects = Schema.Array(
+  ExtraAssociatedProject,
+).annotate({
+  identifier: "ExtraAssociatedProjects",
+  title: "Associated projects",
+});
+
 export const ExtraOrganizationPublicProfileQuery = Schema.Struct({
   organizationId: Schema.String,
   locale: Schema.optional(OrganizationLocale),
@@ -354,6 +378,7 @@ export type ExtraVerifyApiKeyResponse = typeof ExtraVerifyApiKeyResponse.Type;
 export type ExtraProjectPublicConfigQuery =
   typeof ExtraProjectPublicConfigQuery.Type;
 export type ExtraProjectPublicConfig = typeof ExtraProjectPublicConfig.Type;
+export type ExtraAssociatedProject = typeof ExtraAssociatedProject.Type;
 export type ExtraOrganizationPublicProfileQuery =
   typeof ExtraOrganizationPublicProfileQuery.Type;
 export type ExtraOrganizationPublicProfile =

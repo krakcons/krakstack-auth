@@ -5,7 +5,7 @@ import {
 import { Effect, Option, Schema } from "effect";
 import { Headers, HttpServerRequest } from "effect/unstable/http";
 import { HttpApiBuilder, HttpApiError } from "effect/unstable/httpapi";
-import { eq } from "drizzle-orm";
+import { asc, and, eq } from "drizzle-orm";
 
 import { FrontendApi } from "@/api";
 import {
@@ -13,7 +13,13 @@ import {
   localize,
   type LocalizedInputType,
 } from "@/lib/localization";
-import { organization } from "@/db/schema";
+import {
+  member,
+  organization,
+  project,
+  projectOrganization,
+  projectUser,
+} from "@/db/schema";
 import { BetterAuthRequest } from "@/services/auth/better-auth-request";
 import {
   apiKeyAllowedOrigins,
@@ -219,6 +225,55 @@ export const authApiHandler = HttpApiBuilder.group(
               rootHost: query.rootHost,
             })
             .pipe(Effect.mapError(internalServerError));
+        }),
+      )
+      .handle("listAssociatedProjects", ({ query, request }) =>
+        Effect.gen(function* () {
+          const session = yield* requireMutableUserSession(request);
+
+          if (query.organizationId) {
+            const organizationId = query.organizationId;
+            const [membership] = yield* Effect.tryPromise({
+              try: () =>
+                db
+                  .select({ id: member.id })
+                  .from(member)
+                  .where(
+                    and(
+                      eq(member.organizationId, organizationId),
+                      eq(member.userId, session.user.id),
+                    ),
+                  )
+                  .limit(1),
+              catch: internalServerError,
+            });
+            if (!membership) return yield* new HttpApiError.Forbidden({});
+
+            return yield* Effect.tryPromise({
+              try: () =>
+                db
+                  .select({ id: project.id, name: project.name })
+                  .from(projectOrganization)
+                  .innerJoin(
+                    project,
+                    eq(project.id, projectOrganization.projectId),
+                  )
+                  .where(eq(projectOrganization.organizationId, organizationId))
+                  .orderBy(asc(project.name)),
+              catch: internalServerError,
+            });
+          }
+
+          return yield* Effect.tryPromise({
+            try: () =>
+              db
+                .select({ id: project.id, name: project.name })
+                .from(projectUser)
+                .innerJoin(project, eq(project.id, projectUser.projectId))
+                .where(eq(projectUser.userId, session.user.id))
+                .orderBy(asc(project.name)),
+            catch: internalServerError,
+          });
         }),
       )
       .handle("getOrganizationPublicProfile", ({ query }) =>

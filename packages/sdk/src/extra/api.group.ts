@@ -8,6 +8,8 @@ import {
 
 import {
   ExtraBadRequest,
+  ExtraAssociatedProjects,
+  ExtraAssociatedProjectsQuery,
   ExtraCreateApiKeyPayload,
   ExtraCreateApiKeyResponse,
   ExtraImageUploadMultipartPayload,
@@ -39,6 +41,24 @@ export const ExtraApiGroup = HttpApiGroup.make("authExtra")
         summary: "Get host-aware project white-label config",
         description:
           "Returns resolved public branding and authentication options through the proxied auth API.",
+      }),
+    ),
+  )
+  .add(
+    HttpApiEndpoint.get("listAssociatedProjects", "/auth/associated-projects", {
+      query: ExtraAssociatedProjectsQuery.fields,
+      success: ExtraAssociatedProjects,
+      error: [
+        HttpApiError.Unauthorized,
+        HttpApiError.Forbidden,
+        HttpApiError.InternalServerError,
+      ],
+    }).annotateMerge(
+      OpenApi.annotations({
+        title: "List associated projects",
+        summary: "List projects affected by account or organization changes",
+        description:
+          "Returns projects associated with the current user or with an organization the current user belongs to.",
       }),
     ),
   )

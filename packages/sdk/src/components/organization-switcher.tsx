@@ -134,6 +134,7 @@ import {
 import { ExtraUploadedAsset } from "../extra/schema.js";
 import { assetPath, assetUrl, cn } from "./utils.js";
 import type { ProjectAccessLabelCatalog } from "../access.js";
+import { AssociatedProjectsNotice } from "./associated-projects-notice.js";
 import { ExtraApiKeyPermissions } from "../extra/schema.js";
 
 type Locale = "en" | "fr";
@@ -164,6 +165,8 @@ const messages = {
     organization_create_title: "Create organization",
     organization_edit_description:
       "Update the active organization's localized profile.",
+    organization_projects_summary: "Used by {count} projects.",
+    organization_projects_view: "View",
     organization_invitation_cancel: "Cancel invitation",
     organization_invitation_cancel_error: "Could not cancel the invitation.",
     organization_invitation_accept: "Accept invitation",
@@ -322,6 +325,8 @@ const messages = {
     organization_create_title: "Créer une organisation",
     organization_edit_description:
       "Mettez à jour le profil localisé de l'organisation active.",
+    organization_projects_summary: "Utilisée dans {count} projets.",
+    organization_projects_view: "Voir",
     organization_invitation_cancel: "Annuler l'invitation",
     organization_invitation_cancel_error: "Impossible d'annuler l'invitation.",
     organization_invitation_accept: "Accepter l'invitation",
@@ -1350,6 +1355,18 @@ export function OrganizationSwitcher({
                     : {})}
                 />
               </DropdownMenuLabel>
+              {active ? (
+                <div className="px-1 py-2">
+                  <AssociatedProjectsNotice
+                    baseUrl={baseUrl}
+                    getSummary={(count) =>
+                      m.organization_projects_summary({ count })
+                    }
+                    organizationId={active.id}
+                    viewLabel={m.organization_projects_view()}
+                  />
+                </div>
+              ) : null}
               {menuActions ? (
                 <>
                   <DropdownMenuSeparator />

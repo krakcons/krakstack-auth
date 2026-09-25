@@ -95,6 +95,7 @@ import {
   ScrollableDialogHeader,
 } from "./scrollable-dialog.js";
 import type { ProjectAccessLabelCatalog } from "../access.js";
+import { AssociatedProjectsNotice } from "./associated-projects-notice.js";
 import {
   ContactEmailsField,
   ContactPhonesField,
@@ -225,6 +226,8 @@ const messages = {
     user_field_password: "Password",
     user_form_description:
       "Update the profile details associated with your account.",
+    user_form_projects_summary: "Used by {count} projects.",
+    user_form_projects_view: "View",
     user_form_name_label: "Name",
     user_form_title: "Account",
     user_form_update_error: "Unable to update your account.",
@@ -389,6 +392,8 @@ const messages = {
     user_field_password: "Mot de passe",
     user_form_description:
       "Mettez à jour les informations de profil associées à votre compte.",
+    user_form_projects_summary: "Utilisé dans {count} projets.",
+    user_form_projects_view: "Voir",
     user_form_name_label: "Nom",
     user_form_title: "Compte",
     user_form_update_error: "Impossible de mettre à jour votre compte.",
@@ -973,6 +978,15 @@ export const UserButton = ({
                   {...(displayImage ? { imageSrc: displayImage } : {})}
                 />
               </DropdownMenuLabel>
+              <div className="px-1 py-2">
+                <AssociatedProjectsNotice
+                  baseUrl={resolvedBaseUrl}
+                  getSummary={(count) =>
+                    m.user_form_projects_summary({ count })
+                  }
+                  viewLabel={m.user_form_projects_view()}
+                />
+              </div>
               {menuActions ? (
                 <>
                   <DropdownMenuSeparator />
