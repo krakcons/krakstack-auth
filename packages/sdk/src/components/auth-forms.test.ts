@@ -38,6 +38,11 @@ describe("navigateTarget", () => {
     ["/admin/assets?locale=fr#library", "/en/admin/assets?locale=fr#library"],
     ["/admin/assets", "/en/admin/assets?locale=en"],
   ])("preserves the return URL %s after sign-in", async (target, expected) => {
+    vi.stubGlobal("window", {
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
+      origin: "http://localhost",
+    });
     const root = createRootRoute({
       search: { middlewares: [retainSearchParams(["locale"])] },
     });
@@ -52,6 +57,7 @@ describe("navigateTarget", () => {
         createRoute({ getParentRoute: () => root, path: "/admin/assets" }),
       ]),
       history,
+      isServer: false,
       rewrite: {
         input: ({ url }) => {
           const result = new URL(url);
@@ -65,12 +71,16 @@ describe("navigateTarget", () => {
         },
       },
     });
-    await router.load();
+    try {
+      await router.load();
 
-    await navigateTarget(target, router.navigate);
+      await navigateTarget(target, router.navigate);
 
-    expect(history.location.href).toBe(expected);
-    expect(router.state.location.pathname).toBe("/admin/assets");
+      expect(history.location.href).toBe(expected);
+      expect(router.state.location.pathname).toBe("/admin/assets");
+    } finally {
+      vi.unstubAllGlobals();
+    }
   });
 });
 

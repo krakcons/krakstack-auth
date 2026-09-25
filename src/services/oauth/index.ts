@@ -193,7 +193,7 @@ export class OAuthClients extends Context.Service<OAuthClients>()(
               token_endpoint_auth_method: "client_secret_basic",
               grant_types: ["authorization_code", "refresh_token"],
               response_types: ["code"],
-              type: "web",
+              application_type: "web",
               require_pkce: true,
               metadata: {},
             },

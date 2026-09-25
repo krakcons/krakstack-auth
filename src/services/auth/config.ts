@@ -1,6 +1,6 @@
 import { betterAuth, type BetterAuthOptions } from "better-auth";
 import type { GenericEndpointContext } from "@better-auth/core";
-import { drizzleAdapter } from "better-auth-drizzle-adapter";
+import { drizzleAdapter } from "@better-auth/drizzle-adapter/relations-v2";
 import {
   admin,
   anonymous,
@@ -273,9 +273,6 @@ const createAuth = ({
     loginPage: "/sign-in",
     consentPage: "/consent",
     allowDynamicClientRegistration: false,
-    silenceWarnings: {
-      oauthAuthServerConfig: true,
-    },
     clientReference: ({ session }) =>
       Option.getOrUndefined(
         Schema.decodeUnknownOption(Schema.String)(
@@ -293,7 +290,7 @@ const createAuth = ({
     },
     scopes: ["openid", "profile", "email", "offline_access"],
   };
-  if (validAudiences) oauthOptions.validAudiences = validAudiences;
+  if (validAudiences) oauthOptions.resources = validAudiences;
   const socialProviderOptions =
     googleClientId && googleClientSecret
       ? {

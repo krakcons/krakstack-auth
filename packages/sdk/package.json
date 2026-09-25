@@ -76,8 +76,8 @@
   },
   "dependencies": {
     "@effect/atom-react": "4.0.0-rc.112",
-    "@krak-stack/registry": "^0.1.31",
-    "@lucas-barake/effect-form-react": "^0.26.0-beta.5",
+    "@krak-stack/registry": "^0.1.32",
+    "@lucas-barake/effect-form-react": "0.26.0-beta.5",
     "react-qr-code": "^2.2.0"
   },
   "peerDependencies": {

@@ -1566,7 +1566,17 @@ export const navigateTarget = (
 ) => {
   // Return destinations are complete URLs, including any search and hash.
   // API callbacks must reach the server rather than the client route tree.
-  return navigate({ href: target, reloadDocument: target.startsWith("/api/") });
+  if (target.startsWith("/api/") || URL.canParse(target)) {
+    globalThis.window.location.href = target;
+    return;
+  }
+
+  const url = new URL(target, "http://localhost");
+  return navigate({
+    to: url.pathname,
+    search: Object.fromEntries(url.searchParams),
+    hash: url.hash.slice(1),
+  });
 };
 
 const nameFromEmail = (email: string) => {
