@@ -1,11 +1,4 @@
 {
-  "organization_impersonate_member": "Impersonate",
-  "organization_impersonate_member_as_organization": "Impersonate (as organization)",
-  "organization_impersonate_member_error": "Unable to impersonate the member and activate this organization.",
-  "organization_impersonate_member_as_organization_error": "Unable to impersonate the member as this organization.",
-  "organization_type": "Type",
-  "organization_type_personal": "Personal",
-  "organization_type_standard": "Organization",
   "app_name": "Krakstack Auth",
   "app_initials": "KS",
   "app_tagline": "Central identity server",

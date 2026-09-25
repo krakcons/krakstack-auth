@@ -17,7 +17,6 @@ import {
 } from "@krak-stack/registry/query";
 import { ErrorMessage } from "@krak-stack/registry/effect-form";
 import { AppBrand } from "@krak-stack/registry/app-brand";
-import * as messages from "@/paraglide/messages";
 import { Badge } from "@/components/ui/badge";
 import {
   AlertDialog,
@@ -54,10 +53,20 @@ const defaultMessages = {
     organization_delete_error: "Unable to delete organization.",
     organization_delete_title: "Delete organization",
     organization_fetch_error: "Unable to load organizations.",
+    organization_impersonate_member: "Impersonate",
+    organization_impersonate_member_as_organization:
+      "Impersonate (as organization)",
+    organization_impersonate_member_as_organization_error:
+      "Unable to impersonate the member as this organization.",
+    organization_impersonate_member_error:
+      "Unable to impersonate the member and activate this organization.",
     organization_role_admin: "Admin",
     organization_role_member: "Member",
     organization_role_owner: "Owner",
     organization_role_support: "Support",
+    organization_type: "Type",
+    organization_type_personal: "Personal",
+    organization_type_standard: "Organization",
   },
   fr: {
     admin_column_created: "Créé",
@@ -74,20 +83,40 @@ const defaultMessages = {
     organization_delete_error: "Impossible de supprimer l'organisation.",
     organization_delete_title: "Supprimer l'organisation",
     organization_fetch_error: "Impossible de charger les organisations.",
+    organization_impersonate_member: "Emprunter l’identité",
+    organization_impersonate_member_as_organization:
+      "Emprunter l’identité (en tant qu’organisation)",
+    organization_impersonate_member_as_organization_error:
+      "Impossible d’emprunter l’identité du membre en tant que cette organisation.",
+    organization_impersonate_member_error:
+      "Impossible d’emprunter l’identité du membre et d’activer cette organisation.",
     organization_role_admin: "Admin",
     organization_role_member: "Membre",
     organization_role_owner: "Propriétaire",
     organization_role_support: "Support",
+    organization_type: "Type",
+    organization_type_personal: "Personnelle",
+    organization_type_standard: "Organisation",
   },
-} as const;
+} as const satisfies Record<KrakstackAuthLocale, Record<string, string>>;
 
-const labels = (locale: KrakstackAuthLocale) => ({
+type AdminOrganizationsMessageOverrides = Partial<
+  Record<keyof (typeof defaultMessages)["en"], string>
+>;
+
+export const adminOrganizationsMessages = (
+  locale: KrakstackAuthLocale,
+  overrides?: AdminOrganizationsMessageOverrides,
+) => ({
   ...defaultMessages[locale],
+  ...overrides,
 });
 
-type AdminOrganizationsLabels = ReturnType<typeof labels>;
+export type AdminOrganizationsMessages = ReturnType<
+  typeof adminOrganizationsMessages
+>;
 
-const memberRoleLabel = (role: string, m: AdminOrganizationsLabels) =>
+const memberRoleLabel = (role: string, m: AdminOrganizationsMessages) =>
   normalizeOrganizationRoles(role)
     .map((item) => {
       switch (item) {
@@ -213,17 +242,19 @@ const makeAdminOrganizationsTableAtoms = (
 };
 
 export function AdminOrganizationsTable({
+  messages: messageOverrides,
   onSearchChange,
   reloadKey = 0,
   search,
 }: {
+  messages?: Partial<AdminOrganizationsMessages> | undefined;
   onSearchChange?: (search: QueryType) => void;
   reloadKey?: number;
   search?: QueryType;
 }) {
   const auth = useKrakstackAuth();
   const locale = auth?.locale ?? "en";
-  const m = labels(locale);
+  const m = adminOrganizationsMessages(locale, messageOverrides);
   const baseUrl = auth?.baseUrl;
   const projectId = auth?.projectId;
   const navigate = useNavigate();
@@ -349,16 +380,11 @@ export function AdminOrganizationsTable({
     <div className="flex flex-col gap-4">
       {error ? <ErrorMessage text={error} /> : null}
       {AsyncResult.isFailure(impersonateResult) ? (
-        <ErrorMessage
-          text={messages.organization_impersonate_member_error({}, { locale })}
-        />
+        <ErrorMessage text={m.organization_impersonate_member_error} />
       ) : null}
       {AsyncResult.isFailure(impersonateAsOrganizationResult) ? (
         <ErrorMessage
-          text={messages.organization_impersonate_member_as_organization_error(
-            {},
-            { locale },
-          )}
+          text={m.organization_impersonate_member_as_organization_error}
         />
       ) : null}
       <DataTable
@@ -449,7 +475,7 @@ export function AdminOrganizationsTable({
 }
 
 const organizationColumns = (
-  m: AdminOrganizationsLabels,
+  m: AdminOrganizationsMessages,
   locale: KrakstackAuthLocale,
   baseUrl: string | undefined,
   impersonate: (input: { userId: string; organizationId: string }) => void,
@@ -496,7 +522,7 @@ const organizationColumns = (
       actionsLabel: m.admin_column_members,
       itemActions: [
         {
-          name: messages.organization_impersonate_member({}, { locale }),
+          name: m.organization_impersonate_member,
           icon: <UserCog className="size-4" />,
           disabled: () => isImpersonating,
           onClick: ({ item, row }) => {
@@ -505,10 +531,7 @@ const organizationColumns = (
           },
         },
         {
-          name: messages.organization_impersonate_member_as_organization(
-            {},
-            { locale },
-          ),
+          name: m.organization_impersonate_member_as_organization,
           icon: <Building2 className="size-4" />,
           disabled: () => isImpersonating || !actorUserId,
           onClick: ({ item, row }) => {
@@ -526,12 +549,12 @@ const organizationColumns = (
   },
   {
     field: "userId",
-    headerName: messages.organization_type({}, { locale }),
+    headerName: m.organization_type,
     cellRenderer: ({ data }) => (
       <Badge variant={data.userId ? "secondary" : "outline"}>
         {data.userId
-          ? messages.organization_type_personal({}, { locale })
-          : messages.organization_type_standard({}, { locale })}
+          ? m.organization_type_personal
+          : m.organization_type_standard}
       </Badge>
     ),
   },
@@ -584,7 +607,7 @@ function DeleteOrganizationDialog({
   onDeleted,
 }: {
   baseUrl?: string | undefined;
-  labels: AdminOrganizationsLabels;
+  labels: AdminOrganizationsMessages;
   organization: AdminOrganization;
   onClose: () => void;
   onDeleted: () => void;

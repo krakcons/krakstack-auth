@@ -21,7 +21,10 @@ export {
   VerifyEmail,
 } from "./auth-forms.js";
 export { UserButton } from "./user-button.js";
-export { AdminOrganizationsTable } from "./admin-organizations.js";
+export {
+  AdminOrganizationsTable,
+  adminOrganizationsMessages,
+} from "./admin-organizations.js";
 export { AdminOrganizationForm } from "./admin-organization-form.js";
 export { AdminUsersTable, useAdminUsersTotal } from "./admin-users.js";
 export { assetUrl } from "./utils.js";
@@ -54,6 +57,7 @@ export type {
   ProjectAccessMatrixAccess,
   ProjectAccessMatrixMessages,
 } from "./project-access-matrix.js";
+export type { AdminOrganizationsMessages } from "./admin-organizations.js";
 export type {
   KrakstackAuthContextValue,
   KrakstackAuthLocale,
