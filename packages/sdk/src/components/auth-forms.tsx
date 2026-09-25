@@ -3,6 +3,7 @@ import { FormBuilder, FormReact } from "@lucas-barake/effect-form-react";
 import { Link, useNavigate, useRouterState } from "@tanstack/react-router";
 import { Effect, Option, Schema } from "effect";
 import { Atom, AsyncResult } from "effect/unstable/reactivity";
+import { HttpClientError } from "effect/unstable/http";
 import { REGEXP_ONLY_DIGITS } from "input-otp";
 import { KeyRound, Loader2, Mail } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
@@ -18,7 +19,6 @@ import {
 import {
   CheckboxField,
   ErrorMessage,
-  SubmitError,
   TextField,
   effectFormMessages,
 } from "@krak-stack/registry/effect-form";
@@ -38,6 +38,18 @@ import {
   ExtraProjectPublicConfig as ExtraProjectPublicConfigSchema,
   type ExtraProjectPublicConfig,
 } from "../extra/schema.js";
+import {
+  AuthBadRequest,
+  AuthInternalServerError,
+  AuthTooManyRequests,
+  AuthUnauthorized,
+} from "../auth/schema.js";
+import type {
+  AuthConflict,
+  AuthExpectationFailed,
+  AuthForbidden,
+  AuthNotFound,
+} from "../auth/schema.js";
 
 const EMAIL_OTP_RESEND_COOLDOWN_SECONDS = 60;
 
@@ -79,6 +91,12 @@ const defaultMessages = {
     forgot_password_success:
       "If an account exists for that email, a reset link has been sent.",
     forgot_password_title: "Reset password",
+    error_network:
+      "We couldn't reach the server. Check your connection and try again.",
+    error_rate_limited:
+      "Too many attempts. Please wait a moment before trying again.",
+    error_service_unavailable:
+      "The authentication service is temporarily unavailable. Please try again.",
     oauth_client_no_auth_methods:
       "No authentication methods are enabled for this application.",
     reset_password_description: "Enter a new password for your account.",
@@ -98,6 +116,8 @@ const defaultMessages = {
     sign_in_email_otp_send_error: "Unable to send the sign-in code.",
     sign_in_email_otp_verify: "Verify code",
     sign_in_error: "Unable to sign in.",
+    sign_in_invalid_credentials: "The email or password is incorrect.",
+    auth_invalid_code: "The code is invalid or has expired.",
     sign_in_forgot_password: "Forgot your password?",
     sign_in_use_email_otp: "Use email code instead",
     sign_in_use_password: "Use an existing password",
@@ -143,6 +163,12 @@ const defaultMessages = {
     forgot_password_success:
       "Si un compte existe pour ce courriel, un lien de réinitialisation a été envoyé.",
     forgot_password_title: "Réinitialiser le mot de passe",
+    error_network:
+      "Impossible de joindre le serveur. Vérifiez votre connexion et réessayez.",
+    error_rate_limited:
+      "Trop de tentatives. Veuillez patienter un moment avant de réessayer.",
+    error_service_unavailable:
+      "Le service d'authentification est temporairement indisponible. Veuillez réessayer.",
     oauth_client_no_auth_methods:
       "Aucune méthode d'authentification n'est activée pour cette application.",
     reset_password_description:
@@ -164,6 +190,9 @@ const defaultMessages = {
     sign_in_email_otp_send_error: "Impossible d'envoyer le code de connexion.",
     sign_in_email_otp_verify: "Vérifier le code",
     sign_in_error: "Impossible de se connecter.",
+    sign_in_invalid_credentials:
+      "Le courriel ou le mot de passe est incorrect.",
+    auth_invalid_code: "Le code est invalide ou a expiré.",
     sign_in_forgot_password: "Mot de passe oublié?",
     sign_in_use_email_otp: "Utiliser un code courriel",
     sign_in_use_password: "Utiliser un mot de passe existant",
@@ -201,10 +230,66 @@ const labels = (locale: KrakstackAuthLocale) => ({
   ...defaultMessages[locale],
 });
 
+type AuthErrorMessages = {
+  fallback: string;
+  badRequest?: string | undefined;
+  unauthorized?: string | undefined;
+};
+
+type AuthClientError =
+  | AuthBadRequest
+  | AuthUnauthorized
+  | AuthForbidden
+  | AuthNotFound
+  | AuthConflict
+  | AuthExpectationFailed
+  | AuthTooManyRequests
+  | AuthInternalServerError
+  | HttpClientError.HttpClientError
+  | Schema.SchemaError;
+
+const AuthSubmitError = <A,>({
+  result,
+  labels: m,
+  messages,
+}: {
+  result: AsyncResult.AsyncResult<A, AuthClientError>;
+  labels: ReturnType<typeof labels>;
+  messages: AuthErrorMessages;
+}) => {
+  const error = Option.getOrUndefined(AsyncResult.error(result));
+  if (!error) return null;
+
+  let message = messages.fallback;
+  if (error instanceof AuthBadRequest) {
+    message = messages.badRequest ?? messages.fallback;
+  } else if (error instanceof AuthUnauthorized) {
+    message = messages.unauthorized ?? messages.fallback;
+  } else if (error instanceof AuthTooManyRequests) {
+    message = m.error_rate_limited;
+  } else if (error instanceof AuthInternalServerError) {
+    message = m.error_service_unavailable;
+  } else if (HttpClientError.isHttpClientError(error)) {
+    message =
+      error.reason._tag === "TransportError"
+        ? m.error_network
+        : error.reason._tag === "StatusCodeError" &&
+            error.reason.response.status === 429
+          ? m.error_rate_limited
+          : m.error_service_unavailable;
+  } else if (Schema.isSchemaError(error)) {
+    return null;
+  }
+
+  return <ErrorMessage text={message} />;
+};
+
 type AuthFormProps = {
   baseUrl?: string | undefined;
   locale?: KrakstackAuthLocale | undefined;
 };
+
+type SigninErrorContext = "signIn" | "sendEmailOtp" | "verifyEmailOtp";
 
 const useAuthFormOptions = ({ baseUrl, locale }: AuthFormProps) => {
   const auth = useKrakstackAuth();
@@ -366,6 +451,8 @@ export function Signin(props: AuthFormProps) {
   );
   const [emailOtpResendAvailableAt, setEmailOtpResendAvailableAt] = useState(0);
   const [emailOtpResendSeconds, setEmailOtpResendSeconds] = useState(0);
+  const [errorContext, setErrorContext] =
+    useState<SigninErrorContext>("signIn");
   const selectedAuthMethod =
     authMethod === "password" && options.emailPassword
       ? "password"
@@ -498,22 +585,7 @@ export function Signin(props: AuthFormProps) {
           }
           notifyAuthChange();
           onNavigate(result.url ?? redirectTarget);
-        }).pipe(
-          Effect.mapError((cause) =>
-            cause instanceof Error
-              ? cause
-              : new Error(
-                  action.type === "sendEmailOtp" ||
-                    (action.type === "submit" &&
-                      action.method === "emailOtp" &&
-                      (!action.emailSubmitted || !action.otpSent))
-                    ? m.sign_in_email_otp_send_error
-                    : action.type === "submit" && action.method === "emailOtp"
-                      ? m.sign_in_email_otp_error
-                      : m.sign_in_error,
-                ),
-          ),
-        ),
+        }),
     }),
   );
   const submit = useAtomSet(form.submit);
@@ -539,11 +611,7 @@ export function Signin(props: AuthFormProps) {
         );
         notifyAuthChange();
         if (result.url) onNavigate(result.url);
-      }).pipe(
-        Effect.mapError((cause) =>
-          cause instanceof Error ? cause : new Error(m.sign_in_error),
-        ),
-      ),
+      }),
     ),
   );
   const startSocialSignIn = useAtomSet(socialSignIn);
@@ -590,11 +658,13 @@ export function Signin(props: AuthFormProps) {
       });
       return;
     }
+    setErrorContext("sendEmailOtp");
     submit({ type: "sendEmailOtp" });
   };
 
   const resendEmailOtp = () => {
     setOtp("");
+    setErrorContext("sendEmailOtp");
     submit({ type: "sendEmailOtp" });
   };
 
@@ -632,6 +702,14 @@ export function Signin(props: AuthFormProps) {
               onSubmit={(event) => {
                 event.preventDefault();
                 event.stopPropagation();
+                setErrorContext(
+                  !emailSubmitted ||
+                    (selectedAuthMethod === "emailOtp" && !otpSentTo)
+                    ? "sendEmailOtp"
+                    : selectedAuthMethod === "emailOtp"
+                      ? "verifyEmailOtp"
+                      : "signIn",
+                );
                 submit({
                   type: "submit",
                   emailSubmitted,
@@ -725,7 +803,28 @@ export function Signin(props: AuthFormProps) {
                   </div>
                 </div>
               ) : null}
-              <SubmitError result={submitResult} />
+              <AuthSubmitError
+                result={submitResult}
+                labels={m}
+                messages={{
+                  fallback:
+                    errorContext === "sendEmailOtp"
+                      ? m.sign_in_email_otp_send_error
+                      : errorContext === "verifyEmailOtp"
+                        ? m.sign_in_email_otp_error
+                        : m.sign_in_error,
+                  badRequest:
+                    errorContext === "verifyEmailOtp"
+                      ? m.auth_invalid_code
+                      : errorContext === "signIn"
+                        ? m.sign_in_invalid_credentials
+                        : m.sign_in_email_otp_send_error,
+                  unauthorized:
+                    errorContext === "signIn"
+                      ? m.sign_in_invalid_credentials
+                      : m.sign_in_error,
+                }}
+              />
               <div>
                 <Button type="submit" disabled={submitResult.waiting}>
                   {submitResult.waiting ? (
@@ -759,7 +858,11 @@ export function Signin(props: AuthFormProps) {
               <GoogleLogo />
               {m.auth_continue_with_google}
             </Button>
-            <SubmitError result={socialSignInResult} />
+            <AuthSubmitError
+              result={socialSignInResult}
+              labels={m}
+              messages={{ fallback: m.sign_in_error }}
+            />
           </div>
         ) : null}
         {!hasPrimaryAuth && !options.google ? (
@@ -795,6 +898,7 @@ export function VerifyEmail(props: AuthFormProps) {
   );
   const onNavigate = (target: string) => navigateTarget(target, navigate);
   const [resent, setResent] = useState(false);
+  const [lastAction, setLastAction] = useState<"verify" | "resend">("verify");
   const [form] = useState(() =>
     FormReact.make(verifyEmailFormBuilder, {
       runtime: authClientApi(baseUrl).runtime,
@@ -829,22 +933,15 @@ export function VerifyEmail(props: AuthFormProps) {
           );
           notifyAuthChange();
           onNavigate(redirectTarget);
-        }).pipe(
-          Effect.mapError((cause) =>
-            cause instanceof Error
-              ? cause
-              : new Error(
-                  action === "resend"
-                    ? m.verify_email_resend_error
-                    : m.verify_email_error,
-                ),
-          ),
-        ),
+        }),
     }),
   );
   const submit = useAtomSet(form.submit);
   const submitResult = useAtomValue(form.submit);
-  const resendCode = () => submit("resend");
+  const resendCode = () => {
+    setLastAction("resend");
+    submit("resend");
+  };
 
   return (
     <Card className="w-full max-w-md">
@@ -864,6 +961,7 @@ export function VerifyEmail(props: AuthFormProps) {
             onSubmit={(event) => {
               event.preventDefault();
               event.stopPropagation();
+              setLastAction("verify");
               submit("verify");
             }}
           >
@@ -874,7 +972,20 @@ export function VerifyEmail(props: AuthFormProps) {
               required
             />
             <form.otp label={m.verify_email_code} />
-            <SubmitError result={submitResult} />
+            <AuthSubmitError
+              result={submitResult}
+              labels={m}
+              messages={{
+                fallback:
+                  lastAction === "resend"
+                    ? m.verify_email_resend_error
+                    : m.verify_email_error,
+                badRequest:
+                  lastAction === "verify"
+                    ? m.auth_invalid_code
+                    : m.verify_email_resend_error,
+              }}
+            />
             {resent ? (
               <p className="text-muted-foreground text-sm">
                 {m.verify_email_resent}
@@ -934,11 +1045,7 @@ export function ForgotPassword(props: AuthFormProps) {
             ),
           );
           setSubmitted(true);
-        }).pipe(
-          Effect.mapError((cause) =>
-            cause instanceof Error ? cause : new Error(m.forgot_password_error),
-          ),
-        ),
+        }),
     }),
   );
   const submit = useAtomSet(form.submit);
@@ -966,7 +1073,11 @@ export function ForgotPassword(props: AuthFormProps) {
               autoComplete="email"
               required
             />
-            <SubmitError result={submitResult} />
+            <AuthSubmitError
+              result={submitResult}
+              labels={m}
+              messages={{ fallback: m.forgot_password_error }}
+            />
             {submitted ? (
               <p className="bg-card text-card-foreground rounded-lg border px-4 py-3 text-sm shadow-xs">
                 {m.forgot_password_success}
@@ -1032,11 +1143,7 @@ function ResetPasswordForm({
             ),
           );
           onSuccess();
-        }).pipe(
-          Effect.mapError((cause) =>
-            cause instanceof Error ? cause : new Error(m.reset_password_error),
-          ),
-        ),
+        }),
     }),
   );
   const submit = useAtomSet(form.submit);
@@ -1065,7 +1172,11 @@ function ResetPasswordForm({
               minLength={8}
               required
             />
-            <SubmitError result={submitResult} />
+            <AuthSubmitError
+              result={submitResult}
+              labels={m}
+              messages={{ fallback: m.reset_password_error }}
+            />
             <Button type="submit" disabled={submitResult.waiting}>
               {submitResult.waiting ? (
                 <Loader2 className="animate-spin" data-icon="inline-start" />
@@ -1104,6 +1215,9 @@ export function TwoFactor(props: AuthFormProps) {
   const onNavigate = (target: string) => navigateTarget(target, navigate);
   const [mode, setMode] = useState<"totp" | "email" | "backup">("totp");
   const [emailCodeSent, setEmailCodeSent] = useState(false);
+  const [lastAction, setLastAction] = useState<"verify" | "sendEmailCode">(
+    "verify",
+  );
   const [form] = useState(() =>
     FormReact.make(twoFactorFormBuilder, {
       runtime: authClientApi(baseUrl).runtime,
@@ -1154,22 +1268,15 @@ export function TwoFactor(props: AuthFormProps) {
           );
           notifyAuthChange();
           onNavigate(getResultRedirectUrl(result) ?? redirectTarget);
-        }).pipe(
-          Effect.mapError((cause) =>
-            cause instanceof Error
-              ? cause
-              : new Error(
-                  action.type === "sendEmailCode"
-                    ? m.two_factor_send_email_code_error
-                    : m.two_factor_verify_error,
-                ),
-          ),
-        ),
+        }),
     }),
   );
   const submit = useAtomSet(form.submit);
   const submitResult = useAtomValue(form.submit);
-  const sendEmailCode = () => submit({ type: "sendEmailCode" });
+  const sendEmailCode = () => {
+    setLastAction("sendEmailCode");
+    submit({ type: "sendEmailCode" });
+  };
 
   return (
     <Card className="w-full max-w-md">
@@ -1190,6 +1297,7 @@ export function TwoFactor(props: AuthFormProps) {
             onSubmit={(event) => {
               event.preventDefault();
               event.stopPropagation();
+              setLastAction("verify");
               submit({ type: "verify", mode });
             }}
           >
@@ -1206,7 +1314,20 @@ export function TwoFactor(props: AuthFormProps) {
               required
             />
             <form.trustDevice label={m.two_factor_trust_device} />
-            <SubmitError result={submitResult} />
+            <AuthSubmitError
+              result={submitResult}
+              labels={m}
+              messages={{
+                fallback:
+                  lastAction === "sendEmailCode"
+                    ? m.two_factor_send_email_code_error
+                    : m.two_factor_verify_error,
+                badRequest:
+                  lastAction === "verify"
+                    ? m.auth_invalid_code
+                    : m.two_factor_send_email_code_error,
+              }}
+            />
             {emailCodeSent && mode === "email" ? (
               <p className="text-muted-foreground text-sm">
                 {m.two_factor_email_code_sent}

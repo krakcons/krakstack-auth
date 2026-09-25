@@ -9,6 +9,10 @@ import {
 import type { QueryClient } from "@tanstack/react-query";
 import { Suspense } from "react";
 import { KrakstackAuthProvider } from "@krak-stack/auth/components";
+import {
+  ErrorComponent,
+  type ErrorComponentProps,
+} from "@krak-stack/registry/error-component";
 import { Loading } from "@krak-stack/registry/loading";
 import { authBaseUrl } from "@/services/auth/client";
 import { authAccessLabels } from "@/services/auth/access-labels";
@@ -19,6 +23,17 @@ import { getLocale } from "../paraglide/runtime.js";
 import appCss from "../styles.css?url";
 
 const analyticsWebsiteId = import.meta.env.VITE_ANALYTICS_WEBSITE_ID;
+
+const AppErrorComponent = (props: ErrorComponentProps) => (
+  <ErrorComponent
+    {...props}
+    diagnostics={{ app: m.app_name() }}
+    messages={{
+      title: m.error_page_title(),
+      description: m.error_page_description(),
+    }}
+  />
+);
 
 export const Route = createRootRouteWithContext<{
   queryClient: QueryClient;
@@ -82,6 +97,7 @@ export const Route = createRootRouteWithContext<{
       : [],
   }),
   shellComponent: RootDocument,
+  errorComponent: AppErrorComponent,
   component: RootContent,
 });
 

@@ -270,7 +270,9 @@ function DashboardPage() {
       />
 
       {error ? (
-        <p className="text-destructive text-sm">{error.message}</p>
+        <p className="text-destructive text-sm" role="alert">
+          {m.admin_dashboard_load_error()}
+        </p>
       ) : (
         <>
           <div className="grid gap-4 md:grid-cols-2">

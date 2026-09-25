@@ -3,8 +3,34 @@ import { Effect } from "effect";
 import { FetchHttpClient } from "effect/unstable/http";
 
 import { authHttpClient } from "./auth-client-api.js";
+import { AuthTooManyRequests } from "../auth/schema.js";
 
 describe("auth email request locale", () => {
+  it.effect("preserves typed authentication failures", () =>
+    Effect.gen(function* () {
+      const respondWithRateLimit: typeof fetch = async () =>
+        Response.json(
+          { code: "TOO_MANY_REQUESTS", message: "Too many requests" },
+          { status: 429 },
+        );
+      const client = yield* authHttpClient("https://auth.example.com");
+
+      const error = yield* client.auth
+        .signInEmail({
+          payload: {
+            email: "user@example.com",
+            password: "incorrect",
+          },
+        })
+        .pipe(
+          Effect.provideService(FetchHttpClient.Fetch, respondWithRateLimit),
+          Effect.flip,
+        );
+
+      expect(error).toBeInstanceOf(AuthTooManyRequests);
+    }),
+  );
+
   it.effect("sends JSON bodies for empty Better Auth actions", () =>
     Effect.gen(function* () {
       const requests: Request[] = [];

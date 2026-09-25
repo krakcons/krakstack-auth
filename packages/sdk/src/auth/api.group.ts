@@ -90,7 +90,7 @@ const errors = [
   AuthExpectationFailed,
   AuthTooManyRequests,
   AuthInternalServerError,
-];
+] as const;
 
 const docs = (title: string, description: string) =>
   OpenApi.annotations({ title, summary: title, description });
