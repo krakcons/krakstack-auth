@@ -58,7 +58,6 @@ import { Button } from "@/components/ui/button";
 import { CopyButton } from "@krak-stack/registry/copy-button";
 import {
   Dialog,
-  DialogContent,
   DialogFooter,
   DialogDescription,
   DialogHeader,
@@ -122,6 +121,11 @@ import {
   type ContactAddressFieldMessages,
 } from "./contact-fields.js";
 import { useOpenedOnce } from "./hooks.js";
+import {
+  ScrollableDialogBody,
+  ScrollableDialogContent,
+  ScrollableDialogHeader,
+} from "./scrollable-dialog.js";
 import {
   invitationDisplayStatus,
   isInvitationExpired,
@@ -1499,14 +1503,16 @@ export function OrganizationSwitcher({
       >
         <CreateOrganizationSection
           header={
-            <DialogHeader>
-              <DialogTitle className="text-2xl">
-                {m.organization_create_title()}
-              </DialogTitle>
-              <DialogDescription>
-                {m.organization_create_description()}
-              </DialogDescription>
-              <div className="pt-2">
+            <DialogHeader className="sm:flex-row sm:items-end sm:justify-between sm:gap-4">
+              <div className="flex min-w-0 flex-col gap-2">
+                <DialogTitle className="text-2xl">
+                  {m.organization_create_title()}
+                </DialogTitle>
+                <DialogDescription>
+                  {m.organization_create_description()}
+                </DialogDescription>
+              </div>
+              <div className="mt-2 w-fit sm:mt-0">
                 <EditingLocaleSwitcher
                   value={editingOrganizationLocale}
                   onValueChange={setEditingOrganizationLocale}
@@ -1544,14 +1550,16 @@ export function OrganizationSwitcher({
         {activeOrganization && canUpdateOrganization ? (
           <EditOrganizationSection
             header={
-              <DialogHeader>
-                <DialogTitle className="text-2xl">
-                  {m.organization_switcher_manage()}
-                </DialogTitle>
-                <DialogDescription>
-                  {m.organization_edit_description()}
-                </DialogDescription>
-                <div className="pt-2">
+              <DialogHeader className="sm:flex-row sm:items-end sm:justify-between sm:gap-4">
+                <div className="flex min-w-0 flex-col gap-2">
+                  <DialogTitle className="text-2xl">
+                    {m.organization_switcher_manage()}
+                  </DialogTitle>
+                  <DialogDescription>
+                    {m.organization_edit_description()}
+                  </DialogDescription>
+                </div>
+                <div className="mt-2 w-fit sm:mt-0">
                   <EditingLocaleSwitcher
                     value={editingOrganizationLocale}
                     onValueChange={setEditingOrganizationLocale}
@@ -1573,7 +1581,7 @@ export function OrganizationSwitcher({
           );
         }}
       >
-        <DialogContent className="max-h-[85vh] overflow-y-auto sm:max-w-4xl">
+        <ScrollableDialogContent size="4xl">
           {activeOrganization ? (
             <OrganizationMembersManager
               baseUrl={baseUrl}
@@ -1587,7 +1595,7 @@ export function OrganizationSwitcher({
               }}
             />
           ) : null}
-        </DialogContent>
+        </ScrollableDialogContent>
       </Dialog>
       <Dialog
         open={dialog === "apiKeys" && canManageApiKeys}
@@ -1597,7 +1605,7 @@ export function OrganizationSwitcher({
           );
         }}
       >
-        <DialogContent className="max-h-[85vh] min-w-0 overflow-x-hidden overflow-y-auto sm:max-w-[calc(100%-2rem)]">
+        <ScrollableDialogContent size="4xl">
           {activeOrganization ? (
             <OrganizationApiKeyManager
               baseUrl={baseUrl}
@@ -1611,7 +1619,7 @@ export function OrganizationSwitcher({
               }
             />
           ) : null}
-        </DialogContent>
+        </ScrollableDialogContent>
       </Dialog>
       <Dialog
         open={dialog === "invitations" && canViewOrganizationInvitations}
@@ -1621,27 +1629,30 @@ export function OrganizationSwitcher({
           );
         }}
       >
-        <DialogContent className="max-h-[85vh] min-w-0 overflow-x-hidden overflow-y-auto sm:max-w-4xl">
-          <DialogHeader>
-            <DialogTitle className="text-2xl">
-              {m.organization_user_invitations_title()}
-            </DialogTitle>
-            <DialogDescription>
-              {m.organization_user_invitations_description()}
-            </DialogDescription>
-          </DialogHeader>
-          <Separator />
-          <UserInvitationsManager
-            baseUrl={baseUrl}
-            invitations={userInvitations}
-            loading={loadingUserInvitations}
-            error={userInvitationsError}
-            {...(activeOrganization
-              ? { activeOrganizationId: activeOrganization.id }
-              : {})}
-            onActionComplete={refreshAfterInvitationAction}
-          />
-        </DialogContent>
+        <ScrollableDialogContent size="4xl">
+          <ScrollableDialogHeader>
+            <DialogHeader>
+              <DialogTitle className="text-2xl">
+                {m.organization_user_invitations_title()}
+              </DialogTitle>
+              <DialogDescription>
+                {m.organization_user_invitations_description()}
+              </DialogDescription>
+            </DialogHeader>
+          </ScrollableDialogHeader>
+          <ScrollableDialogBody>
+            <UserInvitationsManager
+              baseUrl={baseUrl}
+              invitations={userInvitations}
+              loading={loadingUserInvitations}
+              error={userInvitationsError}
+              {...(activeOrganization
+                ? { activeOrganizationId: activeOrganization.id }
+                : {})}
+              onActionComplete={refreshAfterInvitationAction}
+            />
+          </ScrollableDialogBody>
+        </ScrollableDialogContent>
       </Dialog>
     </OrganizationMessagesContext.Provider>
   );
@@ -1944,9 +1955,9 @@ function EditOrganizationSection({
           submit();
         }}
       >
-        <DialogContent className="grid max-h-[85vh] grid-rows-[auto_minmax(0,1fr)_auto] gap-0 overflow-hidden sm:max-w-2xl">
-          <div className="pb-6">{header}</div>
-          <div className="-mx-6 flex min-h-0 flex-col gap-4 overflow-y-auto px-6 pb-6">
+        <ScrollableDialogContent size="2xl">
+          <ScrollableDialogHeader>{header}</ScrollableDialogHeader>
+          <ScrollableDialogBody className="flex flex-col gap-4" padding="form">
             <OrganizationFormSection
               title={m.organization_profile()}
               description={m.organization_translation_description()}
@@ -2048,14 +2059,14 @@ function EditOrganizationSection({
                 messages={organizationContactFieldMessages(m)}
               />
             </OrganizationFormSection>
-          </div>
+          </ScrollableDialogBody>
           <DialogFooter className="-mx-6 -mb-6 border-t px-6 py-4">
             <div className="flex flex-col gap-3">
               <SubmitError result={submitResult} />
               <SubmitButton form={form} />
             </div>
           </DialogFooter>
-        </DialogContent>
+        </ScrollableDialogContent>
       </form>
     </form.Initialize>
   );
@@ -2160,9 +2171,9 @@ function CreateOrganizationSection({
           submit();
         }}
       >
-        <DialogContent className="grid max-h-[85vh] grid-rows-[auto_minmax(0,1fr)_auto] gap-0 overflow-hidden sm:max-w-2xl">
-          <div className="pb-6">{header}</div>
-          <div className="-mx-6 flex min-h-0 flex-col gap-4 overflow-y-auto px-6 pb-6">
+        <ScrollableDialogContent size="2xl">
+          <ScrollableDialogHeader>{header}</ScrollableDialogHeader>
+          <ScrollableDialogBody className="flex flex-col gap-4" padding="form">
             <OrganizationFormSection
               title={m.organization_profile()}
               description={m.organization_translation_description()}
@@ -2263,14 +2274,14 @@ function CreateOrganizationSection({
                 messages={organizationContactFieldMessages(m)}
               />
             </OrganizationFormSection>
-          </div>
+          </ScrollableDialogBody>
           <DialogFooter className="-mx-6 -mb-6 border-t px-6 py-4">
             <div className="flex flex-col gap-3">
               <SubmitError result={submitResult} />
               <SubmitButton form={form} />
             </div>
           </DialogFooter>
-        </DialogContent>
+        </ScrollableDialogContent>
       </form>
     </form.Initialize>
   );
@@ -2568,42 +2579,45 @@ function OrganizationMembersManager({
 
   return (
     <>
-      <DialogHeader>
-        <DialogTitle className="text-2xl">
-          {inviting
-            ? m.organization_invite_member_title()
-            : m.organization_members_title()}
-        </DialogTitle>
-        <DialogDescription>
-          {inviting
-            ? m.organization_invite_member_description()
-            : m.organization_members_dialog_description({
-                name: organization.name,
-              })}
-        </DialogDescription>
-        {inviting ? (
-          <Button
-            className="mt-2 w-fit"
-            onClick={() => setInviting(false)}
-            type="button"
-            variant="secondary"
-          >
-            <ArrowLeft />
-            {m.organization_back()}
-          </Button>
-        ) : canInviteMembers ? (
-          <Button
-            className="mt-2 w-fit"
-            onClick={() => setInviting(true)}
-            type="button"
-          >
-            <UserPlus />
-            {m.organization_invite_member_title()}
-          </Button>
-        ) : null}
-      </DialogHeader>
-      <Separator />
-      <div className="flex min-w-0 flex-col gap-5">
+      <ScrollableDialogHeader>
+        <DialogHeader className="sm:flex-row sm:items-end sm:justify-between sm:gap-4">
+          <div className="flex min-w-0 flex-col gap-2">
+            <DialogTitle className="text-2xl">
+              {inviting
+                ? m.organization_invite_member_title()
+                : m.organization_members_title()}
+            </DialogTitle>
+            <DialogDescription>
+              {inviting
+                ? m.organization_invite_member_description()
+                : m.organization_members_dialog_description({
+                    name: organization.name,
+                  })}
+            </DialogDescription>
+          </div>
+          {inviting ? (
+            <Button
+              className="mt-2 w-fit sm:mt-0"
+              onClick={() => setInviting(false)}
+              type="button"
+              variant="secondary"
+            >
+              <ArrowLeft />
+              {m.organization_back()}
+            </Button>
+          ) : canInviteMembers ? (
+            <Button
+              className="mt-2 w-fit sm:mt-0"
+              onClick={() => setInviting(true)}
+              type="button"
+            >
+              <UserPlus />
+              {m.organization_invite_member_title()}
+            </Button>
+          ) : null}
+        </DialogHeader>
+      </ScrollableDialogHeader>
+      <ScrollableDialogBody className="flex min-w-0 flex-col gap-5">
         {inviting ? (
           <inviteForm.Initialize defaultValues={{ email: "", role: "member" }}>
             <form
@@ -2711,7 +2725,7 @@ function OrganizationMembersManager({
             </div>
           </section>
         ) : null}
-      </div>
+      </ScrollableDialogBody>
     </>
   );
 }
@@ -3017,57 +3031,60 @@ function OrganizationApiKeyManager({
 
   return (
     <>
-      <DialogHeader>
-        <DialogTitle className="text-2xl">
-          {editingKey
-            ? m.user_api_key_edit_title()
-            : createdKey
-              ? m.user_api_key_created_title()
-              : creating
-                ? m.user_api_key_create_title()
-                : m.user_api_keys_title()}
-        </DialogTitle>
-        <DialogDescription>
-          {editingKey
-            ? m.user_api_key_edit_description()
-            : createdKey
-              ? m.user_api_key_created_description()
-              : creating
-                ? m.user_api_key_create_description()
-                : m.user_api_keys_organization_description({
-                    name: organization.name,
-                  })}
-        </DialogDescription>
-        {creating || editingKey ? (
-          <Button
-            className="mt-2 w-fit"
-            onClick={() => {
-              setCreating(false);
-              setCreatedKey(null);
-              setEditingKey(null);
-            }}
-            type="button"
-            variant="secondary"
-          >
-            <ArrowLeft />
-            {m.user_api_key_back()}
-          </Button>
-        ) : (
-          <Button
-            className="mt-2 w-fit"
-            onClick={() => {
-              setCreatedKey(null);
-              setCreating(true);
-            }}
-            type="button"
-          >
-            <Plus />
-            {m.user_api_key_create_title()}
-          </Button>
-        )}
-      </DialogHeader>
-      <Separator />
-      <div className="flex min-w-0 flex-col gap-5">
+      <ScrollableDialogHeader>
+        <DialogHeader className="sm:flex-row sm:items-end sm:justify-between sm:gap-4">
+          <div className="flex min-w-0 flex-col gap-2">
+            <DialogTitle className="text-2xl">
+              {editingKey
+                ? m.user_api_key_edit_title()
+                : createdKey
+                  ? m.user_api_key_created_title()
+                  : creating
+                    ? m.user_api_key_create_title()
+                    : m.user_api_keys_title()}
+            </DialogTitle>
+            <DialogDescription>
+              {editingKey
+                ? m.user_api_key_edit_description()
+                : createdKey
+                  ? m.user_api_key_created_description()
+                  : creating
+                    ? m.user_api_key_create_description()
+                    : m.user_api_keys_organization_description({
+                        name: organization.name,
+                      })}
+            </DialogDescription>
+          </div>
+          {creating || editingKey ? (
+            <Button
+              className="mt-2 w-fit sm:mt-0"
+              onClick={() => {
+                setCreating(false);
+                setCreatedKey(null);
+                setEditingKey(null);
+              }}
+              type="button"
+              variant="secondary"
+            >
+              <ArrowLeft />
+              {m.user_api_key_back()}
+            </Button>
+          ) : (
+            <Button
+              className="mt-2 w-fit sm:mt-0"
+              onClick={() => {
+                setCreatedKey(null);
+                setCreating(true);
+              }}
+              type="button"
+            >
+              <Plus />
+              {m.user_api_key_create_title()}
+            </Button>
+          )}
+        </DialogHeader>
+      </ScrollableDialogHeader>
+      <ScrollableDialogBody className="flex min-w-0 flex-col gap-5">
         {creating && !createdKey ? (
           <section className="w-full">
             <createForm.Initialize defaultValues={{ name: "", referrers: "" }}>
@@ -3134,7 +3151,7 @@ function OrganizationApiKeyManager({
           <p className="text-destructive text-sm">{error}</p>
         ) : null}
         {!creating && !editingKey ? (
-          <div className="max-w-full min-w-0 overflow-x-hidden">
+          <div className="max-w-full min-w-0">
             <DataTable
               columnDefs={apiKeyColumns({ m })}
               rowData={keys}
@@ -3182,7 +3199,7 @@ function OrganizationApiKeyManager({
             }}
           />
         ) : null}
-      </div>
+      </ScrollableDialogBody>
     </>
   );
 }

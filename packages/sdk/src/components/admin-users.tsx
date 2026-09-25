@@ -3,7 +3,7 @@ import { useNavigate, useRouter } from "@tanstack/react-router";
 import { Atom, AsyncResult } from "effect/unstable/reactivity";
 import { Effect, Schema } from "effect";
 import { Ban, Loader2, ShieldOff, UserCog, UserIcon } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 import {
   DataTable,
@@ -11,6 +11,7 @@ import {
   DataTableListSummary,
 } from "@krak-stack/registry/data-table";
 import {
+  Query,
   SortParamsFromString,
   type QueryType,
 } from "@krak-stack/registry/query";
@@ -195,6 +196,35 @@ const usersAtom = Atom.family((baseUrl?: string | undefined) =>
   }),
 );
 
+interface AdminUsersTableRequest {
+  readonly baseUrl?: string | undefined;
+  readonly projectId?: string | null | undefined;
+  readonly reloadKey: number;
+  readonly refreshKey: number;
+  readonly search: QueryType;
+}
+
+const makeAdminUsersTableAtoms = (initial: AdminUsersTableRequest) => {
+  const requestAtom = Atom.make(initial);
+  const resultAtom = Atom.optimistic(
+    Atom.make((get) => {
+      const request = get(requestAtom);
+      return get.result(
+        usersAtom(request.baseUrl)(
+          adminUsersFamilyKey(
+            request.search,
+            request.projectId,
+            request.reloadKey + request.refreshKey,
+          ),
+        ),
+        { suspendOnWaiting: true },
+      );
+    }),
+  );
+
+  return { requestAtom, resultAtom } as const;
+};
+
 export function AdminUsersTable({
   onSearchChange,
   reloadKey = 0,
@@ -211,17 +241,27 @@ export function AdminUsersTable({
   const baseUrl = auth?.baseUrl;
   const projectId = auth?.projectId;
   const [impersonateError, setImpersonateError] = useState("");
-  const [refreshKey, setRefreshKey] = useState(0);
-  const [localSearch, setLocalSearch] = useState<QueryType>({
-    page: 0,
-    pageSize: 10,
-  });
-  const tableSearch = search ?? localSearch;
-  const result = useAtomValue(
-    usersAtom(baseUrl)(
-      adminUsersFamilyKey(tableSearch, projectId, reloadKey + refreshKey),
-    ),
+  const [tableAtoms] = useState(() =>
+    makeAdminUsersTableAtoms({
+      baseUrl,
+      projectId,
+      reloadKey,
+      refreshKey: 0,
+      search: search ?? Schema.decodeUnknownSync(Query)({}),
+    }),
   );
+  const setTableRequest = useAtomSet(tableAtoms.requestAtom);
+  const tableRequest = useAtomValue(tableAtoms.requestAtom);
+  const result = useAtomValue(tableAtoms.resultAtom);
+  useEffect(() => {
+    setTableRequest((current) => ({
+      ...current,
+      baseUrl,
+      projectId,
+      reloadKey,
+      search: search ?? current.search,
+    }));
+  }, [baseUrl, projectId, reloadKey, search, setTableRequest]);
   const [banningUser, setBanningUser] = useState<User | null>(null);
   const [unbanningUser, setUnbanningUser] = useState<User | null>(null);
   const [impersonateUserAtom] = useState(() =>
@@ -290,7 +330,11 @@ export function AdminUsersTable({
           export: { baseName: "users" },
           gallery: false,
           pagination: { mode: "server", rowCount: total },
-          refresh: () => setRefreshKey((current) => current + 1),
+          refresh: () =>
+            setTableRequest((current) => ({
+              ...current,
+              refreshKey: current.refreshKey + 1,
+            })),
           rowActions: {
             items: [
               {
@@ -322,13 +366,20 @@ export function AdminUsersTable({
             ],
           },
         }}
-        initialState={tableSearch}
+        state={tableRequest.search}
         onStateChange={({ page, pageSize, globalFilter, sort }) => {
-          const nextSearch = { page, pageSize, globalFilter, sort };
+          const nextSearch = Schema.decodeUnknownSync(Query)({
+            page,
+            pageSize,
+            globalFilter,
+            sort,
+          });
+          setTableRequest((current) => ({
+            ...current,
+            search: nextSearch,
+          }));
           if (onSearchChange) {
             onSearchChange(nextSearch);
-          } else {
-            setLocalSearch(nextSearch);
           }
         }}
         status={{ loading: isLoading }}
@@ -338,7 +389,12 @@ export function AdminUsersTable({
           labels={m}
           baseUrl={baseUrl}
           user={banningUser}
-          onBanned={() => setRefreshKey((current) => current + 1)}
+          onBanned={() =>
+            setTableRequest((current) => ({
+              ...current,
+              refreshKey: current.refreshKey + 1,
+            }))
+          }
           onClose={() => setBanningUser(null)}
         />
       ) : null}
@@ -347,7 +403,12 @@ export function AdminUsersTable({
           labels={m}
           baseUrl={baseUrl}
           user={unbanningUser}
-          onUnbanned={() => setRefreshKey((current) => current + 1)}
+          onUnbanned={() =>
+            setTableRequest((current) => ({
+              ...current,
+              refreshKey: current.refreshKey + 1,
+            }))
+          }
           onClose={() => setUnbanningUser(null)}
         />
       ) : null}

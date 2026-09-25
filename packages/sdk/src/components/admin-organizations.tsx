@@ -3,7 +3,7 @@ import { useNavigate, useRouter } from "@tanstack/react-router";
 import { Cause, Effect, Schema } from "effect";
 import { Atom, AsyncResult } from "effect/unstable/reactivity";
 import { Building2, Pencil, Trash2, UserCog } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 import {
   DataTable,
@@ -11,6 +11,7 @@ import {
   DataTableListSummary,
 } from "@krak-stack/registry/data-table";
 import {
+  Query,
   SortParamsFromString,
   type QueryType,
 } from "@krak-stack/registry/query";
@@ -180,6 +181,37 @@ const organizationsAtom = Atom.family((baseUrl?: string | undefined) =>
   }),
 );
 
+interface AdminOrganizationsTableRequest {
+  readonly baseUrl?: string | undefined;
+  readonly projectId?: string | null | undefined;
+  readonly reloadKey: number;
+  readonly refreshKey: number;
+  readonly search: QueryType;
+}
+
+const makeAdminOrganizationsTableAtoms = (
+  initial: AdminOrganizationsTableRequest,
+) => {
+  const requestAtom = Atom.make(initial);
+  const resultAtom = Atom.optimistic(
+    Atom.make((get) => {
+      const request = get(requestAtom);
+      return get.result(
+        organizationsAtom(request.baseUrl)(
+          adminOrganizationsFamilyKey(
+            request.search,
+            request.projectId,
+            request.reloadKey + request.refreshKey,
+          ),
+        ),
+        { suspendOnWaiting: true },
+      );
+    }),
+  );
+
+  return { requestAtom, resultAtom } as const;
+};
+
 export function AdminOrganizationsTable({
   onSearchChange,
   reloadKey = 0,
@@ -267,25 +299,31 @@ export function AdminOrganizationsTable({
   const impersonateAsOrganizationResult = useAtomValue(
     impersonateAsOrganizationAtom,
   );
-  const [refreshKey, setRefreshKey] = useState(0);
   const [editingOrganization, setEditingOrganization] =
     useState<AdminOrganization | null>(null);
   const [deletingOrganization, setDeletingOrganization] =
     useState<AdminOrganization | null>(null);
-  const [localSearch, setLocalSearch] = useState<QueryType>({
-    page: 0,
-    pageSize: 10,
-  });
-  const tableSearch = search ?? localSearch;
-  const result = useAtomValue(
-    organizationsAtom(baseUrl)(
-      adminOrganizationsFamilyKey(
-        tableSearch,
-        projectId,
-        reloadKey + refreshKey,
-      ),
-    ),
+  const [tableAtoms] = useState(() =>
+    makeAdminOrganizationsTableAtoms({
+      baseUrl,
+      projectId,
+      reloadKey,
+      refreshKey: 0,
+      search: search ?? Schema.decodeUnknownSync(Query)({}),
+    }),
   );
+  const setTableRequest = useAtomSet(tableAtoms.requestAtom);
+  const tableRequest = useAtomValue(tableAtoms.requestAtom);
+  const result = useAtomValue(tableAtoms.resultAtom);
+  useEffect(() => {
+    setTableRequest((current) => ({
+      ...current,
+      baseUrl,
+      projectId,
+      reloadKey,
+      search: search ?? current.search,
+    }));
+  }, [baseUrl, projectId, reloadKey, search, setTableRequest]);
   const organizations = AsyncResult.match(result, {
     onInitial: () => [],
     onFailure: () => [],
@@ -339,7 +377,11 @@ export function AdminOrganizationsTable({
           export: { baseName: "organizations" },
           gallery: false,
           pagination: { mode: "server", rowCount: total },
-          refresh: () => setRefreshKey((current) => current + 1),
+          refresh: () =>
+            setTableRequest((current) => ({
+              ...current,
+              refreshKey: current.refreshKey + 1,
+            })),
           rowActions: {
             items: [
               {
@@ -357,13 +399,20 @@ export function AdminOrganizationsTable({
             ],
           },
         }}
-        initialState={tableSearch}
+        state={tableRequest.search}
         onStateChange={({ page, pageSize, globalFilter, sort }) => {
-          const nextSearch = { page, pageSize, globalFilter, sort };
+          const nextSearch = Schema.decodeUnknownSync(Query)({
+            page,
+            pageSize,
+            globalFilter,
+            sort,
+          });
+          setTableRequest((current) => ({
+            ...current,
+            search: nextSearch,
+          }));
           if (onSearchChange) {
             onSearchChange(nextSearch);
-          } else {
-            setLocalSearch(nextSearch);
           }
         }}
         status={{ loading: isLoading }}
@@ -372,7 +421,12 @@ export function AdminOrganizationsTable({
         <AdminOrganizationForm
           organization={editingOrganization}
           onClose={() => setEditingOrganization(null)}
-          onSaved={() => setRefreshKey((current) => current + 1)}
+          onSaved={() =>
+            setTableRequest((current) => ({
+              ...current,
+              refreshKey: current.refreshKey + 1,
+            }))
+          }
         />
       ) : null}
       {deletingOrganization ? (
@@ -383,7 +437,10 @@ export function AdminOrganizationsTable({
           onClose={() => setDeletingOrganization(null)}
           onDeleted={() => {
             setDeletingOrganization(null);
-            setRefreshKey((current) => current + 1);
+            setTableRequest((current) => ({
+              ...current,
+              refreshKey: current.refreshKey + 1,
+            }));
           }}
         />
       ) : null}

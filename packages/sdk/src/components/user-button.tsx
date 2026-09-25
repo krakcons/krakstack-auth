@@ -60,7 +60,6 @@ import { Button } from "@/components/ui/button";
 import { CopyButton } from "@krak-stack/registry/copy-button";
 import {
   Dialog,
-  DialogContent,
   DialogFooter,
   DialogDescription,
   DialogHeader,
@@ -90,6 +89,11 @@ import { ExtraUploadedAsset } from "../extra/schema.js";
 import { assetPath, assetUrl } from "./utils.js";
 import { AdminOrganizationsTable } from "./admin-organizations.js";
 import { AdminUsersTable } from "./admin-users.js";
+import {
+  ScrollableDialogBody,
+  ScrollableDialogContent,
+  ScrollableDialogHeader,
+} from "./scrollable-dialog.js";
 import type { ProjectAccessLabelCatalog } from "../access.js";
 import {
   ContactEmailsField,
@@ -1124,147 +1128,155 @@ export const UserButton = ({
           );
         }}
       >
-        <DialogContent className="max-h-[85vh] overflow-y-auto sm:max-w-3xl">
-          <DialogHeader>
-            <DialogTitle className="text-2xl">
-              {changingPassword
-                ? m.user_account_password_change_title()
-                : settingPassword
-                  ? m.user_account_password_set()
-                  : revokingAccount
-                    ? m.user_account_revoke()
-                    : managingTwoFactor
-                      ? m.user_two_factor_title()
-                      : m.user_security_title()}
-            </DialogTitle>
-            <DialogDescription>
-              {changingPassword
-                ? m.user_account_password_change_description()
-                : settingPassword
-                  ? m.user_account_password_description()
-                  : revokingAccount
-                    ? m.user_account_revoke_description({
-                        provider: providerName(revokingAccount.providerId, m),
-                      })
-                    : managingTwoFactor
-                      ? m.user_two_factor_description()
-                      : m.user_security_description()}
-            </DialogDescription>
-            {changingPassword ||
-            settingPassword ||
-            revokingAccount ||
-            managingTwoFactor ? (
-              <Button
-                className="mt-2 w-fit"
-                type="button"
-                variant="secondary"
-                onClick={() => {
-                  setChangingPassword(false);
+        <ScrollableDialogContent size="3xl">
+          <ScrollableDialogHeader>
+            <DialogHeader className="sm:flex-row sm:items-end sm:justify-between sm:gap-4">
+              <div className="flex min-w-0 flex-col gap-2">
+                <DialogTitle className="text-2xl">
+                  {changingPassword
+                    ? m.user_account_password_change_title()
+                    : settingPassword
+                      ? m.user_account_password_set()
+                      : revokingAccount
+                        ? m.user_account_revoke()
+                        : managingTwoFactor
+                          ? m.user_two_factor_title()
+                          : m.user_security_title()}
+                </DialogTitle>
+                <DialogDescription>
+                  {changingPassword
+                    ? m.user_account_password_change_description()
+                    : settingPassword
+                      ? m.user_account_password_description()
+                      : revokingAccount
+                        ? m.user_account_revoke_description({
+                            provider: providerName(
+                              revokingAccount.providerId,
+                              m,
+                            ),
+                          })
+                        : managingTwoFactor
+                          ? m.user_two_factor_description()
+                          : m.user_security_description()}
+                </DialogDescription>
+              </div>
+              {changingPassword ||
+              settingPassword ||
+              revokingAccount ||
+              managingTwoFactor ? (
+                <Button
+                  className="mt-2 w-fit sm:mt-0"
+                  type="button"
+                  variant="secondary"
+                  onClick={() => {
+                    setChangingPassword(false);
+                    setSettingPassword(false);
+                    setTotpSetup(null);
+                    setManagingTwoFactor(false);
+                    setRevokingAccount(null);
+                  }}
+                >
+                  <ArrowLeft />
+                  {m.user_account_back()}
+                </Button>
+              ) : null}
+            </DialogHeader>
+          </ScrollableDialogHeader>
+          <ScrollableDialogBody>
+            {changingPassword ? (
+              <ChangePasswordForm baseUrl={resolvedBaseUrl} />
+            ) : settingPassword ? (
+              <SetPasswordForm
+                baseUrl={resolvedBaseUrl}
+                onSaved={async () => {
+                  await accountCache.reload();
                   setSettingPassword(false);
-                  setTotpSetup(null);
-                  setManagingTwoFactor(false);
+                }}
+              />
+            ) : revokingAccount ? (
+              <RevokeAccountForm
+                baseUrl={resolvedBaseUrl}
+                account={revokingAccount}
+                requirePassword={requiresPasswordForAccountRevoke(
+                  accountCache.accounts ?? [],
+                )}
+                onCancel={() => setRevokingAccount(null)}
+                onRevoked={async () => {
+                  await accountCache.reload();
                   setRevokingAccount(null);
                 }}
-              >
-                <ArrowLeft />
-                {m.user_account_back()}
-              </Button>
-            ) : null}
-          </DialogHeader>
-          <Separator />
-          {changingPassword ? (
-            <ChangePasswordForm baseUrl={resolvedBaseUrl} />
-          ) : settingPassword ? (
-            <SetPasswordForm
-              baseUrl={resolvedBaseUrl}
-              onSaved={async () => {
-                await accountCache.reload();
-                setSettingPassword(false);
-              }}
-            />
-          ) : revokingAccount ? (
-            <RevokeAccountForm
-              baseUrl={resolvedBaseUrl}
-              account={revokingAccount}
-              requirePassword={requiresPasswordForAccountRevoke(
-                accountCache.accounts ?? [],
-              )}
-              onCancel={() => setRevokingAccount(null)}
-              onRevoked={async () => {
-                await accountCache.reload();
-                setRevokingAccount(null);
-              }}
-            />
-          ) : totpSetup ? (
-            <VerifyTotpSetup
-              baseUrl={resolvedBaseUrl}
-              setup={totpSetup}
-              onVerified={async () => {
-                await refreshSession();
-                setTotpSetup(null);
-                setManagingTwoFactor(false);
-              }}
-            />
-          ) : managingTwoFactor ? (
-            <AccountSecuritySettings
-              baseUrl={resolvedBaseUrl}
-              accountCache={accountCache}
-              onSetup={setTotpSetup}
-            />
-          ) : (
-            <div className="flex flex-col gap-6">
-              <ConnectedAccounts
-                onChangePassword={() => setChangingPassword(true)}
-                onSetupPassword={() => setSettingPassword(true)}
-                onRevokeAccount={setRevokingAccount}
+              />
+            ) : totpSetup ? (
+              <VerifyTotpSetup
+                baseUrl={resolvedBaseUrl}
+                setup={totpSetup}
+                onVerified={async () => {
+                  await refreshSession();
+                  setTotpSetup(null);
+                  setManagingTwoFactor(false);
+                }}
+              />
+            ) : managingTwoFactor ? (
+              <AccountSecuritySettings
                 baseUrl={resolvedBaseUrl}
                 accountCache={accountCache}
-                googleEnabled={projectConfig?.authOptions.google ?? true}
-                currentSiteHref={currentSiteHref}
-                navigate={navigate}
+                onSetup={setTotpSetup}
               />
-              <Separator />
-              <section className="flex flex-col gap-6">
-                <div className="flex flex-wrap items-start justify-between gap-3">
-                  <div className="flex flex-col gap-1.5">
-                    <h2 className="text-sm leading-none font-medium">
-                      {m.user_two_factor_title()}
-                    </h2>
-                    <p className="text-muted-foreground text-xs">
-                      {m.user_two_factor_description()}
-                    </p>
+            ) : (
+              <div className="flex flex-col gap-6">
+                <ConnectedAccounts
+                  onChangePassword={() => setChangingPassword(true)}
+                  onSetupPassword={() => setSettingPassword(true)}
+                  onRevokeAccount={setRevokingAccount}
+                  baseUrl={resolvedBaseUrl}
+                  accountCache={accountCache}
+                  googleEnabled={projectConfig?.authOptions.google ?? true}
+                  currentSiteHref={currentSiteHref}
+                  navigate={navigate}
+                />
+                <Separator />
+                <section className="flex flex-col gap-6">
+                  <div className="flex flex-wrap items-start justify-between gap-3">
+                    <div className="flex flex-col gap-1.5">
+                      <h2 className="text-sm leading-none font-medium">
+                        {m.user_two_factor_title()}
+                      </h2>
+                      <p className="text-muted-foreground text-xs">
+                        {m.user_two_factor_description()}
+                      </p>
+                    </div>
+                    <Badge
+                      variant={
+                        hasTwoFactorEnabled(session?.user)
+                          ? "default"
+                          : "secondary"
+                      }
+                    >
+                      {hasTwoFactorEnabled(session?.user)
+                        ? m.user_two_factor_enabled()
+                        : m.user_two_factor_disabled()}
+                    </Badge>
                   </div>
-                  <Badge
-                    variant={
-                      hasTwoFactorEnabled(session?.user)
-                        ? "default"
-                        : "secondary"
-                    }
-                  >
-                    {hasTwoFactorEnabled(session?.user)
-                      ? m.user_two_factor_enabled()
-                      : m.user_two_factor_disabled()}
-                  </Badge>
-                </div>
-                {hasTwoFactorEnabled(session?.user) ? (
-                  <AccountSecuritySettings
-                    baseUrl={resolvedBaseUrl}
-                    accountCache={accountCache}
-                    onSetup={setTotpSetup}
-                  />
-                ) : (
-                  <Button
-                    type="button"
-                    className="self-start"
-                    onClick={() => setManagingTwoFactor(true)}
-                  >
-                    {m.user_two_factor_enable_submit()}
-                  </Button>
-                )}
-              </section>
-            </div>
-          )}
-        </DialogContent>
+                  {hasTwoFactorEnabled(session?.user) ? (
+                    <AccountSecuritySettings
+                      baseUrl={resolvedBaseUrl}
+                      accountCache={accountCache}
+                      onSetup={setTotpSetup}
+                    />
+                  ) : (
+                    <Button
+                      type="button"
+                      className="self-start"
+                      onClick={() => setManagingTwoFactor(true)}
+                    >
+                      {m.user_two_factor_enable_submit()}
+                    </Button>
+                  )}
+                </section>
+              </div>
+            )}
+          </ScrollableDialogBody>
+        </ScrollableDialogContent>
       </Dialog>
       <Dialog
         open={canManageUserSettings && settingsDialog === "apiKeys"}
@@ -1274,7 +1286,7 @@ export const UserButton = ({
           );
         }}
       >
-        <DialogContent className="max-h-[85vh] min-w-0 overflow-x-hidden overflow-y-auto sm:max-w-[calc(100%-2rem)]">
+        <ScrollableDialogContent size="4xl">
           <ApiKeyManager
             baseUrl={resolvedBaseUrl}
             active={settingsDialog === "apiKeys"}
@@ -1283,7 +1295,7 @@ export const UserButton = ({
               apiKeyPermissions ?? auth?.access?.apiKeyPermissions.user ?? {}
             }
           />
-        </DialogContent>
+        </ScrollableDialogContent>
       </Dialog>
       {isAdmin ? (
         <>
@@ -1295,20 +1307,21 @@ export const UserButton = ({
               );
             }}
           >
-            <DialogContent className="flex h-[85vh] flex-col overflow-y-auto sm:max-w-6xl">
-              <DialogHeader>
-                <DialogTitle className="text-2xl">
-                  {m.user_button_admin_users()}
-                </DialogTitle>
-                <DialogDescription>
-                  {m.user_button_admin_users_description()}
-                </DialogDescription>
-              </DialogHeader>
-              <Separator />
-              <div className="min-h-0 flex-1">
+            <ScrollableDialogContent size="6xl">
+              <ScrollableDialogHeader>
+                <DialogHeader>
+                  <DialogTitle className="text-2xl">
+                    {m.user_button_admin_users()}
+                  </DialogTitle>
+                  <DialogDescription>
+                    {m.user_button_admin_users_description()}
+                  </DialogDescription>
+                </DialogHeader>
+              </ScrollableDialogHeader>
+              <ScrollableDialogBody>
                 <AdminUsersTable />
-              </div>
-            </DialogContent>
+              </ScrollableDialogBody>
+            </ScrollableDialogContent>
           </Dialog>
           <Dialog
             open={settingsDialog === "adminOrganizations"}
@@ -1322,20 +1335,21 @@ export const UserButton = ({
               );
             }}
           >
-            <DialogContent className="flex h-[85vh] flex-col overflow-y-auto sm:max-w-6xl">
-              <DialogHeader>
-                <DialogTitle className="text-2xl">
-                  {m.user_button_admin_organizations()}
-                </DialogTitle>
-                <DialogDescription>
-                  {m.user_button_admin_organizations_description()}
-                </DialogDescription>
-              </DialogHeader>
-              <Separator />
-              <div className="min-h-0 flex-1">
+            <ScrollableDialogContent size="6xl">
+              <ScrollableDialogHeader>
+                <DialogHeader>
+                  <DialogTitle className="text-2xl">
+                    {m.user_button_admin_organizations()}
+                  </DialogTitle>
+                  <DialogDescription>
+                    {m.user_button_admin_organizations_description()}
+                  </DialogDescription>
+                </DialogHeader>
+              </ScrollableDialogHeader>
+              <ScrollableDialogBody>
                 <AdminOrganizationsTable />
-              </div>
-            </DialogContent>
+              </ScrollableDialogBody>
+            </ScrollableDialogContent>
           </Dialog>
         </>
       ) : null}
@@ -1917,14 +1931,16 @@ const UserForm = ({
           submit();
         }}
       >
-        <DialogContent className="grid max-h-[85vh] min-w-0 grid-rows-[auto_minmax(0,1fr)_auto] gap-0 overflow-hidden sm:max-w-3xl">
-          <DialogHeader className="pb-6">
-            <DialogTitle className="text-2xl">
-              {m.user_form_title()}
-            </DialogTitle>
-            <DialogDescription>{m.user_form_description()}</DialogDescription>
-          </DialogHeader>
-          <div className="-mx-6 flex min-h-0 flex-col gap-4 overflow-y-auto px-6 pb-6">
+        <ScrollableDialogContent size="3xl">
+          <ScrollableDialogHeader>
+            <DialogHeader>
+              <DialogTitle className="text-2xl">
+                {m.user_form_title()}
+              </DialogTitle>
+              <DialogDescription>{m.user_form_description()}</DialogDescription>
+            </DialogHeader>
+          </ScrollableDialogHeader>
+          <ScrollableDialogBody className="flex flex-col gap-4" padding="form">
             <div className="flex flex-col gap-1.5">
               <h2 className="text-sm leading-none font-medium">
                 {m.user_profile_title()}
@@ -1992,7 +2008,7 @@ const UserForm = ({
                 />
               </UserContactGroup>
             </div>
-          </div>
+          </ScrollableDialogBody>
           <DialogFooter className="-mx-6 -mb-6 border-t px-6 py-4">
             <div className="flex flex-col gap-3">
               {error && (
@@ -2003,7 +2019,7 @@ const UserForm = ({
               <SubmitButton form={form} />
             </div>
           </DialogFooter>
-        </DialogContent>
+        </ScrollableDialogContent>
       </form>
     </form.Initialize>
   );
@@ -2445,55 +2461,58 @@ function ApiKeyManager({
 
   return (
     <>
-      <DialogHeader>
-        <DialogTitle className="text-2xl">
-          {editingKey
-            ? m.user_api_key_edit_title()
-            : createdKey
-              ? m.user_api_key_created_title()
-              : creating
-                ? m.user_api_key_create_title()
-                : m.user_api_keys_title()}
-        </DialogTitle>
-        <DialogDescription>
-          {editingKey
-            ? m.user_api_key_edit_description()
-            : createdKey
-              ? m.user_api_key_created_description()
-              : creating
-                ? m.user_api_key_create_description()
-                : m.user_api_keys_description()}
-        </DialogDescription>
-        {creating || editingKey ? (
-          <Button
-            className="mt-2 w-fit"
-            onClick={() => {
-              setCreating(false);
-              setCreatedKey(null);
-              setEditingKey(null);
-            }}
-            type="button"
-            variant="secondary"
-          >
-            <ArrowLeft />
-            {m.user_api_key_back()}
-          </Button>
-        ) : (
-          <Button
-            className="mt-2 w-fit"
-            onClick={() => {
-              setCreatedKey(null);
-              setCreating(true);
-            }}
-            type="button"
-          >
-            <Plus />
-            {m.user_api_key_create_title()}
-          </Button>
-        )}
-      </DialogHeader>
-      <Separator />
-      <div className="flex min-w-0 flex-col gap-5">
+      <ScrollableDialogHeader>
+        <DialogHeader className="sm:flex-row sm:items-end sm:justify-between sm:gap-4">
+          <div className="flex min-w-0 flex-col gap-2">
+            <DialogTitle className="text-2xl">
+              {editingKey
+                ? m.user_api_key_edit_title()
+                : createdKey
+                  ? m.user_api_key_created_title()
+                  : creating
+                    ? m.user_api_key_create_title()
+                    : m.user_api_keys_title()}
+            </DialogTitle>
+            <DialogDescription>
+              {editingKey
+                ? m.user_api_key_edit_description()
+                : createdKey
+                  ? m.user_api_key_created_description()
+                  : creating
+                    ? m.user_api_key_create_description()
+                    : m.user_api_keys_description()}
+            </DialogDescription>
+          </div>
+          {creating || editingKey ? (
+            <Button
+              className="mt-2 w-fit sm:mt-0"
+              onClick={() => {
+                setCreating(false);
+                setCreatedKey(null);
+                setEditingKey(null);
+              }}
+              type="button"
+              variant="secondary"
+            >
+              <ArrowLeft />
+              {m.user_api_key_back()}
+            </Button>
+          ) : (
+            <Button
+              className="mt-2 w-fit sm:mt-0"
+              onClick={() => {
+                setCreatedKey(null);
+                setCreating(true);
+              }}
+              type="button"
+            >
+              <Plus />
+              {m.user_api_key_create_title()}
+            </Button>
+          )}
+        </DialogHeader>
+      </ScrollableDialogHeader>
+      <ScrollableDialogBody className="flex min-w-0 flex-col gap-5">
         {creating && !createdKey ? (
           <section className="w-full">
             <createForm.Initialize defaultValues={{ name: "", referrers: "" }}>
@@ -2560,7 +2579,7 @@ function ApiKeyManager({
           <p className="text-destructive text-sm">{error}</p>
         ) : null}
         {!creating && !editingKey ? (
-          <div className="max-w-full min-w-0 overflow-x-hidden">
+          <div className="max-w-full min-w-0">
             <DataTable
               columnDefs={apiKeyColumns({ m })}
               rowData={keys}
@@ -2609,7 +2628,7 @@ function ApiKeyManager({
             }}
           />
         ) : null}
-      </div>
+      </ScrollableDialogBody>
     </>
   );
 }
