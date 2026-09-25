@@ -1,15 +1,8 @@
 import { useAtomSet, useAtomValue } from "@effect/atom-react";
 import { useNavigate, useRouter } from "@tanstack/react-router";
 import { Atom, AsyncResult } from "effect/unstable/reactivity";
-import { Effect, Option, Schema } from "effect";
-import {
-  Ban,
-  Building2,
-  Loader2,
-  ShieldOff,
-  UserCog,
-  UserIcon,
-} from "lucide-react";
+import { Effect, Schema } from "effect";
+import { Ban, Loader2, ShieldOff, UserCog, UserIcon } from "lucide-react";
 import { useState } from "react";
 
 import {
@@ -39,7 +32,7 @@ import type {
   AdminProjectPreview,
 } from "../admin/schema.js";
 
-import { authSessionAtom, notifyAuthChange } from "./auth-atoms.js";
+import { notifyAuthChange } from "./auth-atoms.js";
 import { authClientApi, authHttpClient } from "./auth-client-api.js";
 import { type KrakstackAuthLocale, useKrakstackAuth } from "./auth-provider.js";
 import { assetUrl } from "./utils.js";
@@ -48,7 +41,6 @@ const defaultMessages = {
   en: {
     admin_action_ban: "Ban",
     admin_action_impersonate: "Impersonate",
-    admin_action_impersonate_organization: "Impersonate as organization",
     admin_action_unban: "Unban",
     admin_ban_description:
       "Are you sure you want to ban {name} ({email})? They will not be able to sign in.",
@@ -66,9 +58,6 @@ const defaultMessages = {
     admin_error_access_required: "Admin access is required.",
     admin_error_ban: "Unable to ban user.",
     admin_error_impersonate: "Unable to impersonate user.",
-    admin_error_impersonate_organization:
-      "Unable to impersonate user as organization.",
-    admin_error_organization_required: "Select an active organization first.",
     admin_error_unban: "Unable to unban user.",
     admin_status_active: "Active",
     admin_status_banned: "Banned",
@@ -81,8 +70,6 @@ const defaultMessages = {
   fr: {
     admin_action_ban: "Bannir",
     admin_action_impersonate: "Emprunter l'identité",
-    admin_action_impersonate_organization:
-      "Emprunter l'identité pour l'organisation",
     admin_action_unban: "Débannir",
     admin_ban_description:
       "Êtes-vous sûr de vouloir bannir {name} ({email}) ? Il ne pourra plus se connecter.",
@@ -101,10 +88,6 @@ const defaultMessages = {
     admin_error_ban: "Impossible de bannir l'utilisateur.",
     admin_error_impersonate:
       "Impossible d'emprunter l'identité de l'utilisateur.",
-    admin_error_impersonate_organization:
-      "Impossible d'emprunter l'identité pour l'organisation.",
-    admin_error_organization_required:
-      "Sélectionnez d'abord une organisation active.",
     admin_error_unban: "Impossible de débannir l'utilisateur.",
     admin_status_active: "Actif",
     admin_status_banned: "Banni",
@@ -212,19 +195,6 @@ const usersAtom = Atom.family((baseUrl?: string | undefined) =>
   }),
 );
 
-type SessionWithActiveOrganization = {
-  session?: { activeOrganizationId?: typeof Schema.Unknown.Type };
-};
-
-const activeOrganizationId = (
-  session: SessionWithActiveOrganization | null,
-) => {
-  const value = session?.session?.activeOrganizationId;
-  return Option.getOrNull(
-    Schema.decodeUnknownOption(Schema.NonEmptyString)(value),
-  );
-};
-
 export function AdminUsersTable({
   onSearchChange,
   reloadKey = 0,
@@ -239,13 +209,6 @@ export function AdminUsersTable({
   const auth = useKrakstackAuth();
   const m = labels(auth?.locale ?? "en");
   const baseUrl = auth?.baseUrl;
-  const sessionAtom = authSessionAtom(baseUrl);
-  const sessionResult = useAtomValue(sessionAtom);
-  const session = AsyncResult.match(sessionResult, {
-    onInitial: () => null,
-    onFailure: () => null,
-    onSuccess: ({ value }) => value,
-  });
   const projectId = auth?.projectId;
   const [impersonateError, setImpersonateError] = useState("");
   const [refreshKey, setRefreshKey] = useState(0);
@@ -290,56 +253,9 @@ export function AdminUsersTable({
       ),
     ),
   );
-  const [impersonateOrganizationUserAtom] = useState(() =>
-    authClientApi(baseUrl).runtime.fn(
-      ({
-        actorUserId,
-        organizationId,
-        targetUserId,
-      }: {
-        actorUserId: string;
-        organizationId: string;
-        targetUserId: string;
-      }) =>
-        Effect.gen(function* () {
-          const client = yield* authHttpClient(baseUrl);
-          yield* client.auth.organizationImpersonateUser({
-            payload: { organizationId, actorUserId, targetUserId },
-          });
-          notifyAuthChange();
-          yield* Effect.tryPromise({
-            try: async () => {
-              await navigate({ to: "/" });
-              await router.invalidate();
-            },
-            catch: (cause) =>
-              cause instanceof Error
-                ? cause
-                : new Error(m.admin_error_impersonate_organization),
-          });
-        }).pipe(
-          Effect.catch((cause) =>
-            Effect.sync(() =>
-              setImpersonateError(
-                cause instanceof Error
-                  ? cause.message
-                  : m.admin_error_impersonate_organization,
-              ),
-            ),
-          ),
-        ),
-    ),
-  );
   const impersonateUser = useAtomSet(impersonateUserAtom);
   const impersonateUserResult = useAtomValue(impersonateUserAtom);
-  const impersonateOrganizationUser = useAtomSet(
-    impersonateOrganizationUserAtom,
-  );
-  const impersonateOrganizationUserResult = useAtomValue(
-    impersonateOrganizationUserAtom,
-  );
-  const isImpersonating =
-    impersonateUserResult.waiting || impersonateOrganizationUserResult.waiting;
+  const isImpersonating = impersonateUserResult.waiting;
 
   const users = AsyncResult.match(result, {
     onInitial: () => [],
@@ -387,33 +303,6 @@ export function AdminUsersTable({
                 onClick: (user) => {
                   setImpersonateError("");
                   impersonateUser(user.id);
-                },
-                visible: (user) => !user.banned,
-              },
-              {
-                name: m.admin_action_impersonate_organization,
-                icon: isImpersonating ? (
-                  <Loader2 className="size-4 animate-spin" />
-                ) : (
-                  <Building2 className="size-4" />
-                ),
-                onClick: (user) => {
-                  setImpersonateError("");
-                  if (!session?.user?.id) {
-                    setImpersonateError(m.admin_error_access_required);
-                    return;
-                  }
-                  const organizationId = activeOrganizationId(session);
-                  if (!organizationId) {
-                    setImpersonateError(m.admin_error_organization_required);
-                    return;
-                  }
-
-                  impersonateOrganizationUser({
-                    organizationId,
-                    actorUserId: session.user.id,
-                    targetUserId: user.id,
-                  });
                 },
                 visible: (user) => !user.banned,
               },

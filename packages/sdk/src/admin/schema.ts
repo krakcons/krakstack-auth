@@ -85,6 +85,7 @@ export const AdminOrganizationMember = Schema.Struct({
   id: Schema.String,
   name: Schema.String,
   image: Schema.NullOr(Schema.String),
+  role: Schema.String,
 }).annotate({
   identifier: "AdminOrganizationMember",
   title: "Admin organization member",
@@ -117,7 +118,9 @@ export const AdminOrganization = Schema.Struct({
       userId: null,
       parentId: null,
       memberCount: 12,
-      memberPreviews: [{ id: "user-id", name: "Ada Lovelace", image: null }],
+      memberPreviews: [
+        { id: "user-id", name: "Ada Lovelace", image: null, role: "owner" },
+      ],
       projects: [{ id: "project-id", name: "Portal", logo: null }],
       createdAt: new Date("2026-01-01T00:00:00.000Z"),
     },

@@ -137,6 +137,8 @@ const organizationOrderBy = (query: AdminListQuery) => {
         return [direction(organization.name)];
       case "slug":
         return [direction(organization.slug)];
+      case "userId":
+        return [direction(organization.userId)];
       case "createdAt":
         return [direction(organization.createdAt)];
       default:
@@ -707,6 +709,7 @@ export const adminApiHandler = HttpApiBuilder.group(
                   id: user.id,
                   name: user.name,
                   image: user.image,
+                  role: member.role,
                 })
                 .from(member)
                 .innerJoin(user, eq(user.id, member.userId))
@@ -763,7 +766,12 @@ export const adminApiHandler = HttpApiBuilder.group(
               memberPreviews:
                 membersByOrganization
                   .get(organization.id)
-                  ?.map(({ id, name, image }) => ({ id, name, image })) ?? [],
+                  ?.map(({ id, name, image, role }) => ({
+                    id,
+                    name,
+                    image,
+                    role,
+                  })) ?? [],
               projects: projectsByOrganization.get(organization.id) ?? [],
             })),
             meta: paginationMeta({

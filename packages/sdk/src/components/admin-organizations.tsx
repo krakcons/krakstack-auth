@@ -17,6 +17,7 @@ import {
 import { ErrorMessage } from "@krak-stack/registry/effect-form";
 import { AppBrand } from "@krak-stack/registry/app-brand";
 import * as messages from "@/paraglide/messages";
+import { Badge } from "@/components/ui/badge";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -29,11 +30,12 @@ import {
 } from "@/components/ui/alert-dialog";
 
 import type { AdminOrganization } from "../admin/schema.js";
+import { normalizeOrganizationRoles } from "../roles.js";
 import { AdminOrganizationForm } from "./admin-organization-form.js";
 import { authClientApi, authHttpClient } from "./auth-client-api.js";
 import { type KrakstackAuthLocale, useKrakstackAuth } from "./auth-provider.js";
 import { assetUrl, organizationBranding } from "./utils.js";
-import { notifyAuthChange } from "./auth-atoms.js";
+import { authSessionAtom, notifyAuthChange } from "./auth-atoms.js";
 
 const defaultMessages = {
   en: {
@@ -51,6 +53,10 @@ const defaultMessages = {
     organization_delete_error: "Unable to delete organization.",
     organization_delete_title: "Delete organization",
     organization_fetch_error: "Unable to load organizations.",
+    organization_role_admin: "Admin",
+    organization_role_member: "Member",
+    organization_role_owner: "Owner",
+    organization_role_support: "Support",
   },
   fr: {
     admin_column_created: "Créé",
@@ -67,6 +73,10 @@ const defaultMessages = {
     organization_delete_error: "Impossible de supprimer l'organisation.",
     organization_delete_title: "Supprimer l'organisation",
     organization_fetch_error: "Impossible de charger les organisations.",
+    organization_role_admin: "Admin",
+    organization_role_member: "Membre",
+    organization_role_owner: "Propriétaire",
+    organization_role_support: "Support",
   },
 } as const;
 
@@ -75,6 +85,22 @@ const labels = (locale: KrakstackAuthLocale) => ({
 });
 
 type AdminOrganizationsLabels = ReturnType<typeof labels>;
+
+const memberRoleLabel = (role: string, m: AdminOrganizationsLabels) =>
+  normalizeOrganizationRoles(role)
+    .map((item) => {
+      switch (item) {
+        case "owner":
+          return m.organization_role_owner;
+        case "admin":
+          return m.organization_role_admin;
+        case "support":
+          return m.organization_role_support;
+        case "member":
+          return m.organization_role_member;
+      }
+    })
+    .join(", ");
 
 const organizationDisplay = (
   organization: AdminOrganization,
@@ -170,6 +196,12 @@ export function AdminOrganizationsTable({
   const projectId = auth?.projectId;
   const navigate = useNavigate();
   const router = useRouter();
+  const sessionResult = useAtomValue(authSessionAtom(baseUrl));
+  const actorUserId = AsyncResult.match(sessionResult, {
+    onInitial: () => null,
+    onFailure: () => null,
+    onSuccess: ({ value }) => value?.user.id ?? null,
+  });
   const [impersonateAtom] = useState(() =>
     authClientApi(baseUrl).runtime.fn(
       ({
@@ -203,6 +235,38 @@ export function AdminOrganizationsTable({
   );
   const impersonate = useAtomSet(impersonateAtom);
   const impersonateResult = useAtomValue(impersonateAtom);
+  const [impersonateAsOrganizationAtom] = useState(() =>
+    authClientApi(baseUrl).runtime.fn(
+      ({
+        actorUserId,
+        organizationId,
+        targetUserId,
+      }: {
+        actorUserId: string;
+        organizationId: string;
+        targetUserId: string;
+      }) =>
+        Effect.gen(function* () {
+          const client = yield* authHttpClient(baseUrl);
+          yield* client.auth.organizationImpersonateUser({
+            payload: { actorUserId, organizationId, targetUserId },
+          });
+          notifyAuthChange();
+          yield* Effect.tryPromise({
+            try: async () => {
+              await navigate({ to: "/" });
+              await router.invalidate();
+            },
+            catch: (cause) =>
+              cause instanceof Error ? cause : new Error(String(cause)),
+          });
+        }),
+    ),
+  );
+  const impersonateAsOrganization = useAtomSet(impersonateAsOrganizationAtom);
+  const impersonateAsOrganizationResult = useAtomValue(
+    impersonateAsOrganizationAtom,
+  );
   const [refreshKey, setRefreshKey] = useState(0);
   const [editingOrganization, setEditingOrganization] =
     useState<AdminOrganization | null>(null);
@@ -251,13 +315,23 @@ export function AdminOrganizationsTable({
           text={messages.organization_impersonate_member_error({}, { locale })}
         />
       ) : null}
+      {AsyncResult.isFailure(impersonateAsOrganizationResult) ? (
+        <ErrorMessage
+          text={messages.organization_impersonate_member_as_organization_error(
+            {},
+            { locale },
+          )}
+        />
+      ) : null}
       <DataTable
         columnDefs={organizationColumns(
           m,
           locale,
           baseUrl,
           impersonate,
-          impersonateResult.waiting,
+          impersonateAsOrganization,
+          actorUserId,
+          impersonateResult.waiting || impersonateAsOrganizationResult.waiting,
         )}
         rowData={organizations}
         features={{
@@ -322,6 +396,12 @@ const organizationColumns = (
   locale: KrakstackAuthLocale,
   baseUrl: string | undefined,
   impersonate: (input: { userId: string; organizationId: string }) => void,
+  impersonateAsOrganization: (input: {
+    actorUserId: string;
+    organizationId: string;
+    targetUserId: string;
+  }) => void,
+  actorUserId: string | null,
   isImpersonating: boolean,
 ): DataTableColDef<AdminOrganization>[] => [
   {
@@ -352,7 +432,7 @@ const organizationColumns = (
       getItems: (row) =>
         (row.memberPreviews ?? []).map((member) => ({
           value: member.id,
-          label: member.name,
+          label: `${memberRoleLabel(member.role, m)} — ${member.name}`,
           imageSrc: assetUrl(member.image, baseUrl),
         })),
       getTotalCount: (row) => row.memberCount ?? 0,
@@ -367,8 +447,36 @@ const organizationColumns = (
               impersonate({ userId: item.value, organizationId: row.id });
           },
         },
+        {
+          name: messages.organization_impersonate_member_as_organization(
+            {},
+            { locale },
+          ),
+          icon: <Building2 className="size-4" />,
+          disabled: () => isImpersonating || !actorUserId,
+          onClick: ({ item, row }) => {
+            if (item.value && actorUserId) {
+              impersonateAsOrganization({
+                actorUserId,
+                organizationId: row.id,
+                targetUserId: item.value,
+              });
+            }
+          },
+        },
       ],
     },
+  },
+  {
+    field: "userId",
+    headerName: messages.organization_type({}, { locale }),
+    cellRenderer: ({ data }) => (
+      <Badge variant={data.userId ? "secondary" : "outline"}>
+        {data.userId
+          ? messages.organization_type_personal({}, { locale })
+          : messages.organization_type_standard({}, { locale })}
+      </Badge>
+    ),
   },
   {
     field: "projects",
