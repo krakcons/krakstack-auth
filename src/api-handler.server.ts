@@ -50,7 +50,7 @@ import {
   adminOAuthClientsApiHandler,
   publicOAuthClientsApiHandler,
 } from "@/services/oauth/api.builder";
-import { OpenTelemetryLive } from "@/services/opentelemetry";
+import { HttpApiOtlp } from "@krak-stack/registry/opentelemetry/api";
 import { Organizations } from "@/services/organizations";
 import { Projects } from "@/services/projects";
 import {
@@ -354,7 +354,6 @@ const appServicesLayer = Layer.mergeAll(
 
 const apiApplicationLayer = Layer.mergeAll(
   apiLayer.pipe(Layer.provide(appServicesLayer)),
-  OpenTelemetryLive,
   Layer.succeed(Headers.CurrentRedactedNames, [
     "authorization",
     "cookie",
@@ -362,7 +361,7 @@ const apiApplicationLayer = Layer.mergeAll(
     "x-api-key",
     authProxyKeyHeader,
   ]),
-);
+).pipe(Layer.provideMerge(HttpApiOtlp.layer));
 const apiWebHandler = HttpRouter.toWebHandler<
   Layer.Success<typeof apiApplicationLayer>,
   Layer.Error<typeof apiApplicationLayer>,

@@ -9,12 +9,14 @@ import {
 import type { QueryClient } from "@tanstack/react-query";
 import { Suspense } from "react";
 import { KrakstackAuthProvider } from "@krak-stack/auth/components";
+import { useAtomValue } from "@effect/atom-react";
 import {
   ErrorComponent,
   type ErrorComponentProps,
 } from "@krak-stack/registry/error-component";
 import { Loading } from "@krak-stack/registry/loading";
 import { authBaseUrl } from "@/services/auth/client";
+import { ApiClient } from "@/lib/api-client";
 import { authAccessLabels } from "@/services/auth/access-labels";
 
 import { ThemeProvider } from "@krak-stack/registry/theme-switcher";
@@ -134,6 +136,8 @@ function RootContent() {
 }
 
 function RootDocument({ children }: { children: React.ReactNode }) {
+  useAtomValue(ApiClient.runtime);
+
   return (
     <html lang={getLocale()}>
       <head>

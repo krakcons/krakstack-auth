@@ -4,6 +4,8 @@ import { FetchHttpClient, HttpClient } from "effect/unstable/http";
 import { HttpApiClient } from "effect/unstable/httpapi";
 import { AtomHttpApi } from "effect/unstable/reactivity";
 
+import { apiRuntime } from "@/lib/api-runtime";
+
 export const KRAK_ORGANIZATION_SLUG = "krak";
 
 export const authBaseUrl =
@@ -33,6 +35,7 @@ export class AuthApiClient extends AtomHttpApi.Service<AuthApiClient>()(
     baseUrl: authOrigin,
     httpClient: FetchHttpClient.layer,
     transformClient: withCredentials,
+    runtime: apiRuntime,
   },
 ) {}
 

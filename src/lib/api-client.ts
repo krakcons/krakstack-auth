@@ -2,6 +2,7 @@ import { FetchHttpClient } from "effect/unstable/http";
 import { AtomHttpApi } from "effect/unstable/reactivity";
 
 import { FrontendApi } from "@/api";
+import { apiRuntime } from "@/lib/api-runtime";
 
 const siteUrl =
   globalThis.window?.location.origin ??
@@ -12,4 +13,5 @@ export class ApiClient extends AtomHttpApi.Service<ApiClient>()("ApiClient", {
   api: FrontendApi,
   baseUrl: siteUrl,
   httpClient: FetchHttpClient.layer,
+  runtime: apiRuntime,
 }) {}
