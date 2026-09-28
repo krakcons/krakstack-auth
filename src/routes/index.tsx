@@ -25,7 +25,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { LocaleSwitcher } from "@krak-stack/registry/locale-switcher";
+import { LocaleSwitcher } from "@/components/locale-switcher";
 import { m } from "@/paraglide/messages";
 import { getLocale } from "@/paraglide/runtime";
 import { createSeo } from "@/lib/seo";

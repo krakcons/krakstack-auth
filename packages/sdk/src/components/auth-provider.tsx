@@ -1,6 +1,9 @@
-import { useAtomSuspense, useAtomValue } from "@effect/atom-react";
+import { useAtomValue } from "@effect/atom-react";
 import { useRouterState } from "@tanstack/react-router";
-import { AsyncResult } from "effect/unstable/reactivity";
+import { Cause, Option, Schema } from "effect";
+import { HttpApiError } from "effect/unstable/httpapi";
+import { AsyncResult, Atom } from "effect/unstable/reactivity";
+import { useKrakstackLocale } from "@krak-stack/registry/krakstack-provider";
 import {
   createContext,
   type ReactNode,
@@ -20,10 +23,19 @@ import type {
 import { parseRoleList } from "../roles.js";
 
 export type KrakstackAuthLocale = "en" | "fr";
+export type KrakstackAuthStatus = "loading" | "ready" | "degraded" | "error";
+
+export class KrakstackAuthUnavailableError extends Schema.TaggedError<KrakstackAuthUnavailableError>()(
+  "KrakstackAuthUnavailableError",
+  {
+    cause: Schema.Defect(),
+  },
+) {
+  readonly status = 503;
+}
 
 export type KrakstackAuthProviderProps = {
   children: ReactNode;
-  locale?: KrakstackAuthLocale | undefined;
   baseUrl?: string | undefined;
   projectId?: string | null | undefined;
   access?: ProjectAccessCatalog | undefined;
@@ -34,6 +46,8 @@ export type KrakstackAuthContextValue = {
   locale: KrakstackAuthLocale;
   baseUrl?: string | undefined;
   projectId?: string | null | undefined;
+  status: KrakstackAuthStatus;
+  error: KrakstackAuthUnavailableError | null;
   projectConfig: ExtraProjectPublicConfig | null;
   access: ProjectAccessCatalog | null;
   accessLabels: ProjectAccessLabelCatalog | null;
@@ -91,7 +105,49 @@ interface ProjectConfigQuery {
   rootHost?: string;
 }
 
-const useProjectConfig = (
+const serverProjectConfigAtom = Atom.make(
+  AsyncResult.initial<
+    ExtraProjectPublicConfig,
+    HttpApiError.InternalServerError
+  >(),
+);
+
+type ProjectConfigState = {
+  status: KrakstackAuthStatus;
+  error: KrakstackAuthUnavailableError | null;
+  projectConfig: ExtraProjectPublicConfig | null;
+};
+
+export const resolveProjectConfigState = (
+  result: AsyncResult.AsyncResult<ExtraProjectPublicConfig | null, unknown>,
+): ProjectConfigState => {
+  if (AsyncResult.isFailure(result)) {
+    const projectConfig = AsyncResult.getOrElse(result, () => null);
+    return {
+      status: Option.isSome(result.previousSuccess) ? "degraded" : "error",
+      error: new KrakstackAuthUnavailableError({
+        cause: Cause.squash(result.cause),
+      }),
+      projectConfig,
+    };
+  }
+
+  if (AsyncResult.isSuccess(result)) {
+    return {
+      status: "ready",
+      error: null,
+      projectConfig: result.value,
+    };
+  }
+
+  return { status: "loading", error: null, projectConfig: null };
+};
+
+export const resolveKrakstackAuthLocale = (
+  locale: string,
+): KrakstackAuthLocale => (locale.startsWith("fr") ? "fr" : "en");
+
+const useProjectConfigState = (
   baseUrl: string | undefined,
   providedProjectId: string | null | undefined,
 ) => {
@@ -108,39 +164,39 @@ const useProjectConfig = (
   if (clientId) query.clientId = clientId;
   if (host) query.host = host;
   if (rootHost) query.rootHost = rootHost;
-  const result = useAtomSuspense(
-    authClientApi(baseUrl).query("authExtra", "getProjectPublicConfig", {
-      query,
-      timeToLive: "5 minutes",
-      reactivityKeys: [
-        "project-public-config",
-        ...(projectId ? [`project:${projectId}`] : []),
-        ...(clientId ? [`client:${clientId}`] : []),
-        ...(host ? [`host:${host}`] : []),
-        ...(rootHost ? [`root-host:${rootHost}`] : []),
-      ],
-      serializationKey: `project-public-config:${projectId ?? ""}:${clientId ?? ""}:${host ?? ""}:${rootHost ?? ""}`,
-    }),
-    { suspendOnWaiting: true },
-  );
+  const projectConfigAtom = globalThis.window
+    ? authClientApi(baseUrl).query("authExtra", "getProjectPublicConfig", {
+        query,
+        timeToLive: "5 minutes",
+        reactivityKeys: [
+          "project-public-config",
+          ...(projectId ? [`project:${projectId}`] : []),
+          ...(clientId ? [`client:${clientId}`] : []),
+          ...(host ? [`host:${host}`] : []),
+          ...(rootHost ? [`root-host:${rootHost}`] : []),
+        ],
+        serializationKey: `project-public-config:${projectId ?? ""}:${clientId ?? ""}:${host ?? ""}:${rootHost ?? ""}`,
+      })
+    : serverProjectConfigAtom;
+  const result = useAtomValue(projectConfigAtom);
 
-  return result.value;
+  return useMemo(() => resolveProjectConfigState(result), [result]);
 };
 
 export function KrakstackAuthProvider({
   children,
-  locale = "en",
   baseUrl,
   projectId,
   access,
   accessLabels,
 }: KrakstackAuthProviderProps) {
+  const locale = resolveKrakstackAuthLocale(useKrakstackLocale());
   const searchString = useRouterState({
     select: (state) => state.location.searchStr,
   });
   const resolvedProjectId =
     projectId ?? getSearchParam(searchString, "projectId");
-  const projectConfig = useProjectConfig(baseUrl, projectId);
+  const projectConfigState = useProjectConfigState(baseUrl, projectId);
   const sessionAtom = authSessionAtom(baseUrl);
   const sessionResult = useAtomValue(sessionAtom);
   const wasAuthenticated = useRef(false);
@@ -165,11 +221,18 @@ export function KrakstackAuthProvider({
       baseUrl,
       locale,
       projectId: resolvedProjectId,
-      projectConfig,
+      ...projectConfigState,
       access: access ?? null,
       accessLabels: accessLabels ?? null,
     }),
-    [baseUrl, locale, resolvedProjectId, projectConfig, access, accessLabels],
+    [
+      baseUrl,
+      locale,
+      resolvedProjectId,
+      projectConfigState,
+      access,
+      accessLabels,
+    ],
   );
 
   return (
@@ -183,6 +246,26 @@ export const useKrakstackAuth = () => useContext(KrakstackAuthContext);
 
 export const useKrakstackAuthProjectConfig = () =>
   useKrakstackAuth()?.projectConfig ?? null;
+
+export type KrakstackAuthRequiredProps = {
+  children: ReactNode;
+  fallback?: ReactNode | undefined;
+};
+
+export const KrakstackAuthRequired = ({
+  children,
+  fallback = null,
+}: KrakstackAuthRequiredProps) => {
+  const auth = useKrakstackAuth();
+  if (!auth) {
+    throw new Error(
+      "KrakstackAuthProvider is required to use KrakstackAuthRequired.",
+    );
+  }
+  if (auth.status === "loading") return fallback;
+  if (auth.status === "error") throw auth.error;
+  return children;
+};
 
 export const usePermissions = () => {
   const auth = useKrakstackAuth();

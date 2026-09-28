@@ -1,7 +1,7 @@
 import { createFileRoute, notFound, redirect } from "@tanstack/react-router";
 
 import { ThemeToggle } from "@/components/theme-toggle";
-import { LocaleSwitcher } from "@krak-stack/registry/locale-switcher";
+import { LocaleSwitcher } from "@/components/locale-switcher";
 import {
   DocsNotFound,
   DocsPage,

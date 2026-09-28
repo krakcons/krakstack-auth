@@ -78,7 +78,7 @@ import { Separator } from "@/components/ui/separator";
 
 import { authClientApi, authHttpClient } from "./auth-client-api.js";
 import { authSessionAtom, notifyAuthChange } from "./auth-atoms.js";
-import { useKrakstackAuth } from "./auth-provider.js";
+import { useKrakstackAuth, type KrakstackAuthLocale } from "./auth-provider.js";
 import { parseApiKeyReferrers } from "./api-key.js";
 import { ApiKeyEditForm } from "./api-key-edit-form.js";
 import { ApiKeyPermissions } from "./api-key-permissions.js";
@@ -1304,6 +1304,7 @@ export const UserButton = ({
           <ApiKeyManager
             baseUrl={resolvedBaseUrl}
             active={settingsDialog === "apiKeys"}
+            locale={auth?.locale ?? "en"}
             permissionLabels={auth?.accessLabels ?? undefined}
             permissions={
               apiKeyPermissions ?? auth?.access?.apiKeyPermissions.user ?? {}
@@ -1910,6 +1911,7 @@ const UserForm = ({
   error?: string | null;
   onSubmit: (values: UserFormType) => Effect.Effect<void, unknown>;
 }) => {
+  const auth = useKrakstackAuth();
   const m = useUserButtonMessages();
   const [editingLocale, setEditingLocale] =
     useState<ContactLocale>(getLocale());
@@ -1989,8 +1991,11 @@ const UserForm = ({
                   </p>
                 </div>
                 <EditingLocaleSwitcher
+                  locale={auth?.locale}
                   value={editingLocale}
-                  onValueChange={setEditingLocale}
+                  onValueChange={(value) =>
+                    setEditingLocale(value === "fr" ? "fr" : "en")
+                  }
                 />
               </div>
               <UserContactGroup title={m.user_contact_email_type()}>
@@ -2357,11 +2362,13 @@ function DisableTotpForm({
 function ApiKeyManager({
   baseUrl,
   active,
+  locale,
   permissionLabels,
   permissions = {},
 }: {
   baseUrl?: string | undefined;
   active: boolean;
+  locale: KrakstackAuthLocale;
   permissionLabels?: ProjectAccessLabelCatalog | undefined;
   permissions?: Readonly<Record<string, ReadonlyArray<string>>>;
 }) {
@@ -2576,10 +2583,7 @@ function ApiKeyManager({
               </code>
               <CopyButton
                 className="shrink-0"
-                messages={{
-                  copied: m.user_api_key_copied(),
-                  copy: m.user_api_key_copy(),
-                }}
+                locale={locale}
                 value={createdKey}
                 variant="ghost"
               />

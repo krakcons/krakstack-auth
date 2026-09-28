@@ -17,7 +17,7 @@
         "@effect/platform-browser": "4.0.0-rc.112",
         "@effect/sql-pg": "4.0.0-rc.112",
         "@krak-stack/auth": "workspace:*",
-        "@krak-stack/registry": "^0.1.32",
+        "@krak-stack/registry": "^0.1.34",
         "@lucas-barake/effect-form-react": "0.26.0-beta.5",
         "@opentelemetry/api": "^1.9.1",
         "@opentelemetry/exporter-trace-otlp-http": "^0.219.0",
@@ -73,14 +73,17 @@
     },
     "packages/sdk": {
       "name": "@krak-stack/auth",
-      "version": "0.2.13",
+      "version": "0.2.16",
       "dependencies": {
         "@effect/atom-react": "4.0.0-rc.112",
-        "@krak-stack/registry": "^0.1.32",
         "@lucas-barake/effect-form-react": "0.26.0-beta.5",
         "react-qr-code": "^2.2.0",
       },
+      "devDependencies": {
+        "@krak-stack/registry": "0.1.34",
+      },
       "peerDependencies": {
+        "@krak-stack/registry": "^0.1.34",
         "@tanstack/react-router": "^1.170.15",
         "effect": "4.0.0-rc.112",
         "input-otp": "^1.5.0",
@@ -395,7 +398,7 @@
 
     "@krak-stack/auth": ["@krak-stack/auth@workspace:packages/sdk"],
 
-    "@krak-stack/registry": ["@krak-stack/registry@0.1.32", "", { "dependencies": { "@oxlint/plugins": "1.78.0" }, "peerDependencies": { "@aws-sdk/client-sesv2": "^3.1068.0", "@base-ui/react": "^1.5.0", "@effect/atom-react": "4.0.0-rc.112", "@effect/platform-browser": "4.0.0-rc.112", "@iconify/react": "^6.0.2", "@inlang/paraglide-js": "^2.19.0", "@lucas-barake/effect-form": "0.25.0-beta.6", "@lucas-barake/effect-form-react": "0.26.0-beta.5", "@tanstack/highlight": "^0.0.10", "@tanstack/react-form": "^1.33.0", "@tanstack/react-router": "^1.170.15", "@tanstack/react-virtual": "^3.14.5", "@xberg-io/xberg": "1.0.14", "class-variance-authority": "^0.7.1", "cmdk": "^1.1.1", "cn": "^0.3.0", "drizzle-orm": "^1.0.0-rc.4-5d5b77c", "effect": "4.0.0-rc.112", "lucide-react": "^1.18.0", "react": "^19.2.0", "react-dom": "^19.2.0" }, "optionalPeers": ["@aws-sdk/client-sesv2", "@effect/atom-react", "@effect/platform-browser", "@iconify/react", "@lucas-barake/effect-form", "@lucas-barake/effect-form-react", "@tanstack/highlight", "@tanstack/react-form", "@tanstack/react-router", "@tanstack/react-virtual", "@xberg-io/xberg", "cmdk", "drizzle-orm"] }, "sha512-D9zs+FCoOsDXQOZkWPLQhX/6HodOrHMTpISf2Pa8NMASzsu+C03OTnIrncGz86v98JRKh2GZJ9XsI1DtvIUcnA=="],
+    "@krak-stack/registry": ["@krak-stack/registry@0.1.34", "", { "dependencies": { "@oxlint/plugins": "1.78.0" }, "peerDependencies": { "@aws-sdk/client-sesv2": "^3.1068.0", "@base-ui/react": "^1.5.0", "@effect/atom-react": "4.0.0-rc.112", "@effect/platform-browser": "4.0.0-rc.112", "@iconify/react": "^6.0.2", "@inlang/paraglide-js": "^2.19.0", "@lucas-barake/effect-form": "0.25.0-beta.6", "@lucas-barake/effect-form-react": "0.26.0-beta.5", "@tanstack/highlight": "^0.0.10", "@tanstack/react-form": "^1.33.0", "@tanstack/react-router": "^1.170.15", "@tanstack/react-virtual": "^3.14.5", "@xberg-io/xberg": "1.0.14", "class-variance-authority": "^0.7.1", "cmdk": "^1.1.1", "cn": "^0.3.0", "drizzle-orm": "^1.0.0-rc.4-5d5b77c", "effect": "4.0.0-rc.112", "lucide-react": "^1.18.0", "react": "^19.2.0", "react-dom": "^19.2.0" }, "optionalPeers": ["@aws-sdk/client-sesv2", "@effect/atom-react", "@effect/platform-browser", "@iconify/react", "@lucas-barake/effect-form", "@lucas-barake/effect-form-react", "@tanstack/highlight", "@tanstack/react-form", "@tanstack/react-router", "@tanstack/react-virtual", "@xberg-io/xberg", "cmdk", "drizzle-orm"] }, "sha512-BwURjr2TzB2SkzsGpa0KUjjzjVJ8I2qORGTGutNHEPtF/XsONbt9nLZ8seNZh9byrx1L+2by3Z/mpCZYsEAxlA=="],
 
     "@lix-js/sdk": ["@lix-js/sdk@0.17.0", "", { "dependencies": { "@bytecodealliance/jco-transpile": "0.13.0", "binaryen": "130.0.0", "fflate": "^0.8.3" }, "optionalDependencies": { "@lix-js/sdk-darwin-arm64": "0.17.0", "@lix-js/sdk-linux-arm64": "0.17.0", "@lix-js/sdk-linux-x64": "0.17.0", "@lix-js/sdk-win32-x64": "0.17.0" } }, "sha512-xplbKYEokKbm0/soUy9eXlROF55Si1J9HK97iwJrNl/av1VixZ2mvpDTa0QsX96UyxFnzkXru6hngjtIJTl73g=="],
 

@@ -13,7 +13,7 @@ import { Effect } from "effect";
 
 import { m } from "@/paraglide/messages";
 import { ThemeToggle } from "@/components/theme-toggle";
-import { LocaleSwitcher } from "@krak-stack/registry/locale-switcher";
+import { LocaleSwitcher } from "@/components/locale-switcher";
 import { Loading } from "@krak-stack/registry/loading";
 import {
   SidebarLayout,

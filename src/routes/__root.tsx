@@ -15,26 +15,20 @@ import {
   type ErrorComponentProps,
 } from "@krak-stack/registry/error-component";
 import { Loading } from "@krak-stack/registry/loading";
+import { KrakstackProvider } from "@krak-stack/registry/krakstack-provider";
 import { authBaseUrl } from "@/services/auth/client";
 import { ApiClient } from "@/lib/api-client";
 import { authAccessLabels } from "@/services/auth/access-labels";
 
-import { ThemeProvider } from "@krak-stack/registry/theme-switcher";
+import { ThemeProvider } from "@/components/theme-switcher";
 import { m } from "../paraglide/messages.js";
-import { getLocale } from "../paraglide/runtime.js";
+import { getLocale, locales } from "../paraglide/runtime.js";
 import appCss from "../styles.css?url";
 
 const analyticsWebsiteId = import.meta.env.VITE_ANALYTICS_WEBSITE_ID;
 
 const AppErrorComponent = (props: ErrorComponentProps) => (
-  <ErrorComponent
-    {...props}
-    diagnostics={{ app: m.app_name() }}
-    messages={{
-      title: m.error_page_title(),
-      description: m.error_page_description(),
-    }}
-  />
+  <ErrorComponent {...props} diagnostics={{ app: m.app_name() }} />
 );
 
 export const Route = createRootRouteWithContext<{
@@ -123,7 +117,6 @@ function RootContent() {
     <ClientOnly fallback={loading}>
       <Suspense fallback={loading}>
         <KrakstackAuthProvider
-          locale={getLocale()}
           baseUrl={authBaseUrl}
           accessLabels={authAccessLabels()}
           {...(projectId ? { projectId } : {})}
@@ -144,7 +137,9 @@ function RootDocument({ children }: { children: React.ReactNode }) {
         <HeadContent />
       </head>
       <body>
-        <ThemeProvider>{children}</ThemeProvider>
+        <KrakstackProvider locale={getLocale()} locales={locales}>
+          <ThemeProvider>{children}</ThemeProvider>
+        </KrakstackProvider>
         <Scripts />
       </body>
     </html>

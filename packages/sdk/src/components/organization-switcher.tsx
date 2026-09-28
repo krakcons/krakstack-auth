@@ -107,7 +107,7 @@ import {
   notifyAuthChange,
   refreshOnAuthChange,
 } from "./auth-atoms.js";
-import { useKrakstackAuth } from "./auth-provider.js";
+import { useKrakstackAuth, type KrakstackAuthLocale } from "./auth-provider.js";
 import { parseApiKeyReferrers } from "./api-key.js";
 import { ApiKeyPermissions } from "./api-key-permissions.js";
 import { ApiKeyRateLimit, apiKeyUsagePercent } from "./api-key-rate-limit.js";
@@ -1531,8 +1531,11 @@ export function OrganizationSwitcher({
               </div>
               <div className="mt-2 w-fit sm:mt-0">
                 <EditingLocaleSwitcher
+                  locale={auth?.locale}
                   value={editingOrganizationLocale}
-                  onValueChange={setEditingOrganizationLocale}
+                  onValueChange={(value) =>
+                    setEditingOrganizationLocale(value === "fr" ? "fr" : "en")
+                  }
                 />
               </div>
             </DialogHeader>
@@ -1578,8 +1581,11 @@ export function OrganizationSwitcher({
                 </div>
                 <div className="mt-2 w-fit sm:mt-0">
                   <EditingLocaleSwitcher
+                    locale={auth?.locale}
                     value={editingOrganizationLocale}
-                    onValueChange={setEditingOrganizationLocale}
+                    onValueChange={(value) =>
+                      setEditingOrganizationLocale(value === "fr" ? "fr" : "en")
+                    }
                   />
                 </div>
               </DialogHeader>
@@ -1626,6 +1632,7 @@ export function OrganizationSwitcher({
           {activeOrganization ? (
             <OrganizationApiKeyManager
               baseUrl={baseUrl}
+              locale={auth?.locale ?? "en"}
               organization={activeOrganization}
               active={dialog === "apiKeys" && canManageApiKeys}
               permissionLabels={auth?.accessLabels ?? undefined}
@@ -2934,12 +2941,14 @@ const invitationRowActions = ({
 
 function OrganizationApiKeyManager({
   baseUrl,
+  locale,
   organization,
   active,
   permissionLabels,
   permissions,
 }: {
   baseUrl?: string | undefined;
+  locale: KrakstackAuthLocale;
   organization: OrganizationSummary;
   active: boolean;
   permissionLabels?: ProjectAccessLabelCatalog | undefined;
@@ -3151,10 +3160,7 @@ function OrganizationApiKeyManager({
               </code>
               <CopyButton
                 className="shrink-0"
-                messages={{
-                  copied: m.user_api_key_copied(),
-                  copy: m.user_api_key_copy(),
-                }}
+                locale={locale}
                 value={createdKey}
                 variant="ghost"
               />

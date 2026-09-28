@@ -255,7 +255,6 @@ export function AdminOrganizationForm({
               emptyLabel={m.organization_parent_empty}
               items={parentOptions}
               label={m.organization_parent}
-              messages={{ search: m.organization_parent_search }}
               placeholder={m.organization_parent_none}
             />
             <SubmitError result={submitResult} />

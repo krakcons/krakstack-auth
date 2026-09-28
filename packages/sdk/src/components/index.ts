@@ -1,5 +1,7 @@
 export {
   KrakstackAuthProvider,
+  KrakstackAuthRequired,
+  KrakstackAuthUnavailableError,
   useKrakstackAuth,
   useKrakstackAuthProjectConfig,
   usePermissions,
@@ -62,6 +64,8 @@ export type {
   KrakstackAuthContextValue,
   KrakstackAuthLocale,
   KrakstackAuthProviderProps,
+  KrakstackAuthRequiredProps,
+  KrakstackAuthStatus,
 } from "./auth-provider.js";
 export type {
   OrganizationSwitcherDialog,

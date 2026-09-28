@@ -451,10 +451,7 @@ function MemberRequiredGate({
                 valueDescription={resolvedContactEmail}
                 variant="ghost"
                 className="shrink-0"
-                messages={{
-                  copy: m.member_required_copy_email,
-                  copied: m.member_required_copied_email,
-                }}
+                locale={locale}
               />
             </div>
           ) : null}

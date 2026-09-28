@@ -1,9 +1,13 @@
 import { Outlet, createFileRoute } from "@tanstack/react-router";
-import { useKrakstackAuthProjectConfig } from "@krak-stack/auth/components";
+import {
+  KrakstackAuthRequired,
+  useKrakstackAuthProjectConfig,
+} from "@krak-stack/auth/components";
 import { Users } from "lucide-react";
 
 import { AppBrand } from "@krak-stack/registry/app-brand";
-import { LocaleSwitcher } from "@krak-stack/registry/locale-switcher";
+import { Loading } from "@krak-stack/registry/loading";
+import { LocaleSwitcher } from "@/components/locale-switcher";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { m } from "@/paraglide/messages";
 import { AuthBrandingProvider } from "@/services/auth/client/branding";
@@ -23,45 +27,47 @@ function AuthLayout() {
     : undefined;
 
   return (
-    <main
-      className="relative grid min-h-screen place-items-center px-6 py-10"
-      data-project-theme={projectConfig?.projectKey}
-    >
-      {projectConfig?.themeCss ? (
-        <style dangerouslySetInnerHTML={{ __html: projectConfig.themeCss }} />
-      ) : null}
-      <div className="absolute top-6 left-6 md:top-10 md:left-10">
-        {brandHref ? (
-          <AppBrand
-            label={projectConfig?.name ?? m.sidebar_brand()}
-            subtitle={m.sidebar_brand_subtitle()}
-            icon={Users}
-            href={brandHref}
-            {...(projectConfig?.logoUrl
-              ? { imageSrc: projectConfig.logoUrl }
-              : {})}
-          />
-        ) : (
-          <AppBrand
-            label={projectConfig?.name ?? m.sidebar_brand()}
-            subtitle={m.sidebar_brand_subtitle()}
-            icon={Users}
-            to={null}
-            {...(projectConfig?.logoUrl
-              ? { imageSrc: projectConfig.logoUrl }
-              : {})}
-          />
-        )}
-      </div>
-      <div className="absolute top-6 right-6 flex items-center gap-2 md:top-10 md:right-10">
-        <ThemeToggle />
-        <LocaleSwitcher />
-      </div>
-      <AuthBrandingProvider value={projectConfig}>
-        <div className="flex w-full flex-col items-center">
-          <Outlet />
+    <KrakstackAuthRequired fallback={<Loading variant="centered" />}>
+      <main
+        className="relative grid min-h-screen place-items-center px-6 py-10"
+        data-project-theme={projectConfig?.projectKey}
+      >
+        {projectConfig?.themeCss ? (
+          <style dangerouslySetInnerHTML={{ __html: projectConfig.themeCss }} />
+        ) : null}
+        <div className="absolute top-6 left-6 md:top-10 md:left-10">
+          {brandHref ? (
+            <AppBrand
+              label={projectConfig?.name ?? m.sidebar_brand()}
+              subtitle={m.sidebar_brand_subtitle()}
+              icon={Users}
+              href={brandHref}
+              {...(projectConfig?.logoUrl
+                ? { imageSrc: projectConfig.logoUrl }
+                : {})}
+            />
+          ) : (
+            <AppBrand
+              label={projectConfig?.name ?? m.sidebar_brand()}
+              subtitle={m.sidebar_brand_subtitle()}
+              icon={Users}
+              to={null}
+              {...(projectConfig?.logoUrl
+                ? { imageSrc: projectConfig.logoUrl }
+                : {})}
+            />
+          )}
         </div>
-      </AuthBrandingProvider>
-    </main>
+        <div className="absolute top-6 right-6 flex items-center gap-2 md:top-10 md:right-10">
+          <ThemeToggle />
+          <LocaleSwitcher />
+        </div>
+        <AuthBrandingProvider value={projectConfig}>
+          <div className="flex w-full flex-col items-center">
+            <Outlet />
+          </div>
+        </AuthBrandingProvider>
+      </main>
+    </KrakstackAuthRequired>
   );
 }
