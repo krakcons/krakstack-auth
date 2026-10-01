@@ -8,11 +8,7 @@ import { HttpApiBuilder, HttpApiError } from "effect/unstable/httpapi";
 import { asc, and, eq } from "drizzle-orm";
 
 import { FrontendApi } from "@/api";
-import {
-  LocaleContext,
-  localize,
-  type LocalizedInputType,
-} from "@/lib/localization";
+import { localize, type LocalizedInputType } from "@/lib/localization";
 import {
   member,
   organization,
@@ -278,7 +274,6 @@ export const authApiHandler = HttpApiBuilder.group(
       )
       .handle("getOrganizationPublicProfile", ({ query }) =>
         Effect.gen(function* () {
-          const localeContext = yield* LocaleContext;
           const [record] = yield* Effect.tryPromise({
             try: () =>
               db
@@ -296,7 +291,10 @@ export const authApiHandler = HttpApiBuilder.group(
 
           if (!record) return yield* new HttpApiError.NotFound({});
 
-          return organizationPublicProfile(record, localeContext);
+          return organizationPublicProfile(record, {
+            locale: query.locale ?? "en",
+            fallbackLocale: "en",
+          });
         }),
       )
       .handle("setPassword", ({ payload, request }) =>
