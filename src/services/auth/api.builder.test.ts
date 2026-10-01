@@ -40,7 +40,9 @@ describe("organizationPublicProfile", () => {
         name: "Example",
         slug: "example",
         metadata: {
-          translations: [{ locale: "en", name: "Example" }],
+          translations: [
+            { locale: "en", name: "Example", logo: "logos/example.png" },
+          ],
           emails: [
             {
               email: "team@example.com",
@@ -63,6 +65,7 @@ describe("organizationPublicProfile", () => {
     );
 
     expect(profile.contactEmail).toBe("team@example.com");
+    expect(profile.logo).toBe("logos/example.png");
     expect(profile.addresses[0]?.formatted).toBe(
       "123 Example Street, Montreal QC H2X 1Y4, Canada",
     );
