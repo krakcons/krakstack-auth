@@ -1,6 +1,11 @@
 import { useAtomSet, useAtomSuspense, useAtomValue } from "@effect/atom-react";
 import { FormBuilder, FormReact } from "@lucas-barake/effect-form-react";
-import { Link, useNavigate, useRouterState } from "@tanstack/react-router";
+import {
+  Link,
+  useNavigate,
+  useRouter,
+  useRouterState,
+} from "@tanstack/react-router";
 import { Effect, Option, Schema } from "effect";
 import { Atom, AsyncResult } from "effect/unstable/reactivity";
 import { HttpClientError } from "effect/unstable/http";
@@ -43,6 +48,7 @@ import {
   AuthInternalServerError,
   AuthTooManyRequests,
   AuthUnauthorized,
+  AuthRedirectURLFromString,
 } from "../auth/schema.js";
 import type {
   AuthConflict,
@@ -287,6 +293,7 @@ const AuthSubmitError = <A,>({
 type AuthFormProps = {
   baseUrl?: string | undefined;
   locale?: KrakstackAuthLocale | undefined;
+  defaultRedirectTo?: string | undefined;
 };
 
 type SigninErrorContext = "signIn" | "sendEmailOtp" | "verifyEmailOtp";
@@ -404,6 +411,7 @@ export function Signin(props: AuthFormProps) {
     labels: m,
     projectConfig: providedProjectConfig,
   } = useAuthFormOptions(props);
+  const router = useRouter();
   const navigate = useNavigate();
   const searchString = useRouterState({
     select: (state) => state.location.searchStr,
@@ -415,13 +423,7 @@ export function Signin(props: AuthFormProps) {
   );
   const redirectTarget = getRedirectTarget(
     searchString,
-    projectConfig?.authDomain,
-    projectConfig?.rootDomain,
-  );
-  const socialRedirectTarget = getSocialRedirectTarget(
-    searchString,
-    projectConfig?.authDomain,
-    projectConfig?.rootDomain,
+    props.defaultRedirectTo,
   );
   const initialEmail = getSearchParam(searchString, "email")?.trim() ?? "";
   const oauthQuery = getOAuthQuery(searchString);
@@ -591,27 +593,32 @@ export function Signin(props: AuthFormProps) {
   const submit = useAtomSet(form.submit);
   const submitResult = useAtomValue(form.submit);
   const [socialSignIn] = useState(() =>
-    authClientApi(baseUrl).runtime.fn((provider: "google") =>
-      Effect.gen(function* () {
-        const payload = oauthQuery
-          ? {
-              provider,
-              callbackURL: socialRedirectTarget,
-              errorCallbackURL: "/sign-in",
-              additionalData: { query: oauthQuery },
-              oauth_query: oauthQuery,
-            }
-          : {
-              provider,
-              callbackURL: socialRedirectTarget,
-              errorCallbackURL: "/sign-in",
-            };
-        const result = yield* authHttpClient(baseUrl, locale).pipe(
-          Effect.flatMap((client) => client.auth.signInSocial({ payload })),
-        );
-        notifyAuthChange();
-        if (result.url) onNavigate(result.url);
-      }),
+    authClientApi(baseUrl).runtime.fn(
+      (input: {
+        callbackURL: string;
+        errorCallbackURL: string;
+        oauthQuery: string | null;
+      }) =>
+        Effect.gen(function* () {
+          const payload = input.oauthQuery
+            ? {
+                provider: "google",
+                callbackURL: input.callbackURL,
+                errorCallbackURL: input.errorCallbackURL,
+                additionalData: { query: input.oauthQuery },
+                oauth_query: input.oauthQuery,
+              }
+            : {
+                provider: "google",
+                callbackURL: input.callbackURL,
+                errorCallbackURL: input.errorCallbackURL,
+              };
+          const result = yield* authHttpClient(baseUrl, locale).pipe(
+            Effect.flatMap((client) => client.auth.signInSocial({ payload })),
+          );
+          notifyAuthChange();
+          if (result.url) onNavigate(result.url);
+        }),
     ),
   );
   const startSocialSignIn = useAtomSet(socialSignIn);
@@ -668,7 +675,14 @@ export function Signin(props: AuthFormProps) {
     submit({ type: "sendEmailOtp" });
   };
 
-  const signInWithGoogle = () => startSocialSignIn("google");
+  const signInWithGoogle = () =>
+    startSocialSignIn(
+      getSocialSignInDestinations(
+        router,
+        props.defaultRedirectTo,
+        window.location.href,
+      ),
+    );
 
   return (
     <Card className="w-full max-w-md">
@@ -876,25 +890,14 @@ export function Signin(props: AuthFormProps) {
 }
 
 export function VerifyEmail(props: AuthFormProps) {
-  const {
-    baseUrl,
-    locale,
-    labels: m,
-    projectConfig: providedProjectConfig,
-  } = useAuthFormOptions(props);
+  const { baseUrl, locale, labels: m } = useAuthFormOptions(props);
   const navigate = useNavigate();
   const searchString = useRouterState({
     select: (state) => state.location.searchStr,
   });
-  const projectConfig = useAuthProjectConfig(
-    baseUrl,
-    searchString,
-    providedProjectConfig,
-  );
   const redirectTarget = getRedirectTarget(
     searchString,
-    projectConfig?.authDomain,
-    projectConfig?.rootDomain,
+    props.defaultRedirectTo,
   );
   const onNavigate = (target: string) => navigateTarget(target, navigate);
   const [resent, setResent] = useState(false);
@@ -1191,25 +1194,14 @@ function ResetPasswordForm({
 }
 
 export function TwoFactor(props: AuthFormProps) {
-  const {
-    baseUrl,
-    locale,
-    labels: m,
-    projectConfig: providedProjectConfig,
-  } = useAuthFormOptions(props);
+  const { baseUrl, locale, labels: m } = useAuthFormOptions(props);
   const navigate = useNavigate();
   const searchString = useRouterState({
     select: (state) => state.location.searchStr,
   });
-  const projectConfig = useAuthProjectConfig(
-    baseUrl,
-    searchString,
-    providedProjectConfig,
-  );
   const redirectTarget = getRedirectTarget(
     searchString,
-    projectConfig?.authDomain,
-    projectConfig?.rootDomain,
+    props.defaultRedirectTo,
   );
   const oauthQuery = getOAuthQuery(searchString);
   const onNavigate = (target: string) => navigateTarget(target, navigate);
@@ -1470,29 +1462,73 @@ const getResultRedirectUrl = (data: typeof Schema.Unknown.Type) =>
     (result) => result.url,
   ).pipe(Option.getOrNull);
 
-const getRedirectTarget = (
+export const getRedirectTarget = (
   searchString: string,
-  projectAuthDomain: string | null | undefined,
-  projectRootDomain: string | null | undefined,
+  defaultRedirectTo = "/",
 ) => {
   const oauthTarget = getOAuthAuthorizeTarget(searchString);
   if (oauthTarget) return oauthTarget;
 
-  return (
-    getAuthRedirectParam(searchString) ??
-    getDefaultAuthRedirectTarget(projectAuthDomain, projectRootDomain)
+  const decode = Schema.decodeUnknownOption(AuthRedirectURLFromString());
+  const target = getAuthRedirectParam(searchString);
+  if (target && Option.isSome(decode(target))) return target;
+  return Option.isSome(decode(defaultRedirectTo)) ? defaultRedirectTo : "/";
+};
+
+export const getSocialRedirectTarget = (
+  searchString: string,
+  defaultRedirectTo = "/",
+  origin = globalThis.window?.location.origin,
+) => {
+  const oauthTarget = getOAuthAuthorizeTargetWithoutPromptLogin(searchString);
+  const target =
+    oauthTarget ?? getRedirectTarget(searchString, defaultRedirectTo);
+  // A relative callback is otherwise resolved against the auth backend, which
+  // may be a different origin from the site displaying the sign-in form.
+  if (!origin) return target;
+  return Schema.decodeUnknownOption(AuthRedirectURLFromString(origin))(
+    target,
+  ).pipe(
+    Option.map((url) => url.href),
+    Option.getOrElse(() => origin),
   );
 };
 
-const getSocialRedirectTarget = (
-  searchString: string,
-  projectAuthDomain: string | null | undefined,
-  projectRootDomain: string | null | undefined,
+export const getSocialSignInDestinations = (
+  router: ReturnType<typeof useRouter>,
+  defaultRedirectTo = "/",
+  browserHref: string,
 ) => {
-  const oauthTarget = getOAuthAuthorizeTargetWithoutPromptLogin(searchString);
-  if (oauthTarget) return oauthTarget;
-
-  return getRedirectTarget(searchString, projectAuthDomain, projectRootDomain);
+  const browserURL = Schema.decodeUnknownSync(AuthRedirectURLFromString())(
+    browserHref,
+  );
+  const searchString = router.state.location.searchStr;
+  const defaultTarget = getRedirectTarget("", defaultRedirectTo);
+  const defaultURL = Schema.decodeUnknownSync(
+    AuthRedirectURLFromString(browserURL.origin),
+  )(defaultTarget);
+  const defaultHref = Option.isSome(
+    Schema.decodeUnknownOption(Schema.URLFromString)(defaultTarget),
+  )
+    ? defaultTarget
+    : router.buildLocation({
+        to: defaultURL.pathname,
+        search: Object.fromEntries(defaultURL.searchParams),
+        hash: defaultURL.hash.slice(1),
+      }).publicHref;
+  // Resolve at click time so router rewrites use the current locale. Error
+  // callbacks return to the actual browser-facing sign-in route, not a guessed
+  // locale-prefixed path.
+  browserURL.searchParams.delete("error");
+  return {
+    callbackURL: getSocialRedirectTarget(
+      searchString,
+      defaultHref,
+      browserURL.origin,
+    ),
+    errorCallbackURL: browserURL.href,
+    oauthQuery: getOAuthQuery(searchString),
+  };
 };
 
 const getOAuthAuthorizeTarget = (searchString: string) => {
@@ -1546,13 +1582,6 @@ const getAuthRedirectParam = (searchString: string) => {
     search.get("redirectTo") ??
     search.get("returnTo")
   );
-};
-
-const getDefaultAuthRedirectTarget = (
-  _projectAuthDomain: string | null | undefined,
-  _projectRootDomain: string | null | undefined,
-) => {
-  return "/admin";
 };
 
 const getSearchParam = (searchString: string, key: string) =>

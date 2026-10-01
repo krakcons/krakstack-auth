@@ -9,5 +9,5 @@ export const Route = createFileRoute("/_auth/verify-email")({
       () => "",
     ),
   }),
-  component: () => <VerifyEmail />,
+  component: () => <VerifyEmail defaultRedirectTo="/admin" />,
 });

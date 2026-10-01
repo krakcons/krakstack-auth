@@ -209,7 +209,7 @@ const connectSessionProject = async (
   }
 };
 
-const createAuth = ({
+export const createAuth = ({
   allowedHosts,
   cookieDomain,
 }: {
@@ -316,6 +316,9 @@ const createAuth = ({
       schema,
     }),
     advanced: {
+      // BetterAuthRequest strips untrusted forwarding headers and restores only
+      // the consumer origin authorized by the service API key.
+      trustedProxyHeaders: true,
       cookiePrefix: "krakstack-auth",
       crossSubDomainCookies,
       defaultCookieAttributes: {

@@ -1,4 +1,4 @@
-import { Schema } from "effect";
+import { Effect, Schema, SchemaIssue, SchemaTransformation } from "effect";
 
 import { User, UserMetadata } from "../schema.js";
 
@@ -7,6 +7,33 @@ const StringArrayRecord = Schema.Record(
   Schema.String,
   Schema.Array(Schema.String),
 );
+
+export const AuthRedirectURLFromString = (origin = "http://localhost") =>
+  Schema.String.pipe(
+    Schema.decodeTo(
+      Schema.URL.check(
+        Schema.makeFilter((url) =>
+          (url.protocol === "http:" || url.protocol === "https:") &&
+          !url.username &&
+          !url.password
+            ? undefined
+            : "Expected an HTTP or HTTPS redirect URL without credentials",
+        ),
+      ),
+      SchemaTransformation.transformOrFail({
+        decode: (value) =>
+          Effect.try({
+            try: () => new URL(value, origin),
+            catch: () =>
+              new SchemaIssue.InvalidValue(
+                { message: "Invalid authentication redirect URL" },
+                value,
+              ),
+          }),
+        encode: (url) => Effect.succeed(url.href),
+      }),
+    ),
+  ).annotate({ identifier: "AuthRedirectURLFromString" });
 
 export const AuthUser = Schema.Struct({
   id: Schema.String,
