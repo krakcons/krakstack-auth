@@ -27,7 +27,6 @@ export const AdminApi = HttpApi.make("AdminApi")
   .prefix("/api/auth");
 
 export const FrontendApi = HttpApi.make("FrontendApi")
-  .middleware(LocaleMiddleware)
   .annotateMerge(
     OpenApi.annotations({
       title: "KrakStack Auth API",
@@ -39,5 +38,6 @@ export const FrontendApi = HttpApi.make("FrontendApi")
   .add(ExtraApiGroup)
   .add(PublicOAuthClientsApiGroup)
   .add(PublicProjectsApiGroup)
+  .middleware(LocaleMiddleware)
   .add(HealthApiGroup)
   .prefix("/api");
