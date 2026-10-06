@@ -56,6 +56,8 @@ bun run dev
 | `bun run auth:generate`   | Generate reference Better Auth SQL in `tmp/` |
 | `bun run db:migrate`      | Apply Effect SQL migrations                  |
 | `bun run db:migrate:test` | Apply migrations to `TEST_DATABASE_URL`      |
+| `bun run db:adopt`        | Verify and adopt an existing database        |
+| `bun run db:adopt:test`   | Verify and adopt `TEST_DATABASE_URL`         |
 
 Database-backed service tests must use `TEST_DATABASE_URL`, never `DATABASE_URL`.
 
@@ -63,7 +65,17 @@ Database-backed service tests must use `TEST_DATABASE_URL`, never `DATABASE_URL`
 
 Migrations use `PgMigrator` in `src/db/migrate.ts`. Add new numbered Effect migrations in `src/db/migrations/` and register them in the loader. `bun run start` runs migrations before starting the production server.
 
-The first Effect migration preserves the historical SQL in `src/db/migrations/legacy/`. On existing databases it reads the legacy migration ledger and skips already-applied migrations; on fresh databases it applies the complete history. Keep these SQL files in deployment artifacts and use Effect migrations exclusively. Treat `auth:generate` output as a reference for writing reviewed Effect migrations, not as an application migration.
+Fresh databases use `src/db/migrations/0001_initial.sql`. Existing databases require
+explicit verified adoption; startup never trusts a Drizzle timestamp or replays old
+SQL. Follow the [database adoption runbook](docs/database-adoption.md), including
+databases already marked `(1, 'legacy')` by the previous Effect bridge.
+
+The migration ID/name `1_legacy` is retained solely for compatibility with existing
+Effect ledgers. Its fresh-install implementation now creates the current schema
+directly. Historical SQL is removed from the source tree and remains available in
+Git history. Deploy the migration scripts and SQL files alongside the built app.
+Treat `auth:generate` output as a reference for reviewed Effect migrations, not as
+an application migration.
 
 ## Stack
 
