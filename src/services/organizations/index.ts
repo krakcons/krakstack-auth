@@ -1,9 +1,8 @@
-import { Context, Effect, Layer } from "effect";
-import { eq } from "drizzle-orm";
-
-import { organization } from "@/db/schema";
-import { DB } from "@/services/database";
+import { Context, Effect, Layer, Schema } from "effect";
+import { SqlClient, SqlSchema } from "effect/unstable/sql";
+import { OrganizationRow } from "@/db/schema";
 import { BetterAuthRequest } from "@/services/auth/better-auth-request";
+import type { OrganizationSqlUpdate } from "./schema";
 
 import type {
   AdminCreateOrganizationPayload,
@@ -43,7 +42,7 @@ export class Organizations extends Context.Service<Organizations>()(
         id: string;
         payload: AdminUpdateOrganizationPayload;
       }) {
-        const database = yield* DB;
+        const sql = yield* SqlClient.SqlClient;
         if (payload.parentId) {
           if (payload.parentId === id) {
             return yield* Effect.fail(
@@ -51,10 +50,12 @@ export class Organizations extends Context.Service<Organizations>()(
             );
           }
 
-          const parent = yield* database.query.organization.findFirst({
-            where: { id: payload.parentId },
-            columns: { parentId: true },
-          });
+          const [parent] = yield* SqlSchema.findAll({
+            Request: Schema.String,
+            Result: OrganizationRow,
+            execute: (id) =>
+              sql`SELECT * FROM organization WHERE id = ${id} LIMIT 1`,
+          })(payload.parentId);
           if (!parent || parent.parentId) {
             return yield* Effect.fail(
               new Error("Parent organization must be a root organization"),
@@ -62,17 +63,20 @@ export class Organizations extends Context.Service<Organizations>()(
           }
         }
 
-        const updates: Partial<typeof organization.$inferInsert> = {};
+        const updates: OrganizationSqlUpdate = {};
         if (payload.name !== undefined) updates.name = payload.name;
         if (payload.slug !== undefined) updates.slug = payload.slug;
         if (payload.logo !== undefined) updates.logo = payload.logo;
         if (payload.parentId !== undefined) updates.parentId = payload.parentId;
 
-        const [updated] = yield* database
-          .update(organization)
-          .set(updates)
-          .where(eq(organization.id, id))
-          .returning();
+        const [updated] = yield* SqlSchema.findAll({
+          Request: Schema.String,
+          Result: OrganizationRow,
+          execute: (id) =>
+            Object.keys(updates).length
+              ? sql`UPDATE organization SET ${sql.update(updates)} WHERE id = ${id} RETURNING *`
+              : sql`SELECT * FROM organization WHERE id = ${id} LIMIT 1`,
+        })(id);
 
         return updated ?? null;
       });

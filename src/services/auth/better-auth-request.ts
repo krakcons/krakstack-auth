@@ -1,4 +1,6 @@
 import { Context, Effect, Layer, Option, Redacted, Schema } from "effect";
+import { SqlClient, SqlSchema } from "effect/unstable/sql";
+import { DomainRow } from "@/db/schema";
 import { ApiKeyPermissionGrant } from "@krak-stack/auth/access";
 import { HttpServerRequest } from "effect/unstable/http";
 import { HttpApiError } from "effect/unstable/httpapi";
@@ -9,7 +11,7 @@ import {
 } from "@krak-stack/auth/server";
 
 import { authForRequest, type Auth } from "@/services/auth/config";
-import { DB } from "@/services/database";
+import { sqlLayer } from "@/services/database";
 import {
   apiKeyAllowedOrigins,
   requestMatchesAllowedOrigins,
@@ -51,14 +53,13 @@ export const restoreProxyAuthOrigin = Effect.fn("Auth.restoreProxyOrigin")(
     const origin = yield* readProxyOrigin(request);
     const headers = stripProxyOriginHeaders(request);
     if (Option.isSome(origin)) {
-      const db = yield* DB;
-      const domains = yield* db.query.domains.findMany({
-        where: {
-          hostname: origin.value.host,
-          active: true,
-        },
-        limit: 2,
-      });
+      const sql = yield* SqlClient.SqlClient;
+      const domains = yield* SqlSchema.findAll({
+        Request: Schema.String,
+        Result: DomainRow,
+        execute: (host) =>
+          sql`SELECT * FROM domains WHERE hostname = ${host} AND active = true LIMIT 2`,
+      })(origin.value.host);
       const projectId = domains[0]?.projectId;
       if (domains.length !== 1 || !projectId) {
         return yield* new AuthProxyError({ reason: "invalid" });
@@ -122,7 +123,7 @@ export class BetterAuthRequest extends Context.Service<
             return verifier.api.verifyApiKey(input);
           },
         ).pipe(
-          Effect.provide(DB.layer),
+          Effect.provide(sqlLayer),
           Effect.mapError((error) =>
             error instanceof AuthProxyError && error.reason === "invalid"
               ? new HttpApiError.Unauthorized({})

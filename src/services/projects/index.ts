@@ -1,16 +1,23 @@
-import { Context, Effect, Layer, Schema } from "effect";
-import { eq } from "drizzle-orm";
-
-import { oauthClient, project } from "@/db/schema";
+import { Context, Effect, Layer, Option, Schema } from "effect";
+import { SqlClient, SqlSchema } from "effect/unstable/sql";
+import {
+  DomainRow,
+  OAuthClientRow,
+  OrganizationRow,
+  ProjectRow,
+} from "@/db/schema";
 import { normalizeAuthHost } from "@/lib/domain-utils";
-import { DB } from "@/services/database";
+import { sqlLayer, sqlTestLayer } from "@/services/database";
 import { sanitizeThemeCss } from "@/services/oauth/theme";
 import { organizationBranding } from "@/services/organizations/branding";
 
 import {
   ProjectData,
-  type CreateProjectPayload,
-  type UpdateProjectPayload,
+  ProjectDataJson,
+  CreateProjectPayload,
+  UpdateProjectPayload,
+  UpdateProjectRequest,
+  type ProjectSqlUpdate,
 } from "./schema";
 
 const emptyData: ProjectData = {};
@@ -49,7 +56,7 @@ export const decodeProjectDataOrEmpty = (value: typeof Schema.Unknown.Type) => {
   }
 };
 
-const row = (value: typeof project.$inferSelect) => ({
+const row = (value: typeof ProjectRow.Type) => ({
   ...value,
   logo: value.logo ?? null,
   data: decodeProjectDataOrEmpty(value.data),
@@ -67,17 +74,74 @@ const fallbackPublicConfig = (projectKey: string) => ({
 
 export class Projects extends Context.Service<Projects>()("Projects", {
   make: Effect.gen(function* () {
-    const db = yield* DB;
+    const sql = yield* SqlClient.SqlClient;
+    const findProjects = SqlSchema.findAll({
+      Request: Schema.Void,
+      Result: ProjectRow,
+      execute: () => sql`SELECT * FROM project ORDER BY name`,
+    });
+    const findProject = SqlSchema.findOneOption({
+      Request: Schema.String,
+      Result: ProjectRow,
+      execute: (id) => sql`SELECT * FROM project WHERE id = ${id} LIMIT 1`,
+    });
+    const findClient = SqlSchema.findOneOption({
+      Request: Schema.String,
+      Result: OAuthClientRow,
+      execute: (clientId) =>
+        sql`SELECT * FROM oauth_client WHERE client_id = ${clientId} LIMIT 1`,
+    });
+    const findOrganization = SqlSchema.findOneOption({
+      Request: Schema.String,
+      Result: OrganizationRow,
+      execute: (id) => sql`SELECT * FROM organization WHERE id = ${id} LIMIT 1`,
+    });
+    const findDomains = SqlSchema.findAll({
+      Request: Schema.Struct({
+        host: Schema.String,
+        rootHost: Schema.NullOr(Schema.String),
+      }).annotate({ identifier: "ProjectDomainRequest" }),
+      Result: DomainRow,
+      execute: ({ host, rootHost }) => sql`
+        SELECT * FROM domains WHERE hostname = ${host} AND active = true
+        ${rootHost ? sql`AND root_hostname = ${rootHost}` : sql``} LIMIT 2
+      `,
+    });
+    const insertProject = SqlSchema.findOne({
+      Request: CreateProjectPayload,
+      Result: ProjectRow,
+      execute: (payload) => sql`INSERT INTO project (id, name, logo, data)
+        VALUES (${crypto.randomUUID()}, ${payload.name.trim()}, ${payload.logo ?? null},
+          ${Schema.encodeSync(ProjectDataJson)(decodeProjectData(payload.data))}::jsonb) RETURNING *`,
+    });
+    const updateProject = SqlSchema.findOneOption({
+      Request: UpdateProjectRequest,
+      Result: ProjectRow,
+      execute: ({ id, payload }) => {
+        const updates: ProjectSqlUpdate = {
+          data: Schema.encodeSync(ProjectDataJson)(
+            decodeProjectData(payload.data),
+          ),
+          updatedAt: new Date(),
+        };
+        if (payload.name !== undefined) updates.name = payload.name.trim();
+        if (payload.logo !== undefined) updates.logo = payload.logo;
+        return sql`UPDATE project SET ${sql.update(updates)} WHERE id = ${id} RETURNING *`;
+      },
+    });
+    const removeProject = SqlSchema.findOneOption({
+      Request: Schema.String,
+      Result: ProjectRow,
+      execute: (id) => sql`DELETE FROM project WHERE id = ${id} RETURNING *`,
+    });
 
     const list = Effect.fn("Projects.list")(function* () {
-      const rows = yield* db.query.project.findMany({
-        orderBy: { name: "asc" },
-      });
+      const rows = yield* findProjects(undefined);
       return rows.map(row);
     });
 
     const get = Effect.fn("Projects.get")(function* ({ id }: { id: string }) {
-      const value = yield* db.query.project.findFirst({ where: { id } });
+      const value = Option.getOrNull(yield* findProject(id));
       return value ? row(value) : null;
     });
 
@@ -90,7 +154,7 @@ export class Projects extends Context.Service<Projects>()("Projects", {
     }: {
       projectKey: string;
       value: ReturnType<typeof row> | null;
-      client?: typeof oauthClient.$inferSelect;
+      client?: typeof OAuthClientRow.Type;
       authDomain?: string | null;
       rootDomain?: string | null;
     }) => {
@@ -119,9 +183,7 @@ export class Projects extends Context.Service<Projects>()("Projects", {
       rootHost?: string | undefined;
     }) {
       if (projectId) {
-        const value = yield* db.query.project.findFirst({
-          where: { id: projectId },
-        });
+        const value = Option.getOrNull(yield* findProject(projectId));
         if (value) {
           return publicConfigFrom({
             projectKey: value.id,
@@ -133,28 +195,18 @@ export class Projects extends Context.Service<Projects>()("Projects", {
       const normalizedHost = normalizeAuthHost(host);
       if (normalizedHost) {
         const normalizedRootHost = normalizeAuthHost(rootHost);
-        const matchingDomains = yield* db.query.domains.findMany({
-          where: normalizedRootHost
-            ? {
-                hostname: normalizedHost,
-                rootHostname: normalizedRootHost,
-                active: true,
-              }
-            : { hostname: normalizedHost, active: true },
-          limit: 2,
+        const matchingDomains = yield* findDomains({
+          host: normalizedHost,
+          rootHost: normalizedRootHost,
         });
         const domain =
           matchingDomains.length === 1 ? (matchingDomains[0] ?? null) : null;
         if (domain) {
           const value = domain.projectId
-            ? yield* db.query.project.findFirst({
-                where: { id: domain.projectId },
-              })
+            ? Option.getOrNull(yield* findProject(domain.projectId))
             : null;
           const organization = domain.organizationId
-            ? yield* db.query.organization.findFirst({
-                where: { id: domain.organizationId },
-              })
+            ? Option.getOrNull(yield* findOrganization(domain.organizationId))
             : null;
           const organizationDisplay = organizationBranding(
             organization ?? null,
@@ -178,15 +230,11 @@ export class Projects extends Context.Service<Projects>()("Projects", {
       }
 
       if (clientId) {
-        const client = yield* db.query.oauthClient.findFirst({
-          where: { clientId },
-        });
+        const client = Option.getOrNull(yield* findClient(clientId));
 
         if (client && !client.disabled) {
           const value = client.projectId
-            ? yield* db.query.project.findFirst({
-                where: { id: client.projectId },
-              })
+            ? Option.getOrNull(yield* findProject(client.projectId))
             : null;
 
           return publicConfigFrom({
@@ -207,17 +255,7 @@ export class Projects extends Context.Service<Projects>()("Projects", {
     }: {
       payload: CreateProjectPayload;
     }) {
-      const [value] = yield* db
-        .insert(project)
-        .values({
-          id: crypto.randomUUID(),
-          name: payload.name.trim(),
-          logo: payload.logo ?? null,
-          data: decodeProjectData(payload.data),
-        })
-        .returning();
-
-      return value ? row(value) : null;
+      return row(yield* insertProject(payload));
     });
 
     const update = Effect.fn("Projects.update")(function* ({
@@ -227,18 +265,7 @@ export class Projects extends Context.Service<Projects>()("Projects", {
       id: string;
       payload: UpdateProjectPayload;
     }) {
-      const updates: Partial<typeof project.$inferInsert> = {
-        data: decodeProjectData(payload.data),
-        updatedAt: new Date(),
-      };
-      if (payload.name !== undefined) updates.name = payload.name.trim();
-      if (payload.logo !== undefined) updates.logo = payload.logo;
-
-      const [value] = yield* db
-        .update(project)
-        .set(updates)
-        .where(eq(project.id, id))
-        .returning();
+      const value = Option.getOrNull(yield* updateProject({ id, payload }));
 
       return value ? row(value) : null;
     });
@@ -248,10 +275,7 @@ export class Projects extends Context.Service<Projects>()("Projects", {
     }: {
       id: string;
     }) {
-      const [value] = yield* db
-        .delete(project)
-        .where(eq(project.id, id))
-        .returning();
+      const value = Option.getOrNull(yield* removeProject(id));
 
       return value ? row(value) : null;
     });
@@ -259,7 +283,7 @@ export class Projects extends Context.Service<Projects>()("Projects", {
     return { list, get, getPublicConfig, create, update, delete: _delete };
   }),
 }) {
-  static readonly layer = Layer.effect(this, this.make).pipe(
-    Layer.provide(DB.layer),
-  );
+  static readonly baseLayer = Layer.effect(this, this.make);
+  static readonly layer = this.baseLayer.pipe(Layer.provide(sqlLayer));
+  static readonly testLayer = this.baseLayer.pipe(Layer.provide(sqlTestLayer));
 }

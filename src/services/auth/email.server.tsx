@@ -14,7 +14,9 @@ import { OTPEmail } from "@/emails/OTP";
 import { ResetPasswordEmail } from "@/emails/ResetPassword";
 import type { EmailTheme } from "@/emails/Tailwind";
 import { assetUrl } from "@/lib/assets";
-import { db } from "@/services/database";
+import { runWithDatabase } from "@/services/database";
+import { SqlClient, SqlSchema } from "effect/unstable/sql";
+import { DomainRow, OrganizationRow, ProjectRow } from "@/db/schema";
 import { hostFromRequest } from "@/services/domains";
 import { m } from "@/paraglide/messages";
 import { notificationLayer } from "@/services/auth/notification.server";
@@ -201,7 +203,18 @@ const resolveEmailIdentity = async (
     cookieValue(request.headers, projectContextCookie),
   );
   const contextProject = contextProjectId
-    ? await db.query.project.findFirst({ where: { id: contextProjectId } })
+    ? await runWithDatabase(
+        Effect.gen(function* () {
+          const sql = yield* SqlClient.SqlClient;
+          const [project] = yield* SqlSchema.findAll({
+            Request: Schema.String,
+            Result: ProjectRow,
+            execute: (id) =>
+              sql`SELECT * FROM project WHERE id = ${id} LIMIT 1`,
+          })(contextProjectId);
+          return project;
+        }),
+      )
     : null;
 
   const host = hostFromRequest(request);
@@ -214,9 +227,18 @@ const resolveEmailIdentity = async (
     };
   }
 
-  const domain = await db.query.domains.findFirst({
-    where: { hostname: host, active: true },
-  });
+  const domain = await runWithDatabase(
+    Effect.gen(function* () {
+      const sql = yield* SqlClient.SqlClient;
+      const [domain] = yield* SqlSchema.findAll({
+        Request: Schema.String,
+        Result: DomainRow,
+        execute: (host) =>
+          sql`SELECT * FROM domains WHERE hostname = ${host} AND active = true LIMIT 1`,
+      })(host);
+      return domain;
+    }),
+  );
   if (!domain) {
     return {
       appName: contextProject?.name ?? fallbackAppName,
@@ -231,12 +253,32 @@ const resolveEmailIdentity = async (
 
   const [organization, domainProject] = await Promise.all([
     domain.organizationId
-      ? db.query.organization.findFirst({
-          where: { id: domain.organizationId },
-        })
+      ? runWithDatabase(
+          Effect.gen(function* () {
+            const sql = yield* SqlClient.SqlClient;
+            const [organization] = yield* SqlSchema.findAll({
+              Request: Schema.String,
+              Result: OrganizationRow,
+              execute: (id) =>
+                sql`SELECT * FROM organization WHERE id = ${id} LIMIT 1`,
+            })(domain.organizationId!);
+            return organization;
+          }),
+        )
       : Promise.resolve(null),
     domain.projectId
-      ? db.query.project.findFirst({ where: { id: domain.projectId } })
+      ? runWithDatabase(
+          Effect.gen(function* () {
+            const sql = yield* SqlClient.SqlClient;
+            const [project] = yield* SqlSchema.findAll({
+              Request: Schema.String,
+              Result: ProjectRow,
+              execute: (id) =>
+                sql`SELECT * FROM project WHERE id = ${id} LIMIT 1`,
+            })(domain.projectId!);
+            return project;
+          }),
+        )
       : Promise.resolve(null),
   ]);
   const project = domainProject ?? contextProject;

@@ -5,24 +5,17 @@ import {
 import { Effect, Option, Schema } from "effect";
 import { Headers, HttpServerRequest } from "effect/unstable/http";
 import { HttpApiBuilder, HttpApiError } from "effect/unstable/httpapi";
-import { asc, and, eq } from "drizzle-orm";
+import { SqlClient, SqlSchema } from "effect/unstable/sql";
 
 import { FrontendApi } from "@/api";
 import { localize, type LocalizedInputType } from "@/lib/localization";
-import {
-  member,
-  organization,
-  project,
-  projectOrganization,
-  projectUser,
-} from "@/db/schema";
+import { IdRow, OrganizationRow } from "@/db/schema";
 import { BetterAuthRequest } from "@/services/auth/better-auth-request";
 import {
   apiKeyAllowedOrigins,
   apiKeyMetadata,
   requestMatchesAllowedOrigins,
 } from "@/services/auth/api-key-referrers";
-import { db } from "@/services/database";
 import {
   EmailAddress,
   OrganizationMetadata,
@@ -226,68 +219,47 @@ export const authApiHandler = HttpApiBuilder.group(
       .handle("listAssociatedProjects", ({ query, request }) =>
         Effect.gen(function* () {
           const session = yield* requireMutableUserSession(request);
+          const sql = yield* SqlClient.SqlClient;
+          const AssociatedProjectRow = Schema.Struct({
+            id: Schema.String,
+            name: Schema.String,
+          }).annotate({ identifier: "AssociatedProjectRow" });
 
           if (query.organizationId) {
             const organizationId = query.organizationId;
-            const [membership] = yield* Effect.tryPromise({
-              try: () =>
-                db
-                  .select({ id: member.id })
-                  .from(member)
-                  .where(
-                    and(
-                      eq(member.organizationId, organizationId),
-                      eq(member.userId, session.user.id),
-                    ),
-                  )
-                  .limit(1),
-              catch: internalServerError,
-            });
+            const [membership] = yield* SqlSchema.findAll({
+              Request: Schema.String,
+              Result: IdRow,
+              execute: (id) =>
+                sql`SELECT id FROM member WHERE organization_id = ${id} AND user_id = ${session.user.id} LIMIT 1`,
+            })(organizationId).pipe(Effect.mapError(internalServerError));
             if (!membership) return yield* new HttpApiError.Forbidden({});
 
-            return yield* Effect.tryPromise({
-              try: () =>
-                db
-                  .select({ id: project.id, name: project.name })
-                  .from(projectOrganization)
-                  .innerJoin(
-                    project,
-                    eq(project.id, projectOrganization.projectId),
-                  )
-                  .where(eq(projectOrganization.organizationId, organizationId))
-                  .orderBy(asc(project.name)),
-              catch: internalServerError,
-            });
+            return yield* SqlSchema.findAll({
+              Request: Schema.String,
+              Result: AssociatedProjectRow,
+              execute: (id) =>
+                sql`SELECT p.id, p.name FROM project_organization po INNER JOIN project p ON p.id = po.project_id WHERE po.organization_id = ${id} ORDER BY p.name`,
+            })(organizationId).pipe(Effect.mapError(internalServerError));
           }
 
-          return yield* Effect.tryPromise({
-            try: () =>
-              db
-                .select({ id: project.id, name: project.name })
-                .from(projectUser)
-                .innerJoin(project, eq(project.id, projectUser.projectId))
-                .where(eq(projectUser.userId, session.user.id))
-                .orderBy(asc(project.name)),
-            catch: internalServerError,
-          });
+          return yield* SqlSchema.findAll({
+            Request: Schema.String,
+            Result: AssociatedProjectRow,
+            execute: (id) =>
+              sql`SELECT p.id, p.name FROM project_user pu INNER JOIN project p ON p.id = pu.project_id WHERE pu.user_id = ${id} ORDER BY p.name`,
+          })(session.user.id).pipe(Effect.mapError(internalServerError));
         }),
       )
       .handle("getOrganizationPublicProfile", ({ query }) =>
         Effect.gen(function* () {
-          const [record] = yield* Effect.tryPromise({
-            try: () =>
-              db
-                .select({
-                  id: organization.id,
-                  name: organization.name,
-                  slug: organization.slug,
-                  metadata: organization.metadata,
-                })
-                .from(organization)
-                .where(eq(organization.id, query.organizationId))
-                .limit(1),
-            catch: internalServerError,
-          });
+          const sql = yield* SqlClient.SqlClient;
+          const [record] = yield* SqlSchema.findAll({
+            Request: Schema.String,
+            Result: OrganizationRow,
+            execute: (id) =>
+              sql`SELECT * FROM organization WHERE id = ${id} LIMIT 1`,
+          })(query.organizationId).pipe(Effect.mapError(internalServerError));
 
           if (!record) return yield* new HttpApiError.NotFound({});
 

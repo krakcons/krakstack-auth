@@ -1,10 +1,9 @@
 import { describe, expect, it } from "@effect/vitest";
-import { eq } from "drizzle-orm";
 import { Effect, Redacted } from "effect";
+import { SqlClient } from "effect/unstable/sql";
 import { proxyOriginHeaders } from "@krak-stack/auth/server";
 
-import { domains, project } from "@/db/schema";
-import { DB } from "@/services/database";
+import { sqlTestLayer } from "@/services/database";
 import { restoreProxyAuthOrigin } from "./better-auth-request";
 
 describe.skipIf(!process.env.TEST_DATABASE_URL)(
@@ -28,11 +27,9 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)(
           const hostname = `${projectId}.example.com`;
           const apiKey = Redacted.make("svc_test-only-service-key");
           return Effect.gen(function* () {
-            const db = yield* DB;
-            yield* db
-              .insert(project)
-              .values({ id: projectId, name: "Proxy test" });
-            yield* db.insert(domains).values({
+            const sql = yield* SqlClient.SqlClient;
+            yield* sql`INSERT INTO project (id, name) VALUES (${projectId}, 'Proxy test')`;
+            yield* sql`INSERT INTO domains ${sql.insert({
               id: projectId,
               hostname,
               rootHostname: hostname,
@@ -40,9 +37,9 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)(
               projectId,
               active: scenario !== "inactive",
               managed: false,
-            });
+            })}`;
             if (scenario === "ambiguous") {
-              yield* db.insert(domains).values({
+              yield* sql`INSERT INTO domains ${sql.insert({
                 id: `${projectId}-duplicate`,
                 hostname,
                 rootHostname: "example.com",
@@ -50,7 +47,7 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)(
                 projectId,
                 active: true,
                 managed: false,
-              });
+              })}`;
             }
             const request = new Request(
               `https://${scenario === "unregistered" ? "unregistered.example.com" : hostname}/api/auth/email-otp/send-verification-otp`,
@@ -129,14 +126,12 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)(
           }).pipe(
             Effect.ensuring(
               Effect.gen(function* () {
-                const db = yield* DB;
-                yield* db
-                  .delete(domains)
-                  .where(eq(domains.projectId, projectId));
-                yield* db.delete(project).where(eq(project.id, projectId));
+                const sql = yield* SqlClient.SqlClient;
+                yield* sql`DELETE FROM domains WHERE project_id = ${projectId}`;
+                yield* sql`DELETE FROM project WHERE id = ${projectId}`;
               }).pipe(Effect.orDie),
             ),
-            Effect.provide(DB.testLayer),
+            Effect.provide(sqlTestLayer),
           );
         },
       );

@@ -141,6 +141,22 @@ export const UpdateProjectPayload = Schema.Struct({
 
 export const ProjectDataStandard = Schema.toStandardSchemaV1(ProjectData);
 
+export const ProjectDataJson = Schema.fromJsonString(ProjectData).annotate({
+  identifier: "ProjectDataJson",
+});
+
+export const UpdateProjectRequest = Schema.Struct({
+  id: Schema.String,
+  payload: UpdateProjectPayload,
+}).annotate({ identifier: "UpdateProjectRequest" });
+
+export type ProjectSqlUpdate = {
+  data: string;
+  updatedAt: Date;
+  name?: string;
+  logo?: string | null;
+};
+
 export type ProjectData = typeof ProjectData.Type;
 export type Project = typeof Project.Type;
 export type ProjectPublicConfig = typeof ProjectPublicConfig.Type;

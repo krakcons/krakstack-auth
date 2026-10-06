@@ -1,8 +1,7 @@
-import { eq } from "drizzle-orm";
-import { Effect } from "effect";
+import { Effect, Schema } from "effect";
+import { SqlClient, SqlSchema } from "effect/unstable/sql";
 
-import { project, projectOrganization, projectUser } from "@/db/schema";
-import { DB } from "@/services/database";
+import { IdRow } from "@/db/schema";
 
 const normalizeProjectId = (projectId: string | null | undefined) => {
   const trimmed = projectId?.trim();
@@ -11,12 +10,12 @@ const normalizeProjectId = (projectId: string | null | undefined) => {
 
 const projectExists = (projectId: string) =>
   Effect.gen(function* () {
-    const db = yield* DB;
-    const [value] = yield* db
-      .select({ id: project.id })
-      .from(project)
-      .where(eq(project.id, projectId))
-      .limit(1);
+    const sql = yield* SqlClient.SqlClient;
+    const [value] = yield* SqlSchema.findAll({
+      Request: Schema.String,
+      Result: IdRow,
+      execute: (id) => sql`SELECT id FROM project WHERE id = ${id} LIMIT 1`,
+    })(projectId);
 
     return Boolean(value);
   });
@@ -34,15 +33,18 @@ export const connectProjectUser = ({
     if (!normalizedProjectId || !normalizedUserId) return;
     if (!(yield* projectExists(normalizedProjectId))) return;
 
-    const db = yield* DB;
-    yield* db
-      .insert(projectUser)
-      .values({
-        id: crypto.randomUUID(),
-        projectId: normalizedProjectId,
-        userId: normalizedUserId,
-      })
-      .onConflictDoNothing();
+    const sql = yield* SqlClient.SqlClient;
+    yield* SqlSchema.void({
+      Request: Schema.Struct({
+        projectId: Schema.String,
+        userId: Schema.String,
+      }).annotate({ identifier: "ProjectUserConnection" }),
+      execute: ({
+        projectId,
+        userId,
+      }) => sql`INSERT INTO project_user (id, project_id, user_id)
+        VALUES (${crypto.randomUUID()}, ${projectId}, ${userId}) ON CONFLICT DO NOTHING`,
+    })({ projectId: normalizedProjectId, userId: normalizedUserId });
   });
 
 export const connectProjectOrganization = ({
@@ -58,15 +60,21 @@ export const connectProjectOrganization = ({
     if (!normalizedProjectId || !normalizedOrganizationId) return;
     if (!(yield* projectExists(normalizedProjectId))) return;
 
-    const db = yield* DB;
-    yield* db
-      .insert(projectOrganization)
-      .values({
-        id: crypto.randomUUID(),
-        projectId: normalizedProjectId,
-        organizationId: normalizedOrganizationId,
-      })
-      .onConflictDoNothing();
+    const sql = yield* SqlClient.SqlClient;
+    yield* SqlSchema.void({
+      Request: Schema.Struct({
+        projectId: Schema.String,
+        organizationId: Schema.String,
+      }).annotate({ identifier: "ProjectOrganizationConnection" }),
+      execute: ({
+        projectId,
+        organizationId,
+      }) => sql`INSERT INTO project_organization (id, project_id, organization_id)
+        VALUES (${crypto.randomUUID()}, ${projectId}, ${organizationId}) ON CONFLICT DO NOTHING`,
+    })({
+      projectId: normalizedProjectId,
+      organizationId: normalizedOrganizationId,
+    });
   });
 
 export const connectProjectSession = ({

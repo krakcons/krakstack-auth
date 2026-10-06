@@ -1,8 +1,7 @@
 import { Context, Effect, Layer, Schema } from "effect";
-import { eq } from "drizzle-orm";
-
-import { oauthClient, project } from "@/db/schema";
-import { DB } from "@/services/database";
+import { SqlClient, SqlSchema } from "effect/unstable/sql";
+import { OAuthClientRow, ProjectRow } from "@/db/schema";
+import { sqlLayer } from "@/services/database";
 import { BetterAuthRequest } from "@/services/auth/better-auth-request";
 import { decodeProjectDataOrEmpty } from "@/services/projects";
 import type { ProjectData } from "@/services/projects/schema";
@@ -101,7 +100,7 @@ const createdRow = (
   };
 };
 
-const projectSummary = (value: typeof project.$inferSelect | null) =>
+const projectSummary = (value: typeof ProjectRow.Type | null) =>
   value
     ? {
         id: value.id,
@@ -115,7 +114,26 @@ export class OAuthClients extends Context.Service<OAuthClients>()(
   "OAuthClients",
   {
     make: Effect.gen(function* () {
-      const db = yield* DB;
+      const sql = yield* SqlClient.SqlClient;
+      const findProject = SqlSchema.findAll({
+        Request: Schema.String,
+        Result: ProjectRow,
+        execute: (id) => sql`SELECT * FROM project WHERE id = ${id} LIMIT 1`,
+      });
+      const findClient = SqlSchema.findAll({
+        Request: Schema.String,
+        Result: OAuthClientRow,
+        execute: (clientId) =>
+          sql`SELECT * FROM oauth_client WHERE client_id = ${clientId} LIMIT 1`,
+      });
+      const assignProject = SqlSchema.void({
+        Request: Schema.Struct({
+          clientId: Schema.String,
+          projectId: Schema.NullOr(Schema.String),
+        }).annotate({ identifier: "OAuthClientProjectAssignment" }),
+        execute: ({ clientId, projectId }) =>
+          sql`UPDATE oauth_client SET project_id = ${projectId}, metadata = '{}'::jsonb, updated_at = ${new Date()} WHERE client_id = ${clientId}`,
+      });
 
       const clientProject = Effect.fn("OAuthClients.clientProject")(function* ({
         projectId,
@@ -124,9 +142,7 @@ export class OAuthClients extends Context.Service<OAuthClients>()(
       }) {
         if (!projectId) return undefined;
 
-        const value = yield* db.query.project.findFirst({
-          where: { id: projectId },
-        });
+        const [value] = yield* findProject(projectId);
         return projectSummary(value ?? null);
       });
 
@@ -137,7 +153,7 @@ export class OAuthClients extends Context.Service<OAuthClients>()(
       }: {
         projectKey: string;
         summary: ProjectSummary | undefined;
-        client?: typeof oauthClient.$inferSelect;
+        client?: typeof OAuthClientRow.Type;
       }) => {
         const data = summary?.data ?? {};
 
@@ -163,9 +179,7 @@ export class OAuthClients extends Context.Service<OAuthClients>()(
             Effect.gen(function* () {
               const decoded = decodeRawOAuthClient(client);
               const clientId = decoded.client_id ?? decoded.clientId;
-              const stored = clientId
-                ? yield* db.query.oauthClient.findFirst({ where: { clientId } })
-                : null;
+              const [stored] = clientId ? yield* findClient(clientId) : [];
               const summary = yield* clientProject({
                 projectId:
                   stored?.projectId ?? decoded.project_id ?? decoded.projectId,
@@ -203,10 +217,7 @@ export class OAuthClients extends Context.Service<OAuthClients>()(
         const decoded = decodeRawOAuthClient(client);
         const clientId = decoded.client_id ?? decoded.clientId;
         if (clientId && payload.projectId !== undefined) {
-          yield* db
-            .update(oauthClient)
-            .set({ projectId: payload.projectId, metadata: {} })
-            .where(eq(oauthClient.clientId, clientId));
+          yield* assignProject({ clientId, projectId: payload.projectId });
         }
 
         const summary = yield* clientProject({ projectId: payload.projectId });
@@ -215,11 +226,7 @@ export class OAuthClients extends Context.Service<OAuthClients>()(
 
       const getPublicConfig = Effect.fn("OAuthClients.getPublicConfig")(
         function* ({ clientId }: { clientId: string }) {
-          const [client] = yield* db
-            .select()
-            .from(oauthClient)
-            .where(eq(oauthClient.clientId, clientId))
-            .limit(1);
+          const [client] = yield* findClient(clientId);
 
           if (!client || client.disabled) return null;
 
@@ -264,18 +271,12 @@ export class OAuthClients extends Context.Service<OAuthClients>()(
         );
 
         if (payload.projectId !== undefined) {
-          yield* db
-            .update(oauthClient)
-            .set({ projectId: payload.projectId, metadata: {} })
-            .where(eq(oauthClient.clientId, clientId));
+          yield* assignProject({ clientId, projectId: payload.projectId });
         }
 
         const storedProjectId =
           payload.projectId === undefined
-            ? (yield* db.query.oauthClient.findFirst({
-                where: { clientId },
-                columns: { projectId: true },
-              }))?.projectId
+            ? (yield* findClient(clientId))[0]?.projectId
             : payload.projectId;
 
         const summary = yield* clientProject({ projectId: storedProjectId });
@@ -316,6 +317,6 @@ export class OAuthClients extends Context.Service<OAuthClients>()(
   },
 ) {
   static readonly layer = Layer.effect(this, this.make).pipe(
-    Layer.provide(DB.layer),
+    Layer.provide(sqlLayer),
   );
 }

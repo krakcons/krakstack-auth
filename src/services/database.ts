@@ -1,18 +1,28 @@
-import * as PgDrizzle from "drizzle-orm/effect-postgres";
 import {
   Config,
-  Context,
   Effect,
   Layer,
   ManagedRuntime,
   Redacted,
   Schema,
+  String,
 } from "effect";
 import { PgClient } from "@effect/sql-pg";
-import { Pool, types } from "pg";
-import { drizzle } from "drizzle-orm/node-postgres";
+import { SqlClient } from "effect/unstable/sql";
+import { defaults, Pool, types } from "pg";
 
-import { relations } from "@/db/schema";
+// The existing schema uses timestamp without time zone and stores UTC.
+// Keep that convention for both Effect SQL and Better Auth's native pg adapter.
+defaults.parseInputDatesAsUTC = true;
+const TimestampUtc = Schema.DateFromString.annotate({
+  identifier: "PostgresTimestampUtc",
+});
+const pgTypes = {
+  getTypeParser: (typeId: number, format?: "text" | "binary") =>
+    typeId === 1114 && format !== "binary"
+      ? (value: string) => Schema.decodeUnknownSync(TimestampUtc)(`${value}Z`)
+      : types.getTypeParser(typeId, format),
+};
 
 const DatabasePoolSize = Schema.NumberFromString.check(
   Schema.isBetween({ minimum: 1, maximum: 100 }),
@@ -24,32 +34,32 @@ const databasePoolSize = process.env.DATABASE_POOL_SIZE
 
 export const databasePool = new Pool({
   application_name: "krakstack-auth",
-  connectionString: process.env.DATABASE_URL,
+  connectionString:
+    process.env.NODE_ENV === "test"
+      ? process.env.TEST_DATABASE_URL
+      : process.env.DATABASE_URL,
   connectionTimeoutMillis: 5_000,
   idleTimeoutMillis: 30_000,
   max: databasePoolSize,
+  types: pgTypes,
 });
 
 databasePool.on("error", (error) => {
   console.error("[PostgreSQL] Pool error", error);
 });
 
-const pgTypes = {
-  getTypeParser: (typeId: number, format?: "text" | "binary") => {
-    if (
-      [1184, 1114, 1082, 1186, 1231, 1115, 1185, 1187, 1182].includes(typeId)
-    ) {
-      return (val: any) => val;
-    }
-    return types.getTypeParser(typeId, format);
-  },
+const naming = {
+  transformQueryNames: String.camelToSnake,
+  transformResultNames: String.snakeToCamel,
+  transformJson: false,
 };
 
-const sharedPgLayer = PgClient.layerFrom(
+export const sqlLayer = PgClient.layerFrom(
   PgClient.fromPool({
     acquire: Effect.succeed(databasePool),
     applicationName: "krakstack-auth",
     types: pgTypes,
+    ...naming,
   }),
 );
 
@@ -61,6 +71,7 @@ const pgLayer = (url: Redacted.Redacted) =>
     idleTimeout: "30 seconds",
     maxConnections: databasePoolSize,
     types: pgTypes,
+    ...naming,
   });
 
 const pgLayerFromConfig = (name: string) =>
@@ -71,24 +82,10 @@ const pgLayerFromConfig = (name: string) =>
     }),
   );
 
-export class DB extends Context.Service<DB>()("DB", {
-  make: PgDrizzle.makeWithDefaults({ relations }),
-}) {
-  static readonly baseLayer = Layer.effect(this, this.make);
+export const sqlTestLayer = pgLayerFromConfig("TEST_DATABASE_URL");
 
-  static readonly layer = this.baseLayer.pipe(Layer.provide(sharedPgLayer));
+const databaseRuntime = ManagedRuntime.make(sqlLayer);
 
-  static readonly testLayer = this.baseLayer.pipe(
-    Layer.provide(pgLayerFromConfig("TEST_DATABASE_URL")),
-  );
-}
-
-const databaseRuntime = ManagedRuntime.make(DB.layer);
-
-export const runWithDatabase = <A, E>(effect: Effect.Effect<A, E, DB>) =>
-  databaseRuntime.runPromise(effect);
-
-export const db = drizzle({
-  client: databasePool,
-  relations,
-});
+export const runWithDatabase = <A, E>(
+  effect: Effect.Effect<A, E, SqlClient.SqlClient>,
+) => databaseRuntime.runPromise(effect);

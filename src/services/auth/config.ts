@@ -1,6 +1,5 @@
 import { betterAuth, type BetterAuthOptions } from "better-auth";
 import type { GenericEndpointContext } from "@better-auth/core";
-import { drizzleAdapter } from "@better-auth/drizzle-adapter/relations-v2";
 import {
   admin,
   anonymous,
@@ -15,10 +14,11 @@ import { oauthProvider } from "@better-auth/oauth-provider";
 import { apiKey } from "@better-auth/api-key";
 import { APIError } from "@better-auth/core/error";
 import { Effect, Option, Schema } from "effect";
+import { SqlClient, SqlSchema } from "effect/unstable/sql";
+import { IdRow, OrganizationRow, RoleRow, UserRow } from "@/db/schema";
+import { coreSqlFields, withSqlNames } from "./database-schema";
 import { UserMetadata, UserMetadataStandard } from "@krak-stack/auth/schema";
 
-import { db } from "../../services/database";
-import { schema } from "../../db/schema";
 import {
   allowedHostsForRequest,
   cookieDomainFromRequest,
@@ -34,7 +34,7 @@ import {
 import { organizationImpersonation } from "@/services/auth/plugins/organization-impersonation";
 import { mergeOrganizationMetadata } from "@/services/auth/organization-metadata";
 import { organizationAuthRoles } from "@/services/auth/organization-access";
-import { DB, runWithDatabase } from "@/services/database";
+import { databasePool, runWithDatabase } from "@/services/database";
 import { connectProjectSession } from "@/services/projects/connections";
 
 const isDev = process.env.NODE_ENV === "development";
@@ -93,11 +93,12 @@ const validateOrganizationParent = ({
       );
     }
 
-    const database = yield* DB;
-    const parent = yield* database.query.organization.findFirst({
-      where: { id: parentId },
-      columns: { id: true, parentId: true },
-    });
+    const sql = yield* SqlClient.SqlClient;
+    const [parent] = yield* SqlSchema.findAll({
+      Request: Schema.String,
+      Result: OrganizationRow,
+      execute: (id) => sql`SELECT * FROM organization WHERE id = ${id} LIMIT 1`,
+    })(parentId);
 
     if (!parent || parent.parentId) {
       return yield* Effect.fail(
@@ -107,21 +108,26 @@ const validateOrganizationParent = ({
       );
     }
 
-    const [actor, parentMember] = yield* Effect.all([
-      database.query.user.findFirst({
-        where: { id: userId },
-        columns: { role: true },
-      }),
-      database.query.member.findFirst({
-        where: { organizationId: parentId, userId },
-        columns: { role: true },
-      }),
+    const [actors, parentMembers] = yield* Effect.all([
+      SqlSchema.findAll({
+        Request: Schema.String,
+        Result: RoleRow,
+        execute: (id) => sql`SELECT role FROM "user" WHERE id = ${id} LIMIT 1`,
+      })(userId),
+      SqlSchema.findAll({
+        Request: Schema.String,
+        Result: RoleRow,
+        execute: (id) =>
+          sql`SELECT role FROM member WHERE organization_id = ${parentId} AND user_id = ${id} LIMIT 1`,
+      })(userId),
     ]);
+    const actor = actors[0];
+    const parentMember = parentMembers[0];
     const isPlatformAdmin =
       actor?.role?.split(",").some((role) => role.trim() === "admin") ?? false;
     const canManageParent =
       parentMember?.role
-        .split(",")
+        ?.split(",")
         .some((role) => role === "owner" || role === "admin") ?? false;
 
     if (!isPlatformAdmin && !canManageParent) {
@@ -225,19 +231,24 @@ export const createAuth = ({
   const provisionPersonalOrganization = Effect.fn(
     "Auth.provisionPersonalOrganization",
   )(function* (user: PersonalOrganizationUser) {
-    const database = yield* DB;
-    const current = yield* database.query.organization.findFirst({
-      where: { userId: user.id },
-      columns: { id: true },
+    const sql = yield* SqlClient.SqlClient;
+    const findPersonal = SqlSchema.findAll({
+      Request: Schema.String,
+      Result: IdRow,
+      execute: (id) =>
+        sql`SELECT id FROM organization WHERE user_id = ${id} LIMIT 1`,
     });
+    const [current] = yield* findPersonal(user.id);
     if (current) return current.id;
 
     const slugPart = personalOrganizationSlugPart(user);
     const preferredSlug = `${slugPart}-org`;
-    const existing = yield* database.query.organization.findFirst({
-      where: { slug: preferredSlug },
-      columns: { id: true },
-    });
+    const [existing] = yield* SqlSchema.findAll({
+      Request: Schema.String,
+      Result: IdRow,
+      execute: (slug) =>
+        sql`SELECT id FROM organization WHERE slug = ${slug} LIMIT 1`,
+    })(preferredSlug);
     const slug = existing
       ? `${slugPart}-${organizationSlugPart(user.id)}-org`
       : preferredSlug;
@@ -252,11 +263,7 @@ export const createAuth = ({
       Effect.map((created) => created.id),
       Effect.catch((cause) =>
         Effect.gen(function* () {
-          const concurrentlyCreated =
-            yield* database.query.organization.findFirst({
-              where: { userId: user.id },
-              columns: { id: true },
-            });
+          const [concurrentlyCreated] = yield* findPersonal(user.id);
           if (concurrentlyCreated) return concurrentlyCreated.id;
           return yield* Effect.fail(cause);
         }),
@@ -311,10 +318,8 @@ export const createAuth = ({
       fallback: betterAuthUrl,
     },
     trustedOrigins: (request) => trustedOriginsForRequest(request),
-    database: drizzleAdapter(db, {
-      provider: "pg",
-      schema,
-    }),
+    database: databasePool,
+    verification: { fields: coreSqlFields.verification },
     advanced: {
       // BetterAuthRequest strips untrusted forwarding headers and restores only
       // the consumer origin authorized by the service API key.
@@ -342,12 +347,14 @@ export const createAuth = ({
     },
     ...socialProviderOptions,
     account: {
+      fields: coreSqlFields.account,
       encryptOAuthTokens: true,
       accountLinking: {
         allowUnlinkingAll: true,
       },
     },
     user: {
+      fields: coreSqlFields.user,
       additionalFields: {
         metadata: {
           type: "json",
@@ -357,6 +364,7 @@ export const createAuth = ({
       },
     },
     session: {
+      fields: coreSqlFields.session,
       cookieCache: {
         enabled: true,
         maxAge: 60 * 5,
@@ -382,16 +390,13 @@ export const createAuth = ({
           before: async (session) => {
             return await runWithDatabase(
               Effect.gen(function* () {
-                const database = yield* DB;
-                const sessionUser = yield* database.query.user.findFirst({
-                  where: { id: session.userId },
-                  columns: {
-                    email: true,
-                    id: true,
-                    isAnonymous: true,
-                    name: true,
-                  },
-                });
+                const sql = yield* SqlClient.SqlClient;
+                const [sessionUser] = yield* SqlSchema.findAll({
+                  Request: Schema.String,
+                  Result: UserRow,
+                  execute: (id) =>
+                    sql`SELECT * FROM "user" WHERE id = ${id} LIMIT 1`,
+                })(session.userId);
                 if (!sessionUser || sessionUser.isAnonymous === true) return;
 
                 const organizationId =
@@ -415,157 +420,171 @@ export const createAuth = ({
       },
     },
     plugins: [
-      openAPI(),
-      admin(),
-      anonymous(),
-      jwt(),
-      emailOTP({
-        overrideDefaultEmailVerification: true,
-        disableSignUp: false,
-        storeOTP: "encrypted",
-        allowedAttempts: 5,
-        sendVerificationOTP: async ({ email, otp, type }, context) => {
-          await sendEmailVerificationOtpEmail({
-            request: context?.request,
-            to: email,
-            otp,
-            type,
-          });
-        },
-      }),
-      lastLoginMethod({
-        cookieName: "krakstack-auth.last_used_login_method",
-        storeInDatabase: true,
-        customResolveMethod: (context) => {
-          if (context.path === "/sign-in/email-otp") return "email-otp";
-          return null;
-        },
-      }),
-      twoFactor({
-        issuer: "Krakstack Auth",
-        allowPasswordless: true,
-        otpOptions: {
-          sendOTP: async ({ user, otp }, context) => {
-            await sendTwoFactorOtpEmail({
+      withSqlNames(openAPI()),
+      withSqlNames(admin()),
+      withSqlNames(anonymous()),
+      withSqlNames(jwt()),
+      withSqlNames(
+        emailOTP({
+          overrideDefaultEmailVerification: true,
+          disableSignUp: false,
+          storeOTP: "encrypted",
+          allowedAttempts: 5,
+          sendVerificationOTP: async ({ email, otp, type }, context) => {
+            await sendEmailVerificationOtpEmail({
               request: context?.request,
-              to: user.email,
+              to: email,
               otp,
+              type,
             });
           },
-          period: 5,
-          allowedAttempts: 5,
-          storeOTP: "encrypted",
-        },
-      }),
-      organization({
-        allowUserToCreateOrganization: true,
-        invitationExpiresIn: 14 * 24 * 60 * 60,
-        membershipLimit: 100,
-        roles: organizationAuthRoles,
-        schema: {
-          organization: {
-            additionalFields: {
-              userId: {
-                type: "string",
-                required: false,
-              },
-              parentId: {
-                type: "string",
-                required: false,
+        }),
+      ),
+      withSqlNames(
+        lastLoginMethod({
+          cookieName: "krakstack-auth.last_used_login_method",
+          storeInDatabase: true,
+          customResolveMethod: (context) => {
+            if (context.path === "/sign-in/email-otp") return "email-otp";
+            return null;
+          },
+        }),
+      ),
+      withSqlNames(
+        twoFactor({
+          issuer: "Krakstack Auth",
+          allowPasswordless: true,
+          otpOptions: {
+            sendOTP: async ({ user, otp }, context) => {
+              await sendTwoFactorOtpEmail({
+                request: context?.request,
+                to: user.email,
+                otp,
+              });
+            },
+            period: 5,
+            allowedAttempts: 5,
+            storeOTP: "encrypted",
+          },
+        }),
+      ),
+      withSqlNames(
+        organization({
+          allowUserToCreateOrganization: true,
+          invitationExpiresIn: 14 * 24 * 60 * 60,
+          membershipLimit: 100,
+          roles: organizationAuthRoles,
+          schema: {
+            organization: {
+              additionalFields: {
+                userId: {
+                  type: "string",
+                  required: false,
+                  fieldName: "user_id",
+                },
+                parentId: {
+                  type: "string",
+                  required: false,
+                  fieldName: "parent_id",
+                },
               },
             },
           },
-        },
-        organizationHooks: {
-          beforeCreateOrganization: async ({ organization, user }) => {
-            const parentId = organizationParentId(organization);
-            await runWithDatabase(
-              validateOrganizationParent({ parentId, userId: user.id }),
-            );
-            const slugPart = personalOrganizationSlugPart(user);
-            const personalSlugs = [
-              `${slugPart}-org`,
-              `${slugPart}-${organizationSlugPart(user.id)}-org`,
-            ];
+          organizationHooks: {
+            beforeCreateOrganization: async ({ organization, user }) => {
+              const parentId = organizationParentId(organization);
+              await runWithDatabase(
+                validateOrganizationParent({ parentId, userId: user.id }),
+              );
+              const slugPart = personalOrganizationSlugPart(user);
+              const personalSlugs = [
+                `${slugPart}-org`,
+                `${slugPart}-${organizationSlugPart(user.id)}-org`,
+              ];
 
-            return {
-              data: {
-                ...organization,
-                userId: personalSlugs.includes(organization.slug ?? "")
-                  ? user.id
-                  : null,
-              },
-            };
-          },
-          beforeUpdateOrganization: async ({ organization, member }) => {
-            return await runWithDatabase(
-              Effect.gen(function* () {
-                yield* validateOrganizationParent({
-                  organizationId: member.organizationId,
-                  parentId: organizationParentId(organization),
-                  userId: member.userId,
-                });
-                const database = yield* DB;
-                const current = yield* database.query.organization.findFirst({
-                  where: { id: member.organizationId },
-                  columns: { metadata: true, userId: true },
-                });
-
-                const data = {
+              return {
+                data: {
                   ...organization,
-                  userId: current?.userId ?? null,
-                };
-                if (organization.metadata) {
-                  data.metadata = mergeOrganizationMetadata(
-                    current?.metadata,
-                    organization.metadata,
-                  );
-                }
-                return { data };
-              }),
-            );
-          },
-          beforeDeleteOrganization: async ({ organization }) => {
-            if (!organization.userId) return;
+                  userId: personalSlugs.includes(organization.slug ?? "")
+                    ? user.id
+                    : null,
+                },
+              };
+            },
+            beforeUpdateOrganization: async ({ organization, member }) => {
+              return await runWithDatabase(
+                Effect.gen(function* () {
+                  yield* validateOrganizationParent({
+                    organizationId: member.organizationId,
+                    parentId: organizationParentId(organization),
+                    userId: member.userId,
+                  });
+                  const sql = yield* SqlClient.SqlClient;
+                  const [current] = yield* SqlSchema.findAll({
+                    Request: Schema.String,
+                    Result: OrganizationRow,
+                    execute: (id) =>
+                      sql`SELECT * FROM organization WHERE id = ${id} LIMIT 1`,
+                  })(member.organizationId);
 
-            throw new APIError("FORBIDDEN", {
-              message: "Personal organizations cannot be deleted",
-            });
+                  const data = {
+                    ...organization,
+                    userId: current?.userId ?? null,
+                  };
+                  if (organization.metadata) {
+                    data.metadata = mergeOrganizationMetadata(
+                      current?.metadata,
+                      organization.metadata,
+                    );
+                  }
+                  return { data };
+                }),
+              );
+            },
+            beforeDeleteOrganization: async ({ organization }) => {
+              if (!organization.userId) return;
+
+              throw new APIError("FORBIDDEN", {
+                message: "Personal organizations cannot be deleted",
+              });
+            },
           },
-        },
-      }),
-      organizationImpersonation(),
-      apiKey([
-        {
-          configId: "user",
-          defaultPrefix: "user_",
-          references: "user",
-          enableMetadata: true,
-          permissions: { defaultPermissions: {} },
-          rateLimit: apiKeyRateLimit,
-        },
-        {
-          configId: "organization",
-          defaultPrefix: "org_",
-          references: "organization",
-          enableMetadata: true,
-          permissions: { defaultPermissions: {} },
-          rateLimit: apiKeyRateLimit,
-        },
-        {
-          configId: "service",
-          defaultPrefix: "svc_",
-          references: "user",
-          enableMetadata: true,
-          permissions: { defaultPermissions: {} },
-          rateLimit: {
-            enabled: true,
-            timeWindow: 1000 * 60 * 60 * 24,
-            maxRequests: 10000,
+        }),
+      ),
+      withSqlNames(organizationImpersonation()),
+      withSqlNames(
+        apiKey([
+          {
+            configId: "user",
+            defaultPrefix: "user_",
+            references: "user",
+            enableMetadata: true,
+            permissions: { defaultPermissions: {} },
+            rateLimit: apiKeyRateLimit,
           },
-        },
-      ]),
-      oauthProvider(oauthOptions),
+          {
+            configId: "organization",
+            defaultPrefix: "org_",
+            references: "organization",
+            enableMetadata: true,
+            permissions: { defaultPermissions: {} },
+            rateLimit: apiKeyRateLimit,
+          },
+          {
+            configId: "service",
+            defaultPrefix: "svc_",
+            references: "user",
+            enableMetadata: true,
+            permissions: { defaultPermissions: {} },
+            rateLimit: {
+              enabled: true,
+              timeWindow: 1000 * 60 * 60 * 24,
+              maxRequests: 10000,
+            },
+          },
+        ]),
+      ),
+      withSqlNames(oauthProvider(oauthOptions)),
     ],
   });
 

@@ -6,12 +6,13 @@ import type { BetterAuthPluginDBSchema } from "@better-auth/core/db";
 import { APIError } from "@better-auth/core/error";
 import { defaultKeyHasher } from "@better-auth/api-key";
 import { deleteSessionCookie, setSessionCookie } from "better-auth/cookies";
-import { and, eq } from "drizzle-orm";
+import { Effect, Schema } from "effect";
+import { SqlClient, SqlSchema } from "effect/unstable/sql";
 import * as z from "zod";
 import { globalAdminRoles, hasAnyRole } from "@krak-stack/auth/roles";
 
-import { apikey, organization, user as authUser } from "@/db/schema";
-import { db } from "@/services/database";
+import { ApiKeyRow, IdRow, RoleRow } from "@/db/schema";
+import { runWithDatabase } from "@/services/database";
 
 const authError = (code: string, message: string) => ({ code, message });
 
@@ -54,15 +55,17 @@ const verifyServiceApiKey = async (headers: Headers | undefined) => {
   if (!key) return false;
 
   const hashedKey = await defaultKeyHasher(key);
-  const [record] = await db
-    .select({
-      id: apikey.id,
-      enabled: apikey.enabled,
-      expiresAt: apikey.expiresAt,
-    })
-    .from(apikey)
-    .where(and(eq(apikey.key, hashedKey), eq(apikey.configId, "service")))
-    .limit(1);
+  const [record] = await runWithDatabase(
+    Effect.gen(function* () {
+      const sql = yield* SqlClient.SqlClient;
+      return yield* SqlSchema.findAll({
+        Request: Schema.String,
+        Result: ApiKeyRow,
+        execute: (key) =>
+          sql`SELECT * FROM apikey WHERE key = ${key} AND config_id = 'service' LIMIT 1`,
+      })(hashedKey);
+    }),
+  );
 
   if (!record) {
     throw APIError.from(
@@ -158,18 +161,30 @@ export const organizationImpersonation = () =>
 
           const [organizationRecord, actorUser, targetUser, targetUserRole] =
             await Promise.all([
-              db
-                .select({ id: organization.id })
-                .from(organization)
-                .where(eq(organization.id, ctx.body.organizationId))
-                .limit(1),
+              runWithDatabase(
+                Effect.gen(function* () {
+                  const sql = yield* SqlClient.SqlClient;
+                  return yield* SqlSchema.findAll({
+                    Request: Schema.String,
+                    Result: IdRow,
+                    execute: (id) =>
+                      sql`SELECT id FROM organization WHERE id = ${id} LIMIT 1`,
+                  })(ctx.body.organizationId);
+                }),
+              ),
               ctx.context.internalAdapter.findUserById(ctx.body.actorUserId),
               ctx.context.internalAdapter.findUserById(ctx.body.targetUserId),
-              db
-                .select({ role: authUser.role })
-                .from(authUser)
-                .where(eq(authUser.id, ctx.body.targetUserId))
-                .limit(1),
+              runWithDatabase(
+                Effect.gen(function* () {
+                  const sql = yield* SqlClient.SqlClient;
+                  return yield* SqlSchema.findAll({
+                    Request: Schema.String,
+                    Result: RoleRow,
+                    execute: (id) =>
+                      sql`SELECT role FROM "user" WHERE id = ${id} LIMIT 1`,
+                  })(ctx.body.targetUserId);
+                }),
+              ),
             ]);
 
           if (!organizationRecord[0]) {

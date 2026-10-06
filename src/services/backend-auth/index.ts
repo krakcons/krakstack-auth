@@ -1,93 +1,67 @@
 import { Context, Effect, Layer, Option, Schema } from "effect";
-import { and, desc, eq, gt, inArray, isNotNull } from "drizzle-orm";
+import { SqlClient, SqlSchema } from "effect/unstable/sql";
 
+import { OrganizationRow, UserRow } from "@/db/schema";
 import {
-  member,
-  organization,
-  session as authSession,
-  user,
-} from "@/db/schema";
-import type { AuthOrganization } from "@/lib/auth-schema";
-import { decodeUserMetadata, type UserMetadata } from "@krak-stack/auth/schema";
-import { DB } from "@/services/database";
-import type {
   BackendAuthActiveOrganization,
-  BackendAuthMembersResponse,
-  BackendAuthOrganizationChildrenResponse,
-  BackendAuthOrganizationsResponse,
-  BackendAuthUsersResponse,
+  BackendAuthMemberParams,
 } from "./schema";
 
-type MemberRecord = BackendAuthMembersResponse[number];
-type MemberRow = {
-  id: string;
-  organizationId: string;
-  userId: string;
-  role: string;
-  createdAt: Date;
-  userIdField: string;
-  name: string;
-  email: string;
-  emailVerified: boolean;
-  image: string | null;
-  metadata: typeof user.$inferSelect.metadata;
-  userRole: string | null;
-  banned: boolean | null;
-  userCreatedAt: Date;
-  userUpdatedAt: Date;
-};
+const BackendUserRow = Schema.Struct({
+  id: UserRow.fields.id,
+  name: UserRow.fields.name,
+  email: UserRow.fields.email,
+  emailVerified: UserRow.fields.emailVerified,
+  image: UserRow.fields.image,
+  metadata: UserRow.fields.metadata,
+  role: UserRow.fields.role,
+  banned: UserRow.fields.banned,
+  createdAt: UserRow.fields.createdAt,
+  updatedAt: UserRow.fields.updatedAt,
+}).annotate({ identifier: "BackendUserRow" });
 
-const parseMetadata = (
-  value: string | null,
-): typeof Schema.Json.Type | string | null => {
-  if (!value) return null;
-  return Option.getOrElse(
-    Schema.decodeUnknownOption(Schema.fromJsonString(Schema.Json))(value),
-    () => value,
-  );
-};
+const BackendOrganizationRow = Schema.Struct({
+  id: OrganizationRow.fields.id,
+  name: OrganizationRow.fields.name,
+  slug: OrganizationRow.fields.slug,
+  logo: OrganizationRow.fields.logo,
+  metadata: OrganizationRow.fields.metadata,
+  parentId: OrganizationRow.fields.parentId,
+  createdAt: OrganizationRow.fields.createdAt,
+}).annotate({ identifier: "BackendOrganizationRow" });
 
-const userMetadata = (value: UserMetadata | null) =>
-  value === null ? null : decodeUserMetadata(value);
+const MemberRow = Schema.Struct({
+  id: Schema.String,
+  organizationId: Schema.String,
+  userId: Schema.String,
+  role: Schema.String,
+  createdAt: Schema.Date,
+  userIdField: Schema.String,
+  name: Schema.String,
+  email: Schema.String,
+  emailVerified: Schema.Boolean,
+  image: Schema.NullOr(Schema.String),
+  metadata: UserRow.fields.metadata,
+  userRole: Schema.NullOr(Schema.String),
+  banned: Schema.NullOr(Schema.Boolean),
+  userCreatedAt: Schema.Date,
+  userUpdatedAt: Schema.Date,
+}).annotate({ identifier: "BackendMemberRow" });
 
-const uniqueIds = (ids: ReadonlyArray<string>) =>
-  Array.from(new Set(ids.map((id) => id.trim()).filter(Boolean)));
+const parseMetadata = (value: string | null) =>
+  value
+    ? Option.getOrElse(
+        Schema.decodeUnknownOption(Schema.fromJsonString(Schema.Json))(value),
+        () => value,
+      )
+    : null;
 
-const orderedBatch = <A extends { id: string }>(
-  ids: ReadonlyArray<string>,
-  records: ReadonlyArray<A>,
-) => {
-  const byId = new Map(records.map((record) => [record.id, record]));
-  const data = ids.flatMap((id) => {
-    const record = byId.get(id);
-    return record ? [record] : [];
-  });
-
-  return {
-    data,
-    missingIds: ids.filter((id) => !byId.has(id)),
-  };
-};
-
-const selectMemberColumns = () => ({
-  id: member.id,
-  organizationId: member.organizationId,
-  userId: member.userId,
-  role: member.role,
-  createdAt: member.createdAt,
-  userIdField: user.id,
-  name: user.name,
-  email: user.email,
-  emailVerified: user.emailVerified,
-  image: user.image,
-  metadata: user.metadata,
-  userRole: user.role,
-  banned: user.banned,
-  userCreatedAt: user.createdAt,
-  userUpdatedAt: user.updatedAt,
+const organizationRecord = (record: typeof BackendOrganizationRow.Type) => ({
+  ...record,
+  metadata: parseMetadata(record.metadata),
 });
 
-const memberRecord = (record: MemberRow): MemberRecord => ({
+const memberRecord = (record: typeof MemberRow.Type) => ({
   id: record.id,
   organizationId: record.organizationId,
   userId: record.userId,
@@ -99,7 +73,7 @@ const memberRecord = (record: MemberRow): MemberRecord => ({
     email: record.email,
     emailVerified: record.emailVerified,
     image: record.image,
-    metadata: userMetadata(record.metadata),
+    metadata: record.metadata,
     role: record.userRole,
     banned: record.banned,
     createdAt: record.userCreatedAt,
@@ -107,9 +81,81 @@ const memberRecord = (record: MemberRow): MemberRecord => ({
   },
 });
 
+const uniqueIds = (ids: ReadonlyArray<string>) =>
+  Array.from(new Set(ids.map((id) => id.trim()).filter(Boolean)));
+
+const orderedBatch = <A extends { id: string }>(
+  ids: ReadonlyArray<string>,
+  records: ReadonlyArray<A>,
+) => {
+  const byId = new Map(records.map((record) => [record.id, record]));
+  return {
+    data: ids.flatMap((id) => {
+      const record = byId.get(id);
+      return record ? [record] : [];
+    }),
+    missingIds: ids.filter((id) => !byId.has(id)),
+  };
+};
+
 export class BackendAuth extends Context.Service<BackendAuth>()("BackendAuth", {
   make: Effect.gen(function* () {
-    const db = yield* DB;
+    const sql = yield* SqlClient.SqlClient;
+    const userById = SqlSchema.findOneOption({
+      Request: Schema.String,
+      Result: BackendUserRow,
+      execute: (id) => sql`SELECT * FROM "user" WHERE id = ${id} LIMIT 1`,
+    });
+    const usersByIds = SqlSchema.findAll({
+      Request: Schema.Array(Schema.String),
+      Result: BackendUserRow,
+      execute: (ids) => sql`SELECT * FROM "user" WHERE ${sql.in("id", ids)}`,
+    });
+    const organizationById = SqlSchema.findOneOption({
+      Request: Schema.String,
+      Result: BackendOrganizationRow,
+      execute: (id) => sql`SELECT * FROM organization WHERE id = ${id} LIMIT 1`,
+    });
+    const organizationsByIds = SqlSchema.findAll({
+      Request: Schema.Array(Schema.String),
+      Result: BackendOrganizationRow,
+      execute: (ids) =>
+        sql`SELECT * FROM organization WHERE ${sql.in("id", ids)}`,
+    });
+    const children = SqlSchema.findAll({
+      Request: Schema.String,
+      Result: BackendOrganizationRow,
+      execute: (id) => sql`SELECT * FROM organization WHERE parent_id = ${id}`,
+    });
+    const organizationsByUser = SqlSchema.findAll({
+      Request: Schema.String,
+      Result: BackendOrganizationRow,
+      execute: (id) =>
+        sql`SELECT o.* FROM organization o INNER JOIN member m ON m.organization_id = o.id WHERE m.user_id = ${id}`,
+    });
+    const activeOrganization = SqlSchema.findOneOption({
+      Request: Schema.String,
+      Result: BackendAuthActiveOrganization,
+      execute: (id) => sql`SELECT active_organization_id AS id FROM session
+        WHERE user_id = ${id} AND active_organization_id IS NOT NULL AND expires_at > ${new Date()}
+        ORDER BY updated_at DESC, created_at DESC LIMIT 1`,
+    });
+    const memberColumns = sql`m.id, m.organization_id, m.user_id, m.role, m.created_at,
+      u.id AS user_id_field, u.name, u.email, u.email_verified, u.image, u.metadata,
+      u.role AS user_role, u.banned, u.created_at AS user_created_at, u.updated_at AS user_updated_at`;
+    const activeMember = SqlSchema.findOneOption({
+      Request: BackendAuthMemberParams,
+      Result: MemberRow,
+      execute: ({ organizationId, userId }) => sql`SELECT ${memberColumns}
+        FROM member m INNER JOIN "user" u ON u.id = m.user_id
+        WHERE m.organization_id = ${organizationId} AND m.user_id = ${userId} LIMIT 1`,
+    });
+    const members = SqlSchema.findAll({
+      Request: Schema.String,
+      Result: MemberRow,
+      execute: (id) =>
+        sql`SELECT ${memberColumns} FROM member m INNER JOIN "user" u ON u.id = m.user_id WHERE m.organization_id = ${id}`,
+    });
 
     const listUsersByIds = Effect.fn("BackendAuth.listUsersByIds")(function* ({
       ids,
@@ -117,229 +163,66 @@ export class BackendAuth extends Context.Service<BackendAuth>()("BackendAuth", {
       ids: ReadonlyArray<string>;
     }) {
       const normalizedIds = uniqueIds(ids);
-      if (normalizedIds.length === 0) {
-        return { data: [], missingIds: [] } satisfies BackendAuthUsersResponse;
-      }
-
-      const records = yield* db
-        .select({
-          id: user.id,
-          name: user.name,
-          email: user.email,
-          emailVerified: user.emailVerified,
-          image: user.image,
-          metadata: user.metadata,
-          role: user.role,
-          banned: user.banned,
-          createdAt: user.createdAt,
-          updatedAt: user.updatedAt,
-        })
-        .from(user)
-        .where(inArray(user.id, normalizedIds));
-
       return orderedBatch(
         normalizedIds,
-        records.map((record) => ({
-          ...record,
-          metadata: userMetadata(record.metadata),
-        })),
-      ) satisfies BackendAuthUsersResponse;
+        normalizedIds.length ? yield* usersByIds(normalizedIds) : [],
+      );
     });
-
     const getUser = Effect.fn("BackendAuth.getUser")(function* ({
       id,
     }: {
       id: string;
     }) {
-      const [record] = yield* db
-        .select({
-          id: user.id,
-          name: user.name,
-          email: user.email,
-          emailVerified: user.emailVerified,
-          image: user.image,
-          metadata: user.metadata,
-          role: user.role,
-          banned: user.banned,
-          createdAt: user.createdAt,
-          updatedAt: user.updatedAt,
-        })
-        .from(user)
-        .where(eq(user.id, id))
-        .limit(1);
-
-      return record
-        ? { ...record, metadata: userMetadata(record.metadata) }
-        : undefined;
+      return Option.getOrUndefined(yield* userById(id));
     });
-
     const listOrganizationsByIds = Effect.fn(
       "BackendAuth.listOrganizationsByIds",
     )(function* ({ ids }: { ids: ReadonlyArray<string> }) {
       const normalizedIds = uniqueIds(ids);
-      if (normalizedIds.length === 0) {
-        return {
-          data: [],
-          missingIds: [],
-        } satisfies BackendAuthOrganizationsResponse;
-      }
-
-      const records = yield* db
-        .select({
-          id: organization.id,
-          name: organization.name,
-          slug: organization.slug,
-          logo: organization.logo,
-          metadata: organization.metadata,
-          parentId: organization.parentId,
-          createdAt: organization.createdAt,
-        })
-        .from(organization)
-        .where(inArray(organization.id, normalizedIds));
-
-      const organizations: ReadonlyArray<AuthOrganization> = records.map(
-        (record) => ({
-          ...record,
-          metadata: parseMetadata(record.metadata),
-        }),
-      );
-
-      return orderedBatch(
-        normalizedIds,
-        organizations,
-      ) satisfies BackendAuthOrganizationsResponse;
+      const records = normalizedIds.length
+        ? yield* organizationsByIds(normalizedIds)
+        : [];
+      return orderedBatch(normalizedIds, records.map(organizationRecord));
     });
-
     const getOrganization = Effect.fn("BackendAuth.getOrganization")(
       function* ({ id }: { id: string }) {
-        const [record] = yield* db
-          .select({
-            id: organization.id,
-            name: organization.name,
-            slug: organization.slug,
-            logo: organization.logo,
-            metadata: organization.metadata,
-            parentId: organization.parentId,
-            createdAt: organization.createdAt,
-          })
-          .from(organization)
-          .where(eq(organization.id, id))
-          .limit(1);
-
-        if (!record) return undefined;
-
-        return {
-          ...record,
-          metadata: parseMetadata(record.metadata),
-        } satisfies AuthOrganization;
+        return Option.getOrUndefined(
+          Option.map(yield* organizationById(id), organizationRecord),
+        );
       },
     );
-
     const getOrganizationChildren = Effect.fn(
       "BackendAuth.getOrganizationChildren",
     )(function* ({ organizationId }: { organizationId: string }) {
-      const records = yield* db
-        .select({
-          id: organization.id,
-          name: organization.name,
-          slug: organization.slug,
-          logo: organization.logo,
-          metadata: organization.metadata,
-          parentId: organization.parentId,
-          createdAt: organization.createdAt,
-        })
-        .from(organization)
-        .where(eq(organization.parentId, organizationId));
-
-      return records.map((record) => ({
-        ...record,
-        metadata: parseMetadata(record.metadata),
-      })) satisfies BackendAuthOrganizationChildrenResponse;
+      return (yield* children(organizationId)).map(organizationRecord);
     });
-
     const listOrganizationsByUserId = Effect.fn(
       "BackendAuth.listOrganizationsByUserId",
     )(function* ({ userId }: { userId: string }) {
-      const records = yield* db
-        .select({
-          id: organization.id,
-          name: organization.name,
-          slug: organization.slug,
-          logo: organization.logo,
-          metadata: organization.metadata,
-          parentId: organization.parentId,
-          createdAt: organization.createdAt,
-        })
-        .from(member)
-        .innerJoin(organization, eq(member.organizationId, organization.id))
-        .where(eq(member.userId, userId));
-
       return {
-        data: records.map((record) => ({
-          ...record,
-          metadata: parseMetadata(record.metadata),
-        })),
+        data: (yield* organizationsByUser(userId)).map(organizationRecord),
         missingIds: [],
-      } satisfies BackendAuthOrganizationsResponse;
+      };
     });
-
     const getUserActiveOrganization = Effect.fn(
       "BackendAuth.getUserActiveOrganization",
     )(function* ({ userId }: { userId: string }) {
-      const [activeSession] = yield* db
-        .select({ id: authSession.activeOrganizationId })
-        .from(authSession)
-        .where(
-          and(
-            eq(authSession.userId, userId),
-            isNotNull(authSession.activeOrganizationId),
-            gt(authSession.expiresAt, new Date()),
-          ),
-        )
-        .orderBy(desc(authSession.updatedAt), desc(authSession.createdAt))
-        .limit(1);
-
-      return {
-        id: activeSession?.id ?? null,
-      } satisfies BackendAuthActiveOrganization;
+      return Option.getOrElse(yield* activeOrganization(userId), () => ({
+        id: null,
+      }));
     });
-
-    const getActiveMember = Effect.fn("BackendAuth.getActiveMember")(
-      function* ({
-        organizationId,
-        userId,
-      }: {
-        organizationId: string;
-        userId: string;
-      }) {
-        const [record] = yield* db
-          .select(selectMemberColumns())
-          .from(member)
-          .innerJoin(user, eq(member.userId, user.id))
-          .where(
-            and(
-              eq(member.organizationId, organizationId),
-              eq(member.userId, userId),
-            ),
-          )
-          .limit(1);
-
-        return record ? memberRecord(record) : undefined;
-      },
-    );
-
+    const getActiveMember = Effect.fn("BackendAuth.getActiveMember")(function* (
+      input: typeof BackendAuthMemberParams.Type,
+    ) {
+      return Option.getOrUndefined(
+        Option.map(yield* activeMember(input), memberRecord),
+      );
+    });
     const listOrganizationMembers = Effect.fn(
       "BackendAuth.listOrganizationMembers",
     )(function* ({ organizationId }: { organizationId: string }) {
-      const records = yield* db
-        .select(selectMemberColumns())
-        .from(member)
-        .innerJoin(user, eq(member.userId, user.id))
-        .where(eq(member.organizationId, organizationId));
-
-      return records.map(memberRecord) satisfies BackendAuthMembersResponse;
+      return (yield* members(organizationId)).map(memberRecord);
     });
-
     return {
       listUsersByIds,
       getUser,

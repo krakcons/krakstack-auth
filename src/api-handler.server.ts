@@ -43,7 +43,8 @@ import {
 import { BackendAuth } from "@/services/backend-auth";
 import { backendAuthApiHandler } from "@/services/backend-auth/api.builder";
 import { BackendAuthApi } from "@/services/backend-auth/api.group";
-import { DB } from "@/services/database";
+import { sqlLayer } from "@/services/database";
+import { SqlClient } from "effect/unstable/sql";
 import { Domains } from "@/services/domains";
 import { OAuthClients } from "@/services/oauth";
 import {
@@ -305,8 +306,8 @@ const healthServiceLayer = HealthService.layerWith({
       {
         name: "database",
         check: Effect.gen(function* () {
-          const db = yield* DB;
-          yield* db.$client`SELECT 1`;
+          const sql = yield* SqlClient.SqlClient;
+          yield* sql`SELECT 1`;
           return HealthService.up();
         }).pipe(Effect.timeout("2 seconds")),
       },
@@ -350,7 +351,7 @@ const appServicesLayer = Layer.mergeAll(
   S3Service.layer,
   healthServiceLayer,
   CloudflareLive,
-).pipe(Layer.provideMerge(DB.layer));
+).pipe(Layer.provideMerge(sqlLayer));
 
 const apiApplicationLayer = Layer.mergeAll(
   apiLayer.pipe(Layer.provide(appServicesLayer)),

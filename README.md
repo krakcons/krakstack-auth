@@ -41,22 +41,29 @@ The current GHCR image is the official deployment artifact and embeds official-i
 ```bash
 cp .env.example .env
 bun install
-bun run auth:migrate
+bun run db:migrate
 bun run dev
 ```
 
-| Command                 | Purpose                                     |
-| ----------------------- | ------------------------------------------- |
-| `bun run dev`           | Start the development server on port `3001` |
-| `bun run build`         | Build the SDK and application               |
-| `bun run test`          | Run Vitest                                  |
-| `bun run type:check`    | Check TypeScript                            |
-| `bun run lint`          | Run Oxlint                                  |
-| `bun run fmt`           | Format with Oxfmt                           |
-| `bun run auth:generate` | Regenerate the Better Auth schema           |
-| `bun run auth:migrate`  | Apply Better Auth migrations                |
+| Command                   | Purpose                                      |
+| ------------------------- | -------------------------------------------- |
+| `bun run dev`             | Start the development server on port `3001`  |
+| `bun run build`           | Build the SDK and application                |
+| `bun run test`            | Run Vitest                                   |
+| `bun run type:check`      | Check TypeScript                             |
+| `bun run lint`            | Run Oxlint                                   |
+| `bun run fmt`             | Format with Oxfmt                            |
+| `bun run auth:generate`   | Generate reference Better Auth SQL in `tmp/` |
+| `bun run db:migrate`      | Apply Effect SQL migrations                  |
+| `bun run db:migrate:test` | Apply migrations to `TEST_DATABASE_URL`      |
 
 Database-backed service tests must use `TEST_DATABASE_URL`, never `DATABASE_URL`.
+
+### Database migrations
+
+Migrations use `PgMigrator` in `src/db/migrate.ts`. Add new numbered Effect migrations in `src/db/migrations/` and register them in the loader. `bun run start` runs migrations before starting the production server.
+
+The first Effect migration preserves the historical SQL in `src/db/migrations/legacy/`. On existing databases it reads the legacy migration ledger and skips already-applied migrations; on fresh databases it applies the complete history. Keep these SQL files in deployment artifacts and use Effect migrations exclusively. Treat `auth:generate` output as a reference for writing reviewed Effect migrations, not as an application migration.
 
 ## Stack
 
@@ -66,6 +73,6 @@ Database-backed service tests must use `TEST_DATABASE_URL`, never `DATABASE_URL`
 | Application  | TanStack Start and React           |
 | Identity     | Better Auth and OAuth Provider     |
 | Services     | Effect and Effect HttpApi          |
-| Database     | PostgreSQL and Drizzle ORM         |
+| Database     | PostgreSQL and Effect SQL          |
 | Styling      | Tailwind CSS and shadcn components |
 | Localization | Paraglide.js and Inlang            |

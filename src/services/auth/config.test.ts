@@ -3,7 +3,7 @@ import { stripProxyOriginHeaders } from "@krak-stack/auth/server";
 
 import { createAuth } from "./config";
 
-describe("auth proxy base URL", () => {
+describe.skipIf(!process.env.TEST_DATABASE_URL)("auth proxy base URL", () => {
   it("uses the validated consumer host for request-scoped API URLs", async () => {
     const auth = createAuth({
       allowedHosts: ["localhost:3001", "localhost:3004"],

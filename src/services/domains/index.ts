@@ -1,22 +1,30 @@
-import { and, eq, inArray, ne } from "drizzle-orm";
-import { Context, Effect, Layer } from "effect";
+import { Context, Effect, Layer, Option, Schema } from "effect";
+import { SqlClient, SqlSchema } from "effect/unstable/sql";
 import { CredentialsFromEnv } from "@distilled.cloud/cloudflare";
 import * as CustomHostnames from "@distilled.cloud/cloudflare/custom-hostnames";
 import * as FetchHttpClient from "effect/unstable/http/FetchHttpClient";
 
-import { domains, organization, project } from "@/db/schema";
+import { DomainRow, IdRow, OrganizationRow, ProjectRow } from "@/db/schema";
 import {
   cookieDomainForAuthDomainContext,
   normalizeAuthHost,
   normalizeOAuthClientDomains,
   parseCsv,
 } from "@/lib/domain-utils";
-import { DB, runWithDatabase } from "@/services/database";
+import { sqlLayer, sqlTestLayer, runWithDatabase } from "@/services/database";
 import type {
   ServerCreateDomainPayload,
   ServerDomain,
   ServerUpdateDomainPayload,
 } from "@krak-stack/auth/server";
+import {
+  DomainLinkUpdate,
+  DomainMatchRequest,
+  DomainRemovalRequest,
+  DomainSiblingRequest,
+  DomainStatusUpdate,
+  DomainWrite,
+} from "./schema";
 
 export { normalizeAuthHost, normalizeOAuthClientDomains, parseCsv };
 
@@ -135,7 +143,7 @@ const requireCloudflareZoneId = Effect.sync(() => {
   return zoneId;
 });
 
-type DomainRow = typeof domains.$inferSelect;
+type DomainRow = typeof DomainRow.Type;
 
 const normalizePayload = (payload: ServerCreateDomainPayload) => {
   const hostname = normalizeAuthHost(payload.hostname);
@@ -173,7 +181,98 @@ const normalizeUpdatePayload = (payload: ServerUpdateDomainPayload) => {
 
 export class Domains extends Context.Service<Domains>()("Domains", {
   make: Effect.gen(function* () {
-    const db = yield* DB;
+    const sql = yield* SqlClient.SqlClient;
+    const findDomain = SqlSchema.findAll({
+      Request: Schema.String,
+      Result: DomainRow,
+      execute: (id) => sql`SELECT * FROM domains WHERE id = ${id} LIMIT 1`,
+    });
+    const findByHost = SqlSchema.findAll({
+      Request: Schema.String,
+      Result: DomainRow,
+      execute: (host) =>
+        sql`SELECT * FROM domains WHERE hostname = ${host} ORDER BY created_at LIMIT 1`,
+    });
+    const findActiveByHost = SqlSchema.findAll({
+      Request: Schema.String,
+      Result: DomainRow,
+      execute: (host) =>
+        sql`SELECT * FROM domains WHERE hostname = ${host} AND active = true LIMIT 2`,
+    });
+    const findActiveByRoot = SqlSchema.findAll({
+      Request: Schema.String,
+      Result: DomainRow,
+      execute: (host) =>
+        sql`SELECT * FROM domains WHERE root_hostname = ${host} AND active = true LIMIT 1`,
+    });
+    const findMatching = SqlSchema.findAll({
+      Request: DomainMatchRequest,
+      Result: DomainRow,
+      execute: ({ hostname, rootHostname }) =>
+        sql`SELECT * FROM domains WHERE hostname = ${hostname} AND root_hostname = ${rootHostname} LIMIT 1`,
+    });
+    const findProject = SqlSchema.findAll({
+      Request: Schema.String,
+      Result: IdRow,
+      execute: (id) => sql`SELECT id FROM project WHERE id = ${id} LIMIT 1`,
+    });
+    const findProjects = SqlSchema.findAll({
+      Request: Schema.Array(Schema.String),
+      Result: ProjectRow,
+      execute: (ids) => sql`SELECT * FROM project WHERE ${sql.in("id", ids)}`,
+    });
+    const findOrganizations = SqlSchema.findAll({
+      Request: Schema.Array(Schema.String),
+      Result: OrganizationRow,
+      execute: (ids) =>
+        sql`SELECT * FROM organization WHERE ${sql.in("id", ids)}`,
+    });
+    const findAll = SqlSchema.findAll({
+      Request: Schema.Void,
+      Result: DomainRow,
+      execute: () => sql`SELECT * FROM domains ORDER BY created_at DESC`,
+    });
+    const updateStatus = SqlSchema.findOneOption({
+      Request: DomainStatusUpdate,
+      Result: DomainRow,
+      execute: ({ id, active }) =>
+        sql`UPDATE domains SET active = ${active}, updated_at = ${new Date()} WHERE id = ${id} RETURNING *`,
+    });
+    const updateLinks = SqlSchema.findOneOption({
+      Request: DomainLinkUpdate,
+      Result: DomainRow,
+      execute: ({ id, ...updates }) =>
+        sql`UPDATE domains SET ${sql.update({ ...updates, updatedAt: new Date() })} WHERE id = ${id} RETURNING *`,
+    });
+    const insertDomain = SqlSchema.findOne({
+      Request: DomainWrite,
+      Result: DomainRow,
+      execute: (value) =>
+        sql`INSERT INTO domains ${sql.insert(value)} RETURNING *`,
+    });
+    const updateDomain = SqlSchema.findOneOption({
+      Request: DomainWrite,
+      Result: DomainRow,
+      execute: ({ id, ...updates }) =>
+        sql`UPDATE domains SET ${sql.update({ ...updates, updatedAt: new Date() })} WHERE id = ${id} RETURNING *`,
+    });
+    const findSibling = SqlSchema.findOneOption({
+      Request: DomainSiblingRequest,
+      Result: DomainRow,
+      execute: ({ hostname, id }) =>
+        sql`SELECT * FROM domains WHERE hostname = ${hostname} AND id <> ${id} ORDER BY created_at LIMIT 1`,
+    });
+    const findHostnameSibling = SqlSchema.findOneOption({
+      Request: DomainRemovalRequest,
+      Result: IdRow,
+      execute: ({ hostnameId, id }) =>
+        sql`SELECT id FROM domains WHERE hostname_id = ${hostnameId} AND id <> ${id} LIMIT 1`,
+    });
+    const removeDomain = SqlSchema.void({
+      Request: DomainRemovalRequest,
+      execute: ({ id, hostnameId }) =>
+        sql`DELETE FROM domains WHERE id = ${id} AND hostname_id = ${hostnameId}`,
+    });
 
     const enrichDomains = Effect.fn("Domains.enrichDomains")(function* (
       rows: readonly DomainRow[],
@@ -187,21 +286,9 @@ export class Domains extends Context.Service<Domains>()("Domains", {
         ),
       );
 
-      const projects = projectIds.length
-        ? yield* db
-            .select({ id: project.id, name: project.name, logo: project.logo })
-            .from(project)
-            .where(inArray(project.id, projectIds))
-        : [];
+      const projects = projectIds.length ? yield* findProjects(projectIds) : [];
       const organizations = organizationIds.length
-        ? yield* db
-            .select({
-              id: organization.id,
-              name: organization.name,
-              logo: organization.logo,
-            })
-            .from(organization)
-            .where(inArray(organization.id, organizationIds))
+        ? yield* findOrganizations(organizationIds)
         : [];
       const projectById = new Map(projects.map((item) => [item.id, item]));
       const organizationById = new Map(
@@ -235,7 +322,7 @@ export class Domains extends Context.Service<Domains>()("Domains", {
     });
 
     const get = Effect.fn("Domains.get")(function* ({ id }: { id: string }) {
-      const domain = yield* db.query.domains.findFirst({ where: { id } });
+      const [domain] = yield* findDomain(id);
       return yield* enrichDomain(domain ?? null);
     });
 
@@ -252,19 +339,15 @@ export class Domains extends Context.Service<Domains>()("Domains", {
       const active = cloudflare.status === "active";
       if (domain.active === active) return domain;
 
-      const [updated] = yield* db
-        .update(domains)
-        .set({ active, updatedAt: new Date() })
-        .where(eq(domains.id, domain.id))
-        .returning();
+      const updated = Option.getOrNull(
+        yield* updateStatus({ id: domain.id, active }),
+      );
 
       return updated ?? { ...domain, active };
     });
 
     const list = Effect.fn("Domains.list")(function* () {
-      const rows = yield* db.query.domains.findMany({
-        orderBy: { createdAt: "desc" },
-      });
+      const rows = yield* findAll(undefined);
       const refreshed = yield* Effect.all(rows.map(refreshStatus), {
         concurrency: 4,
       });
@@ -279,10 +362,7 @@ export class Domains extends Context.Service<Domains>()("Domains", {
     }) {
       const normalized = normalizeAuthHost(hostname);
       if (!normalized) return null;
-      const domain = yield* db.query.domains.findFirst({
-        where: { hostname: normalized },
-        orderBy: { createdAt: "asc" },
-      });
+      const [domain] = yield* findByHost(normalized);
       return domain ?? null;
     });
 
@@ -291,10 +371,7 @@ export class Domains extends Context.Service<Domains>()("Domains", {
         const host = hostFromRequest(request);
         if (!host) return null;
 
-        const rows = yield* db.query.domains.findMany({
-          where: { hostname: host, active: true },
-          limit: 2,
-        });
+        const rows = yield* findActiveByHost(host);
         return rows.length === 1 ? (rows[0] ?? null) : null;
       },
     );
@@ -305,9 +382,7 @@ export class Domains extends Context.Service<Domains>()("Domains", {
       const host = originHostFromRequest(request);
       if (!host) return null;
 
-      const domain = yield* db.query.domains.findFirst({
-        where: { rootHostname: host, active: true },
-      });
+      const [domain] = yield* findActiveByRoot(host);
       return domain ?? null;
     });
 
@@ -383,11 +458,9 @@ export class Domains extends Context.Service<Domains>()("Domains", {
       }
 
       const originHost = normalizeAuthHost(request.headers.get("origin"));
-      const originDomain = originHost
-        ? yield* db.query.domains.findFirst({
-            where: { rootHostname: originHost, active: true },
-          })
-        : null;
+      const [originDomain] = originHost
+        ? yield* findActiveByRoot(originHost)
+        : [];
       if (originDomain) {
         for (const origin of originsForHosts(
           [originDomain.hostname, originDomain.rootHostname],
@@ -415,43 +488,30 @@ export class Domains extends Context.Service<Domains>()("Domains", {
       const normalized = normalizePayload(payload);
       if (!normalized) return null;
 
-      const linkedProject = normalized.projectId
-        ? yield* db.query.project.findFirst({
-            where: { id: normalized.projectId },
-            columns: { id: true },
-          })
-        : null;
+      const [linkedProject] = normalized.projectId
+        ? yield* findProject(normalized.projectId)
+        : [];
       if (normalized.projectId && !linkedProject) {
         throw new Error(`Project not found: ${normalized.projectId}`);
       }
 
-      const existing = yield* db.query.domains.findFirst({
-        where: {
-          hostname: normalized.hostname,
-          rootHostname: normalized.rootHostname,
-        },
-      });
+      const [existing] = yield* findMatching(normalized);
       if (existing) {
-        const [domain] = yield* db
-          .update(domains)
-          .set({
+        const domain = Option.getOrNull(
+          yield* updateLinks({
+            id: existing.id,
             projectId: linkedProject?.id ?? null,
             organizationId: normalized.organizationId,
             managed: normalized.managed,
-            updatedAt: new Date(),
-          })
-          .where(eq(domains.id, existing.id))
-          .returning();
+          }),
+        );
 
         return yield* enrichDomain(
           domain ?? { ...existing, managed: normalized.managed },
         );
       }
 
-      const hostSibling = yield* db.query.domains.findFirst({
-        where: { hostname: normalized.hostname },
-        orderBy: { createdAt: "asc" },
-      });
+      const [hostSibling] = yield* findByHost(normalized.hostname);
 
       let hostnameId: string = hostSibling?.hostnameId ?? crypto.randomUUID();
       const active = hostSibling?.active ?? !normalized.managed;
@@ -468,19 +528,16 @@ export class Domains extends Context.Service<Domains>()("Domains", {
         })).id;
       }
 
-      const [domain] = yield* db
-        .insert(domains)
-        .values({
-          id: crypto.randomUUID(),
-          hostname: normalized.hostname,
-          rootHostname: normalized.rootHostname,
-          projectId: linkedProject?.id ?? null,
-          organizationId: normalized.organizationId,
-          hostnameId,
-          managed: normalized.managed,
-          active,
-        })
-        .returning();
+      const domain = yield* insertDomain({
+        id: crypto.randomUUID(),
+        hostname: normalized.hostname,
+        rootHostname: normalized.rootHostname,
+        projectId: linkedProject?.id ?? null,
+        organizationId: normalized.organizationId,
+        hostnameId,
+        managed: normalized.managed,
+        active,
+      });
 
       return yield* enrichDomain(domain ?? null);
     });
@@ -495,7 +552,7 @@ export class Domains extends Context.Service<Domains>()("Domains", {
       const normalized = normalizeUpdatePayload(payload);
       if (!normalized) return null;
 
-      const existing = yield* db.query.domains.findFirst({ where: { id } });
+      const [existing] = yield* findDomain(id);
       if (!existing) return null;
 
       const hostnameChanged = existing.hostname !== normalized.hostname;
@@ -507,13 +564,7 @@ export class Domains extends Context.Service<Domains>()("Domains", {
         hostnameChanged ||
         existing.rootHostname !== normalized.rootHostname
       ) {
-        const conflicting = yield* db.query.domains.findFirst({
-          where: {
-            hostname: normalized.hostname,
-            rootHostname: normalized.rootHostname,
-          },
-          columns: { id: true },
-        });
+        const [conflicting] = yield* findMatching(normalized);
         if (conflicting && conflicting.id !== id) {
           throw new Error(
             `Domain already exists: ${normalized.hostname} -> ${normalized.rootHostname}`,
@@ -521,12 +572,9 @@ export class Domains extends Context.Service<Domains>()("Domains", {
         }
       }
 
-      const linkedProject = normalized.projectId
-        ? yield* db.query.project.findFirst({
-            where: { id: normalized.projectId },
-            columns: { id: true },
-          })
-        : null;
+      const [linkedProject] = normalized.projectId
+        ? yield* findProject(normalized.projectId)
+        : [];
       if (normalized.projectId && !linkedProject) {
         throw new Error(`Project not found: ${normalized.projectId}`);
       }
@@ -534,17 +582,9 @@ export class Domains extends Context.Service<Domains>()("Domains", {
       let hostnameId: string = existing.hostnameId;
       let active = existing.active;
 
-      const [hostSibling] = yield* db
-        .select()
-        .from(domains)
-        .where(
-          and(
-            eq(domains.hostname, normalized.hostname),
-            ne(domains.id, existing.id),
-          ),
-        )
-        .orderBy(domains.createdAt)
-        .limit(1);
+      const hostSibling = Option.getOrNull(
+        yield* findSibling({ hostname: normalized.hostname, id: existing.id }),
+      );
 
       if (hostSibling) {
         hostnameId = hostSibling.hostnameId;
@@ -577,9 +617,9 @@ export class Domains extends Context.Service<Domains>()("Domains", {
         }
       }
 
-      const [domain] = yield* db
-        .update(domains)
-        .set({
+      const domain = Option.getOrNull(
+        yield* updateDomain({
+          id,
           hostname: normalized.hostname,
           rootHostname: normalized.rootHostname,
           projectId: linkedProject?.id ?? null,
@@ -587,10 +627,8 @@ export class Domains extends Context.Service<Domains>()("Domains", {
           hostnameId,
           managed: normalized.managed,
           active,
-          updatedAt: new Date(),
-        })
-        .where(eq(domains.id, id))
-        .returning();
+        }),
+      );
 
       return yield* enrichDomain(domain ?? null);
     });
@@ -600,7 +638,7 @@ export class Domains extends Context.Service<Domains>()("Domains", {
     }: {
       id: string;
     }) {
-      const domain = yield* db.query.domains.findFirst({ where: { id } });
+      const [domain] = yield* findDomain(id);
       if (!domain) return null;
       if (!domain.managed) return [];
 
@@ -625,16 +663,7 @@ export class Domains extends Context.Service<Domains>()("Domains", {
       const domain = yield* get({ id });
       if (!domain) return null;
 
-      const [hostSibling] = yield* db
-        .select({ id: domains.id })
-        .from(domains)
-        .where(
-          and(
-            eq(domains.hostnameId, domain.hostnameId),
-            ne(domains.id, domain.id),
-          ),
-        )
-        .limit(1);
+      const hostSibling = Option.getOrNull(yield* findHostnameSibling(domain));
 
       if (domain.managed && !hostSibling) {
         const zoneId = yield* requireCloudflareZoneId;
@@ -644,11 +673,7 @@ export class Domains extends Context.Service<Domains>()("Domains", {
         });
       }
 
-      yield* db
-        .delete(domains)
-        .where(
-          and(eq(domains.id, id), eq(domains.hostnameId, domain.hostnameId)),
-        );
+      yield* removeDomain({ id, hostnameId: domain.hostnameId });
 
       return domain;
     });
@@ -673,10 +698,10 @@ export class Domains extends Context.Service<Domains>()("Domains", {
     Layer.provide(CloudflareLive),
   );
 
-  static readonly layer = this.baseLayer.pipe(Layer.provide(DB.layer));
+  static readonly layer = this.baseLayer.pipe(Layer.provide(sqlLayer));
 
   static readonly testLayer = Layer.effect(this, this.make).pipe(
-    Layer.provideMerge(DB.testLayer),
+    Layer.provideMerge(sqlTestLayer),
   );
 }
 

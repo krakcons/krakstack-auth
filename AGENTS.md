@@ -42,7 +42,7 @@ The application is divided into two areas: frontend and backend.
 ### Backend
 
 - Effect application services.
-- Effect Postgres and Drizzle ORM for database access.
+- Effect Postgres and Effect SQL for database access. Use `SqlClient.SqlClient` directly and `SqlSchema` for schema-backed queries.
 - Effect HttpApi, HttpServer, OpenAPI, and OpenTelemetry for API and runtime concerns.
 - Effect durable workflows for long-running, retryable, or resumable orchestration.
 
@@ -53,7 +53,7 @@ The application is divided into two areas: frontend and backend.
 - `tmp/` contains local temporary files that should not be committed.
 - `src/components/` contains React components.
 - `src/components/ui/` contains shadcn-managed primitives. Do not edit directly.
-- `src/db/` contains Drizzle schema definitions.
+- `src/db/` contains database row schemas and Effect SQL migrations.
 - `src/hooks/` contains shared React hooks.
 - `src/lib/` contains shared utilities.
 - `src/messages/` contains i18n source files.
@@ -142,10 +142,10 @@ Use Effect durable workflows for operations that must survive interruption, retr
 - Backend and service tests must use the real Postgres test database through `TEST_DATABASE_URL`.
 - Never point tests at `DATABASE_URL`.
 - The test database is provided externally. Set `TEST_DATABASE_URL` in `.env` or the shell before DB tests.
-- Expose service `testLayer`s for tests, backed by `DB.testLayer` where database access is needed.
+- Expose service `testLayer`s for tests, backed by `sqlTestLayer` from `src/services/database.ts` where database access is needed.
 - Run migrations against the test database before DB tests and reset affected tables between tests.
-- Use Drizzle queries for test setup and cleanup where possible.
-- Avoid raw SQL unless a migration or lifecycle task requires it.
+- Use Effect SQL statements for test setup and cleanup. Run `bun run db:migrate:test` before database-backed tests.
+- Keep application SQL parameterized through `SqlClient`; reserve `sql.unsafe` for trusted migration SQL.
 
 ## End-to-End Testing
 
