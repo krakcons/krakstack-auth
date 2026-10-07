@@ -20,7 +20,7 @@ Apply the middleware to the root API when most groups need identity context:
 
 ```ts
 import { AuthMiddleware } from "@krak-stack/auth/server";
-import { HttpApi } from "effect/unstable/httpapi";
+import { HttpApi } from "effect/http-api";
 
 import { CoursesApiGroup } from "@/services/courses/api.group";
 
@@ -37,8 +37,8 @@ Adding middleware makes `AuthService` available; it does not automatically requi
 ```ts
 import { AuthMiddleware } from "@krak-stack/auth/server";
 import { Layer } from "effect";
-import { FetchHttpClient } from "effect/unstable/http";
-import { HttpApiBuilder } from "effect/unstable/httpapi";
+import { FetchHttpClient } from "effect/http";
+import { HttpApiBuilder } from "effect/http-api";
 
 const AuthLive = AuthMiddleware.layer();
 

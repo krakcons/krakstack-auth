@@ -1,6 +1,6 @@
 import { describe, expect, it } from "@effect/vitest";
 import { Option } from "effect";
-import { AsyncResult } from "effect/unstable/reactivity";
+import { AsyncResult } from "effect/reactivity";
 
 import {
   KrakstackAuthUnavailableError,

@@ -1,6 +1,6 @@
 import { useAtomSet, useAtomValue } from "@effect/atom-react";
 import { useNavigate, useRouter } from "@tanstack/react-router";
-import { Atom, AsyncResult } from "effect/unstable/reactivity";
+import { Atom, AsyncResult } from "effect/reactivity";
 import { Effect, Schema } from "effect";
 import { Ban, Loader2, ShieldOff, UserCog, UserIcon } from "lucide-react";
 import { useEffect, useState } from "react";

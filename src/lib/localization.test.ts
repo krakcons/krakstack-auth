@@ -1,6 +1,6 @@
 import { describe, expect, it } from "@effect/vitest";
 import { Effect, Layer } from "effect";
-import { HttpClientRequest, HttpServer } from "effect/unstable/http";
+import { HttpClientRequest, HttpServer } from "effect/http";
 import {
   HttpApi,
   HttpApiBuilder,
@@ -8,7 +8,7 @@ import {
   HttpApiGroup,
   HttpApiMiddleware,
   HttpApiTest,
-} from "effect/unstable/httpapi";
+} from "effect/http-api";
 
 import {
   LocaleContext,

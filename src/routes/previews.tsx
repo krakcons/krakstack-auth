@@ -7,7 +7,7 @@ import {
   OrganizationSwitcher,
   UserButton,
 } from "@krak-stack/auth/components";
-import { AsyncResult } from "effect/unstable/reactivity";
+import { AsyncResult } from "effect/reactivity";
 
 import { ThemeToggle } from "@/components/theme-toggle";
 import { buttonVariants } from "@/components/ui/button";

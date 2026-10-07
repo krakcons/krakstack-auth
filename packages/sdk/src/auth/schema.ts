@@ -20,7 +20,7 @@ export const AuthRedirectURLFromString = (origin = "http://localhost") =>
             : "Expected an HTTP or HTTPS redirect URL without credentials",
         ),
       ),
-      SchemaTransformation.transformOrFail({
+      SchemaTransformation.transformEffect({
         decode: (value) =>
           Effect.try({
             try: () => new URL(value, origin),

@@ -3,7 +3,7 @@ import type { AdminApiKey } from "@krak-stack/auth/admin";
 import { FormBuilder, FormReact } from "@lucas-barake/effect-form-react";
 import { createFileRoute } from "@tanstack/react-router";
 import { Effect, Schema } from "effect";
-import { Atom, AsyncResult } from "effect/unstable/reactivity";
+import { Atom, AsyncResult } from "effect/reactivity";
 import {
   Check,
   Copy,

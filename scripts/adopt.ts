@@ -1,11 +1,11 @@
 import * as BunRuntime from "@effect/platform-bun/BunRuntime";
 import { PgClient } from "@effect/sql-pg";
 import { Config, Effect, String } from "effect";
-import { SqlClient } from "effect/unstable/sql";
+import { SqlClient } from "effect/sql";
 import { adopt, verifyBaseline } from "../src/db/adopt";
 
 const databaseLayer = PgClient.layerConfig({
-  url: Config.redacted(
+  url: Config.Redacted(
     process.argv.includes("--test") ? "TEST_DATABASE_URL" : "DATABASE_URL",
   ),
   transformQueryNames: Config.succeed(String.camelToSnake),

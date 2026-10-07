@@ -3,7 +3,7 @@ import {
   HttpApiError,
   HttpApiGroup,
   OpenApi,
-} from "effect/unstable/httpapi";
+} from "effect/http-api";
 import { Schema } from "effect";
 
 import {

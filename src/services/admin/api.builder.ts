@@ -1,6 +1,6 @@
 import { Effect, Schema } from "effect";
-import { SqlClient, SqlSchema } from "effect/unstable/sql";
-import { HttpApiBuilder, HttpApiError } from "effect/unstable/httpapi";
+import { SqlClient, SqlSchema } from "effect/sql";
+import { HttpApiBuilder, HttpApiError } from "effect/http-api";
 import { AdminListQuery, SortParamsFromString } from "@krak-stack/auth/admin";
 
 import { AdminApi } from "@/api";

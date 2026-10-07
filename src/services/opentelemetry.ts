@@ -1,5 +1,5 @@
-import { FetchHttpClient } from "effect/unstable/http";
-import { Otlp, OtlpSerialization } from "effect/unstable/observability";
+import { FetchHttpClient } from "effect/http";
+import { Otlp, OtlpSerialization } from "effect/observability";
 import { Layer } from "effect";
 
 export const OpenTelemetryLive = Otlp.layerFromConfig().pipe(

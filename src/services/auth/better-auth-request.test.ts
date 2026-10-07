@@ -1,6 +1,6 @@
 import { describe, expect, it } from "@effect/vitest";
 import { Effect, Redacted } from "effect";
-import { SqlClient } from "effect/unstable/sql";
+import { SqlClient } from "effect/sql";
 import { proxyOriginHeaders } from "@krak-stack/auth/server";
 
 import { sqlTestLayer } from "@/services/database";

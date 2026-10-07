@@ -1,6 +1,6 @@
 import { Effect, Layer, Option, Schema } from "effect";
-import { Headers, HttpServerRequest } from "effect/unstable/http";
-import { HttpApiError } from "effect/unstable/httpapi";
+import { Headers, HttpServerRequest } from "effect/http";
+import { HttpApiError } from "effect/http-api";
 
 import { BetterAuthRequest } from "@/services/auth/better-auth-request";
 import {

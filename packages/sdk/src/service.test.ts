@@ -1,11 +1,7 @@
 import { describe, expect, it } from "@effect/vitest";
 import { Effect, Redacted, Schema } from "effect";
-import {
-  HttpClient,
-  HttpClientRequest,
-  HttpClientResponse,
-} from "effect/unstable/http";
-import { HttpApiError } from "effect/unstable/httpapi";
+import { HttpClient, HttpClientRequest, HttpClientResponse } from "effect/http";
+import { HttpApiError } from "effect/http-api";
 
 import { AuthClientConfig } from "./config.js";
 import { AuthService } from "./service.js";

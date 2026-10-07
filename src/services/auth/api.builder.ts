@@ -3,9 +3,9 @@ import {
   ExtraBadRequest,
 } from "@krak-stack/auth/extra";
 import { Effect, Option, Schema } from "effect";
-import { Headers, HttpServerRequest } from "effect/unstable/http";
-import { HttpApiBuilder, HttpApiError } from "effect/unstable/httpapi";
-import { SqlClient, SqlSchema } from "effect/unstable/sql";
+import { Headers, HttpServerRequest } from "effect/http";
+import { HttpApiBuilder, HttpApiError } from "effect/http-api";
+import { SqlClient, SqlSchema } from "effect/sql";
 
 import { FrontendApi } from "@/api";
 import { localize, type LocalizedInputType } from "@/lib/localization";

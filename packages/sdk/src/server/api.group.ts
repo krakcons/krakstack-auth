@@ -1,9 +1,5 @@
-import { OpenApi } from "effect/unstable/httpapi";
-import {
-  HttpApiEndpoint,
-  HttpApiError,
-  HttpApiGroup,
-} from "effect/unstable/httpapi";
+import { OpenApi } from "effect/http-api";
+import { HttpApiEndpoint, HttpApiError, HttpApiGroup } from "effect/http-api";
 
 import { Member, Organization, User } from "../schema.js";
 import {

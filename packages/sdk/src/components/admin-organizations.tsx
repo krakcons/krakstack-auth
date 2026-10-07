@@ -1,7 +1,7 @@
 import { useAtomSet, useAtomSubscribe, useAtomValue } from "@effect/atom-react";
 import { useNavigate, useRouter } from "@tanstack/react-router";
 import { Cause, Effect, Schema } from "effect";
-import { Atom, AsyncResult } from "effect/unstable/reactivity";
+import { Atom, AsyncResult } from "effect/reactivity";
 import { Building2, Pencil, Trash2, UserCog } from "lucide-react";
 import { useEffect, useState } from "react";
 

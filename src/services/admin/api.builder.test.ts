@@ -2,10 +2,10 @@ import * as BunHttpPlatform from "@effect/platform-bun/BunHttpPlatform";
 import * as BunServices from "@effect/platform-bun/BunServices";
 import { describe, expect, it } from "@effect/vitest";
 import { Effect, Layer } from "effect";
-import { Etag, FetchHttpClient, HttpRouter } from "effect/unstable/http";
+import { Etag, FetchHttpClient, HttpRouter } from "effect/http";
 import { CredentialsFromEnv } from "@distilled.cloud/cloudflare";
-import { HttpApiTest } from "effect/unstable/httpapi";
-import { SqlClient } from "effect/unstable/sql";
+import { HttpApiTest } from "effect/http-api";
+import { SqlClient } from "effect/sql";
 
 import { AdminApi } from "@/api";
 import { AdminAuthMiddleware } from "@/services/auth/middleware";

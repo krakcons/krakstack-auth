@@ -13,7 +13,7 @@ import {
   healthHandler,
   HealthService,
 } from "@krak-stack/registry/service-health";
-import * as FetchHttpClient from "effect/unstable/http/FetchHttpClient";
+import * as FetchHttpClient from "effect/http/FetchHttpClient";
 import {
   Etag,
   Headers,
@@ -22,8 +22,8 @@ import {
   HttpRouter,
   HttpServerRequest,
   HttpServerResponse,
-} from "effect/unstable/http";
-import { HttpApiBuilder, HttpApiError, OpenApi } from "effect/unstable/httpapi";
+} from "effect/http";
+import { HttpApiBuilder, HttpApiError, OpenApi } from "effect/http-api";
 import {
   Session as InternalSession,
   User as InternalUser,
@@ -44,7 +44,7 @@ import { BackendAuth } from "@/services/backend-auth";
 import { backendAuthApiHandler } from "@/services/backend-auth/api.builder";
 import { BackendAuthApi } from "@/services/backend-auth/api.group";
 import { sqlLayer } from "@/services/database";
-import { SqlClient } from "effect/unstable/sql";
+import { SqlClient } from "effect/sql";
 import { Domains } from "@/services/domains";
 import { OAuthClients } from "@/services/oauth";
 import {

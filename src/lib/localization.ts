@@ -3,8 +3,8 @@ import {
   locales as paraglideLocales,
 } from "@/paraglide/runtime";
 import { Context, Effect, Layer, Option, Schema } from "effect";
-import { Cookies, HttpServerRequest } from "effect/unstable/http";
-import { HttpApiMiddleware } from "effect/unstable/httpapi";
+import { Cookies, HttpServerRequest } from "effect/http";
+import { HttpApiMiddleware } from "effect/http-api";
 
 export type Locale = (typeof paraglideLocales)[number];
 

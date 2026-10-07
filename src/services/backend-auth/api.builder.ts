@@ -1,5 +1,5 @@
 import { Cause, Effect, Layer, Option, Schema } from "effect";
-import { HttpApiBuilder, HttpApiError } from "effect/unstable/httpapi";
+import { HttpApiBuilder, HttpApiError } from "effect/http-api";
 
 import { Domains } from "@/services/domains";
 

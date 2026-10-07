@@ -1,15 +1,7 @@
 import { describe, expect, it } from "@effect/vitest";
 import { Effect, Layer, Redacted } from "effect";
-import {
-  HttpRouter,
-  HttpServerRequest,
-  HttpServerResponse,
-} from "effect/unstable/http";
-import {
-  HttpApiEndpoint,
-  HttpApiError,
-  HttpApiGroup,
-} from "effect/unstable/httpapi";
+import { HttpRouter, HttpServerRequest, HttpServerResponse } from "effect/http";
+import { HttpApiEndpoint, HttpApiError, HttpApiGroup } from "effect/http-api";
 
 import { AuthService } from "../service.js";
 import { AuthMiddleware, makeAuthenticationLive } from "./middleware.js";

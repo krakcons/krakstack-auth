@@ -4,7 +4,7 @@ import { Config, Effect, String } from "effect";
 import { migrate } from "../src/db/migrate";
 
 const databaseLayer = PgClient.layerConfig({
-  url: Config.redacted(
+  url: Config.Redacted(
     process.argv.includes("--test") ? "TEST_DATABASE_URL" : "DATABASE_URL",
   ),
   transformQueryNames: Config.succeed(String.camelToSnake),

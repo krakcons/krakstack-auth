@@ -11,6 +11,7 @@
   "scripts": {
     "dev": "bun --bun vite dev --port 3001",
     "sdk:dev": "bun --filter @krak-stack/auth dev",
+    "sdk:pack:dev": "mkdir -p tmp && bun pm --cwd packages/sdk pack --filename \"$PWD/tmp/auth-effect4.tgz\"",
     "build": "bun --filter @krak-stack/auth build && bun --bun vite build",
     "start": "bun run db:migrate && bun run server.ts",
     "db:migrate": "bun run scripts/migrate.ts",
@@ -33,12 +34,12 @@
     "@better-auth/api-key": "1.7.6",
     "@better-auth/core": "1.7.6",
     "@better-auth/oauth-provider": "1.7.6",
-    "@distilled.cloud/aws": "1.0.0-rc.6",
-    "@distilled.cloud/cloudflare": "1.0.0-rc.6",
-    "@effect/atom-react": "4.0.0-rc.112",
-    "@effect/platform-browser": "4.0.0-rc.112",
-    "@effect/platform-bun": "4.0.0-rc.112",
-    "@effect/sql-pg": "4.0.0-rc.112",
+    "@distilled.cloud/aws": "1.0.0-rc.13",
+    "@distilled.cloud/cloudflare": "1.0.0-rc.13",
+    "@effect/atom-react": "4.0.0",
+    "@effect/platform-browser": "4.0.0",
+    "@effect/platform-bun": "4.0.0",
+    "@effect/sql-pg": "4.0.0",
     "@krak-stack/auth": "workspace:*",
     "@krak-stack/registry": "^0.1.35",
     "@lucas-barake/effect-form-react": "0.26.0-beta.5",
@@ -59,7 +60,7 @@
     "class-variance-authority": "^0.7.1",
     "cmdk": "^1.1.1",
     "cn": "^0.3.3",
-    "effect": "4.0.0-rc.112",
+    "effect": "4.0.0",
     "input-otp": "^1.5.0",
     "lucide-react": "^1.47.0",
     "pg": "^8.23.0",
@@ -70,7 +71,7 @@
   },
   "devDependencies": {
     "@effect/tsgo": "0.14.6",
-    "@effect/vitest": "4.0.0-rc.112",
+    "@effect/vitest": "4.0.0",
     "@inlang/paraglide-js": "^2.25.4",
     "@oxlint/plugins": "1.79.0",
     "@tailwindcss/typography": "^0.5.20",
@@ -88,10 +89,16 @@
     "shadcn": "^4.21.0",
     "typescript": "7.0.2",
     "vite": "^8.3.0",
-    "vitest": "^4.1.11"
+    "vitest": "^5.0.3"
   },
   "overrides": {
-    "@effect/platform-node-shared": "4.0.0-rc.112",
-    "@lucas-barake/effect-form": "0.25.0-beta.6"
+    "@krak-stack/registry": "file:../krakstack-site/tmp/registry-effect4.tgz",
+    "@effect/platform-node-shared": "4.0.0",
+    "@lucas-barake/effect-form": "0.25.0-beta.6",
+    "@lucas-barake/effect-form-react": "0.26.0-beta.5"
+  },
+  "patchedDependencies": {
+    "@lucas-barake/effect-form@0.25.0-beta.6": "patches/@lucas-barake%2Feffect-form@0.25.0-beta.6.patch",
+    "@lucas-barake/effect-form-react@0.26.0-beta.5": "patches/@lucas-barake%2Feffect-form-react@0.26.0-beta.5.patch"
   }
 }

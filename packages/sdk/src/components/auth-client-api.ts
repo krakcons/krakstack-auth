@@ -1,11 +1,7 @@
 import { Effect } from "effect";
-import {
-  FetchHttpClient,
-  HttpClient,
-  HttpClientRequest,
-} from "effect/unstable/http";
-import { AtomHttpApi } from "effect/unstable/reactivity";
-import { HttpApi, HttpApiClient } from "effect/unstable/httpapi";
+import { FetchHttpClient, HttpClient, HttpClientRequest } from "effect/http";
+import { AtomHttpApi } from "effect/reactivity";
+import { HttpApi, HttpApiClient } from "effect/http-api";
 
 import { AuthClientApi } from "../api.js";
 import { defaultBaseUrl } from "../config.js";

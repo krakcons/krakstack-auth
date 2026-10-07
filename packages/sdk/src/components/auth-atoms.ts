@@ -1,5 +1,5 @@
 import { Option } from "effect";
-import { AsyncResult, Atom } from "effect/unstable/reactivity";
+import { AsyncResult, Atom } from "effect/reactivity";
 
 import { authClientApi } from "./auth-client-api.js";
 

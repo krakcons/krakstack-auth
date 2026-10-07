@@ -1,7 +1,7 @@
 import * as BunServices from "@effect/platform-bun/BunServices";
 import { PgMigrator } from "@effect/sql-pg";
 import { Effect, FileSystem, Schema } from "effect";
-import { SqlClient, SqlSchema } from "effect/unstable/sql";
+import { SqlClient, SqlSchema } from "effect/sql";
 import { fileURLToPath } from "node:url";
 import { applicationTables } from "../migration-schema";
 
@@ -29,5 +29,12 @@ export default Effect.gen(function* () {
   const content = yield* fs.readFileString(
     fileURLToPath(new URL("./0001_initial.sql", import.meta.url)),
   );
-  yield* sql.unsafe(content);
+  // This fixed baseline contains only semicolon-delimited DDL (no procedural
+  // bodies or semicolons in literals). The native driver executes one statement
+  // per query. Preserve the SQL and persisted migration ID/name unchanged.
+  for (const statement of content
+    .split(/;[ \t]*(?:\r?\n|$)/)
+    .map((value) => value.trim())) {
+    if (statement) yield* sql.unsafe(statement);
+  }
 }).pipe(Effect.provide(BunServices.layer));

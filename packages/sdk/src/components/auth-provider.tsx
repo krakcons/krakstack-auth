@@ -1,8 +1,8 @@
 import { useAtomValue } from "@effect/atom-react";
 import { useRouterState } from "@tanstack/react-router";
 import { Cause, Option, Schema } from "effect";
-import { HttpApiError } from "effect/unstable/httpapi";
-import { AsyncResult, Atom } from "effect/unstable/reactivity";
+import { HttpApiError } from "effect/http-api";
+import { AsyncResult, Atom } from "effect/reactivity";
 import { useKrakstackLocale } from "@krak-stack/registry/krakstack-provider";
 import {
   createContext,

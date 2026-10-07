@@ -83,8 +83,8 @@ If the application already sends `/api/*` requests through an Effect HTTP router
 ```ts
 import { proxyAuthHttpEffect } from "@krak-stack/auth/server";
 import { Layer } from "effect";
-import { FetchHttpClient, HttpRouter } from "effect/unstable/http";
-import { HttpApiBuilder } from "effect/unstable/httpapi";
+import { FetchHttpClient, HttpRouter } from "effect/http";
+import { HttpApiBuilder } from "effect/http-api";
 
 const authUrl = process.env.KRAKSTACK_AUTH_URL;
 if (!authUrl) throw new Error("KRAKSTACK_AUTH_URL is required");

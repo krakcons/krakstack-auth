@@ -1,5 +1,5 @@
 import { Cause, Effect, Option, Schema } from "effect";
-import { HttpApiBuilder, HttpApiError } from "effect/unstable/httpapi";
+import { HttpApiBuilder, HttpApiError } from "effect/http-api";
 
 import { AdminApi, FrontendApi } from "@/api";
 import { Projects } from "@/services/projects";

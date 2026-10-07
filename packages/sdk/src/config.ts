@@ -24,10 +24,10 @@ export class AuthClientConfig extends Context.Service<AuthClientConfig>()(
         const baseUrl =
           options.baseUrl ??
           process.env.KRAKSTACK_AUTH_URL ??
-          (yield* Config.string("VITE_KRAKSTACK_AUTH_URL"));
+          (yield* Config.String("VITE_KRAKSTACK_AUTH_URL"));
         const apiKey =
           options.apiKey ??
-          (yield* Config.redacted("KRAKSTACK_AUTH_SERVICE_API_KEY"));
+          (yield* Config.Redacted("KRAKSTACK_AUTH_SERVICE_API_KEY"));
 
         return {
           baseUrl: normalizeBaseUrl(baseUrl),

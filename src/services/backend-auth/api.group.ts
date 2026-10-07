@@ -4,7 +4,7 @@ import {
   HttpApiError,
   HttpApiGroup,
   OpenApi,
-} from "effect/unstable/httpapi";
+} from "effect/http-api";
 
 import { AuthMember, AuthOrganization, AuthUser } from "@/lib/auth-schema";
 import { ServiceApiKeyMiddleware } from "@/services/auth/middleware";

@@ -18,7 +18,7 @@ type: how-to
 
 ```ts
 import { AuthMiddleware } from "@krak-stack/auth/server";
-import { HttpApi } from "effect/unstable/httpapi";
+import { HttpApi } from "effect/http-api";
 
 export const AppApi = HttpApi.make("AppApi")
   .add(CoursesApiGroup)
@@ -33,8 +33,8 @@ Le middleware rend `AuthService` disponible; il n'exige pas automatiquement un u
 ```ts
 import { AuthMiddleware } from "@krak-stack/auth/server";
 import { Layer } from "effect";
-import { FetchHttpClient } from "effect/unstable/http";
-import { HttpApiBuilder } from "effect/unstable/httpapi";
+import { FetchHttpClient } from "effect/http";
+import { HttpApiBuilder } from "effect/http-api";
 
 const AuthLive = AuthMiddleware.layer();
 

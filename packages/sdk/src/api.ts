@@ -1,4 +1,4 @@
-import { HttpApi, OpenApi } from "effect/unstable/httpapi";
+import { HttpApi, OpenApi } from "effect/http-api";
 
 import { AdminApiGroup } from "./admin/api.group.js";
 import { AuthApiGroup } from "./auth/api.group.js";

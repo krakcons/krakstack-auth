@@ -1,6 +1,6 @@
 import { describe, expect, it } from "@effect/vitest";
 
-import { SqlClient } from "effect/unstable/sql";
+import { SqlClient } from "effect/sql";
 import { runWithDatabase } from "@/services/database";
 
 describe("database runtime", () => {

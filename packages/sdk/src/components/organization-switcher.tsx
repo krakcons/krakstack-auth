@@ -7,7 +7,7 @@ import type {
 import { useAtomRefresh, useAtomSet, useAtomValue } from "@effect/atom-react";
 import { FormBuilder, FormReact } from "@lucas-barake/effect-form-react";
 import { Effect, Option, Predicate, Schema } from "effect";
-import { AsyncResult, Atom } from "effect/unstable/reactivity";
+import { AsyncResult, Atom } from "effect/reactivity";
 import {
   ArrowLeft,
   Building2,

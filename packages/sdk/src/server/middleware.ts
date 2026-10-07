@@ -1,10 +1,10 @@
 import { Cause, Effect, Layer, Redacted } from "effect";
-import { HttpServerRequest } from "effect/unstable/http";
+import { HttpServerRequest } from "effect/http";
 import {
   HttpApiError,
   HttpApiMiddleware,
   HttpApiSecurity,
-} from "effect/unstable/httpapi";
+} from "effect/http-api";
 
 import { AuthService, type AuthServiceLayerOptions } from "../service.js";
 

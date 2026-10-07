@@ -7,7 +7,7 @@ import {
   HttpClientRequest,
   HttpServerRequest,
   HttpServerResponse,
-} from "effect/unstable/http";
+} from "effect/http";
 import {
   AuthProxyError,
   authProxyKeyHeader,

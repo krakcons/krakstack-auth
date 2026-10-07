@@ -1,5 +1,5 @@
 import { Schema } from "effect";
-import { HttpApiError, HttpApiMiddleware } from "effect/unstable/httpapi";
+import { HttpApiError, HttpApiMiddleware } from "effect/http-api";
 
 export class ServiceApiKeyUnauthorized extends Schema.TaggedError<ServiceApiKeyUnauthorized>()(
   "ServiceApiKeyUnauthorized",

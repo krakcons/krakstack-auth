@@ -12,7 +12,7 @@ import {
   useRouterState,
 } from "@tanstack/react-router";
 import { Effect, Option, Predicate, Schema } from "effect";
-import { AsyncResult, Atom, AtomRegistry } from "effect/unstable/reactivity";
+import { AsyncResult, Atom, AtomRegistry } from "effect/reactivity";
 import {
   ArrowLeft,
   Building2,

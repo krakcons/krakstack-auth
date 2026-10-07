@@ -1,5 +1,5 @@
 import { Effect, Layer, Schema } from "effect";
-import { HttpApiError, HttpApiMiddleware } from "effect/unstable/httpapi";
+import { HttpApiError, HttpApiMiddleware } from "effect/http-api";
 
 import {
   ApiKeyPermissionGrant,

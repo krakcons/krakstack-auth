@@ -8,21 +8,11 @@ import {
   String,
 } from "effect";
 import { PgClient } from "@effect/sql-pg";
-import { SqlClient } from "effect/unstable/sql";
-import { defaults, Pool, types } from "pg";
+import { SqlClient } from "effect/sql";
+import { defaults, Pool } from "pg";
 
 // The existing schema uses timestamp without time zone and stores UTC.
-// Keep that convention for both Effect SQL and Better Auth's native pg adapter.
 defaults.parseInputDatesAsUTC = true;
-const TimestampUtc = Schema.DateFromString.annotate({
-  identifier: "PostgresTimestampUtc",
-});
-const pgTypes = {
-  getTypeParser: (typeId: number, format?: "text" | "binary") =>
-    typeId === 1114 && format !== "binary"
-      ? (value: string) => Schema.decodeUnknownSync(TimestampUtc)(`${value}Z`)
-      : types.getTypeParser(typeId, format),
-};
 
 const DatabasePoolSize = Schema.NumberFromString.check(
   Schema.isBetween({ minimum: 1, maximum: 100 }),
@@ -41,7 +31,6 @@ export const databasePool = new Pool({
   connectionTimeoutMillis: 5_000,
   idleTimeoutMillis: 30_000,
   max: databasePoolSize,
-  types: pgTypes,
 });
 
 databasePool.on("error", (error) => {
@@ -54,14 +43,21 @@ const naming = {
   transformJson: false,
 };
 
-export const sqlLayer = PgClient.layerFrom(
-  PgClient.fromPool({
-    acquire: Effect.succeed(databasePool),
-    applicationName: "krakstack-auth",
-    types: pgTypes,
-    ...naming,
-  }),
-);
+// Effect 4 uses its native PostgreSQL pool; Better Auth retains the pg pool above.
+// Native timestamp codecs already decode timestamp-without-time-zone as UTC.
+export const sqlLayer = PgClient.layerConfig({
+  url: Config.Redacted(
+    process.env.NODE_ENV === "test" ? "TEST_DATABASE_URL" : "DATABASE_URL",
+  ),
+  applicationName: Config.succeed("krakstack-auth"),
+  connectTimeout: Config.succeed("5 seconds"),
+  idleTimeout: Config.succeed("30 seconds"),
+  maxConnections: Config.succeed(databasePoolSize),
+  startupParameters: Config.succeed({ TimeZone: "UTC" }),
+  transformQueryNames: Config.succeed(naming.transformQueryNames),
+  transformResultNames: Config.succeed(naming.transformResultNames),
+  transformJson: Config.succeed(naming.transformJson),
+});
 
 const pgLayer = (url: Redacted.Redacted) =>
   PgClient.layer({
@@ -70,14 +66,14 @@ const pgLayer = (url: Redacted.Redacted) =>
     connectTimeout: "5 seconds",
     idleTimeout: "30 seconds",
     maxConnections: databasePoolSize,
-    types: pgTypes,
+    startupParameters: { TimeZone: "UTC" },
     ...naming,
   });
 
 const pgLayerFromConfig = (name: string) =>
   Layer.unwrap(
     Effect.gen(function* () {
-      const url = yield* Config.redacted(name);
+      const url = yield* Config.Redacted(name);
       return pgLayer(url);
     }),
   );

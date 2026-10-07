@@ -7,13 +7,9 @@ import {
   Layer,
   Redacted,
 } from "effect";
-import {
-  FetchHttpClient,
-  HttpClient,
-  HttpClientRequest,
-} from "effect/unstable/http";
-import { HttpApiClient } from "effect/unstable/httpapi";
-import { HttpApiError } from "effect/unstable/httpapi";
+import { FetchHttpClient, HttpClient, HttpClientRequest } from "effect/http";
+import { HttpApiClient } from "effect/http-api";
+import { HttpApiError } from "effect/http-api";
 
 import { AuthServiceApi } from "./api.js";
 import { AuthClientConfig, type ClientConfig } from "./config.js";

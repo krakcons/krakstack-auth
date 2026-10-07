@@ -2,7 +2,7 @@ import { describe, expect, it } from "@effect/vitest";
 import * as BunServices from "@effect/platform-bun/BunServices";
 import { PgClient, PgMigrator } from "@effect/sql-pg";
 import { Config, Effect, Redacted, Schema, String } from "effect";
-import { SqlClient, SqlSchema } from "effect/unstable/sql";
+import { SqlClient, SqlSchema } from "effect/sql";
 import { adopt, verifyBaseline } from "./adopt";
 import { migrate } from "./migrate";
 import initialMigration from "./migrations/0001_initial";
@@ -21,7 +21,7 @@ const withDatabase = <A, E, R>(program: Effect.Effect<A, E, R>) =>
   Effect.gen(function* () {
     const parent = yield* SqlClient.SqlClient;
     const url = new URL(
-      Redacted.value(yield* Config.redacted("TEST_DATABASE_URL")),
+      Redacted.value(yield* Config.Redacted("TEST_DATABASE_URL")),
     );
     const name = `auth_migration_test_${crypto.randomUUID().replaceAll("-", "")}`;
     return yield* Effect.acquireUseRelease(
@@ -45,7 +45,7 @@ const withDatabase = <A, E, R>(program: Effect.Effect<A, E, R>) =>
   }).pipe(
     Effect.provide(
       PgClient.layerConfig({
-        url: Config.redacted("TEST_DATABASE_URL"),
+        url: Config.Redacted("TEST_DATABASE_URL"),
         maxConnections: Config.succeed(1),
       }),
     ),

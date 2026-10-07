@@ -1,5 +1,5 @@
 import { Context, Effect, Layer, Schema } from "effect";
-import { SqlClient, SqlSchema } from "effect/unstable/sql";
+import { SqlClient, SqlSchema } from "effect/sql";
 import { OAuthClientRow, ProjectRow } from "@/db/schema";
 import { sqlLayer } from "@/services/database";
 import { BetterAuthRequest } from "@/services/auth/better-auth-request";

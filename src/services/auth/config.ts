@@ -14,7 +14,7 @@ import { oauthProvider } from "@better-auth/oauth-provider";
 import { apiKey } from "@better-auth/api-key";
 import { APIError } from "@better-auth/core/error";
 import { Effect, Option, Schema } from "effect";
-import { SqlClient, SqlSchema } from "effect/unstable/sql";
+import { SqlClient, SqlSchema } from "effect/sql";
 import { IdRow, OrganizationRow, RoleRow, UserRow } from "@/db/schema";
 import { coreSqlFields, withSqlNames } from "./database-schema";
 import { UserMetadata, UserMetadataStandard } from "@krak-stack/auth/schema";

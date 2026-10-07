@@ -1,6 +1,6 @@
 import { Schema } from "effect";
-import { Multipart } from "effect/unstable/http";
-import { HttpApiSchema } from "effect/unstable/httpapi";
+import { Multipart } from "effect/http";
+import { HttpApiSchema } from "effect/http-api";
 
 export const ImageUploadPayload = Schema.Struct({
   file: Multipart.SingleFileSchema,

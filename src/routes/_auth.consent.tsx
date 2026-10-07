@@ -2,7 +2,7 @@ import { useAtomSet, useAtomSubscribe, useAtomValue } from "@effect/atom-react";
 import { FormBuilder, FormReact } from "@lucas-barake/effect-form-react";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { Option, Schema } from "effect";
-import { AsyncResult, Atom } from "effect/unstable/reactivity";
+import { AsyncResult, Atom } from "effect/reactivity";
 import { useMemo } from "react";
 
 import { m } from "@/paraglide/messages";

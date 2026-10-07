@@ -7,8 +7,8 @@ import {
   useRouterState,
 } from "@tanstack/react-router";
 import { Effect, Option, Schema } from "effect";
-import { Atom, AsyncResult } from "effect/unstable/reactivity";
-import { HttpClientError } from "effect/unstable/http";
+import { Atom, AsyncResult } from "effect/reactivity";
+import { HttpClientError } from "effect/http";
 import { REGEXP_ONLY_DIGITS } from "input-otp";
 import { KeyRound, Loader2, Mail } from "lucide-react";
 import { useEffect, useRef, useState } from "react";

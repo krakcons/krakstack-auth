@@ -1,10 +1,11 @@
 {
   "name": "@krak-stack/auth",
-  "version": "0.2.17",
+  "version": "0.2.18",
   "description": "Effect HttpApi clients and schemas for KrakStack Auth.",
   "license": "MIT",
   "files": [
     "dist",
+    "patches",
     "tailwind.css"
   ],
   "type": "module",
@@ -75,7 +76,7 @@
     "type:check": "tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {
-    "@effect/atom-react": "4.0.0-rc.112",
+    "@effect/atom-react": "^4.0.0",
     "@lucas-barake/effect-form-react": "0.26.0-beta.5",
     "react-qr-code": "^2.2.0"
   },
@@ -83,9 +84,9 @@
     "@krak-stack/registry": "0.1.35"
   },
   "peerDependencies": {
-    "@krak-stack/registry": "^0.1.35",
+    "@krak-stack/registry": "^0.1.36",
     "@tanstack/react-router": "^1.170.15",
-    "effect": "4.0.0-rc.112",
+    "effect": "^4.0.0",
     "input-otp": "^1.5.0",
     "lucide-react": "^1.18.0",
     "react": "^19.2.0"

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "@effect/vitest";
 import { Effect } from "effect";
-import { FetchHttpClient } from "effect/unstable/http";
+import { FetchHttpClient } from "effect/http";
 
 import { authHttpClient } from "./auth-client-api.js";
 import { AuthTooManyRequests } from "../auth/schema.js";

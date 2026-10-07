@@ -1,9 +1,9 @@
 import { Context, Effect, Layer, Option, Redacted, Schema } from "effect";
-import { SqlClient, SqlSchema } from "effect/unstable/sql";
+import { SqlClient, SqlSchema } from "effect/sql";
 import { DomainRow } from "@/db/schema";
 import { ApiKeyPermissionGrant } from "@krak-stack/auth/access";
-import { HttpServerRequest } from "effect/unstable/http";
-import { HttpApiError } from "effect/unstable/httpapi";
+import { HttpServerRequest } from "effect/http";
+import { HttpApiError } from "effect/http-api";
 import {
   AuthProxyError,
   stripProxyOriginHeaders,

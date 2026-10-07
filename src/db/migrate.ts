@@ -1,7 +1,7 @@
 import * as BunServices from "@effect/platform-bun/BunServices";
 import { PgMigrator } from "@effect/sql-pg";
 import { Effect } from "effect";
-import { SqlClient } from "effect/unstable/sql";
+import { SqlClient } from "effect/sql";
 
 import initialMigration from "./migrations/0001_initial";
 

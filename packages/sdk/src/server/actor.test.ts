@@ -1,15 +1,7 @@
 import { describe, expect, it } from "@effect/vitest";
 import { Effect, Layer, Logger, Redacted, References, Schema } from "effect";
-import {
-  HttpRouter,
-  HttpServerRequest,
-  HttpServerResponse,
-} from "effect/unstable/http";
-import {
-  HttpApiEndpoint,
-  HttpApiError,
-  HttpApiGroup,
-} from "effect/unstable/httpapi";
+import { HttpRouter, HttpServerRequest, HttpServerResponse } from "effect/http";
+import { HttpApiEndpoint, HttpApiError, HttpApiGroup } from "effect/http-api";
 
 import { CurrentActor, defineProjectAccess } from "../access.js";
 import {

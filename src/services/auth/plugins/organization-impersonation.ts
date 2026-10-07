@@ -7,7 +7,7 @@ import { APIError } from "@better-auth/core/error";
 import { defaultKeyHasher } from "@better-auth/api-key";
 import { deleteSessionCookie, setSessionCookie } from "better-auth/cookies";
 import { Effect, Schema } from "effect";
-import { SqlClient, SqlSchema } from "effect/unstable/sql";
+import { SqlClient, SqlSchema } from "effect/sql";
 import { globalAdminRoles, hasAnyRole } from "@krak-stack/auth/roles";
 
 import { ApiKeyRow, IdRow, RoleRow } from "@/db/schema";

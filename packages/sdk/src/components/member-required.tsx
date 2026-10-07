@@ -1,6 +1,6 @@
 import { useAtomSet, useAtomSuspense } from "@effect/atom-react";
 import { Effect, Schema } from "effect";
-import { Atom } from "effect/unstable/reactivity";
+import { Atom } from "effect/reactivity";
 import { Check, Loader2, Mail, ShieldAlert } from "lucide-react";
 import { type ReactNode, useState } from "react";
 

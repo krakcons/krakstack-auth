@@ -1,8 +1,8 @@
 import { AuthClientApi } from "@krak-stack/auth/api";
 import { Effect } from "effect";
-import { FetchHttpClient, HttpClient } from "effect/unstable/http";
-import { HttpApiClient } from "effect/unstable/httpapi";
-import { AtomHttpApi } from "effect/unstable/reactivity";
+import { FetchHttpClient, HttpClient } from "effect/http";
+import { HttpApiClient } from "effect/http-api";
+import { AtomHttpApi } from "effect/reactivity";
 
 import { apiRuntime } from "@/lib/api-runtime";
 

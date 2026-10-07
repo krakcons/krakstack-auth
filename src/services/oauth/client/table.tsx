@@ -1,7 +1,7 @@
 import { useAtomSet, useAtomValue } from "@effect/atom-react";
 import { useNavigate, useSearch } from "@tanstack/react-router";
 import { Schema } from "effect";
-import { Atom, AsyncResult } from "effect/unstable/reactivity";
+import { Atom, AsyncResult } from "effect/reactivity";
 import { FolderKanban, KeyRound, Pencil, Trash2 } from "lucide-react";
 import { useState } from "react";
 

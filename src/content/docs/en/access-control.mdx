@@ -76,7 +76,7 @@ The `apiKeys` catalog is a ceiling, not an automatic grant. `encodeGrant` does n
 
 ```ts
 import { ActorRequired } from "@krak-stack/auth/server";
-import { HttpApiEndpoint, HttpApiGroup } from "effect/unstable/httpapi";
+import { HttpApiEndpoint, HttpApiGroup } from "effect/http-api";
 
 export const RecordsApi = HttpApiGroup.make("records").add(
   HttpApiEndpoint.patch("updateRecord", "/records/:id").middleware(
@@ -96,7 +96,7 @@ ActorRequired({ type: "apiKey", ownerType: "organization" });
 ```ts
 import { ActorRequired, AuthMiddleware } from "@krak-stack/auth/server";
 import { Layer } from "effect";
-import { HttpApiBuilder } from "effect/unstable/httpapi";
+import { HttpApiBuilder } from "effect/http-api";
 
 export const ApiLive = HttpApiBuilder.layer(AppApi).pipe(
   Layer.provide(ActorRequired.layer(Access)),

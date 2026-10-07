@@ -1,8 +1,8 @@
 import { describe, expect, it } from "@effect/vitest";
 import { Effect, Layer } from "effect";
 import { CredentialsFromEnv } from "@distilled.cloud/cloudflare";
-import { FetchHttpClient } from "effect/unstable/http";
-import { SqlClient } from "effect/unstable/sql";
+import { FetchHttpClient } from "effect/http";
+import { SqlClient } from "effect/sql";
 
 import { sqlTestLayer } from "@/services/database";
 import { Projects } from "@/services/projects";
