@@ -8,11 +8,11 @@ import { defaultKeyHasher } from "@better-auth/api-key";
 import { deleteSessionCookie, setSessionCookie } from "better-auth/cookies";
 import { Effect, Schema } from "effect";
 import { SqlClient, SqlSchema } from "effect/unstable/sql";
-import * as z from "zod";
 import { globalAdminRoles, hasAnyRole } from "@krak-stack/auth/roles";
 
 import { ApiKeyRow, IdRow, RoleRow } from "@/db/schema";
 import { runWithDatabase } from "@/services/database";
+import { OrganizationImpersonationBodyStandard } from "../schema";
 
 const authError = (code: string, message: string) => ({ code, message });
 
@@ -27,18 +27,6 @@ const schema = {
     },
   },
 } satisfies BetterAuthPluginDBSchema;
-
-const bodySchema = z.object({
-  organizationId: z.string().min(1),
-  actorUserId: z.string().min(1),
-  targetUserId: z.string().min(1),
-  expiresInSeconds: z
-    .number()
-    .int()
-    .positive()
-    .max(60 * 60 * 24)
-    .optional(),
-});
 
 const bearerToken = (value: string | null) => {
   if (!value?.startsWith("Bearer ")) return null;
@@ -141,7 +129,7 @@ export const organizationImpersonation = () =>
         "/organization/impersonate-user",
         {
           method: "POST",
-          body: bodySchema,
+          body: OrganizationImpersonationBodyStandard,
           requireHeaders: true,
           metadata: {
             openapi: {
