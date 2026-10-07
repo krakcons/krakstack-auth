@@ -16,11 +16,13 @@ ENV VITE_ANALYTICS_WEBSITE_ID=$VITE_ANALYTICS_WEBSITE_ID
 # Install dependencies
 COPY package.json bun.lock ./
 COPY packages/sdk/package.json ./packages/sdk/package.json
-RUN bun install
+COPY patches ./patches
+RUN bun install --frozen-lockfile --ignore-scripts
 
 # Copy source
 COPY . .
 
+RUN bun run prepare
 RUN bun run build
 
 EXPOSE 3000

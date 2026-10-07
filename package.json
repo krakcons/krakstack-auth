@@ -41,7 +41,7 @@
     "@effect/platform-bun": "4.0.0",
     "@effect/sql-pg": "4.0.0",
     "@krak-stack/auth": "workspace:*",
-    "@krak-stack/registry": "^0.1.35",
+    "@krak-stack/registry": "^0.1.36",
     "@lucas-barake/effect-form-react": "0.26.0-beta.5",
     "@opentelemetry/api": "^1.9.1",
     "@opentelemetry/exporter-trace-otlp-http": "^0.219.0",
@@ -92,7 +92,6 @@
     "vitest": "^5.0.3"
   },
   "overrides": {
-    "@krak-stack/registry": "file:../krakstack-site/tmp/registry-effect4.tgz",
     "@effect/platform-node-shared": "4.0.0",
     "@lucas-barake/effect-form": "0.25.0-beta.6",
     "@lucas-barake/effect-form-react": "0.26.0-beta.5"

@@ -81,7 +81,7 @@
     "react-qr-code": "^2.2.0"
   },
   "devDependencies": {
-    "@krak-stack/registry": "0.1.35"
+    "@krak-stack/registry": "0.1.36"
   },
   "peerDependencies": {
     "@krak-stack/registry": "^0.1.36",
