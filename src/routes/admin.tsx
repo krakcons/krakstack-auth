@@ -39,8 +39,8 @@ export const Route = createFileRoute("/admin")({
   head: () => ({
     meta: [{ name: "robots", content: "noindex,nofollow" }],
   }),
-  beforeLoad: async () => {
-    const session = await Effect.runPromise(getAuthSession());
+  beforeLoad: async ({ context }) => {
+    const session = await Effect.runPromise(getAuthSession(context.registry));
 
     if (!session?.user) {
       throw redirect({ to: "/sign-in" });

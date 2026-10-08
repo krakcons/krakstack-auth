@@ -1,8 +1,9 @@
 import { AuthClientApi } from "@krak-stack/auth/api";
+import { authSessionAtom } from "@krak-stack/auth/components";
 import { Effect } from "effect";
 import { FetchHttpClient, HttpClient } from "effect/http";
 import { HttpApiClient } from "effect/http-api";
-import { AtomHttpApi } from "effect/reactivity";
+import { AtomHttpApi, AtomRegistry } from "effect/reactivity";
 
 import { apiRuntime } from "@/lib/api-runtime";
 
@@ -44,14 +45,10 @@ const makeAuthClient = HttpApiClient.make(AuthClientApi, {
   transformClient: withCredentials,
 }).pipe(Effect.provide(FetchHttpClient.layer));
 
-export const getAuthSession = () =>
-  makeAuthClient.pipe(
-    Effect.flatMap((client) =>
-      client.auth.getSession({
-        query: { disableCookieCache: "true" },
-      }),
-    ),
-  );
+const sessionAtom = authSessionAtom(authOrigin);
+
+export const getAuthSession = (registry: AtomRegistry.AtomRegistry) =>
+  AtomRegistry.getResult(registry, sessionAtom);
 
 export const ensureKrakOrganizationSelected = () =>
   makeAuthClient.pipe(
