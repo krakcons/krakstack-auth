@@ -1,5 +1,10 @@
 import { Link, createFileRoute } from "@tanstack/react-router";
-import { useQuery } from "@tanstack/react-query";
+import { useAtomValue } from "@effect/atom-react";
+import type {
+  DailyActiveUsersByDay,
+  ProjectConnections,
+} from "@krak-stack/auth/admin";
+import { AsyncResult } from "effect/reactivity";
 import { areaY, barY, defineChart, group } from "@tanstack/charts";
 import { Chart } from "@tanstack/charts/react";
 import { scaleBand } from "@tanstack/charts/scales/band";
@@ -15,9 +20,12 @@ import {
   Users,
 } from "lucide-react";
 import { useMemo, useState } from "react";
-import { Schema } from "effect";
 
 import { m } from "@/paraglide/messages";
+import {
+  dashboardStatsAtom,
+  type ChartRange,
+} from "@/services/admin/client/atom";
 import { SidebarPageHeader } from "@krak-stack/registry/sidebar-layout";
 import { StatsCard } from "@krak-stack/registry/stats-card";
 import {
@@ -39,30 +47,10 @@ export const Route = createFileRoute("/admin/")({
   component: DashboardPage,
 });
 
-const DailyCount = Schema.Struct({ date: Schema.String, count: Schema.Number });
-type DailyCount = typeof DailyCount.Type;
-const ProjectConnection = Schema.Struct({
-  projectId: Schema.String,
-  projectName: Schema.String,
-  users: Schema.Number,
-  organizations: Schema.Number,
-});
-type ProjectConnection = typeof ProjectConnection.Type;
-const DashboardStats = Schema.Struct({
-  totalUsers: Schema.Number,
-  totalOrganizations: Schema.Number,
-  totalProjects: Schema.Number,
-  totalDomains: Schema.Number,
-  totalApiKeys: Schema.Number,
-  totalOauthClients: Schema.Number,
-  dailyActiveUsers: Schema.Number,
-  dailyActiveUsersByDay: Schema.Array(DailyCount),
-  signupsByDay: Schema.Array(DailyCount),
-  projectConnections: Schema.Array(ProjectConnection),
-}).annotate({ identifier: "DashboardStats" });
+type DailyCount = typeof DailyActiveUsersByDay.Type;
+type ProjectConnection = typeof ProjectConnections.Type;
 
 const chartRanges = ["7", "14", "30", "90"] as const;
-type ChartRange = (typeof chartRanges)[number];
 
 const chartRangeOptions: { value: ChartRange; label: string }[] = [
   { value: "7", label: m.admin_chart_range_7_days() },
@@ -73,20 +61,6 @@ const chartRangeOptions: { value: ChartRange; label: string }[] = [
 
 const isChartRange = (value: string): value is ChartRange =>
   chartRanges.some((range) => range === value);
-
-function useDashboardStats(range: ChartRange) {
-  return useQuery({
-    queryKey: ["admin", "dashboard", range],
-    queryFn: async () => {
-      const params = new URLSearchParams({ days: range });
-      const res = await fetch(`/api/auth/admin/dashboard-stats?${params}`, {
-        credentials: "include",
-      });
-      if (!res.ok) throw new Error("Failed to fetch dashboard stats.");
-      return Schema.decodeUnknownPromise(DashboardStats)(await res.json());
-    },
-  });
-}
 
 const formatDay = (value: string) =>
   new Date(`${value}T00:00:00Z`).toLocaleDateString(undefined, {
@@ -257,7 +231,10 @@ function ProjectConnectionBars({
 
 function DashboardPage() {
   const [chartRange, setChartRange] = useState<ChartRange>("14");
-  const { data: stats, isLoading, error } = useDashboardStats(chartRange);
+  const result = useAtomValue(dashboardStatsAtom(chartRange));
+  const stats = AsyncResult.isSuccess(result) ? result.value : undefined;
+  const isLoading = AsyncResult.isInitial(result);
+  const error = AsyncResult.isFailure(result);
 
   const formatStat = (value: number | undefined) =>
     isLoading ? "..." : (value ?? 0).toLocaleString();

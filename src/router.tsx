@@ -1,31 +1,28 @@
 import { createRouter as createTanStackRouter } from "@tanstack/react-router";
-import { setupRouterSsrQueryIntegration } from "@tanstack/react-router-ssr-query";
 import { routeTree } from "./routeTree.gen";
 import { deLocalizeUrl, localizeUrl } from "./paraglide/runtime.js";
-import { QueryClient } from "@tanstack/react-query";
+import { RegistryContext } from "@effect/atom-react";
+import { AtomRegistry } from "effect/reactivity";
 
 export function getRouter() {
-  const queryClient = new QueryClient({
-    defaultOptions: {
-      queries: {
-        staleTime: 1000 * 60,
-      },
-    },
-  });
+  const registry = AtomRegistry.make({ defaultIdleTTL: 400 });
 
   const router = createTanStackRouter({
     routeTree,
     scrollRestoration: true,
     defaultPreload: "intent",
     defaultPreloadStaleTime: 0,
-    context: { queryClient },
+    context: { registry },
+    Wrap: ({ children }) => (
+      <RegistryContext.Provider value={registry}>
+        {children}
+      </RegistryContext.Provider>
+    ),
     rewrite: {
       input: ({ url }) => deLocalizeUrl(url),
       output: ({ url }) => localizeUrl(url),
     },
   });
-
-  setupRouterSsrQueryIntegration({ router, queryClient });
 
   return router;
 }

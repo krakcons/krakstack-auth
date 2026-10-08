@@ -6,7 +6,7 @@ import {
   createRootRouteWithContext,
   useRouterState,
 } from "@tanstack/react-router";
-import type { QueryClient } from "@tanstack/react-query";
+import type { AtomRegistry } from "effect/reactivity";
 import { Suspense } from "react";
 import { KrakstackAuthProvider } from "@krak-stack/auth/components";
 import { useAtomValue } from "@effect/atom-react";
@@ -32,7 +32,7 @@ const AppErrorComponent = (props: ErrorComponentProps) => (
 );
 
 export const Route = createRootRouteWithContext<{
-  queryClient: QueryClient;
+  registry: AtomRegistry.AtomRegistry;
 }>()({
   head: () => ({
     meta: [
