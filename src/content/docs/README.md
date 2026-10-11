@@ -102,7 +102,7 @@ The route owns its loader, redirects, and TanStack registration. Compose the exp
 
 ```bash
 bun run test src/lib/docs.test.ts
-bun type:check
+bun check
 bun lint
 bun run build
 ```

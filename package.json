@@ -23,7 +23,6 @@
     "lint": "oxlint",
     "fmt": "oxfmt",
     "fmt:check": "oxfmt --check .",
-    "type:check": "tsc --noEmit",
     "auth:generate": "bun x auth generate --config ./src/services/auth/config.ts --output ./tmp/auth-schema.sql",
     "shadcn:update": "for file in src/components/ui/*.tsx; do bunx shadcn@latest add -y -o $(basename \"$file\" .tsx); done",
     "prepare": "effect-tsgo patch"

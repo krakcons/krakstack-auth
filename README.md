@@ -50,7 +50,7 @@ bun run dev
 | `bun run dev`             | Start the development server on port `3001`  |
 | `bun run build`           | Build the SDK and application                |
 | `bun run test`            | Run Vitest                                   |
-| `bun run type:check`      | Check TypeScript                             |
+| `bun check`               | Check TypeScript                             |
 | `bun run lint`            | Run Oxlint                                   |
 | `bun run fmt`             | Format with Oxfmt                            |
 | `bun run auth:generate`   | Generate reference Better Auth SQL in `tmp/` |
