@@ -1,4 +1,4 @@
-import { Effect, type Redacted } from "effect";
+import { Effect, type Redacted, Schema } from "effect";
 import {
   Cookies,
   FetchHttpClient,
@@ -13,6 +13,7 @@ import {
   authProxyKeyHeader,
   proxyOriginHeaders,
 } from "./proxy-origin.js";
+import { AuthProxyOrigin } from "./schema.js";
 
 const blockedRequestHeaders = [
   "accept-encoding",
@@ -47,6 +48,8 @@ const hostOnlyCookie = (cookie: string) =>
 export interface ProxyAuthRequestOptions {
   cookieDomain?: string;
   apiKey?: Redacted.Redacted<string>;
+  /** For proxyAuthHttpEffect only; enable behind an ingress that overwrites x-forwarded-proto. */
+  trustForwardedProto?: boolean;
 }
 
 const normalizedCookieDomain = (domain: string) =>
@@ -208,5 +211,22 @@ export const proxyAuthHttpEffect = (
   Effect.gen(function* () {
     const request = yield* HttpServerRequest.HttpServerRequest;
     const webRequest = yield* HttpServerRequest.toWeb(request);
-    return yield* proxyAuthRequestEffect(webRequest, baseUrl, options);
+    if (!options?.trustForwardedProto) {
+      return yield* proxyAuthRequestEffect(webRequest, baseUrl, options);
+    }
+
+    // toWeb can return the original Web Request with the internal HTTP URL.
+    // Trust only the configured ingress protocol, never forwarded host headers.
+    const url = new URL(webRequest.url);
+    const protocol = yield* Schema.decodeUnknownEffect(
+      AuthProxyOrigin.fields.protocol,
+    )(request.headers["x-forwarded-proto"] ?? url.protocol.slice(0, -1)).pipe(
+      Effect.mapError(() => new AuthProxyError({ reason: "invalid" })),
+    );
+    url.protocol = `${protocol}:`;
+    return yield* proxyAuthRequestEffect(
+      new Request(url, webRequest),
+      baseUrl,
+      options,
+    );
   });

@@ -1,8 +1,14 @@
 import { describe, expect, it } from "@effect/vitest";
 import { Effect, Redacted } from "effect";
-import { HttpClient, HttpClientRequest, HttpClientResponse } from "effect/http";
+import {
+  HttpClient,
+  HttpClientRequest,
+  HttpClientResponse,
+  HttpServerRequest,
+} from "effect/http";
 
 import {
+  proxyAuthHttpEffect,
   proxyAuthRequest as sendProxyRequest,
   proxyAuthRequestEffect as sendProxyRequestEffect,
   type ProxyAuthRequestOptions,
@@ -35,6 +41,152 @@ const mockFetch = (handler: FetchHandler): typeof fetch => {
   implementation.preconnect = globalThis.fetch.preconnect;
   return implementation;
 };
+
+describe("proxyAuthHttpEffect", () => {
+  it.effect(
+    "keeps local HTTP and preserves sign-in bodies when no protocol is forwarded",
+    () => {
+      const body = '{"email":"learner@example.org"}';
+      const request = new Request(
+        "http://localhost:3000/api/auth/sign-in/email",
+        {
+          method: "POST",
+          body,
+          headers: { "content-type": "application/json" },
+        },
+      );
+      const client = HttpClient.make((outgoing) =>
+        Effect.gen(function* () {
+          expect(outgoing.method).toBe("POST");
+          expect(outgoing.headers["x-krakstack-forwarded-proto"]).toBe("http");
+          expect(outgoing.headers["x-krakstack-forwarded-host"]).toBe(
+            "localhost:3000",
+          );
+          const web = yield* HttpClientRequest.toWeb(outgoing);
+          expect(yield* Effect.promise(() => web.text())).toBe(body);
+          return HttpClientResponse.fromWeb(
+            outgoing,
+            new Response(null, { status: 204 }),
+          );
+        }),
+      );
+      return proxyAuthHttpEffect("http://auth.internal", {
+        apiKey,
+        trustForwardedProto: true,
+      }).pipe(
+        Effect.provideService(
+          HttpServerRequest.HttpServerRequest,
+          HttpServerRequest.fromWeb(request),
+        ),
+        Effect.provideService(HttpClient.HttpClient, client),
+      );
+    },
+  );
+  for (const host of ["learning.kokobi.org", "learn.customer.org"]) {
+    it.effect(`restores the trusted ingress HTTPS protocol for ${host}`, () => {
+      const request = new Request(
+        `http://${host}/api/auth/get-session?test=1`,
+        {
+          headers: {
+            "x-forwarded-proto": "https",
+            "x-forwarded-host": "attacker.example",
+            "x-krakstack-forwarded-host": "attacker.example",
+            "x-krakstack-forwarded-proto": "http",
+            cookie: "session=test",
+          },
+        },
+      );
+      const client = HttpClient.make((outgoing, url) =>
+        Effect.sync(() => {
+          expect(url.toString()).toBe(
+            "http://auth.internal/api/auth/get-session?test=1",
+          );
+          expect(outgoing.headers["x-krakstack-forwarded-host"]).toBe(host);
+          expect(outgoing.headers["x-krakstack-forwarded-proto"]).toBe("https");
+          expect(outgoing.headers["x-forwarded-proto"]).toBe("https");
+          expect(outgoing.headers.cookie).toBe("session=test");
+          return HttpClientResponse.fromWeb(
+            outgoing,
+            new Response(null, { status: 204 }),
+          );
+        }),
+      );
+      return proxyAuthHttpEffect("http://auth.internal", {
+        apiKey,
+        trustForwardedProto: true,
+      }).pipe(
+        Effect.provideService(
+          HttpServerRequest.HttpServerRequest,
+          HttpServerRequest.fromWeb(request),
+        ),
+        Effect.provideService(HttpClient.HttpClient, client),
+      );
+    });
+  }
+
+  it.effect(
+    "does not trust forwarding headers unless explicitly enabled",
+    () => {
+      const request = new Request(
+        "http://localhost:3000/api/auth/get-session",
+        {
+          headers: { "x-forwarded-proto": "https" },
+        },
+      );
+      const client = HttpClient.make((outgoing) =>
+        Effect.sync(() => {
+          expect(outgoing.headers["x-krakstack-forwarded-proto"]).toBe("http");
+          return HttpClientResponse.fromWeb(
+            outgoing,
+            new Response(null, { status: 204 }),
+          );
+        }),
+      );
+      return proxyAuthHttpEffect("http://auth.internal", { apiKey }).pipe(
+        Effect.provideService(
+          HttpServerRequest.HttpServerRequest,
+          HttpServerRequest.fromWeb(request),
+        ),
+        Effect.provideService(HttpClient.HttpClient, client),
+      );
+    },
+  );
+
+  it.effect(
+    "rejects invalid trusted ingress protocols before contacting auth",
+    () =>
+      Effect.gen(function* () {
+        const request = new Request(
+          "http://learning.kokobi.org/api/auth/get-session",
+          {
+            headers: { "x-forwarded-proto": "javascript" },
+          },
+        );
+        const result = yield* Effect.result(
+          proxyAuthHttpEffect("http://auth.internal", {
+            apiKey,
+            trustForwardedProto: true,
+          }).pipe(
+            Effect.provideService(
+              HttpServerRequest.HttpServerRequest,
+              HttpServerRequest.fromWeb(request),
+            ),
+            Effect.provideService(
+              HttpClient.HttpClient,
+              HttpClient.make(() => Effect.die("Unexpected upstream request")),
+            ),
+          ),
+        );
+        expect(result._tag).toBe("Failure");
+        if (result._tag === "Failure") {
+          expect(result.failure).toMatchObject({
+            _tag: "AuthProxyError",
+            reason: "invalid",
+          });
+        }
+      }),
+  );
+});
 
 describe("proxyAuthRequest", () => {
   it.effect("preserves the tenant origin across auth endpoints", () =>
