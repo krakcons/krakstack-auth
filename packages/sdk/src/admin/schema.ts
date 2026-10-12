@@ -1,7 +1,7 @@
 import { Schema } from "effect";
 import { ApiKeyPermissionGrant } from "../access.js";
 
-import { PaginatedResponse, Query } from "../query.js";
+import { PaginatedResponse, Query } from "@krak-stack/registry/query";
 
 import {
   ServerCreateDomainPayload,
@@ -367,4 +367,3 @@ export {
   ServerDomainRecordsResponse,
   ServerUpdateDomainPayload,
 };
-export { SortParamsFromString } from "../query.js";

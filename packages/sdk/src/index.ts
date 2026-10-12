@@ -1,5 +1,4 @@
 export * from "./schema.js";
-export * as Query from "./query.js";
 export * as Roles from "./roles.js";
 export { AuthClientApi, AuthServiceApi } from "./api.js";
 export { AuthService, type AuthServiceLayerOptions } from "./service.js";

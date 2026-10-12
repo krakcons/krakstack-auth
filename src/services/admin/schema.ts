@@ -1,6 +1,11 @@
 import { ApiKeyPermissionGrant } from "@krak-stack/auth/access";
+import { AdminListQuery } from "@krak-stack/auth/admin";
 import { Schema } from "effect";
 import { ApiKeyRow, OrganizationRow, UserRow } from "@/db/schema";
+
+export const AdminListRequest = Schema.toType(AdminListQuery).annotate({
+  identifier: "AdminListRequest",
+});
 
 export type ApiKeySqlUpdate = {
   -readonly [K in keyof typeof ApiKeyRow.Type]?: (typeof ApiKeyRow.Type)[K];

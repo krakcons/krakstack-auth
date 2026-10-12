@@ -10,11 +10,7 @@ import {
   type DataTableColDef,
   DataTableListSummary,
 } from "@krak-stack/registry/data-table";
-import {
-  Query,
-  SortParamsFromString,
-  type QueryType,
-} from "@krak-stack/registry/query";
+import { Query, type QueryType } from "@krak-stack/registry/query";
 import { ErrorMessage } from "@krak-stack/registry/effect-form";
 import { AppBrand } from "@krak-stack/registry/app-brand";
 import { Badge } from "@/components/ui/badge";
@@ -32,6 +28,7 @@ import type {
   AdminOrganizationPreview,
   AdminProjectPreview,
 } from "../admin/schema.js";
+import { AdminListQuery } from "../admin/schema.js";
 
 import { notifyAuthChange } from "./auth-atoms.js";
 import { authClientApi, authHttpClient } from "./auth-client-api.js";
@@ -136,43 +133,15 @@ type User = {
   projects: ReadonlyArray<AdminProjectPreview>;
 };
 
-interface AdminUsersQuery {
-  page: number;
-  pageSize: number;
-  globalFilter?: string;
-  sort?: string;
-  projectId?: string;
-}
-
 const AdminUsersFamilyKey = Schema.fromJsonString(
   Schema.Struct({
-    query: Schema.Struct({
-      page: Schema.Number,
-      pageSize: Schema.Number,
-      globalFilter: Schema.optional(Schema.String),
-      sort: Schema.optional(Schema.String),
-      projectId: Schema.optional(Schema.String),
-    }),
+    query: AdminListQuery,
     reloadKey: Schema.Number,
   }),
 ).annotate({ identifier: "AdminUsersFamilyKey" });
 
-const adminUsersQuery = (search: QueryType, projectId?: string | null) => {
-  let query: AdminUsersQuery = {
-    page: search.page ?? 0,
-    pageSize: search.pageSize ?? 10,
-  };
-  if (search.globalFilter)
-    query = { ...query, globalFilter: search.globalFilter };
-  if (search.sort)
-    query = {
-      ...query,
-      sort: Schema.encodeSync(SortParamsFromString)(search.sort),
-    };
-  if (projectId) query = { ...query, projectId };
-
-  return query;
-};
+const adminUsersQuery = (search: QueryType, projectId?: string | null) =>
+  projectId ? { ...search, projectId } : search;
 
 const adminUsersFamilyKey = (
   search: QueryType,

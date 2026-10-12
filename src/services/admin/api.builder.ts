@@ -1,7 +1,7 @@
 import { Effect, Schema } from "effect";
 import { SqlClient, SqlSchema } from "effect/sql";
 import { HttpApiBuilder, HttpApiError } from "effect/http-api";
-import { AdminListQuery, SortParamsFromString } from "@krak-stack/auth/admin";
+import { AdminListQuery } from "@krak-stack/auth/admin";
 
 import { AdminApi } from "@/api";
 import { ApiKeyRow, ResourcePreviewRow } from "@/db/schema";
@@ -13,6 +13,7 @@ import {
 import { Domains } from "@/services/domains";
 import { Organizations } from "@/services/organizations";
 import {
+  AdminListRequest,
   AdminOrganizationRow,
   AdminUserRow,
   ApiKeyPermissionsJson,
@@ -81,9 +82,7 @@ const orderBy = (
           userId: "o.user_id",
           createdAt: "o.created_at",
         };
-  const sorts = query.sort
-    ? Schema.decodeSync(SortParamsFromString)(query.sort)
-    : [];
+  const sorts = query.sort ?? [];
   const clauses = sorts.flatMap(({ id, direction }) => {
     const column = columns[id];
     return column ? [`${column} ${direction === "desc" ? "DESC" : "ASC"}`] : [];
@@ -308,7 +307,7 @@ export const adminApiHandler = HttpApiBuilder.group(
               sql`SELECT count(*)::int AS count FROM "user" u ${filters}`,
           })(undefined).pipe(Effect.mapError(internalServerError));
           const users = yield* SqlSchema.findAll({
-            Request: AdminListQuery,
+            Request: AdminListRequest,
             Result: AdminUserRow,
             execute: (
               input,
@@ -359,7 +358,7 @@ export const adminApiHandler = HttpApiBuilder.group(
               sql`SELECT count(*)::int AS count FROM organization o ${filters}`,
           })(undefined).pipe(Effect.mapError(internalServerError));
           const organizations = yield* SqlSchema.findAll({
-            Request: AdminListQuery,
+            Request: AdminListRequest,
             Result: AdminOrganizationRow,
             execute: (
               input,

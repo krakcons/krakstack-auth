@@ -10,11 +10,7 @@ import {
   type DataTableColDef,
   DataTableListSummary,
 } from "@krak-stack/registry/data-table";
-import {
-  Query,
-  SortParamsFromString,
-  type QueryType,
-} from "@krak-stack/registry/query";
+import { Query, type QueryType } from "@krak-stack/registry/query";
 import { ErrorMessage } from "@krak-stack/registry/effect-form";
 import { AppBrand } from "@krak-stack/registry/app-brand";
 import { Badge } from "@/components/ui/badge";
@@ -29,7 +25,7 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 
-import type { AdminOrganization } from "../admin/schema.js";
+import { AdminListQuery, type AdminOrganization } from "../admin/schema.js";
 import { normalizeOrganizationRoles } from "../roles.js";
 import { AdminOrganizationForm } from "./admin-organization-form.js";
 import { authClientApi, authHttpClient } from "./auth-client-api.js";
@@ -145,43 +141,15 @@ const organizationDisplay = (
   };
 };
 
-interface AdminOrganizationsQuery {
-  page: number;
-  pageSize: number;
-  globalFilter?: string;
-  sort?: string;
-  projectId?: string;
-}
-
 const AdminOrganizationsFamilyKey = Schema.fromJsonString(
   Schema.Struct({
-    query: Schema.Struct({
-      page: Schema.Number,
-      pageSize: Schema.Number,
-      globalFilter: Schema.optional(Schema.String),
-      sort: Schema.optional(Schema.String),
-      projectId: Schema.optional(Schema.String),
-    }),
+    query: AdminListQuery,
     reloadKey: Schema.Number,
   }),
 ).annotate({ identifier: "AdminOrganizationsFamilyKey" });
 
-const organizationsQuery = (search: QueryType, projectId?: string | null) => {
-  let query: AdminOrganizationsQuery = {
-    page: search.page ?? 0,
-    pageSize: search.pageSize ?? 10,
-  };
-  if (search.globalFilter)
-    query = { ...query, globalFilter: search.globalFilter };
-  if (search.sort)
-    query = {
-      ...query,
-      sort: Schema.encodeSync(SortParamsFromString)(search.sort),
-    };
-  if (projectId) query = { ...query, projectId };
-
-  return query;
-};
+const organizationsQuery = (search: QueryType, projectId?: string | null) =>
+  projectId ? { ...search, projectId } : search;
 
 const adminOrganizationsFamilyKey = (
   search: QueryType,
