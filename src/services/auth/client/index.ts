@@ -45,7 +45,7 @@ const makeAuthClient = HttpApiClient.make(AuthClientApi, {
   transformClient: withCredentials,
 }).pipe(Effect.provide(FetchHttpClient.layer));
 
-const sessionAtom = authSessionAtom(authOrigin);
+export const sessionAtom = authSessionAtom(authOrigin);
 
 export const getAuthSession = (registry: AtomRegistry.AtomRegistry) =>
   AtomRegistry.getResult(registry, sessionAtom);

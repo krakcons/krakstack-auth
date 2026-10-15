@@ -8,37 +8,13 @@ Typed Effect contracts, server authentication middleware, project authorization 
 bun add @krak-stack/auth effect
 ```
 
-### Temporary Effect form patches
+### Effect forms
 
-React consumers of this interim release must patch both published form betas for
-stable Effect 4. The patches are bundled with Auth but are **not applied
-automatically** to a consuming application.
-
-```sh
-mkdir -p patches
-cp node_modules/@krak-stack/auth/patches/*.patch patches/
-```
-
-Merge these fields into the application's workspace-root `package.json`,
-preserving existing overrides and patches, then run `bun install`:
-
-```json
-{
-  "overrides": {
-    "@lucas-barake/effect-form": "0.25.0-beta.6",
-    "@lucas-barake/effect-form-react": "0.26.0-beta.5"
-  },
-  "patchedDependencies": {
-    "@lucas-barake/effect-form@0.25.0-beta.6": "patches/@lucas-barake%2Feffect-form@0.25.0-beta.6.patch",
-    "@lucas-barake/effect-form-react@0.26.0-beta.5": "patches/@lucas-barake%2Feffect-form-react@0.26.0-beta.5.patch"
-  }
-}
-```
-
-Commit the patches, manifest, and lockfile together. Other package managers need
-equivalent patch configuration. Server-only imports do not load the form
-libraries. See the bundled `patches/README.md` for provenance and cleanup after
-[upstream release PR #111](https://github.com/lucas-barake/effect-form/pull/111).
+React components use `@lucas-barake/effect-form-react@1.1.0`, which supports
+stable Effect 4 without compatibility patches. When upgrading from the patched
+betas, remove their `patchedDependencies` entries and patch files, update any
+direct form dependencies or version overrides to `1.1.0`, and run `bun install`.
+Server-only imports do not load the form libraries.
 
 ### Entry points
 

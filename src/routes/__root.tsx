@@ -6,17 +6,19 @@ import {
   createRootRouteWithContext,
   useRouterState,
 } from "@tanstack/react-router";
-import type { AtomRegistry } from "effect/reactivity";
+import { AsyncResult, type AtomRegistry } from "effect/reactivity";
+import { Effect } from "effect";
 import { Suspense } from "react";
 import { KrakstackAuthProvider } from "@krak-stack/auth/components";
-import { useAtomValue } from "@effect/atom-react";
+import { useAtomSubscribe, useAtomValue } from "@effect/atom-react";
+import { BrowserOtlp } from "@krak-stack/registry/opentelemetry/browser";
 import {
   ErrorComponent,
   type ErrorComponentProps,
 } from "@krak-stack/registry/error-component";
 import { Loading } from "@krak-stack/registry/loading";
 import { KrakstackProvider } from "@krak-stack/registry/krakstack-provider";
-import { authBaseUrl } from "@/services/auth/client";
+import { authBaseUrl, sessionAtom } from "@/services/auth/client";
 import { ApiClient } from "@/lib/api-client";
 import { authAccessLabels } from "@/services/auth/access-labels";
 
@@ -129,7 +131,25 @@ function RootContent() {
 }
 
 function RootDocument({ children }: { children: React.ReactNode }) {
-  useAtomValue(ApiClient.runtime);
+  const runtime = useAtomValue(ApiClient.runtime);
+  useAtomSubscribe(
+    sessionAtom,
+    (session) => {
+      if (!AsyncResult.isSuccess(runtime)) return;
+      Effect.runFork(
+        BrowserOtlp.identify(
+          AsyncResult.isSuccess(session) && !session.waiting && session.value
+            ? {
+                userId: session.value.user.id,
+                organizationId:
+                  session.value.session.activeOrganizationId ?? undefined,
+              }
+            : null,
+        ),
+      );
+    },
+    { immediate: true },
+  );
 
   return (
     <html lang={getLocale()}>
