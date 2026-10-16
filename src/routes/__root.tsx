@@ -4,6 +4,7 @@ import {
   Outlet,
   Scripts,
   createRootRouteWithContext,
+  stripSearchParams,
   useRouterState,
 } from "@tanstack/react-router";
 import { AsyncResult, type AtomRegistry } from "effect/reactivity";
@@ -36,6 +37,14 @@ const AppErrorComponent = (props: ErrorComponentProps) => (
 export const Route = createRootRouteWithContext<{
   registry: AtomRegistry.AtomRegistry;
 }>()({
+  search: {
+    middlewares: [
+      stripSearchParams<{ page?: number; pageSize?: number }>({
+        page: 0,
+        pageSize: 20,
+      }),
+    ],
+  },
   head: () => ({
     meta: [
       {
