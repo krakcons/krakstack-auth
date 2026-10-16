@@ -53,7 +53,12 @@ const adminNavGroups: NavGroup[] = [
   {
     label: m.sidebar_group_manage,
     items: [
-      { label: m.sidebar_nav_dashboard, href: "/admin", icon: LayoutDashboard },
+      {
+        label: m.sidebar_nav_dashboard,
+        href: "/admin",
+        exact: true,
+        icon: LayoutDashboard,
+      },
       {
         label: m.sidebar_nav_projects,
         href: "/admin/projects",
