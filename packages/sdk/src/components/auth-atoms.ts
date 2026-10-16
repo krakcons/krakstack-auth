@@ -87,3 +87,9 @@ export const getLastUsedLoginMethod = () => {
 export const notifyAuthChange = () => {
   globalThis.window?.dispatchEvent(new Event(AUTH_CLIENT_CHANGE_EVENT));
 };
+
+// Changing identity must discard the host application's router and query caches.
+// Do not notify mounted guards first: they still belong to the previous user.
+export const reloadAfterImpersonation = () => {
+  window.location.reload();
+};

@@ -1,5 +1,4 @@
 import { useAtomSet, useAtomSubscribe, useAtomValue } from "@effect/atom-react";
-import { useNavigate, useRouter } from "@tanstack/react-router";
 import { Cause, Effect, Schema } from "effect";
 import { Atom, AsyncResult } from "effect/reactivity";
 import { Building2, Pencil, Trash2, UserCog } from "lucide-react";
@@ -31,7 +30,11 @@ import { AdminOrganizationForm } from "./admin-organization-form.js";
 import { authClientApi, authHttpClient } from "./auth-client-api.js";
 import { type KrakstackAuthLocale, useKrakstackAuth } from "./auth-provider.js";
 import { assetUrl, organizationBranding } from "./utils.js";
-import { authSessionAtom, notifyAuthChange } from "./auth-atoms.js";
+import {
+  authSessionAtom,
+  notifyAuthChange,
+  reloadAfterImpersonation,
+} from "./auth-atoms.js";
 
 const defaultMessages = {
   en: {
@@ -225,8 +228,6 @@ export function AdminOrganizationsTable({
   const m = adminOrganizationsMessages(locale, messageOverrides);
   const baseUrl = auth?.baseUrl;
   const projectId = auth?.projectId;
-  const navigate = useNavigate();
-  const router = useRouter();
   const sessionResult = useAtomValue(authSessionAtom(baseUrl));
   const actorUserId = AsyncResult.match(sessionResult, {
     onInitial: () => null,
@@ -249,18 +250,12 @@ export function AdminOrganizationsTable({
             .organizationSetActive({ payload: { organizationId } })
             .pipe(
               Effect.tapError(() =>
-                client.auth.adminStopImpersonating({ payload: {} }),
+                client.auth
+                  .adminStopImpersonating({ payload: {} })
+                  .pipe(Effect.tap(() => Effect.sync(notifyAuthChange))),
               ),
-              Effect.ensuring(Effect.sync(notifyAuthChange)),
             );
-          yield* Effect.tryPromise({
-            try: async () => {
-              await navigate({ to: "/" });
-              await router.invalidate();
-            },
-            catch: (cause) =>
-              cause instanceof Error ? cause : new Error(String(cause)),
-          });
+          yield* Effect.sync(reloadAfterImpersonation);
         }),
     ),
   );
@@ -282,15 +277,7 @@ export function AdminOrganizationsTable({
           yield* client.auth.organizationImpersonateUser({
             payload: { actorUserId, organizationId, targetUserId },
           });
-          notifyAuthChange();
-          yield* Effect.tryPromise({
-            try: async () => {
-              await navigate({ to: "/" });
-              await router.invalidate();
-            },
-            catch: (cause) =>
-              cause instanceof Error ? cause : new Error(String(cause)),
-          });
+          yield* Effect.sync(reloadAfterImpersonation);
         }),
     ),
   );

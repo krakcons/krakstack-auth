@@ -1,5 +1,4 @@
 import { useAtomSet, useAtomValue } from "@effect/atom-react";
-import { useNavigate, useRouter } from "@tanstack/react-router";
 import { Atom, AsyncResult } from "effect/reactivity";
 import { Effect, Schema } from "effect";
 import { Ban, Loader2, ShieldOff, UserCog, UserIcon } from "lucide-react";
@@ -30,7 +29,7 @@ import type {
 } from "../admin/schema.js";
 import { AdminListQuery } from "../admin/schema.js";
 
-import { notifyAuthChange } from "./auth-atoms.js";
+import { reloadAfterImpersonation } from "./auth-atoms.js";
 import { authClientApi, authHttpClient } from "./auth-client-api.js";
 import { type KrakstackAuthLocale, useKrakstackAuth } from "./auth-provider.js";
 import { assetUrl } from "./utils.js";
@@ -203,8 +202,6 @@ export function AdminUsersTable({
   reloadKey?: number;
   search?: QueryType;
 }) {
-  const navigate = useNavigate();
-  const router = useRouter();
   const auth = useKrakstackAuth();
   const m = labels(auth?.locale ?? "en");
   const baseUrl = auth?.baseUrl;
@@ -238,17 +235,7 @@ export function AdminUsersTable({
       Effect.gen(function* () {
         const client = yield* authHttpClient(baseUrl);
         yield* client.auth.adminImpersonateUser({ payload: { userId } });
-        notifyAuthChange();
-        yield* Effect.tryPromise({
-          try: async () => {
-            await navigate({ to: "/" });
-            await router.invalidate();
-          },
-          catch: (cause) =>
-            cause instanceof Error
-              ? cause
-              : new Error(m.admin_error_impersonate),
-        });
+        yield* Effect.sync(reloadAfterImpersonation);
       }).pipe(
         Effect.catch((cause) =>
           Effect.sync(() =>

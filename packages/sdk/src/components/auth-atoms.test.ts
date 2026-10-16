@@ -2,9 +2,30 @@ import { describe, expect, it } from "@effect/vitest";
 import { Atom, AtomRegistry } from "effect/reactivity";
 import { vi } from "vitest";
 
-import { notifyAuthChange, refreshOnAuthChange } from "./auth-atoms.js";
+import {
+  AUTH_CLIENT_CHANGE_EVENT,
+  notifyAuthChange,
+  refreshOnAuthChange,
+  reloadAfterImpersonation,
+} from "./auth-atoms.js";
 
 describe("auth atom revalidation", () => {
+  it("reloads after impersonation without refreshing the previous user's guards", () => {
+    const reload = vi.fn();
+    const window = Object.assign(new EventTarget(), { location: { reload } });
+    const onAuthChange = vi.fn();
+    window.addEventListener(AUTH_CLIENT_CHANGE_EVENT, onAuthChange);
+    vi.stubGlobal("window", window);
+    try {
+      reloadAfterImpersonation();
+
+      expect(reload).toHaveBeenCalledExactlyOnceWith();
+      expect(onAuthChange).not.toHaveBeenCalled();
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
   it("refreshes mounted queries across registries and releases listeners", () => {
     const document = Object.assign(new EventTarget(), {
       visibilityState: "visible",

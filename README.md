@@ -61,6 +61,12 @@ bun run dev
 
 Database-backed service tests must use `TEST_DATABASE_URL`, never `DATABASE_URL`.
 
+### SDK releases
+
+SDK versions and changelogs are managed with Changesets. Run `bun run changeset`
+with SDK changes, then use `bun run version:packages` when preparing a release.
+Publishing remains manual. See the [SDK release workflow](.changeset/README.md).
+
 ### Database migrations
 
 Migrations use `PgMigrator` in `src/db/migrate.ts`. Add new numbered Effect migrations in `src/db/migrations/` and register them in the loader. `bun run start` runs migrations before starting the production server.
