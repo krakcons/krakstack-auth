@@ -23,6 +23,7 @@ const parseOrganizationMetadata = (metadata: typeof Schema.Unknown.Type) =>
 export const organizationBranding = (
   organization: OrganizationBrandingSource | null | undefined,
   locale: Locale = "en",
+  image: "icon" | "logo" = "icon",
 ) => {
   if (!organization) return null;
 
@@ -38,6 +39,9 @@ export const organizationBranding = (
 
   return {
     name: translation?.name || organization.name,
-    logo: translation?.icon || translation?.logo || organization.logo,
+    logo:
+      (image === "icon" ? translation?.icon : null) ||
+      translation?.logo ||
+      organization.logo,
   };
 };

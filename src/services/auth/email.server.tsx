@@ -285,6 +285,7 @@ const resolveEmailIdentity = async (
   const organizationDisplay = organizationBranding(
     organization ?? null,
     locale,
+    "logo",
   );
   const appName = organizationDisplay?.name ?? project?.name ?? fallbackAppName;
   const theme = emailThemeFromCss(projectThemeCss(project?.data));
