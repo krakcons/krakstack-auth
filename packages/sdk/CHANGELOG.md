@@ -1,5 +1,11 @@
 # @krak-stack/auth
 
+## 0.2.22
+
+### Patch Changes
+
+- Update the KrakStack registry development dependency and minimum peer requirement to `0.1.48` for corrected image previews, full-width image inputs, file metadata, and non-overlapping replace/delete actions. Use compact, consistently sized icon and logo previews in account and organization forms without changing suggested upload resolutions.
+
 ## 0.2.21
 
 ### Patch Changes

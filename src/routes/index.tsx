@@ -4,7 +4,6 @@ import {
   Blocks,
   Building2,
   Check,
-  Fingerprint,
   Globe2,
   KeyRound,
   Menu,
@@ -119,7 +118,7 @@ function Home() {
           <AppBrand
             label={m.sidebar_brand()}
             subtitle={m.sidebar_brand_subtitle()}
-            icon={Fingerprint}
+            icon={Users}
             className="min-w-0"
           />
           <div className="ml-auto flex shrink-0 items-center gap-2 text-sm">
@@ -328,7 +327,7 @@ function AuthPreview() {
         </div>
         <div className="grid min-h-96 sm:grid-cols-[0.72fr_1.28fr]">
           <div className="bg-primary text-primary-foreground hidden flex-col justify-between p-6 sm:flex">
-            <Fingerprint className="size-8" />
+            <Users className="size-8" />
             <div>
               <div className="mb-3 flex gap-1">
                 <span className="h-1 w-7 rounded-full bg-current" />

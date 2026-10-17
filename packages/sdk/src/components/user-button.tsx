@@ -1968,8 +1968,8 @@ const UserForm = ({
             <form.image
               label={m.user_profile_photo_upload_label()}
               size={{
-                width: 96,
-                height: 96,
+                width: 40,
+                height: 40,
                 suggestedWidth: 512,
                 suggestedHeight: 512,
               }}

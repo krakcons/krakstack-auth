@@ -1994,8 +1994,8 @@ function EditOrganizationSection({
                 <form.enLogo
                   label={m.organization_logo()}
                   size={{
-                    width: 175,
-                    height: 50,
+                    width: 140,
+                    height: 40,
                     suggestedWidth: 350,
                     suggestedHeight: 100,
                   }}
@@ -2003,8 +2003,8 @@ function EditOrganizationSection({
                 <form.enIcon
                   label={m.organization_icon()}
                   size={{
-                    width: 96,
-                    height: 96,
+                    width: 40,
+                    height: 40,
                     suggestedWidth: 512,
                     suggestedHeight: 512,
                   }}
@@ -2018,8 +2018,8 @@ function EditOrganizationSection({
                 <form.frLogo
                   label={m.organization_logo()}
                   size={{
-                    width: 175,
-                    height: 50,
+                    width: 140,
+                    height: 40,
                     suggestedWidth: 350,
                     suggestedHeight: 100,
                   }}
@@ -2027,8 +2027,8 @@ function EditOrganizationSection({
                 <form.frIcon
                   label={m.organization_icon()}
                   size={{
-                    width: 96,
-                    height: 96,
+                    width: 40,
+                    height: 40,
                     suggestedWidth: 512,
                     suggestedHeight: 512,
                   }}
@@ -2210,8 +2210,8 @@ function CreateOrganizationSection({
                 <form.enLogo
                   label={m.organization_logo()}
                   size={{
-                    width: 175,
-                    height: 50,
+                    width: 140,
+                    height: 40,
                     suggestedWidth: 350,
                     suggestedHeight: 100,
                   }}
@@ -2219,8 +2219,8 @@ function CreateOrganizationSection({
                 <form.enIcon
                   label={m.organization_icon()}
                   size={{
-                    width: 96,
-                    height: 96,
+                    width: 40,
+                    height: 40,
                     suggestedWidth: 512,
                     suggestedHeight: 512,
                   }}
@@ -2234,8 +2234,8 @@ function CreateOrganizationSection({
                 <form.frLogo
                   label={m.organization_logo()}
                   size={{
-                    width: 175,
-                    height: 50,
+                    width: 140,
+                    height: 40,
                     suggestedWidth: 350,
                     suggestedHeight: 100,
                   }}
@@ -2243,8 +2243,8 @@ function CreateOrganizationSection({
                 <form.frIcon
                   label={m.organization_icon()}
                   size={{
-                    width: 96,
-                    height: 96,
+                    width: 40,
+                    height: 40,
                     suggestedWidth: 512,
                     suggestedHeight: 512,
                   }}

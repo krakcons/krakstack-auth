@@ -152,8 +152,8 @@ export function ProjectForm({
             <form.logo
               label={m.oauth_client_logo_url()}
               size={{
-                width: 96,
-                height: 96,
+                width: 140,
+                height: 40,
                 suggestedWidth: 512,
                 suggestedHeight: 512,
               }}
