@@ -16,6 +16,7 @@ const config = defineConfig({
     ],
   },
   resolve: {
+    dedupe: ["@krak-stack/registry"],
     alias: [
       {
         find: /^@krak-stack\/auth$/,

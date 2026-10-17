@@ -6,8 +6,49 @@ import {
   UserContactPhonesForm,
   UserContactSocialsForm,
   UserContactWebsitesForm,
+  userContactEmailDefaults,
   userMetadataFromForm,
 } from "./user-button";
+
+describe("userContactEmailDefaults", () => {
+  it("keeps the primary sign-in email out of the editable contacts", () => {
+    for (const metadata of [{}, { emails: [] }]) {
+      expect(userContactEmailDefaults(metadata, " ada@example.com ")).toEqual(
+        [],
+      );
+    }
+  });
+
+  it("preserves existing contact emails and localized labels", () => {
+    const emails = [
+      {
+        email: "work@example.com",
+        translations: [{ locale: "fr" as const, label: "Travail" }],
+      },
+    ];
+    expect(userContactEmailDefaults({ emails }, "ada@example.com")).toEqual(
+      emails,
+    );
+  });
+
+  it("does not add a blank contact email", () => {
+    expect(userContactEmailDefaults({}, " ")).toEqual([]);
+  });
+
+  it("removes existing copies of the primary email from the editable contacts", () => {
+    expect(
+      userContactEmailDefaults(
+        {
+          emails: [
+            { email: "ADA@example.com", translations: [] },
+            { email: "work@example.com", translations: [] },
+          ],
+        },
+        "ada@example.com",
+      ),
+    ).toEqual([{ email: "work@example.com", translations: [] }]);
+  });
+});
 
 describe("userMetadataFromForm", () => {
   it("accepts draft values that normalization can clean", () => {

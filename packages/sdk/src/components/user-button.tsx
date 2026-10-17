@@ -75,6 +75,8 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Separator } from "@/components/ui/separator";
+import { FieldLabel } from "@/components/ui/field";
+import { Input } from "@/components/ui/input";
 
 import { authClientApi, authHttpClient } from "./auth-client-api.js";
 import { authSessionAtom, notifyAuthChange } from "./auth-atoms.js";
@@ -239,6 +241,7 @@ const messages = {
     user_contact_description:
       "Add up to 8 public contacts of each type, separately from the email used to sign in.",
     user_contact_email_type: "Email",
+    user_contact_primary: "Primary",
     user_contact_extension: "Extension",
     user_contact_label: "Label",
     user_contact_phone_type: "Phone",
@@ -405,6 +408,7 @@ const messages = {
     user_contact_description:
       "Ajoutez jusqu’à 8 coordonnées publiques de chaque type, distinctes du courriel utilisé pour vous connecter.",
     user_contact_email_type: "Courriel",
+    user_contact_primary: "Principal",
     user_contact_extension: "Poste",
     user_contact_label: "Libellé",
     user_contact_phone_type: "Téléphone",
@@ -551,6 +555,23 @@ type UserFormType = {
   websites: ReadonlyArray<ContactWebsiteValue>;
   socials: ReadonlyArray<ContactSocialValue>;
 };
+
+export const userContactEmailDefaults = (
+  metadata: UserMetadata,
+  email: string,
+): ContactEmailValue[] =>
+  (metadata.emails ?? []).filter(
+    (contact) =>
+      contact.email.trim().toLowerCase() !== email.trim().toLowerCase(),
+  );
+
+export const userPrimaryContactEmail = (email: string): ContactEmailValue => ({
+  email,
+  translations: [
+    { locale: "en", label: messages.en.user_contact_primary },
+    { locale: "fr", label: messages.fr.user_contact_primary },
+  ],
+});
 
 const changePasswordFormBuilder = FormBuilder.empty
   .addField("currentPassword", Schema.NonEmptyString)
@@ -1079,10 +1100,11 @@ export const UserButton = ({
         }}
       >
         <UserForm
+          primaryEmail={displayEmail}
           defaultValues={{
             name: displayName ?? "",
             image: displayImage || null,
-            emails: Array.from(metadata.emails ?? []),
+            emails: userContactEmailDefaults(metadata, displayEmail),
             phones: Array.from(metadata.phones ?? []),
             websites: Array.from(metadata.websites ?? []),
             socials: Array.from(metadata.socials ?? []),
@@ -1092,7 +1114,14 @@ export const UserButton = ({
             Effect.gen(function* () {
               setFormError(null);
               const metadata = yield* Effect.try({
-                try: () => userMetadataFromForm(values),
+                try: () =>
+                  userMetadataFromForm({
+                    ...values,
+                    emails: [
+                      userPrimaryContactEmail(displayEmail),
+                      ...values.emails,
+                    ],
+                  }),
                 catch: () => new Error(m.user_contact_validation_error()),
               });
               const imageFile = isFile(values.image) ? values.image : null;
@@ -1904,10 +1933,12 @@ const providerName = (
 
 const UserForm = ({
   defaultValues,
+  primaryEmail,
   error,
   onSubmit,
 }: {
   defaultValues: UserFormType;
+  primaryEmail: string;
   error?: string | null;
   onSubmit: (values: UserFormType) => Effect.Effect<void, unknown>;
 }) => {
@@ -1999,9 +2030,21 @@ const UserForm = ({
                 />
               </div>
               <UserContactGroup title={m.user_contact_email_type()}>
+                <div className="bg-muted/20 rounded-lg border p-4">
+                  <FieldLabel htmlFor="user-primary-contact-email">
+                    {m.user_contact_primary()}
+                  </FieldLabel>
+                  <Input
+                    id="user-primary-contact-email"
+                    className="mt-2"
+                    type="email"
+                    value={primaryEmail}
+                    readOnly
+                  />
+                </div>
                 <form.emails
                   locale={editingLocale}
-                  maxItems={USER_CONTACT_LIMIT}
+                  maxItems={USER_CONTACT_LIMIT - 1}
                   messages={userContactFieldMessages(m)}
                 />
               </UserContactGroup>
