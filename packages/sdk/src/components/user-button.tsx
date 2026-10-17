@@ -78,6 +78,12 @@ import { FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 
 import { authClientApi, authHttpClient } from "./auth-client-api.js";
+import { PasswordField } from "./password-field.js";
+import {
+  PasswordResetActions,
+  PasswordResetFeedback,
+  usePasswordResetRequest,
+} from "./password-reset-flow.js";
 import { authSessionAtom, notifyAuthChange } from "./auth-atoms.js";
 import { useKrakstackAuth, type KrakstackAuthLocale } from "./auth-provider.js";
 import { parseApiKeyReferrers } from "./api-key.js";
@@ -127,6 +133,15 @@ const messages = {
     user_account_confirm_revoke: "Revoke account",
     user_account_connected: "Connected",
     user_account_current_password: "Current password",
+    sign_in_forgot_password: "Forgot your password?",
+    user_password_reset_title: "Check your email",
+    user_password_reset_description:
+      "We sent you a link to reset your password. After resetting, sign in again to continue.",
+    user_password_reset_error:
+      "Unable to send password reset email. Please try again.",
+    user_password_reset_sending: "Sending reset email…",
+    user_password_reset_resend: "Resend email",
+    user_password_reset_countdown: "Resend in {seconds}s",
     user_account_google_connect: "Set up",
     user_account_google_description:
       "Use your Google account as a sign-in option.",
@@ -288,6 +303,15 @@ const messages = {
     user_account_confirm_revoke: "Révoquer le compte",
     user_account_connected: "Connecté",
     user_account_current_password: "Mot de passe actuel",
+    sign_in_forgot_password: "Mot de passe oublié?",
+    user_password_reset_title: "Consultez votre courriel",
+    user_password_reset_description:
+      "Nous vous avons envoyé un lien pour réinitialiser votre mot de passe. Après la réinitialisation, reconnectez-vous pour continuer.",
+    user_password_reset_error:
+      "Impossible d’envoyer le courriel de réinitialisation. Veuillez réessayer.",
+    user_password_reset_sending: "Envoi du courriel de réinitialisation…",
+    user_password_reset_resend: "Renvoyer le courriel",
+    user_password_reset_countdown: "Renvoyer dans {seconds} s",
     user_account_google_connect: "Configurer",
     user_account_google_description:
       "Utilisez votre compte Google comme option de connexion.",
@@ -824,6 +848,8 @@ export const UserButton = ({
   const [revokingAccount, setRevokingAccount] = useState<LinkedAccount | null>(
     null,
   );
+  const [passwordResetVisible, setPasswordResetVisible] = useState(false);
+  const passwordReset = usePasswordResetRequest(resolvedBaseUrl);
   const settingsDialog =
     controlledDialog !== undefined ? controlledDialog : uncontrolledDialog;
   const [formError, setFormError] = useState<string | null>(null);
@@ -943,6 +969,20 @@ export const UserButton = ({
   const canManageUserSettings = !isOrganizationImpersonating;
   const canUseAdminSettings = !isOrganizationImpersonating;
   const isAdmin = hasAdminRole(session.user);
+
+  const startPasswordReset = () => {
+    if (passwordReset.result.waiting) return;
+    if (passwordReset.resendSeconds > 0) {
+      setPasswordResetVisible(true);
+      return;
+    }
+    passwordReset.send({
+      locale: getLocale,
+      email: displayEmail,
+      redirectTo: `${window.location.origin}/reset-password`,
+      onSent: () => setPasswordResetVisible(true),
+    });
+  };
 
   const startSignOut = () => {
     const redirectUrl = signOutRedirect.startsWith("http")
@@ -1160,57 +1200,41 @@ export const UserButton = ({
       <Dialog
         open={canManageUserSettings && settingsDialog === "security"}
         onOpenChange={(open) => {
+          setSettingsDialog((current) =>
+            open ? "security" : current === "security" ? null : current,
+          );
+        }}
+        onOpenChangeComplete={(open) => {
+          if (open) return;
+          // Keep the active page intact until the exit animation has finished.
+          setPasswordResetVisible(false);
           setChangingPassword(false);
           setSettingPassword(false);
           setTotpSetup(null);
           setManagingTwoFactor(false);
           setRevokingAccount(null);
-          setSettingsDialog((current) =>
-            open ? "security" : current === "security" ? null : current,
-          );
         }}
       >
         <ScrollableDialogContent size="3xl">
           <ScrollableDialogHeader>
-            <DialogHeader className="sm:flex-row sm:items-end sm:justify-between sm:gap-4">
-              <div className="flex min-w-0 flex-col gap-2">
-                <DialogTitle className="text-2xl">
-                  {changingPassword
-                    ? m.user_account_password_change_title()
-                    : settingPassword
-                      ? m.user_account_password_set()
-                      : revokingAccount
-                        ? m.user_account_revoke()
-                        : managingTwoFactor
-                          ? m.user_two_factor_title()
-                          : m.user_security_title()}
-                </DialogTitle>
-                <DialogDescription>
-                  {changingPassword
-                    ? m.user_account_password_change_description()
-                    : settingPassword
-                      ? m.user_account_password_description()
-                      : revokingAccount
-                        ? m.user_account_revoke_description({
-                            provider: providerName(
-                              revokingAccount.providerId,
-                              m,
-                            ),
-                          })
-                        : managingTwoFactor
-                          ? m.user_two_factor_description()
-                          : m.user_security_description()}
-                </DialogDescription>
-              </div>
-              {changingPassword ||
+            <DialogHeader className="gap-4">
+              {passwordResetVisible ||
+              changingPassword ||
               settingPassword ||
               revokingAccount ||
               managingTwoFactor ? (
                 <Button
-                  className="mt-2 w-fit sm:mt-0"
+                  className="h-auto w-fit p-0"
                   type="button"
-                  variant="secondary"
+                  variant="link"
+                  disabled={
+                    passwordResetVisible && passwordReset.result.waiting
+                  }
                   onClick={() => {
+                    if (passwordResetVisible) {
+                      setPasswordResetVisible(false);
+                      return;
+                    }
                     setChangingPassword(false);
                     setSettingPassword(false);
                     setTotpSetup(null);
@@ -1222,11 +1246,68 @@ export const UserButton = ({
                   {m.user_account_back()}
                 </Button>
               ) : null}
+              <div className="flex min-w-0 flex-col gap-2">
+                <DialogTitle className="text-2xl">
+                  {passwordResetVisible
+                    ? m.user_password_reset_title()
+                    : changingPassword
+                      ? m.user_account_password_change_title()
+                      : settingPassword
+                        ? m.user_account_password_set()
+                        : revokingAccount
+                          ? m.user_account_revoke()
+                          : managingTwoFactor
+                            ? m.user_two_factor_title()
+                            : m.user_security_title()}
+                </DialogTitle>
+                <DialogDescription>
+                  {passwordResetVisible
+                    ? m.user_password_reset_description()
+                    : changingPassword
+                      ? m.user_account_password_change_description()
+                      : settingPassword
+                        ? m.user_account_password_description()
+                        : revokingAccount
+                          ? m.user_account_revoke_description({
+                              provider: providerName(
+                                revokingAccount.providerId,
+                                m,
+                              ),
+                            })
+                          : managingTwoFactor
+                            ? m.user_two_factor_description()
+                            : m.user_security_description()}
+                </DialogDescription>
+              </div>
             </DialogHeader>
           </ScrollableDialogHeader>
           <ScrollableDialogBody>
-            {changingPassword ? (
-              <ChangePasswordForm baseUrl={resolvedBaseUrl} />
+            <PasswordResetFeedback
+              pending={passwordReset.result.waiting}
+              sendingLabel={m.user_password_reset_sending()}
+              error={
+                AsyncResult.isFailure(passwordReset.result) ? (
+                  <p role="alert" className="text-destructive text-sm">
+                    {m.user_password_reset_error()}
+                  </p>
+                ) : null
+              }
+            />
+            {passwordResetVisible ? (
+              <PasswordResetActions
+                pending={passwordReset.result.waiting}
+                resendSeconds={passwordReset.resendSeconds}
+                onResend={startPasswordReset}
+                resendLabel={m.user_password_reset_resend()}
+                countdownLabel={(seconds) =>
+                  m.user_password_reset_countdown({ seconds })
+                }
+              />
+            ) : changingPassword ? (
+              <ChangePasswordForm
+                baseUrl={resolvedBaseUrl}
+                onResetPassword={startPasswordReset}
+              />
             ) : settingPassword ? (
               <SetPasswordForm
                 baseUrl={resolvedBaseUrl}
@@ -1237,6 +1318,7 @@ export const UserButton = ({
               />
             ) : revokingAccount ? (
               <RevokeAccountForm
+                onResetPassword={startPasswordReset}
                 baseUrl={resolvedBaseUrl}
                 account={revokingAccount}
                 requirePassword={requiresPasswordForAccountRevoke(
@@ -1260,6 +1342,7 @@ export const UserButton = ({
               />
             ) : managingTwoFactor ? (
               <AccountSecuritySettings
+                onResetPassword={startPasswordReset}
                 baseUrl={resolvedBaseUrl}
                 accountCache={accountCache}
                 onSetup={setTotpSetup}
@@ -1301,6 +1384,7 @@ export const UserButton = ({
                   </div>
                   {hasTwoFactorEnabled(session?.user) ? (
                     <AccountSecuritySettings
+                      onResetPassword={startPasswordReset}
                       baseUrl={resolvedBaseUrl}
                       accountCache={accountCache}
                       onSetup={setTotpSetup}
@@ -1696,14 +1780,20 @@ function PasswordSettings({
   );
 }
 
-function ChangePasswordForm({ baseUrl }: { baseUrl?: string | undefined }) {
+function ChangePasswordForm({
+  baseUrl,
+  onResetPassword,
+}: {
+  baseUrl?: string | undefined;
+  onResetPassword: () => void;
+}) {
   const m = useUserButtonMessages();
   const [saved, setSaved] = useState(false);
   let reset = () => {};
   const [form] = useState(() =>
     FormReact.make(changePasswordFormBuilder, {
       runtime: authClientApi(baseUrl).runtime,
-      fields: { currentPassword: TextField, newPassword: TextField },
+      fields: { currentPassword: PasswordField, newPassword: PasswordField },
       mode: { validation: "onSubmit" },
       onSubmit: (_, { decoded }) =>
         authHttpClient(baseUrl).pipe(
@@ -1743,13 +1833,15 @@ function ChangePasswordForm({ baseUrl }: { baseUrl?: string | undefined }) {
       >
         <form.currentPassword
           label={m.user_account_current_password()}
-          type="password"
           autoComplete="current-password"
+          recovery={{
+            label: m.sign_in_forgot_password(),
+            onClick: onResetPassword,
+          }}
           required
         />
         <form.newPassword
           label={m.user_account_new_password()}
-          type="password"
           autoComplete="new-password"
           required
         />
@@ -1778,7 +1870,7 @@ function SetPasswordForm({
   const [form] = useState(() =>
     FormReact.make(passwordFormBuilder(true), {
       runtime: authClientApi(baseUrl).runtime,
-      fields: { password: TextField },
+      fields: { password: PasswordField },
       mode: { validation: "onSubmit" },
       onSubmit: (_, { decoded }) =>
         authHttpClient(baseUrl).pipe(
@@ -1812,7 +1904,6 @@ function SetPasswordForm({
       >
         <form.password
           label={m.user_account_new_password()}
-          type="password"
           autoComplete="new-password"
           required
         />
@@ -1825,12 +1916,14 @@ function SetPasswordForm({
 
 function RevokeAccountForm({
   baseUrl,
+  onResetPassword,
   account,
   requirePassword,
   onCancel,
   onRevoked,
 }: {
   baseUrl?: string | undefined;
+  onResetPassword: () => void;
   account: LinkedAccount;
   requirePassword: boolean;
   onCancel: () => void;
@@ -1840,7 +1933,7 @@ function RevokeAccountForm({
   const [form] = useState(() =>
     FormReact.make(passwordFormBuilder(requirePassword), {
       runtime: authClientApi(baseUrl).runtime,
-      fields: { password: TextField },
+      fields: { password: PasswordField },
       mode: { validation: "onSubmit" },
       onSubmit: (_, { decoded }) =>
         Effect.gen(function* () {
@@ -1891,8 +1984,11 @@ function RevokeAccountForm({
         {requirePassword ? (
           <form.password
             label={m.user_field_password()}
-            type="password"
             autoComplete="current-password"
+            recovery={{
+              label: m.sign_in_forgot_password(),
+              onClick: onResetPassword,
+            }}
             required
           />
         ) : null}
@@ -2101,10 +2197,12 @@ const UserContactGroup = ({
 
 function AccountSecuritySettings({
   baseUrl,
+  onResetPassword,
   accountCache,
   onSetup,
 }: {
   baseUrl?: string | undefined;
+  onResetPassword: () => void;
   accountCache: AccountCache;
   onSetup: (setup: TotpSetup) => void;
 }) {
@@ -2139,6 +2237,7 @@ function AccountSecuritySettings({
         </p>
       ) : twoFactorEnabled ? (
         <DisableTotpForm
+          onResetPassword={onResetPassword}
           baseUrl={baseUrl}
           requirePassword={requirePassword}
           onDisabled={async () => {
@@ -2148,6 +2247,7 @@ function AccountSecuritySettings({
         />
       ) : (
         <EnableTotpForm
+          onResetPassword={onResetPassword}
           baseUrl={baseUrl}
           requirePassword={requirePassword}
           onEnabled={onSetup}
@@ -2162,10 +2262,12 @@ function AccountSecuritySettings({
 
 function EnableTotpForm({
   baseUrl,
+  onResetPassword,
   requirePassword,
   onEnabled,
 }: {
   baseUrl?: string | undefined;
+  onResetPassword: () => void;
   requirePassword: boolean;
   onEnabled: (setup: TotpSetup) => void;
 }) {
@@ -2173,7 +2275,7 @@ function EnableTotpForm({
   const [form] = useState(() =>
     FormReact.make(passwordFormBuilder(requirePassword), {
       runtime: authClientApi(baseUrl).runtime,
-      fields: { password: TextField },
+      fields: { password: PasswordField },
       mode: { validation: "onSubmit" },
       onSubmit: (_, { decoded }) =>
         authHttpClient(baseUrl).pipe(
@@ -2221,8 +2323,11 @@ function EnableTotpForm({
         {requirePassword ? (
           <form.password
             label={m.user_field_password()}
-            type="password"
             autoComplete="current-password"
+            recovery={{
+              label: m.sign_in_forgot_password(),
+              onClick: onResetPassword,
+            }}
             required
           />
         ) : null}
@@ -2330,10 +2435,12 @@ function VerifyTotpSetup({
 
 function DisableTotpForm({
   baseUrl,
+  onResetPassword,
   requirePassword,
   onDisabled,
 }: {
   baseUrl?: string | undefined;
+  onResetPassword: () => void;
   requirePassword: boolean;
   onDisabled: () => Promise<void>;
 }) {
@@ -2341,7 +2448,7 @@ function DisableTotpForm({
   const [form] = useState(() =>
     FormReact.make(passwordFormBuilder(requirePassword), {
       runtime: authClientApi(baseUrl).runtime,
-      fields: { password: TextField },
+      fields: { password: PasswordField },
       mode: { validation: "onSubmit" },
       onSubmit: (_, { decoded }) =>
         authHttpClient(baseUrl).pipe(
@@ -2376,8 +2483,11 @@ function DisableTotpForm({
         {requirePassword ? (
           <form.password
             label={m.user_field_password()}
-            type="password"
             autoComplete="current-password"
+            recovery={{
+              label: m.sign_in_forgot_password(),
+              onClick: onResetPassword,
+            }}
             required
           />
         ) : null}
@@ -2525,7 +2635,22 @@ function ApiKeyManager({
   return (
     <>
       <ScrollableDialogHeader>
-        <DialogHeader className="sm:flex-row sm:items-end sm:justify-between sm:gap-4">
+        <DialogHeader className="gap-4">
+          {creating || editingKey ? (
+            <Button
+              className="h-auto w-fit p-0"
+              onClick={() => {
+                setCreating(false);
+                setCreatedKey(null);
+                setEditingKey(null);
+              }}
+              type="button"
+              variant="link"
+            >
+              <ArrowLeft />
+              {m.user_api_key_back()}
+            </Button>
+          ) : null}
           <div className="flex min-w-0 flex-col gap-2">
             <DialogTitle className="text-2xl">
               {editingKey
@@ -2546,23 +2671,9 @@ function ApiKeyManager({
                     : m.user_api_keys_description()}
             </DialogDescription>
           </div>
-          {creating || editingKey ? (
+          {!creating && !editingKey ? (
             <Button
-              className="mt-2 w-fit sm:mt-0"
-              onClick={() => {
-                setCreating(false);
-                setCreatedKey(null);
-                setEditingKey(null);
-              }}
-              type="button"
-              variant="secondary"
-            >
-              <ArrowLeft />
-              {m.user_api_key_back()}
-            </Button>
-          ) : (
-            <Button
-              className="mt-2 w-fit sm:mt-0"
+              className="w-fit"
               onClick={() => {
                 setCreatedKey(null);
                 setCreating(true);
@@ -2572,7 +2683,7 @@ function ApiKeyManager({
               <Plus />
               {m.user_api_key_create_title()}
             </Button>
-          )}
+          ) : null}
         </DialogHeader>
       </ScrollableDialogHeader>
       <ScrollableDialogBody className="flex min-w-0 flex-col gap-5">

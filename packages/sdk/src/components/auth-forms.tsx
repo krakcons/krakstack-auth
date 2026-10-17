@@ -37,6 +37,20 @@ import {
 
 import { getLastUsedLoginMethod, notifyAuthChange } from "./auth-atoms.js";
 import { authClientApi, authHttpClient } from "./auth-client-api.js";
+import { PasswordField } from "./password-field.js";
+import {
+  passwordResetSearch,
+  passwordResetConfirmation,
+  passwordResetConfirmationSearch,
+  passwordResetCallbackUrl,
+  requestPasswordResetEmail,
+  resetPasswordAndSignOut,
+} from "./password-reset.js";
+import {
+  PasswordResetActions,
+  PasswordResetFeedback,
+  usePasswordResetRequest,
+} from "./password-reset-flow.js";
 import { type KrakstackAuthLocale, useKrakstackAuth } from "./auth-provider.js";
 import { cn } from "./utils.js";
 import {
@@ -90,6 +104,7 @@ const defaultMessages = {
     field_email: "Email",
     field_password: "Password",
     forgot_password_back_to_sign_in: "Back to sign in",
+    forgot_password_change_email: "Change email",
     forgot_password_description:
       "Enter your email and we will send a reset link if an account exists.",
     forgot_password_error: "Unable to send password reset email.",
@@ -97,6 +112,12 @@ const defaultMessages = {
     forgot_password_success:
       "If an account exists for that email, a reset link has been sent.",
     forgot_password_title: "Reset password",
+    user_password_reset_title: "Check your email",
+    user_password_reset_sending: "Sending reset email…",
+    user_password_reset_resend: "Resend email",
+    user_password_reset_countdown: "Resend in {seconds}s",
+    forgot_password_success_email:
+      "If an account exists for {email}, we’ve sent a password-reset link.",
     error_network:
       "We couldn't reach the server. Check your connection and try again.",
     error_rate_limited:
@@ -161,6 +182,7 @@ const defaultMessages = {
     field_email: "Courriel",
     field_password: "Mot de passe",
     forgot_password_back_to_sign_in: "Retour à la connexion",
+    forgot_password_change_email: "Modifier le courriel",
     forgot_password_description:
       "Saisissez votre courriel et nous enverrons un lien de réinitialisation si un compte existe.",
     forgot_password_error:
@@ -169,6 +191,12 @@ const defaultMessages = {
     forgot_password_success:
       "Si un compte existe pour ce courriel, un lien de réinitialisation a été envoyé.",
     forgot_password_title: "Réinitialiser le mot de passe",
+    user_password_reset_title: "Consultez votre courriel",
+    user_password_reset_sending: "Envoi du courriel de réinitialisation…",
+    user_password_reset_resend: "Renvoyer le courriel",
+    user_password_reset_countdown: "Renvoyer dans {seconds} s",
+    forgot_password_success_email:
+      "Si un compte existe pour {email}, nous avons envoyé un lien de réinitialisation.",
     error_network:
       "Impossible de joindre le serveur. Vérifiez votre connexion et réessayez.",
     error_rate_limited:
@@ -296,7 +324,11 @@ type AuthFormProps = {
   defaultRedirectTo?: string | undefined;
 };
 
-type SigninErrorContext = "signIn" | "sendEmailOtp" | "verifyEmailOtp";
+type SigninErrorContext =
+  | "signIn"
+  | "sendEmailOtp"
+  | "verifyEmailOtp"
+  | "resetPassword";
 
 const useAuthFormOptions = ({ baseUrl, locale }: AuthFormProps) => {
   const auth = useKrakstackAuth();
@@ -368,9 +400,6 @@ const authLinkClassName = cn(
   buttonVariants({ variant: "link", size: null }),
   "h-auto align-baseline",
 );
-
-const searchObject = (searchString: string) =>
-  Object.fromEntries(new URLSearchParams(searchString));
 
 const authMethodSearch = (
   searchString: string,
@@ -487,7 +516,7 @@ export function Signin(props: AuthFormProps) {
   const [form] = useState(() =>
     FormReact.make(signinFormBuilder, {
       runtime: authClientApi(baseUrl).runtime,
-      fields: { email: TextField, password: TextField, otp: OtpField },
+      fields: { email: TextField, password: PasswordField, otp: OtpField },
       mode: { validation: "onSubmit" },
       onSubmit: (
         action:
@@ -497,11 +526,35 @@ export function Signin(props: AuthFormProps) {
               method: "password" | "emailOtp";
               otpSent: boolean;
             }
-          | { type: "sendEmailOtp" },
+          | { type: "sendEmailOtp" }
+          | { type: "resetPassword" },
         { decoded: value },
       ) =>
         Effect.gen(function* () {
           const email = value.email.trim();
+          if (action.type === "resetPassword") {
+            yield* requestPasswordResetEmail({
+              baseUrl,
+              locale,
+              email,
+              redirectTo: passwordResetCallbackUrl(
+                searchString,
+                window.location.origin,
+                email,
+              ),
+            });
+            yield* Effect.promise(() =>
+              navigate({
+                to: "/reset-password",
+                search: passwordResetConfirmationSearch(
+                  searchString,
+                  email,
+                  Date.now(),
+                ),
+              }),
+            );
+            return;
+          }
           const sendEmailOtp = authHttpClient(baseUrl, locale).pipe(
             Effect.flatMap((client) =>
               client.auth.sendVerificationOtp({
@@ -750,23 +803,19 @@ export function Signin(props: AuthFormProps) {
                 <div className="flex flex-col gap-2">
                   <form.password
                     label={m.field_password}
-                    type="password"
                     autoFocus
                     autoComplete="current-password"
+                    recovery={{
+                      label: m.sign_in_forgot_password,
+                      disabled: submitResult.waiting,
+                      onClick: () => {
+                        setErrorContext("resetPassword");
+                        submit({ type: "resetPassword" });
+                      },
+                    }}
                     required
                   />
                   <div className="flex flex-wrap gap-x-4 gap-y-2 text-sm">
-                    <Link
-                      className={authLinkClassName}
-                      to="/reset-password"
-                      search={authMethodSearch(
-                        searchString,
-                        "password",
-                        formValues.email.trim(),
-                      )}
-                    >
-                      {m.sign_in_forgot_password}
-                    </Link>
                     {canChangeAuthMethod ? (
                       <Button
                         type="button"
@@ -822,21 +871,27 @@ export function Signin(props: AuthFormProps) {
                 labels={m}
                 messages={{
                   fallback:
-                    errorContext === "sendEmailOtp"
-                      ? m.sign_in_email_otp_send_error
-                      : errorContext === "verifyEmailOtp"
-                        ? m.sign_in_email_otp_error
-                        : m.sign_in_error,
+                    errorContext === "resetPassword"
+                      ? m.forgot_password_error
+                      : errorContext === "sendEmailOtp"
+                        ? m.sign_in_email_otp_send_error
+                        : errorContext === "verifyEmailOtp"
+                          ? m.sign_in_email_otp_error
+                          : m.sign_in_error,
                   badRequest:
-                    errorContext === "verifyEmailOtp"
-                      ? m.auth_invalid_code
+                    errorContext === "resetPassword"
+                      ? m.forgot_password_error
+                      : errorContext === "verifyEmailOtp"
+                        ? m.auth_invalid_code
+                        : errorContext === "signIn"
+                          ? m.sign_in_invalid_credentials
+                          : m.sign_in_email_otp_send_error,
+                  unauthorized:
+                    errorContext === "resetPassword"
+                      ? m.forgot_password_error
                       : errorContext === "signIn"
                         ? m.sign_in_invalid_credentials
-                        : m.sign_in_email_otp_send_error,
-                  unauthorized:
-                    errorContext === "signIn"
-                      ? m.sign_in_invalid_credentials
-                      : m.sign_in_error,
+                        : m.sign_in_error,
                 }}
               />
               <div>
@@ -1024,35 +1079,94 @@ export function VerifyEmail(props: AuthFormProps) {
 
 export function ForgotPassword(props: AuthFormProps) {
   const { baseUrl, locale, labels: m } = useAuthFormOptions(props);
+  const navigate = useNavigate();
   const searchString = useRouterState({
     select: (state) => state.location.searchStr,
   });
   const initialEmail = getSearchParam(searchString, "email")?.trim() ?? "";
-  const [submitted, setSubmitted] = useState(false);
+  const confirmation = passwordResetConfirmation(searchString);
+  const passwordReset = usePasswordResetRequest(
+    baseUrl,
+    confirmation?.resetSentAt,
+  );
+  const resetEmailInput = (email: string) => ({
+    locale,
+    email,
+    redirectTo: passwordResetCallbackUrl(
+      searchString,
+      window.location.origin,
+      email,
+    ),
+    onSent: (sentAt: number) =>
+      navigate({
+        to: "/reset-password",
+        search: passwordResetConfirmationSearch(searchString, email, sentAt),
+        replace: true,
+      }),
+  });
+  const requestResetEmail = (email: string) =>
+    passwordReset.request(resetEmailInput(email));
   const [form] = useState(() =>
     FormReact.make(forgotPasswordFormBuilder, {
       runtime: authClientApi(baseUrl).runtime,
       fields: { email: TextField },
       mode: { validation: "onSubmit" },
-      onSubmit: (_, { decoded: value }) =>
-        Effect.gen(function* () {
-          setSubmitted(false);
-          yield* authHttpClient(baseUrl, locale).pipe(
-            Effect.flatMap((client) =>
-              client.auth.requestPasswordReset({
-                payload: {
-                  email: value.email.trim(),
-                  redirectTo: `${window.location.origin}/reset-password`,
-                },
-              }),
-            ),
-          );
-          setSubmitted(true);
-        }),
+      onSubmit: (
+        action: { requestEmail: typeof requestResetEmail },
+        { decoded: value },
+      ) => action.requestEmail(value.email.trim()),
     }),
   );
   const submit = useAtomSet(form.submit);
   const submitResult = useAtomValue(form.submit);
+  const feedback = (
+    <PasswordResetFeedback
+      pending={passwordReset.result.waiting}
+      sendingLabel={m.user_password_reset_sending}
+      error={
+        <AuthSubmitError
+          result={passwordReset.result}
+          labels={m}
+          messages={{ fallback: m.forgot_password_error }}
+        />
+      }
+    />
+  );
+
+  if (confirmation) {
+    return (
+      <Card className="w-full max-w-md">
+        <CardHeader>
+          <CardTitle className="text-3xl">
+            {m.user_password_reset_title}
+          </CardTitle>
+          <CardDescription>
+            {text(m.forgot_password_success_email, {
+              email: confirmation.email,
+            })}
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div className="flex flex-col gap-4">
+            {feedback}
+            <PasswordResetActions
+              pending={passwordReset.result.waiting}
+              resendSeconds={passwordReset.resendSeconds}
+              onResend={() =>
+                passwordReset.send(resetEmailInput(confirmation.email))
+              }
+              resendLabel={m.user_password_reset_resend}
+              countdownLabel={(seconds) =>
+                text(m.user_password_reset_countdown, {
+                  seconds: String(seconds),
+                })
+              }
+            />
+          </div>
+        </CardContent>
+      </Card>
+    );
+  }
 
   return (
     <Card className="w-full max-w-md">
@@ -1061,13 +1175,16 @@ export function ForgotPassword(props: AuthFormProps) {
         <CardDescription>{m.forgot_password_description}</CardDescription>
       </CardHeader>
       <CardContent>
-        <form.Initialize defaultValues={{ email: initialEmail }}>
+        <form.Initialize
+          key={initialEmail}
+          defaultValues={{ email: initialEmail }}
+        >
           <form
             className="flex flex-col gap-4"
             onSubmit={(event) => {
               event.preventDefault();
               event.stopPropagation();
-              submit();
+              submit({ requestEmail: requestResetEmail });
             }}
           >
             <form.email
@@ -1076,33 +1193,19 @@ export function ForgotPassword(props: AuthFormProps) {
               autoComplete="email"
               required
             />
-            <AuthSubmitError
-              result={submitResult}
-              labels={m}
-              messages={{ fallback: m.forgot_password_error }}
-            />
-            {submitted ? (
-              <p className="bg-card text-card-foreground rounded-lg border px-4 py-3 text-sm shadow-xs">
-                {m.forgot_password_success}
-              </p>
-            ) : null}
-            <Button type="submit" disabled={submitResult.waiting}>
-              {submitResult.waiting ? (
+            {feedback}
+            <Button
+              type="submit"
+              className="self-start"
+              disabled={submitResult.waiting || passwordReset.result.waiting}
+            >
+              {submitResult.waiting || passwordReset.result.waiting ? (
                 <Loader2 className="animate-spin" data-icon="inline-start" />
               ) : null}
               {m.forgot_password_submit}
             </Button>
           </form>
         </form.Initialize>
-        <p className="text-muted-foreground mt-6 text-center text-sm">
-          <Link
-            className={authLinkClassName}
-            to="/sign-in"
-            search={searchObject(searchString)}
-          >
-            {m.forgot_password_back_to_sign_in}
-          </Link>
-        </p>
       </CardContent>
     </Card>
   );
@@ -1127,24 +1230,25 @@ function ResetPasswordForm({
 }: AuthFormProps & { token: string }) {
   const { baseUrl, locale, labels: m } = useAuthFormOptions(props);
   const navigate = useNavigate();
-  const onSuccess = () => navigate({ to: "/sign-in" });
+  const searchString = useRouterState({
+    select: (state) => state.location.searchStr,
+  });
+  const onSuccess = () =>
+    navigate({ to: "/sign-in", search: passwordResetSearch(searchString) });
   const [form] = useState(() =>
     FormReact.make(resetPasswordFormBuilder, {
       runtime: authClientApi(baseUrl).runtime,
-      fields: { password: TextField },
+      fields: { password: PasswordField },
       mode: { validation: "onSubmit" },
       onSubmit: (_, { decoded: value }) =>
         Effect.gen(function* () {
-          yield* authHttpClient(baseUrl, locale).pipe(
-            Effect.flatMap((client) =>
-              client.auth.resetPassword({
-                payload: {
-                  newPassword: value.password,
-                  token,
-                },
-              }),
-            ),
-          );
+          yield* resetPasswordAndSignOut({
+            baseUrl,
+            locale,
+            newPassword: value.password,
+            token,
+          });
+          notifyAuthChange();
           onSuccess();
         }),
     }),
@@ -1170,7 +1274,6 @@ function ResetPasswordForm({
           >
             <form.password
               label={m.reset_password_new_password}
-              type="password"
               autoComplete="new-password"
               minLength={8}
               required

@@ -1,5 +1,7 @@
 import { describe, expect, it } from "@effect/vitest";
 import { vi } from "vitest";
+import { Effect } from "effect";
+import { FetchHttpClient } from "effect/http";
 import {
   createMemoryHistory,
   createRootRoute,
@@ -15,6 +17,67 @@ import {
   navigateTarget,
   resolveInitialAuthMethod,
 } from "./auth-forms.js";
+import { resetPasswordAndSignOut } from "./password-reset.js";
+
+describe("password reset session cleanup", () => {
+  it.effect("clears browser session cookies after resetting the password", () =>
+    Effect.gen(function* () {
+      const requests: Request[] = [];
+      const capture: typeof fetch = async (input, init) => {
+        requests.push(new Request(input, init));
+        return Response.json({ status: true, success: true });
+      };
+
+      yield* resetPasswordAndSignOut({
+        baseUrl: "https://auth.example.com",
+        locale: () => "fr",
+        newPassword: "new-password",
+        token: "reset-token",
+      }).pipe(Effect.provideService(FetchHttpClient.Fetch, capture));
+
+      expect(requests.map((request) => new URL(request.url).pathname)).toEqual([
+        "/api/auth/reset-password",
+        "/api/auth/sign-out",
+      ]);
+      expect(
+        requests.every((request) => request.credentials === "include"),
+      ).toBe(true);
+      expect(
+        requests.every(
+          (request) => request.headers.get("accept-language") === "fr",
+        ),
+      ).toBe(true);
+    }),
+  );
+
+  it.effect("does not sign the user out when the reset is rejected", () =>
+    Effect.gen(function* () {
+      const requests: Request[] = [];
+      const reject: typeof fetch = async (input, init) => {
+        requests.push(new Request(input, init));
+        return Response.json(
+          { code: "INVALID_TOKEN", message: "Invalid token" },
+          { status: 400 },
+        );
+      };
+
+      const error = yield* resetPasswordAndSignOut({
+        baseUrl: "https://auth.example.com",
+        locale: () => "en",
+        newPassword: "new-password",
+        token: "expired-token",
+      }).pipe(
+        Effect.provideService(FetchHttpClient.Fetch, reject),
+        Effect.flip,
+      );
+
+      expect(error._tag).toBe("AuthBadRequest");
+      expect(requests.map((request) => new URL(request.url).pathname)).toEqual([
+        "/api/auth/reset-password",
+      ]);
+    }),
+  );
+});
 
 describe("auth return destinations", () => {
   it.each([

@@ -23,6 +23,7 @@ export {
   VerifyEmail,
 } from "./auth-forms.js";
 export { UserButton } from "./user-button.js";
+export { PasswordField, type PasswordFieldOptions } from "./password-field.js";
 export {
   AdminOrganizationsTable,
   adminOrganizationsMessages,
