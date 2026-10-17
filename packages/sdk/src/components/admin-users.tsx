@@ -7,7 +7,6 @@ import { useEffect, useState } from "react";
 import {
   DataTable,
   type DataTableColDef,
-  DataTableListSummary,
 } from "@krak-stack/registry/data-table";
 import { Query, type QueryType } from "@krak-stack/registry/query";
 import { ErrorMessage } from "@krak-stack/registry/effect-form";
@@ -409,10 +408,11 @@ const userColumns = (
   {
     field: "organizations",
     headerName: m.admin_column_organizations,
-    cellRenderer: ({ data }) => (
-      <DataTableListSummary
-        emptyLabel="-"
-        items={data.organizations.map((organization) => {
+    type: "list",
+    typeOptions: {
+      emptyLabel: "-",
+      getItems: (data) =>
+        data.organizations.map((organization) => {
           const logo = assetUrl(organization.logo, baseUrl);
           return {
             label: organization.name,
@@ -423,18 +423,18 @@ const userColumns = (
               initials(organization.name)
             ),
           };
-        })}
-        display="icon"
-      />
-    ),
+        }),
+      display: "icon",
+    },
   },
   {
     field: "projects",
     headerName: m.admin_column_projects,
-    cellRenderer: ({ data }) => (
-      <DataTableListSummary
-        emptyLabel="-"
-        items={data.projects.map((project) => {
+    type: "list",
+    typeOptions: {
+      emptyLabel: "-",
+      getItems: (data) =>
+        data.projects.map((project) => {
           const logo = assetUrl(project.logo, baseUrl);
           return {
             label: project.name,
@@ -445,10 +445,9 @@ const userColumns = (
               initials(project.name)
             ),
           };
-        })}
-        display="icon"
-      />
-    ),
+        }),
+      display: "icon",
+    },
   },
   {
     field: "emailVerified",

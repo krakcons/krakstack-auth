@@ -38,7 +38,6 @@ import {
 import {
   DataTable,
   type DataTableColDef,
-  DataTableListSummary,
   DataTableListCell,
 } from "@krak-stack/registry/data-table";
 import {
@@ -3407,15 +3406,14 @@ const apiKeyColumns = ({
     colId: "permissions",
     valueGetter: ({ data }) => data.permissions,
     headerName: m.user_api_key_permissions(),
-    cellRenderer: ({ data }) => {
-      const values = organizationApiKeyFormattedPermissions(data.permissions);
-      return (
-        <DataTableListSummary
-          emptyLabel={m.user_api_key_no_permissions()}
-          items={values}
-          visibleCount={1}
-        />
-      );
+    type: "list",
+    typeOptions: {
+      getItems: (data) =>
+        organizationApiKeyFormattedPermissions(data.permissions).map(
+          (label) => ({ label }),
+        ),
+      emptyLabel: m.user_api_key_no_permissions(),
+      visibleCount: 1,
     },
   },
   {

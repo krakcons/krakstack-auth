@@ -18,7 +18,6 @@ import { useState } from "react";
 
 import {
   DataTable,
-  DataTableListSummary,
   type DataTableColDef,
 } from "@krak-stack/registry/data-table";
 import { SidebarPageHeader } from "@krak-stack/registry/sidebar-layout";
@@ -559,20 +558,18 @@ const apiKeyColumns = (): DataTableColDef<ApiKeySummary>[] => [
   {
     field: "permissions",
     headerName: m.admin_api_key_permissions(),
-    cellRenderer: ({ data }) => (
-      <DataTableListSummary
-        items={Object.entries(data.permissions).flatMap(([resource, actions]) =>
-          actions.map((action) => `${resource}:${action}`),
-        )}
-        emptyLabel={
-          data.configId === "service" &&
-          Object.keys(data.permissions).length === 0
-            ? m.admin_api_key_permissions_all()
-            : m.admin_api_key_permissions_none()
-        }
-        visibleCount={1}
-      />
-    ),
+    type: "list",
+    typeOptions: {
+      getItems: (data) =>
+        data.configId === "service" &&
+        Object.keys(data.permissions).length === 0
+          ? [{ label: m.admin_api_key_permissions_all() }]
+          : Object.entries(data.permissions).flatMap(([resource, actions]) =>
+              actions.map((action) => ({ label: `${resource}:${action}` })),
+            ),
+      emptyLabel: m.admin_api_key_permissions_none(),
+      visibleCount: 1,
+    },
   },
   {
     field: "lastRequest",

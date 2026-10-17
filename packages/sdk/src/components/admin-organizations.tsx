@@ -7,7 +7,6 @@ import { useEffect, useState } from "react";
 import {
   DataTable,
   type DataTableColDef,
-  DataTableListSummary,
 } from "@krak-stack/registry/data-table";
 import { Query, type QueryType } from "@krak-stack/registry/query";
 import { ErrorMessage } from "@krak-stack/registry/effect-form";
@@ -516,10 +515,11 @@ const organizationColumns = (
   {
     field: "projects",
     headerName: m.admin_column_projects,
-    cellRenderer: ({ data }) => (
-      <DataTableListSummary
-        emptyLabel="-"
-        items={(data.projects ?? []).map((project) => {
+    type: "list",
+    typeOptions: {
+      emptyLabel: "-",
+      getItems: (data) =>
+        (data.projects ?? []).map((project) => {
           const logo = assetUrl(project.logo, baseUrl);
           return {
             label: project.name,
@@ -530,10 +530,9 @@ const organizationColumns = (
               initials(project.name)
             ),
           };
-        })}
-        display="icon"
-      />
-    ),
+        }),
+      display: "icon",
+    },
   },
   {
     field: "createdAt",
