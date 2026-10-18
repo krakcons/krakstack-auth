@@ -1,10 +1,14 @@
 # @krak-stack/auth
 
-## 0.2.23
+## 0.2.24
 
 ### Patch Changes
 
 - Improve the sign-in flow by moving email-code/password switching into the alternative options below the primary action. Replace the inline email-change link with a Back control so users can return to the initial screen and choose Google. Persist successful code-send timestamps in local storage to preserve the resend cooldown across method switches and reloads, and reuse unexpired codes instead of sending duplicate emails when switching back to email code.
+
+## 0.2.23
+
+### Patch Changes
 
 - Add a reusable Effect Form `PasswordField` with optional recovery for existing-password prompts. Password sign-in sends recovery email for the entered address before opening the confirmation page, while account revocation, password changes, and two-factor settings send recovery email inline. Share request state, resend cooldowns, and confirmation controls across public recovery and account settings without adding router dependencies to the shared flow.
 
