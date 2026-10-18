@@ -10,7 +10,7 @@ import { Effect, Option, Schema } from "effect";
 import { Atom, AsyncResult } from "effect/reactivity";
 import { HttpClientError } from "effect/http";
 import { REGEXP_ONLY_DIGITS } from "input-otp";
-import { KeyRound, Loader2, Mail } from "lucide-react";
+import { ArrowLeft, KeyRound, Loader2, Mail } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 
 import { Button, buttonVariants } from "@/components/ui/button";
@@ -38,6 +38,11 @@ import {
 import { getLastUsedLoginMethod, notifyAuthChange } from "./auth-atoms.js";
 import { authClientApi, authHttpClient } from "./auth-client-api.js";
 import { PasswordField } from "./password-field.js";
+import {
+  emailOtpSendsAtom,
+  emailOtpSendState,
+  EMAIL_OTP_RESEND_COOLDOWN_SECONDS,
+} from "./email-otp-state.js";
 import {
   passwordResetSearch,
   passwordResetConfirmation,
@@ -71,8 +76,6 @@ import type {
   AuthNotFound,
 } from "../auth/schema.js";
 
-const EMAIL_OTP_RESEND_COOLDOWN_SECONDS = 60;
-
 const signinFormBuilder = FormBuilder.empty
   .addField("email", Schema.String)
   .addField("password", Schema.String)
@@ -99,7 +102,7 @@ const twoFactorFormBuilder = FormBuilder.empty
 const defaultMessages = {
   en: {
     auth_continue_with_google: "Continue with Google",
-    auth_or_continue_with: "or continue with",
+    auth_or_continue_with: "Or",
     auth_sign_in: "Sign in",
     field_email: "Email",
     field_password: "Password",
@@ -131,7 +134,7 @@ const defaultMessages = {
     reset_password_missing_token: "The password reset link is missing a token.",
     reset_password_new_password: "New password",
     reset_password_title: "Choose a new password",
-    sign_in_change_email: "Change",
+    sign_in_change_email: "Back",
     sign_in_continue: "Continue",
     sign_in_description: "Enter your email to continue.",
     sign_in_email_as: "Signing in as {email}",
@@ -146,8 +149,8 @@ const defaultMessages = {
     sign_in_invalid_credentials: "The email or password is incorrect.",
     auth_invalid_code: "The code is invalid or has expired.",
     sign_in_forgot_password: "Forgot your password?",
-    sign_in_use_email_otp: "Use email code instead",
-    sign_in_use_password: "Use an existing password",
+    sign_in_use_email_otp: "Use email code",
+    sign_in_use_password: "Use password",
     two_factor_backup_code: "Backup code",
     two_factor_code: "Authentication code",
     two_factor_email_code: "Email verification code",
@@ -177,7 +180,7 @@ const defaultMessages = {
   },
   fr: {
     auth_continue_with_google: "Continuer avec Google",
-    auth_or_continue_with: "ou continuez avec",
+    auth_or_continue_with: "Ou",
     auth_sign_in: "Se connecter",
     field_email: "Courriel",
     field_password: "Mot de passe",
@@ -212,7 +215,7 @@ const defaultMessages = {
       "Le lien de réinitialisation du mot de passe ne contient pas de jeton.",
     reset_password_new_password: "Nouveau mot de passe",
     reset_password_title: "Choisir un nouveau mot de passe",
-    sign_in_change_email: "Modifier",
+    sign_in_change_email: "Retour",
     sign_in_continue: "Continuer",
     sign_in_description: "Saisissez votre courriel pour continuer.",
     sign_in_email_as: "Connexion avec {email}",
@@ -229,7 +232,7 @@ const defaultMessages = {
     auth_invalid_code: "Le code est invalide ou a expiré.",
     sign_in_forgot_password: "Mot de passe oublié?",
     sign_in_use_email_otp: "Utiliser un code courriel",
-    sign_in_use_password: "Utiliser un mot de passe existant",
+    sign_in_use_password: "Utiliser un mot de passe",
     two_factor_backup_code: "Code de secours",
     two_factor_code: "Code d'authentification",
     two_factor_email_code: "Code de vérification par courriel",
@@ -482,6 +485,10 @@ export function Signin(props: AuthFormProps) {
   );
   const [emailOtpResendAvailableAt, setEmailOtpResendAvailableAt] = useState(0);
   const [emailOtpResendSeconds, setEmailOtpResendSeconds] = useState(0);
+  const otpSends = useAtomValue(emailOtpSendsAtom(baseUrl ?? ""));
+  const persistOtpSends = useAtomSet(emailOtpSendsAtom(baseUrl ?? ""));
+  const otpSendsRef = useRef(otpSends);
+  otpSendsRef.current = otpSends;
   const [errorContext, setErrorContext] =
     useState<SigninErrorContext>("signIn");
   const selectedAuthMethod =
@@ -527,6 +534,7 @@ export function Signin(props: AuthFormProps) {
               otpSent: boolean;
             }
           | { type: "sendEmailOtp" }
+          | { type: "resendEmailOtp" }
           | { type: "resetPassword" },
         { decoded: value },
       ) =>
@@ -555,12 +563,34 @@ export function Signin(props: AuthFormProps) {
             );
             return;
           }
-          const sendEmailOtp = authHttpClient(baseUrl, locale).pipe(
-            Effect.flatMap((client) =>
-              client.auth.sendVerificationOtp({
-                payload: { email, type: "sign-in" },
-              }),
-            ),
+          const previousSend = otpSendsRef.current[email];
+          const previousSendState = emailOtpSendState(previousSend, Date.now());
+          const reuseCode =
+            previousSendState.reusable &&
+            (action.type !== "resendEmailOtp" ||
+              previousSendState.resendSeconds > 0);
+          const sendEmailOtp = (
+            reuseCode
+              ? Effect.void
+              : authHttpClient(baseUrl, locale).pipe(
+                  Effect.flatMap((client) =>
+                    client.auth.sendVerificationOtp({
+                      payload: { email, type: "sign-in" },
+                    }),
+                  ),
+                  Effect.asVoid,
+                  Effect.tap(() =>
+                    Effect.sync(() => {
+                      const sends = {
+                        ...otpSendsRef.current,
+                        [email]: Date.now(),
+                      };
+                      otpSendsRef.current = sends;
+                      persistOtpSends(sends);
+                    }),
+                  ),
+                )
+          ).pipe(
             Effect.tap(() =>
               Effect.sync(() => {
                 setAuthMethod("emailOtp");
@@ -572,13 +602,17 @@ export function Signin(props: AuthFormProps) {
                   replace: true,
                 });
                 setEmailOtpResendAvailableAt(
-                  Date.now() + EMAIL_OTP_RESEND_COOLDOWN_SECONDS * 1000,
+                  (otpSendsRef.current[email] ?? 0) +
+                    EMAIL_OTP_RESEND_COOLDOWN_SECONDS * 1000,
                 );
               }),
             ),
           );
 
-          if (action.type === "sendEmailOtp") {
+          if (
+            action.type === "sendEmailOtp" ||
+            action.type === "resendEmailOtp"
+          ) {
             yield* sendEmailOtp;
             return;
           }
@@ -681,6 +715,12 @@ export function Signin(props: AuthFormProps) {
     password: "",
     otp: "",
   }));
+  const lastOtpSentAt = otpSends[formValues.email.trim()];
+  useEffect(() => {
+    setEmailOtpResendAvailableAt(
+      (lastOtpSentAt ?? 0) + EMAIL_OTP_RESEND_COOLDOWN_SECONDS * 1000,
+    );
+  }, [lastOtpSentAt]);
   const resetForm = useAtomSet(form.reset);
   const setEmail = useAtomSet(form.getFieldAtoms(form.fields.email).setValue);
   const setPassword = useAtomSet(
@@ -709,8 +749,6 @@ export function Signin(props: AuthFormProps) {
       resetForm();
       setEmail(formValues.email);
       setAuthMethod("password");
-      setOtpSentTo("");
-      setEmailOtpResendAvailableAt(0);
       navigate({
         to: "/sign-in",
         search: authMethodSearch(searchString, "password", formValues.email),
@@ -725,7 +763,7 @@ export function Signin(props: AuthFormProps) {
   const resendEmailOtp = () => {
     setOtp("");
     setErrorContext("sendEmailOtp");
-    submit({ type: "sendEmailOtp" });
+    submit({ type: "resendEmailOtp" });
   };
 
   const signInWithGoogle = () =>
@@ -740,23 +778,23 @@ export function Signin(props: AuthFormProps) {
   return (
     <Card className="w-full max-w-md">
       <CardHeader>
+        {emailSubmitted ? (
+          <Button
+            type="button"
+            variant="link"
+            className="w-fit justify-self-start p-0"
+            disabled={submitResult.waiting}
+            onClick={resetEmailStep}
+          >
+            <ArrowLeft />
+            {m.sign_in_change_email}
+          </Button>
+        ) : null}
         <CardTitle className="text-3xl">{m.auth_sign_in}</CardTitle>
         <CardDescription>
-          {!emailSubmitted ? (
-            m.sign_in_description
-          ) : (
-            <>
-              {text(m.sign_in_email_as, { email: formValues.email })}{" "}
-              <Button
-                type="button"
-                variant="link"
-                className="h-auto px-0"
-                onClick={resetEmailStep}
-              >
-                {m.sign_in_change_email}
-              </Button>
-            </>
-          )}
+          {!emailSubmitted
+            ? m.sign_in_description
+            : text(m.sign_in_email_as, { email: formValues.email })}
         </CardDescription>
       </CardHeader>
       <CardContent>
@@ -815,19 +853,6 @@ export function Signin(props: AuthFormProps) {
                     }}
                     required
                   />
-                  <div className="flex flex-wrap gap-x-4 gap-y-2 text-sm">
-                    {canChangeAuthMethod ? (
-                      <Button
-                        type="button"
-                        variant="link"
-                        className="h-auto px-0"
-                        onClick={switchAuthMethod}
-                      >
-                        <Mail />
-                        {m.sign_in_use_email_otp}
-                      </Button>
-                    ) : null}
-                  </div>
                 </div>
               ) : null}
               {emailSubmitted && selectedAuthMethod === "emailOtp" ? (
@@ -850,17 +875,6 @@ export function Signin(props: AuthFormProps) {
                               seconds: String(emailOtpResendSeconds),
                             })
                           : m.sign_in_email_otp_resend}
-                      </Button>
-                    ) : null}
-                    {canChangeAuthMethod ? (
-                      <Button
-                        type="button"
-                        variant="link"
-                        className="h-auto px-0"
-                        onClick={switchAuthMethod}
-                      >
-                        <KeyRound />
-                        {m.sign_in_use_password}
                       </Button>
                     ) : null}
                   </div>
@@ -912,26 +926,45 @@ export function Signin(props: AuthFormProps) {
             </form>
           </form.Initialize>
         ) : null}
-        {options.google && !emailSubmitted ? (
+        {(emailSubmitted && canChangeAuthMethod) ||
+        (options.google && !emailSubmitted) ? (
           <div className="mt-4 flex flex-col gap-3">
             {hasPrimaryAuth ? (
               <Divider label={m.auth_or_continue_with} />
             ) : null}
-            <Button
-              type="button"
-              variant="outline"
-              className="w-full"
-              disabled={submitResult.waiting}
-              onClick={signInWithGoogle}
-            >
-              <GoogleLogo />
-              {m.auth_continue_with_google}
-            </Button>
-            <AuthSubmitError
-              result={socialSignInResult}
-              labels={m}
-              messages={{ fallback: m.sign_in_error }}
-            />
+            {emailSubmitted && canChangeAuthMethod ? (
+              <Button
+                type="button"
+                variant="outline"
+                className="w-full"
+                disabled={submitResult.waiting}
+                onClick={switchAuthMethod}
+              >
+                {selectedAuthMethod === "password" ? <Mail /> : <KeyRound />}
+                {selectedAuthMethod === "password"
+                  ? m.sign_in_use_email_otp
+                  : m.sign_in_use_password}
+              </Button>
+            ) : null}
+            {options.google && !emailSubmitted ? (
+              <>
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="w-full"
+                  disabled={submitResult.waiting}
+                  onClick={signInWithGoogle}
+                >
+                  <GoogleLogo />
+                  {m.auth_continue_with_google}
+                </Button>
+                <AuthSubmitError
+                  result={socialSignInResult}
+                  labels={m}
+                  messages={{ fallback: m.sign_in_error }}
+                />
+              </>
+            ) : null}
           </div>
         ) : null}
         {!hasPrimaryAuth && !options.google ? (

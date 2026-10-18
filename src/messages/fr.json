@@ -57,7 +57,7 @@
   "home_oauth_metadata": "Métadonnées OAuth",
   "home_footer": "Authentification libre et auto-hébergée basée sur Better Auth et PostgreSQL.",
   "auth_sign_in": "Se connecter",
-  "auth_or_continue_with": "ou continuez avec",
+  "auth_or_continue_with": "Ou",
   "auth_continue_with_google": "Continuer avec Google",
   "sign_in_description": "Saisissez votre courriel et votre mot de passe pour continuer.",
   "sign_in_error": "Impossible de se connecter.",

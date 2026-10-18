@@ -4,6 +4,8 @@
 
 ### Patch Changes
 
+- Improve the sign-in flow by moving email-code/password switching into the alternative options below the primary action. Replace the inline email-change link with a Back control so users can return to the initial screen and choose Google. Persist successful code-send timestamps in local storage to preserve the resend cooldown across method switches and reloads, and reuse unexpired codes instead of sending duplicate emails when switching back to email code.
+
 - Add a reusable Effect Form `PasswordField` with optional recovery for existing-password prompts. Password sign-in sends recovery email for the entered address before opening the confirmation page, while account revocation, password changes, and two-factor settings send recovery email inline. Share request state, resend cooldowns, and confirmation controls across public recovery and account settings without adding router dependencies to the shared flow.
 
   Preserve recovery confirmation across refreshes without resending email, accept plain and JSON-quoted confirmation timestamps, retain OAuth and return-destination context, and clear browser session cookies after a successful password reset. Include English and French recovery messages and regression coverage for OTP-only accounts, token reuse, and session revocation.
