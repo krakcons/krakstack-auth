@@ -92,4 +92,24 @@ See [React components and CSS](https://auth.krakstack.net/en/docs/components) fo
 
 Define project permissions with `defineProjectAccess`, resolve actors with `ActorRequired`, and enforce backend policies with `withPolicy`. Frontend permission helpers control presentation only.
 
+`ActorRequired` annotates the current span, child spans and handler logs with verified attribution:
+
+| Attribute              | User session           | User-owned API key     | Organization-owned API key |
+| ---------------------- | ---------------------- | ---------------------- | -------------------------- |
+| `app.actor.type`       | `user`                 | `api_key`              | `api_key`                  |
+| `app.actor.id`         | User ID                | API-key ID             | API-key ID                 |
+| `app.actor.owner.type` | Omitted                | `user`                 | `organization`             |
+| `app.actor.owner.id`   | Omitted                | Owner user ID          | Owner organization ID      |
+| `user.id`              | User ID                | Owner user ID          | Omitted                    |
+| `organization.id`      | Active organization ID | Active organization ID | Owner organization ID      |
+
+The `app.actor.*` fields and existing `organization.id` are application conventions, not standard OTel actor attributes. The public actor model still uses `type: "apiKey"`; `api_key` is its telemetry representation. Only identifiers are emitted, never API-key values or session tokens. Consumers such as transactional audit recording can inherit these log annotations without depending on the auth SDK. MCP and AI execution context belongs to the respective integration layers and does not replace the authenticated actor.
+
+Auth-owned user, organization and actor annotations replace the inherited set,
+preventing stale user/API-key owner attribution. Unrelated request, MCP and agent
+context is preserved, and scoped log/child-span context is restored afterward.
+Stale fields on an already-created current span are cleared to empty strings
+because the tracer interface has no attribute-removal method; handler logs and
+new child spans omit those fields entirely.
+
 See the [RBAC guide](https://auth.krakstack.net/en/docs/rbac).

@@ -125,32 +125,37 @@ const provideRequestContext = <A, E, R>(effect: Effect.Effect<A, E, R>) =>
     Effect.withSpan("http.server GET"),
   );
 
-const expectActorSpanAttributes = ({
-  organizationId,
-  userId,
-}: {
+interface ExpectedActorAttributes {
   organizationId: string;
   userId?: string;
-}) =>
+  actorType: "user" | "api_key";
+  actorId: string;
+  ownerType?: "user" | "organization";
+  ownerId?: string;
+}
+
+const expectedAttribution = (expected: ExpectedActorAttributes) => ({
+  "organization.id": expected.organizationId,
+  "user.id": expected.userId,
+  "app.actor.type": expected.actorType,
+  "app.actor.id": expected.actorId,
+  "app.actor.owner.type": expected.ownerType,
+  "app.actor.owner.id": expected.ownerId,
+});
+
+const expectActorSpanAttributes = (expected: ExpectedActorAttributes) =>
   Effect.gen(function* () {
     const requestSpan = yield* Effect.currentSpan;
-    expect(requestSpan.attributes.get("organization.id")).toBe(organizationId);
-    expect(requestSpan.attributes.get("user.id")).toBe(userId);
-
     const childSpan = yield* Effect.currentSpan.pipe(
       Effect.withSpan("authenticated-child"),
     );
-    expect(childSpan.attributes.get("organization.id")).toBe(organizationId);
-    expect(childSpan.attributes.get("user.id")).toBe(userId);
+    for (const [key, value] of Object.entries(expectedAttribution(expected))) {
+      expect(requestSpan.attributes.get(key)).toBe(value);
+      expect(childSpan.attributes.get(key)).toBe(value);
+    }
   }).pipe(Effect.orDie);
 
-const expectActorLogAttributes = ({
-  organizationId,
-  userId,
-}: {
-  organizationId: string;
-  userId?: string;
-}) => {
+const expectActorLogAttributes = (expected: ExpectedActorAttributes) => {
   const annotations: Array<Record<string, typeof Schema.Unknown.Type>> = [];
   const logger = Logger.make((options) => {
     annotations.push(options.fiber.getRef(References.CurrentLogAnnotations));
@@ -161,8 +166,13 @@ const expectActorLogAttributes = ({
     Effect.andThen(
       Effect.sync(() => {
         expect(annotations).toHaveLength(1);
-        expect(annotations[0]?.["organization.id"]).toBe(organizationId);
-        expect(annotations[0]?.["user.id"]).toBe(userId);
+        for (const [key, value] of Object.entries(
+          expectedAttribution(expected),
+        )) {
+          expect(annotations[0]?.[key]).toBe(value);
+        }
+        expect(annotations[0]).not.toHaveProperty("session.token");
+        expect(JSON.stringify(annotations[0])).not.toContain("session-token");
       }),
     ),
     Effect.orDie,
@@ -210,10 +220,14 @@ const runAnyActorMiddleware = (authSession: AuthSession) =>
         expect(actor.permissions.has("test:records:read")).toBe(true);
         expect(actor.permissions.has("test:records:update")).toBe(false);
         yield* expectActorSpanAttributes({
+          actorType: "user",
+          actorId: "user-1",
           organizationId: "org-1",
           userId: "user-1",
         });
         yield* expectActorLogAttributes({
+          actorType: "user",
+          actorId: "user-1",
           organizationId: "org-1",
           userId: "user-1",
         });
@@ -228,6 +242,117 @@ const runAnyActorMiddleware = (authSession: AuthSession) =>
   );
 
 describe("ActorRequired", () => {
+  for (const scenario of [
+    {
+      name: "organization key",
+      session: organizationKeySession,
+      expected: {
+        "app.actor.type": "api_key",
+        "app.actor.id": "organization-key-1",
+        "app.actor.owner.type": "organization",
+        "app.actor.owner.id": "org-1",
+        "user.id": undefined,
+        "organization.id": "org-1",
+      },
+    },
+    {
+      name: "user",
+      session: userSession,
+      expected: {
+        "app.actor.type": "user",
+        "app.actor.id": "user-1",
+        "app.actor.owner.type": undefined,
+        "app.actor.owner.id": undefined,
+        "user.id": "user-1",
+        "organization.id": "org-1",
+      },
+    },
+  ]) {
+    it.effect(
+      `replaces stale attribution for a ${scenario.name} while preserving unrelated context`,
+      () => {
+        const ambient = {
+          "user.id": "previous-user",
+          "organization.id": "previous-org",
+          "app.actor.type": "api_key",
+          "app.actor.id": "previous-key",
+          "app.actor.owner.type": "user",
+          "app.actor.owner.id": "previous-owner",
+          "app.actor.delegated_by": "previous-delegator",
+          "mcp.method.name": "tools/call",
+          "request.id": "request-1",
+        };
+        return Effect.gen(function* () {
+          const middleware = yield* ActorRequired();
+          const logsBefore = yield* References.CurrentLogAnnotations;
+          const spansBefore = yield* References.TracerSpanAnnotations;
+          yield* Effect.annotateCurrentSpan(ambient);
+          yield* middleware(
+            Effect.gen(function* () {
+              const logs = yield* References.CurrentLogAnnotations;
+              const current = yield* Effect.currentSpan;
+              const child = yield* Effect.currentSpan.pipe(
+                Effect.withSpan("authenticated-child"),
+              );
+              for (const [key, value] of Object.entries(scenario.expected)) {
+                expect(logs[key]).toBe(value);
+                expect(child.attributes.get(key)).toBe(value);
+                expect(current.attributes.get(key)).toBe(value ?? "");
+              }
+              expect(logs).not.toHaveProperty("app.actor.delegated_by");
+              expect(child.attributes.has("app.actor.delegated_by")).toBe(
+                false,
+              );
+              expect(current.attributes.get("app.actor.delegated_by")).toBe("");
+              expect(logs["mcp.method.name"]).toBe("tools/call");
+              expect(child.attributes.get("request.id")).toBe("request-1");
+              return HttpServerResponse.empty();
+            }),
+            middlewareOptions,
+          );
+          expect(yield* References.CurrentLogAnnotations).toEqual(logsBefore);
+          expect(yield* References.TracerSpanAnnotations).toEqual(spansBefore);
+        }).pipe(
+          Effect.provide(ActorRequired.layer(Access)),
+          Effect.provide(authServiceLayer(scenario.session)),
+          Effect.annotateLogs(ambient),
+          Effect.annotateSpans(ambient),
+          provideRequestContext,
+        );
+      },
+    );
+  }
+
+  it.effect(
+    "scopes verified attribution to the authenticated handler and overrides ambient actor claims",
+    () =>
+      Effect.gen(function* () {
+        const middleware = yield* ActorRequired();
+        const before = yield* References.CurrentLogAnnotations;
+        yield* middleware(
+          Effect.gen(function* () {
+            const annotations = yield* References.CurrentLogAnnotations;
+            expect(annotations["app.actor.type"]).toBe("api_key");
+            expect(annotations["app.actor.id"]).toBe("user-key-1");
+            expect(annotations["app.actor.owner.id"]).toBe("user-1");
+            expect(annotations["request.id"]).toBe("request-1");
+            return HttpServerResponse.empty();
+          }),
+          middlewareOptions,
+        );
+        expect(yield* References.CurrentLogAnnotations).toEqual(before);
+      }).pipe(
+        Effect.provide(ActorRequired.layer(Access)),
+        Effect.provide(authServiceLayer(userKeySession)),
+        Effect.annotateLogs({
+          "app.actor.type": "system",
+          "app.actor.id": "unverified",
+          "request.id": "request-1",
+        }),
+        provideRequestContext,
+      ),
+  );
+
   it.effect("resolves a member using live organization roles", () =>
     runAnyActorMiddleware(userSession),
   );
@@ -246,10 +371,18 @@ describe("ActorRequired", () => {
           expect(actor.permissions.has("test:records:read")).toBe(true);
           expect(actor.permissions.has("test:records:update")).toBe(false);
           yield* expectActorSpanAttributes({
+            actorType: "api_key",
+            actorId: "user-key-1",
+            ownerType: "user",
+            ownerId: "user-1",
             organizationId: "org-1",
             userId: "user-1",
           });
           yield* expectActorLogAttributes({
+            actorType: "api_key",
+            actorId: "user-key-1",
+            ownerType: "user",
+            ownerId: "user-1",
             organizationId: "org-1",
             userId: "user-1",
           });
@@ -277,8 +410,20 @@ describe("ActorRequired", () => {
           expect(actor.actor.type).toBe("apiKey");
           expect(actor.permissions.has("test:records:read")).toBe(false);
           expect(actor.permissions.has("test:records:update")).toBe(true);
-          yield* expectActorSpanAttributes({ organizationId: "org-1" });
-          yield* expectActorLogAttributes({ organizationId: "org-1" });
+          yield* expectActorSpanAttributes({
+            organizationId: "org-1",
+            actorType: "api_key",
+            actorId: "organization-key-1",
+            ownerType: "organization",
+            ownerId: "org-1",
+          });
+          yield* expectActorLogAttributes({
+            organizationId: "org-1",
+            actorType: "api_key",
+            actorId: "organization-key-1",
+            ownerType: "organization",
+            ownerId: "org-1",
+          });
           return HttpServerResponse.empty();
         }),
         middlewareOptions,
