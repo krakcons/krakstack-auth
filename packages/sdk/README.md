@@ -57,6 +57,34 @@ const program = Effect.gen(function* () {
 
 Use `AuthMiddleware.layer()` to provide request headers and configuration in an Effect HttpApi application. See the [middleware guide](https://auth.krakstack.net/en/docs/middleware).
 
+`AuthMiddleware` also annotates request logs and spans with verified user,
+organization, and actor IDs using its existing session lookup. Missing sessions
+are anonymous; auth service failures are not silently treated as anonymous.
+`ActorRequired` remains responsible for project authorization and `CurrentActor`.
+
+For plain `HttpRouter` routes, use the same authentication through
+`AuthMiddleware.routerLayer()`. For example, browser Events ingestion can inherit
+verified identity without an `Events.layer({ identity })` callback:
+
+```ts
+import { AuthMiddleware } from "@krak-stack/auth/server";
+import { HttpApiOtlp } from "@krak-stack/registry/opentelemetry/api";
+import { Events } from "@krak-stack/registry/events";
+import { Layer } from "effect";
+
+const telemetry = HttpApiOtlp.layer.pipe(
+  Layer.provide(AuthMiddleware.routerLayer({ paths: ["/api/otel/v1/logs"] })),
+  Layer.provide(Events.processorLayer),
+  Layer.provide(eventsLayer),
+);
+```
+
+Here `eventsLayer` is the configured Events layer, with SQL provided when
+persistence is needed. `paths` limits auth lookup to the listed URL pathnames;
+without it, the middleware covers every route it is provided to. The router
+adapter uses the same auth configuration and organization-impersonation policy
+as `AuthMiddleware.layer()`. It does not grant permissions or provide `CurrentActor`.
+
 ## React Components
 
 The component bundle uses the optional peer dependencies declared in `package.json` and Krakstack/shadcn UI primitives from `@krak-stack/registry`. Install the component peers used by your application; server-only consumers only need `effect`.
@@ -92,7 +120,7 @@ See [React components and CSS](https://auth.krakstack.net/en/docs/components) fo
 
 Define project permissions with `defineProjectAccess`, resolve actors with `ActorRequired`, and enforce backend policies with `withPolicy`. Frontend permission helpers control presentation only.
 
-`ActorRequired` annotates the current span, child spans and handler logs with verified attribution:
+`AuthMiddleware` annotates the current span, child spans and handler logs with verified attribution:
 
 | Attribute              | User session           | User-owned API key     | Organization-owned API key |
 | ---------------------- | ---------------------- | ---------------------- | -------------------------- |
@@ -111,5 +139,11 @@ context is preserved, and scoped log/child-span context is restored afterward.
 Stale fields on an already-created current span are cleared to empty strings
 because the tracer interface has no attribute-removal method; handler logs and
 new child spans omit those fields entirely.
+
+`ActorRequired` does not construct or rewrite attribution. It resolves the project
+actor, enforces actor constraints, and provides `CurrentActor`, preserving the
+annotations established by `AuthMiddleware`. When supplying `AuthService` directly
+without `AuthMiddleware`, authorization still works, but no auth attribution is
+added automatically.
 
 See the [RBAC guide](https://auth.krakstack.net/en/docs/rbac).

@@ -31,7 +31,10 @@ export {
   AuthMiddleware,
   makeAuthenticationLive,
 } from "./middleware.js";
-export type { AuthenticationLiveOptions } from "./middleware.js";
+export type {
+  AuthenticationLiveOptions,
+  AuthRouterOptions,
+} from "./middleware.js";
 export {
   ServerActiveOrganization,
   ServerCreateDomainPayload,

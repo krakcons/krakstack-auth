@@ -1,4 +1,4 @@
-import { Effect, Layer, Option, References, Schema } from "effect";
+import { Effect, Layer, Schema } from "effect";
 import { HttpApiError, HttpApiMiddleware } from "effect/http-api";
 
 import {
@@ -174,69 +174,7 @@ const requiredActor = <Project extends string, Action extends string>(
 const withCurrentActor = <A, E, R>(
   httpEffect: Effect.Effect<A, E, R | CurrentActor>,
   actor: CurrentActor,
-) => {
-  const userId =
-    actor.actor.type === "user"
-      ? actor.actor.userId
-      : actor.actor.owner.type === "user"
-        ? actor.actor.owner.userId
-        : undefined;
-  const attributes: Record<string, string> = {};
-  if (actor.actor.type === "user") {
-    attributes["app.actor.type"] = "user";
-    attributes["app.actor.id"] = actor.actor.userId;
-  } else {
-    attributes["app.actor.type"] = "api_key";
-    attributes["app.actor.id"] = actor.actor.apiKeyId;
-    attributes["app.actor.owner.type"] = actor.actor.owner.type;
-    attributes["app.actor.owner.id"] =
-      actor.actor.owner.type === "user"
-        ? actor.actor.owner.userId
-        : actor.actor.owner.organizationId;
-  }
-  if (actor.organizationId)
-    attributes["organization.id"] = actor.organizationId;
-  if (userId) attributes["user.id"] = userId;
-
-  const ownedAttribute = (key: string) =>
-    key === "user.id" ||
-    key === "organization.id" ||
-    key.startsWith("app.actor.");
-  const replaceAttribution = (
-    annotations: Effect.Success<typeof References.CurrentLogAnnotations>,
-  ) => ({
-    ...Object.fromEntries(
-      Object.entries(annotations).filter(([key]) => !ownedAttribute(key)),
-    ),
-    ...attributes,
-  });
-  return Effect.gen(function* () {
-    const logs = yield* References.CurrentLogAnnotations;
-    const spans = yield* References.TracerSpanAnnotations;
-    const current = yield* Effect.currentSpan.pipe(Effect.option);
-    if (Option.isSome(current)) {
-      for (const key of current.value.attributes.keys()) {
-        if (ownedAttribute(key) && attributes[key] === undefined) {
-          // Tracer has no removeAttribute API. Clear stale current-span values
-          // explicitly; handler logs and child spans omit these fields entirely.
-          current.value.attribute(key, "");
-        }
-      }
-    }
-    yield* Effect.annotateCurrentSpan(attributes);
-    return yield* httpEffect.pipe(
-      Effect.provideService(CurrentActor, actor),
-      Effect.provideService(
-        References.TracerSpanAnnotations,
-        replaceAttribution(spans),
-      ),
-      Effect.provideService(
-        References.CurrentLogAnnotations,
-        replaceAttribution(logs),
-      ),
-    );
-  });
-};
+) => httpEffect.pipe(Effect.provideService(CurrentActor, actor));
 
 export function ActorRequired(): typeof AnyActorRequired;
 export function ActorRequired(constraint: {

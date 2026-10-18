@@ -10,6 +10,7 @@ import {
   type AuthSessionWithOrganization,
 } from "../service.js";
 import { ActorRequired } from "./actor.js";
+import { AuthMiddleware } from "./middleware.js";
 
 const now = new Date("2026-01-01T00:00:00.000Z");
 
@@ -180,6 +181,7 @@ const expectActorLogAttributes = (expected: ExpectedActorAttributes) => {
 };
 
 const authService = (authSession: AuthSession) => ({
+  getSession: () => Effect.succeed<AuthSession>(authSession),
   requireSession: () => Effect.succeed<AuthSession>(authSession),
   requireOrganization: () =>
     Effect.succeed<AuthSessionWithOrganization>({
@@ -209,6 +211,17 @@ const authServiceLayer = (authSession: AuthSession) =>
     ),
   );
 
+const withAuthentication = (
+  httpEffect: Parameters<AuthMiddleware["Service"]["apiKey"]>[0],
+) =>
+  Effect.gen(function* () {
+    const middleware = yield* AuthMiddleware;
+    return yield* middleware.apiKey(httpEffect, {
+      ...middlewareOptions,
+      credential: Redacted.make(""),
+    });
+  });
+
 const runAnyActorMiddleware = (authSession: AuthSession) =>
   Effect.gen(function* () {
     const middleware = yield* ActorRequired();
@@ -234,14 +247,45 @@ const runAnyActorMiddleware = (authSession: AuthSession) =>
         return HttpServerResponse.empty();
       }),
       middlewareOptions,
-    );
+    ).pipe(withAuthentication);
   }).pipe(
     Effect.provide(ActorRequired.layer(Access)),
-    Effect.provide(authServiceLayer(authSession)),
+    Effect.provide(AuthMiddleware.layer(authServiceLayer(authSession))),
     provideRequestContext,
   );
 
 describe("ActorRequired", () => {
+  it.effect(
+    "provides authorization without constructing or rewriting attribution",
+    () =>
+      Effect.gen(function* () {
+        const middleware = yield* ActorRequired();
+        const logs = yield* References.CurrentLogAnnotations;
+        const spans = yield* References.TracerSpanAnnotations;
+        const current = yield* Effect.currentSpan;
+        const attributes = new Map(current.attributes);
+
+        return yield* middleware(
+          Effect.gen(function* () {
+            const actor = yield* CurrentActor;
+            expect(actor.actor.type).toBe("user");
+            expect(actor.permissions.has("test:records:read")).toBe(true);
+            expect(yield* References.CurrentLogAnnotations).toBe(logs);
+            expect(yield* References.TracerSpanAnnotations).toBe(spans);
+            expect(current.attributes).toEqual(attributes);
+            return HttpServerResponse.empty();
+          }),
+          middlewareOptions,
+        );
+      }).pipe(
+        Effect.provide(ActorRequired.layer(Access)),
+        Effect.provide(authServiceLayer(userSession)),
+        Effect.annotateLogs({ "request.id": "request-1" }),
+        Effect.annotateSpans({ "request.id": "request-1" }),
+        provideRequestContext,
+      ),
+  );
+
   for (const scenario of [
     {
       name: "organization key",
@@ -309,12 +353,14 @@ describe("ActorRequired", () => {
               return HttpServerResponse.empty();
             }),
             middlewareOptions,
-          );
+          ).pipe(withAuthentication);
           expect(yield* References.CurrentLogAnnotations).toEqual(logsBefore);
           expect(yield* References.TracerSpanAnnotations).toEqual(spansBefore);
         }).pipe(
           Effect.provide(ActorRequired.layer(Access)),
-          Effect.provide(authServiceLayer(scenario.session)),
+          Effect.provide(
+            AuthMiddleware.layer(authServiceLayer(scenario.session)),
+          ),
           Effect.annotateLogs(ambient),
           Effect.annotateSpans(ambient),
           provideRequestContext,
@@ -339,11 +385,11 @@ describe("ActorRequired", () => {
             return HttpServerResponse.empty();
           }),
           middlewareOptions,
-        );
+        ).pipe(withAuthentication);
         expect(yield* References.CurrentLogAnnotations).toEqual(before);
       }).pipe(
         Effect.provide(ActorRequired.layer(Access)),
-        Effect.provide(authServiceLayer(userKeySession)),
+        Effect.provide(AuthMiddleware.layer(authServiceLayer(userKeySession))),
         Effect.annotateLogs({
           "app.actor.type": "system",
           "app.actor.id": "unverified",
@@ -389,10 +435,10 @@ describe("ActorRequired", () => {
           return HttpServerResponse.empty();
         }),
         middlewareOptions,
-      );
+      ).pipe(withAuthentication);
     }).pipe(
       Effect.provide(ActorRequired.layer(Access)),
-      Effect.provide(authServiceLayer(userKeySession)),
+      Effect.provide(AuthMiddleware.layer(authServiceLayer(userKeySession))),
       provideRequestContext,
     ),
   );
@@ -427,10 +473,12 @@ describe("ActorRequired", () => {
           return HttpServerResponse.empty();
         }),
         middlewareOptions,
-      );
+      ).pipe(withAuthentication);
     }).pipe(
       Effect.provide(ActorRequired.layer(Access)),
-      Effect.provide(authServiceLayer(organizationKeySession)),
+      Effect.provide(
+        AuthMiddleware.layer(authServiceLayer(organizationKeySession)),
+      ),
       provideRequestContext,
     ),
   );

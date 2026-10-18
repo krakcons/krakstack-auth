@@ -1,11 +1,12 @@
 import { describe, expect, it } from "@effect/vitest";
-import { Effect, Layer, Redacted } from "effect";
+import { Effect, Layer, Option, Redacted, References } from "effect";
 import { HttpRouter, HttpServerRequest, HttpServerResponse } from "effect/http";
 import { HttpApiEndpoint, HttpApiError, HttpApiGroup } from "effect/http-api";
 
 import { AuthService } from "../service.js";
 import { AuthMiddleware, makeAuthenticationLive } from "./middleware.js";
 import type { AuthSession } from "../service.js";
+import { CurrentActor } from "../access.js";
 
 const now = new Date("2026-01-01T00:00:00.000Z");
 
@@ -238,6 +239,117 @@ const organizationApiKeyAuthClientLayer = Layer.effect(
   })),
 ).pipe(Layer.provide(baseAuthServiceLayer));
 
+describe("AuthMiddleware.routerLayer", () => {
+  const run = (authLayer: Layer.Layer<AuthService, unknown>, path = "/test") =>
+    Effect.gen(function* () {
+      let annotations: Effect.Success<typeof References.CurrentLogAnnotations> =
+        {};
+      const inspect = Effect.gen(function* () {
+        annotations = yield* References.CurrentLogAnnotations;
+        // Session attribution is not project authorization.
+        expect(Option.isNone(yield* Effect.serviceOption(CurrentActor))).toBe(
+          true,
+        );
+        return HttpServerResponse.empty();
+      });
+      const handler = yield* HttpRouter.toHttpEffect(
+        HttpRouter.add("GET", "/test", inspect).pipe(
+          Layer.provide(
+            AuthMiddleware.routerLayer({ authLayer, paths: [path] }),
+          ),
+        ),
+      );
+      const response = yield* handler.pipe(
+        Effect.provideService(HttpServerRequest.HttpServerRequest, request),
+      );
+      return { response, annotations };
+    }).pipe(Effect.scoped);
+
+  for (const scenario of [
+    {
+      name: "cookie",
+      layer: authClientLayer,
+      expected: {
+        "user.id": "user-1",
+        "organization.id": "org-1",
+        "app.actor.type": "user",
+        "app.actor.id": "user-1",
+      },
+    },
+    { name: "anonymous", layer: rejectedAuthClientLayer, expected: {} },
+    {
+      name: "user key",
+      layer: userApiKeyAuthClientLayer,
+      expected: {
+        "user.id": "user-1",
+        "organization.id": "org-1",
+        "app.actor.type": "api_key",
+        "app.actor.id": "user-key-1",
+        "app.actor.owner.type": "user",
+        "app.actor.owner.id": "user-1",
+      },
+    },
+    {
+      name: "organization key",
+      layer: organizationApiKeyAuthClientLayer,
+      expected: {
+        "organization.id": "org-1",
+        "app.actor.type": "api_key",
+        "app.actor.id": "org-key-1",
+        "app.actor.owner.type": "organization",
+        "app.actor.owner.id": "org-1",
+      },
+    },
+  ]) {
+    it.effect(
+      `replaces inherited attribution for ${scenario.name} sessions`,
+      () =>
+        Effect.gen(function* () {
+          const { response, annotations } = yield* run(scenario.layer);
+          expect(response.status).toBe(204);
+          expect(annotations).toEqual({
+            "request.id": "request-1",
+            ...scenario.expected,
+          });
+        }).pipe(
+          Effect.annotateLogs({
+            "request.id": "request-1",
+            "user.id": "stale-user",
+            "organization.id": "stale-org",
+            "app.actor.type": "api_key",
+            "app.actor.id": "stale-key",
+            "app.actor.owner.type": "user",
+            "app.actor.owner.id": "stale-owner",
+          }),
+        ),
+    );
+  }
+
+  it.effect("propagates auth outages instead of running anonymously", () =>
+    Effect.gen(function* () {
+      const error = yield* run(unavailableAuthClientLayer).pipe(Effect.flip);
+      expect(error).toBeInstanceOf(HttpApiError.ServiceUnavailable);
+    }),
+  );
+  it.effect("preserves the organization impersonation restriction", () =>
+    Effect.gen(function* () {
+      const error = yield* run(organizationImpersonationAuthClientLayer).pipe(
+        Effect.flip,
+      );
+      expect(error).toBeInstanceOf(HttpApiError.Forbidden);
+    }),
+  );
+  it.effect(
+    "does not resolve sessions for routes outside its configured paths",
+    () =>
+      Effect.gen(function* () {
+        expect(
+          (yield* run(unavailableAuthClientLayer, "/other")).response.status,
+        ).toBe(204);
+      }),
+  );
+});
+
 const requiredOrganizationLayer = Layer.effect(
   AuthService,
   Effect.map(AuthService, (service) => ({
@@ -297,6 +409,43 @@ describe("SessionContext", () => {
 });
 
 describe("AuthenticationLive", () => {
+  it.effect(
+    "adds verified attribution using the session lookup it already performs",
+    () => {
+      let lookups = 0;
+      const countedLayer = Layer.effect(
+        AuthService,
+        Effect.map(AuthService, (service) => ({
+          ...service,
+          getSession: () =>
+            Effect.sync(() => {
+              lookups++;
+              return authSession;
+            }),
+        })),
+      ).pipe(Layer.provide(baseAuthServiceLayer));
+      return provideRequestContext(
+        Effect.gen(function* () {
+          const middleware = yield* AuthMiddleware;
+          yield* middleware.apiKey(
+            Effect.gen(function* () {
+              const annotations = yield* References.CurrentLogAnnotations;
+              expect(annotations).toMatchObject({
+                "user.id": "user-1",
+                "organization.id": "org-1",
+                "app.actor.type": "user",
+                "app.actor.id": "user-1",
+              });
+              expect(lookups).toBe(1);
+              return HttpServerResponse.empty();
+            }),
+            { ...middlewareOptions, credential: Redacted.make("") },
+          );
+        }),
+      ).pipe(Effect.provide(makeAuthenticationLive(countedLayer)));
+    },
+  );
+
   it.effect("provides cookie session-derived auth contexts", () =>
     provideRequestContext(
       Effect.gen(function* () {

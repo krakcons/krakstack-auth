@@ -1,12 +1,18 @@
 import { Cause, Effect, Layer, Redacted } from "effect";
-import { HttpServerRequest } from "effect/http";
+import { HttpRouter, HttpServerRequest } from "effect/http";
 import {
   HttpApiError,
   HttpApiMiddleware,
   HttpApiSecurity,
 } from "effect/http-api";
 
-import { AuthService, type AuthServiceLayerOptions } from "../service.js";
+import {
+  AuthService,
+  type AuthServiceLayerOptions,
+  type AuthSession,
+} from "../service.js";
+import { AuthClientConfig } from "../config.js";
+import { withAuthAnnotations } from "./attribution.js";
 
 export const ApiKeySecurity = HttpApiSecurity.apiKey({
   key: "x-api-key",
@@ -34,6 +40,34 @@ export class AuthMiddleware extends HttpApiMiddleware.Service<
   static readonly layer = (
     options: AuthenticationLiveOptions | Layer.Layer<AuthService, unknown> = {},
   ) => makeAuthenticationLive(options);
+
+  /** The same optional authentication and attribution for plain HttpRouter routes. */
+  static readonly routerLayer = (options: AuthRouterOptions = {}) =>
+    HttpRouter.middleware(
+      Effect.gen(function* () {
+        const config = options.authLayer
+          ? undefined
+          : yield* AuthClientConfig.make(options);
+        return (httpEffect) =>
+          Effect.gen(function* () {
+            const request = yield* HttpServerRequest.HttpServerRequest;
+            if (
+              options.paths &&
+              !options.paths.includes(pathnameFromUrl(request.url))
+            ) {
+              return yield* httpEffect;
+            }
+            const { auth, session } = yield* authenticateRequest(
+              { ...options, ...config },
+              options.authLayer,
+            );
+            return yield* withAuthAnnotations(
+              httpEffect.pipe(Effect.provideService(AuthService, auth)),
+              sessionAnnotations(session),
+            );
+          });
+      }),
+    ).layer;
 }
 
 export type AuthenticationLiveOptions = AuthServiceLayerOptions & {
@@ -48,6 +82,11 @@ export type AuthenticationLiveOptions = AuthServiceLayerOptions & {
   >;
 };
 
+export type AuthRouterOptions = AuthenticationLiveOptions & {
+  /** Resolve auth only for these exact URL pathnames. Defaults to every route in scope. */
+  readonly paths?: readonly string[];
+};
+
 const isAuthServiceLayer = (
   value: AuthenticationLiveOptions | Layer.Layer<AuthService, unknown>,
 ): value is Layer.Layer<AuthService, unknown> => Layer.isLayer(value);
@@ -58,64 +97,85 @@ export const makeAuthenticationLive = (
   const legacyLayer = isAuthServiceLayer(options) ? options : undefined;
   const authOptions = isAuthServiceLayer(options) ? {} : options;
   const authLayer = legacyLayer ?? authOptions.authLayer;
-  const allowedOrganizationImpersonationRoutes =
-    authOptions.allowedOrganizationImpersonationRoutes ?? [];
   return Layer.effect(
     AuthMiddleware,
     Effect.gen(function* () {
       return {
         apiKey: (httpEffect, { credential }) =>
-          Effect.gen(function* () {
-            const request = yield* HttpServerRequest.HttpServerRequest;
-            const apiKey = Redacted.value(credential).trim();
-            const headers = apiKey
-              ? { ...request.headers, "x-api-key": apiKey }
-              : request.headers;
-            const auth = yield* AuthService.pipe(
-              Effect.provide(
-                authLayer ??
-                  AuthService.layer({
-                    ...authOptions,
-                    headers,
-                  }),
+          authenticateRequest(
+            authOptions,
+            authLayer,
+            Redacted.value(credential).trim(),
+          ).pipe(
+            Effect.flatMap(({ auth, session }) =>
+              withAuthAnnotations(
+                httpEffect.pipe(Effect.provideService(AuthService, auth)),
+                sessionAnnotations(session),
               ),
-              Effect.tapCause((cause) =>
-                Effect.logError(
-                  "Authentication rejected: auth client initialization failed",
-                  Cause.pretty(cause),
-                ),
-              ),
-              Effect.mapError(() => new HttpApiError.ServiceUnavailable({})),
-            );
-            if (
-              !isAllowedRoute(allowedOrganizationImpersonationRoutes, request)
-            ) {
-              const session = yield* auth
-                .getSession()
-                .pipe(
-                  Effect.catchTag("Unauthorized", () => Effect.succeed(null)),
-                );
-
-              if (session?.session.impersonatedByOrganizationId) {
-                return yield* new HttpApiError.Forbidden({});
-              }
-            }
-            return auth;
-          }).pipe(
-            Effect.mapError((error) =>
-              error instanceof HttpApiError.Unauthorized ||
-              error instanceof HttpApiError.Forbidden ||
-              error instanceof HttpApiError.ServiceUnavailable
-                ? error
-                : new HttpApiError.ServiceUnavailable({}),
-            ),
-            Effect.flatMap((auth) =>
-              httpEffect.pipe(Effect.provideService(AuthService, auth)),
             ),
           ),
       };
     }),
   );
+};
+
+const authenticateRequest = Effect.fnUntraced(function* (
+  options: AuthenticationLiveOptions,
+  authLayer: AuthenticationLiveOptions["authLayer"],
+  apiKey?: string,
+) {
+  const request = yield* HttpServerRequest.HttpServerRequest;
+  const auth = yield* AuthService.pipe(
+    Effect.provide(
+      authLayer ??
+        AuthService.layer({
+          ...options,
+          headers: apiKey
+            ? { ...request.headers, "x-api-key": apiKey }
+            : request.headers,
+        }),
+    ),
+    Effect.tapCause((cause) =>
+      Effect.logError(
+        "Authentication rejected: auth client initialization failed",
+        Cause.pretty(cause),
+      ),
+    ),
+    Effect.mapError(() => new HttpApiError.ServiceUnavailable({})),
+  );
+  const session = yield* auth
+    .getSession()
+    .pipe(Effect.catchTag("Unauthorized", () => Effect.succeed(null)));
+  if (
+    session?.session.impersonatedByOrganizationId &&
+    !isAllowedRoute(
+      options.allowedOrganizationImpersonationRoutes ?? [],
+      request,
+    )
+  ) {
+    return yield* new HttpApiError.Forbidden({});
+  }
+  return { auth, session };
+});
+
+const sessionAnnotations = (session: AuthSession | null) => {
+  const attributes: Record<string, string> = {};
+  if (!session) return attributes;
+  if (session.user) attributes["user.id"] = session.user.id;
+  if (session.session.activeOrganizationId) {
+    attributes["organization.id"] = session.session.activeOrganizationId;
+  }
+  if (session.authMethod.type === "cookie" && session.user) {
+    attributes["app.actor.type"] = "user";
+    attributes["app.actor.id"] = session.user.id;
+  } else if (session.authMethod.type === "apiKey") {
+    const key = session.authMethod.apiKey;
+    attributes["app.actor.type"] = "api_key";
+    attributes["app.actor.id"] = key.id;
+    attributes["app.actor.owner.type"] = key.configId;
+    attributes["app.actor.owner.id"] = key.referenceId;
+  }
+  return attributes;
 };
 
 const pathnameFromUrl = (url: string) =>
