@@ -52,6 +52,7 @@ import {
   publicOAuthClientsApiHandler,
 } from "@/services/oauth/api.builder";
 import { HttpApiOtlp } from "@krak-stack/registry/opentelemetry/api";
+import { Otlp } from "@krak-stack/registry/opentelemetry";
 import { Organizations } from "@/services/organizations";
 import { Projects } from "@/services/projects";
 import {
@@ -362,7 +363,9 @@ const apiApplicationLayer = Layer.mergeAll(
     "x-api-key",
     authProxyKeyHeader,
   ]),
-).pipe(Layer.provideMerge(HttpApiOtlp.layer));
+).pipe(
+  Layer.provideMerge(HttpApiOtlp.layer.pipe(Layer.provideMerge(Otlp.layer))),
+);
 const apiWebHandler = HttpRouter.toWebHandler<
   Layer.Success<typeof apiApplicationLayer>,
   Layer.Error<typeof apiApplicationLayer>,

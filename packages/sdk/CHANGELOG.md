@@ -4,6 +4,8 @@
 
 ### Patch Changes
 
+- Require `@krak-stack/registry` version `^0.1.52` for the coordinated audit attribution and telemetry integration.
+
 - Actor authorization adds standard `user.roles` from the current organization membership for historical audit snapshots, without confusing global roles or organization API keys with human members. Auth emits IDs and roles only, not names/photos. Clear inherited profile/role annotations alongside other auth attribution. Audit display names/photos are resolved dynamically from current organization membership.
 
   Separate the responsible principal (`app.actor.type/id`, user or organization) from authentication (`app.auth.method`, session or api_key) and API-key record identity (`app.auth.credential.id`). Replace inherited authentication annotations together with actor annotations; never emit credentials or session tokens.

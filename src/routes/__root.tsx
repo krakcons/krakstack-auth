@@ -7,19 +7,17 @@ import {
   stripSearchParams,
   useRouterState,
 } from "@tanstack/react-router";
-import { AsyncResult, type AtomRegistry } from "effect/reactivity";
-import { Effect } from "effect";
+import type { AtomRegistry } from "effect/reactivity";
 import { Suspense } from "react";
 import { KrakstackAuthProvider } from "@krak-stack/auth/components";
-import { useAtomSubscribe, useAtomValue } from "@effect/atom-react";
-import { BrowserOtlp } from "@krak-stack/registry/opentelemetry/browser";
+import { useAtomValue } from "@effect/atom-react";
 import {
   ErrorComponent,
   type ErrorComponentProps,
 } from "@krak-stack/registry/error-component";
 import { Loading } from "@krak-stack/registry/loading";
 import { KrakstackProvider } from "@krak-stack/registry/krakstack-provider";
-import { authBaseUrl, sessionAtom } from "@/services/auth/client";
+import { authBaseUrl } from "@/services/auth/client";
 import { ApiClient } from "@/lib/api-client";
 import { authAccessLabels } from "@/services/auth/access-labels";
 
@@ -140,25 +138,9 @@ function RootContent() {
 }
 
 function RootDocument({ children }: { children: React.ReactNode }) {
-  const runtime = useAtomValue(ApiClient.runtime);
-  useAtomSubscribe(
-    sessionAtom,
-    (session) => {
-      if (!AsyncResult.isSuccess(runtime)) return;
-      Effect.runFork(
-        BrowserOtlp.identify(
-          AsyncResult.isSuccess(session) && !session.waiting && session.value
-            ? {
-                userId: session.value.user.id,
-                organizationId:
-                  session.value.session.activeOrganizationId ?? undefined,
-              }
-            : null,
-        ),
-      );
-    },
-    { immediate: true },
-  );
+  // Keep the browser telemetry runtime mounted. Identity is no longer
+  // client-managed; verified attribution belongs at server ingestion boundaries.
+  useAtomValue(ApiClient.runtime);
 
   return (
     <html lang={getLocale()}>
