@@ -129,10 +129,9 @@ const provideRequestContext = <A, E, R>(effect: Effect.Effect<A, E, R>) =>
 interface ExpectedActorAttributes {
   organizationId: string;
   userId?: string;
-  actorType: "user" | "api_key";
+  actorType: "user" | "organization";
   actorId: string;
-  ownerType?: "user" | "organization";
-  ownerId?: string;
+  credentialId?: string;
 }
 
 const expectedAttribution = (expected: ExpectedActorAttributes) => ({
@@ -140,8 +139,8 @@ const expectedAttribution = (expected: ExpectedActorAttributes) => ({
   "user.id": expected.userId,
   "app.actor.type": expected.actorType,
   "app.actor.id": expected.actorId,
-  "app.actor.owner.type": expected.ownerType,
-  "app.actor.owner.id": expected.ownerId,
+  "app.auth.method": expected.credentialId ? "api_key" : "session",
+  "app.auth.credential.id": expected.credentialId,
 });
 
 const expectActorSpanAttributes = (expected: ExpectedActorAttributes) =>
@@ -256,7 +255,7 @@ const runAnyActorMiddleware = (authSession: AuthSession) =>
 
 describe("ActorRequired", () => {
   it.effect(
-    "provides authorization without constructing or rewriting attribution",
+    "adds verified roles without reconstructing session attribution",
     () =>
       Effect.gen(function* () {
         const middleware = yield* ActorRequired();
@@ -270,9 +269,17 @@ describe("ActorRequired", () => {
             const actor = yield* CurrentActor;
             expect(actor.actor.type).toBe("user");
             expect(actor.permissions.has("test:records:read")).toBe(true);
-            expect(yield* References.CurrentLogAnnotations).toBe(logs);
-            expect(yield* References.TracerSpanAnnotations).toBe(spans);
-            expect(current.attributes).toEqual(attributes);
+            expect(yield* References.CurrentLogAnnotations).toEqual({
+              ...logs,
+              "user.roles": ["member"],
+            });
+            expect(yield* References.TracerSpanAnnotations).toEqual({
+              ...spans,
+              "user.roles": ["member"],
+            });
+            expect(current.attributes).toEqual(
+              new Map([...attributes, ["user.roles", ["member"]]]),
+            );
             return HttpServerResponse.empty();
           }),
           middlewareOptions,
@@ -291,10 +298,11 @@ describe("ActorRequired", () => {
       name: "organization key",
       session: organizationKeySession,
       expected: {
-        "app.actor.type": "api_key",
-        "app.actor.id": "organization-key-1",
-        "app.actor.owner.type": "organization",
-        "app.actor.owner.id": "org-1",
+        "app.actor.type": "organization",
+        "app.actor.id": "org-1",
+        "app.auth.method": "api_key",
+        "app.auth.credential.id": "organization-key-1",
+        "app.auth.impersonator.id": undefined,
         "user.id": undefined,
         "organization.id": "org-1",
       },
@@ -305,8 +313,9 @@ describe("ActorRequired", () => {
       expected: {
         "app.actor.type": "user",
         "app.actor.id": "user-1",
-        "app.actor.owner.type": undefined,
-        "app.actor.owner.id": undefined,
+        "app.auth.method": "session",
+        "app.auth.credential.id": undefined,
+        "app.auth.impersonator.id": undefined,
         "user.id": "user-1",
         "organization.id": "org-1",
       },
@@ -318,10 +327,11 @@ describe("ActorRequired", () => {
         const ambient = {
           "user.id": "previous-user",
           "organization.id": "previous-org",
-          "app.actor.type": "api_key",
-          "app.actor.id": "previous-key",
-          "app.actor.owner.type": "user",
-          "app.actor.owner.id": "previous-owner",
+          "app.actor.type": "user",
+          "app.actor.id": "previous-user",
+          "app.auth.method": "api_key",
+          "app.auth.credential.id": "previous-key",
+          "app.auth.impersonator.id": "previous-admin",
           "app.actor.delegated_by": "previous-delegator",
           "mcp.method.name": "tools/call",
           "request.id": "request-1",
@@ -378,9 +388,10 @@ describe("ActorRequired", () => {
         yield* middleware(
           Effect.gen(function* () {
             const annotations = yield* References.CurrentLogAnnotations;
-            expect(annotations["app.actor.type"]).toBe("api_key");
-            expect(annotations["app.actor.id"]).toBe("user-key-1");
-            expect(annotations["app.actor.owner.id"]).toBe("user-1");
+            expect(annotations["app.actor.type"]).toBe("user");
+            expect(annotations["app.actor.id"]).toBe("user-1");
+            expect(annotations["app.auth.method"]).toBe("api_key");
+            expect(annotations["app.auth.credential.id"]).toBe("user-key-1");
             expect(annotations["request.id"]).toBe("request-1");
             return HttpServerResponse.empty();
           }),
@@ -403,6 +414,47 @@ describe("ActorRequired", () => {
     runAnyActorMiddleware(userSession),
   );
 
+  for (const scenario of [
+    { name: "member", session: userSession, roles: ["member"] },
+    { name: "user key", session: userKeySession, roles: ["member"] },
+    { name: "organization key", session: organizationKeySession, roles: [] },
+  ]) {
+    it.effect(
+      `snapshots verified organization roles for a ${scenario.name}`,
+      () =>
+        Effect.gen(function* () {
+          const middleware = yield* ActorRequired();
+          yield* middleware(
+            Effect.gen(function* () {
+              const annotations = yield* References.CurrentLogAnnotations;
+              expect(annotations["user.roles"]).toEqual(scenario.roles);
+              const current = yield* Effect.currentSpan;
+              const child = yield* Effect.currentSpan.pipe(
+                Effect.withSpan("role-snapshot"),
+              );
+              expect(current.attributes.get("user.roles")).toEqual(
+                scenario.roles,
+              );
+              expect(child.attributes.get("user.roles")).toEqual(
+                scenario.roles,
+              );
+              expect(annotations).not.toHaveProperty("user.full_name");
+              expect(annotations).not.toHaveProperty("app.user.image");
+              return HttpServerResponse.empty();
+            }),
+            middlewareOptions,
+          ).pipe(withAuthentication);
+        }).pipe(
+          Effect.provide(ActorRequired.layer(Access)),
+          Effect.provide(
+            AuthMiddleware.layer(authServiceLayer(scenario.session)),
+          ),
+          Effect.annotateLogs({ "user.roles": ["owner"] }),
+          provideRequestContext,
+        ),
+    );
+  }
+
   it.effect("intersects a user key grant with the live member role", () =>
     Effect.gen(function* () {
       const middleware = yield* ActorRequired({
@@ -417,18 +469,16 @@ describe("ActorRequired", () => {
           expect(actor.permissions.has("test:records:read")).toBe(true);
           expect(actor.permissions.has("test:records:update")).toBe(false);
           yield* expectActorSpanAttributes({
-            actorType: "api_key",
-            actorId: "user-key-1",
-            ownerType: "user",
-            ownerId: "user-1",
+            actorType: "user",
+            actorId: "user-1",
+            credentialId: "user-key-1",
             organizationId: "org-1",
             userId: "user-1",
           });
           yield* expectActorLogAttributes({
-            actorType: "api_key",
-            actorId: "user-key-1",
-            ownerType: "user",
-            ownerId: "user-1",
+            actorType: "user",
+            actorId: "user-1",
+            credentialId: "user-key-1",
             organizationId: "org-1",
             userId: "user-1",
           });
@@ -458,17 +508,15 @@ describe("ActorRequired", () => {
           expect(actor.permissions.has("test:records:update")).toBe(true);
           yield* expectActorSpanAttributes({
             organizationId: "org-1",
-            actorType: "api_key",
-            actorId: "organization-key-1",
-            ownerType: "organization",
-            ownerId: "org-1",
+            actorType: "organization",
+            actorId: "org-1",
+            credentialId: "organization-key-1",
           });
           yield* expectActorLogAttributes({
             organizationId: "org-1",
-            actorType: "api_key",
-            actorId: "organization-key-1",
-            ownerType: "organization",
-            ownerId: "org-1",
+            actorType: "organization",
+            actorId: "org-1",
+            credentialId: "organization-key-1",
           });
           return HttpServerResponse.empty();
         }),

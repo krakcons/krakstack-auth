@@ -161,19 +161,29 @@ const authenticateRequest = Effect.fnUntraced(function* (
 const sessionAnnotations = (session: AuthSession | null) => {
   const attributes: Record<string, string> = {};
   if (!session) return attributes;
-  if (session.user) attributes["user.id"] = session.user.id;
+  if (
+    session.user &&
+    (session.authMethod.type === "cookie" ||
+      session.authMethod.apiKey.configId === "user")
+  ) {
+    attributes["user.id"] = session.user.id;
+  }
   if (session.session.activeOrganizationId) {
     attributes["organization.id"] = session.session.activeOrganizationId;
   }
   if (session.authMethod.type === "cookie" && session.user) {
     attributes["app.actor.type"] = "user";
     attributes["app.actor.id"] = session.user.id;
+    attributes["app.auth.method"] = "session";
+    if (session.session.impersonatedBy) {
+      attributes["app.auth.impersonator.id"] = session.session.impersonatedBy;
+    }
   } else if (session.authMethod.type === "apiKey") {
     const key = session.authMethod.apiKey;
-    attributes["app.actor.type"] = "api_key";
-    attributes["app.actor.id"] = key.id;
-    attributes["app.actor.owner.type"] = key.configId;
-    attributes["app.actor.owner.id"] = key.referenceId;
+    attributes["app.actor.type"] = key.configId;
+    attributes["app.actor.id"] = key.referenceId;
+    attributes["app.auth.method"] = "api_key";
+    attributes["app.auth.credential.id"] = key.id;
   }
   return attributes;
 };

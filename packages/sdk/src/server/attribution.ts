@@ -3,12 +3,14 @@ import { Effect, Option, References } from "effect";
 /** Replace auth-owned attribution rather than merging it with an outer actor. */
 export const withAuthAnnotations = <A, E, R>(
   effect: Effect.Effect<A, E, R>,
-  attributes: Readonly<Record<string, string>>,
+  attributes: Readonly<Record<string, string | ReadonlyArray<string>>>,
 ) => {
   const ownedAttribute = (key: string) =>
-    key === "user.id" ||
+    key.startsWith("user.") ||
+    key.startsWith("app.user.") ||
     key === "organization.id" ||
-    key.startsWith("app.actor.");
+    key.startsWith("app.actor.") ||
+    key.startsWith("app.auth.");
   const replaceAttribution = (
     annotations: Effect.Success<typeof References.CurrentLogAnnotations>,
   ) => ({

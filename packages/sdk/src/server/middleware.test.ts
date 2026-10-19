@@ -16,7 +16,7 @@ const user = {
   updatedAt: now,
   email: "user@example.com",
   emailVerified: true,
-  image: null,
+  image: "https://images.example.test/user-1.png",
   name: "Test User",
   role: null,
   banned: false,
@@ -274,19 +274,45 @@ describe("AuthMiddleware.routerLayer", () => {
         "organization.id": "org-1",
         "app.actor.type": "user",
         "app.actor.id": "user-1",
+        "app.auth.method": "session",
       },
     },
     { name: "anonymous", layer: rejectedAuthClientLayer, expected: {} },
+    {
+      name: "impersonation",
+      layer: Layer.effect(
+        AuthService,
+        Effect.map(AuthService, (service) => ({
+          ...service,
+          getSession: () =>
+            Effect.succeed<AuthSession>({
+              ...authSession,
+              session: {
+                ...authSession.session,
+                impersonatedBy: "admin-user-1",
+              },
+            }),
+        })),
+      ).pipe(Layer.provide(baseAuthServiceLayer)),
+      expected: {
+        "user.id": "user-1",
+        "organization.id": "org-1",
+        "app.actor.type": "user",
+        "app.actor.id": "user-1",
+        "app.auth.method": "session",
+        "app.auth.impersonator.id": "admin-user-1",
+      },
+    },
     {
       name: "user key",
       layer: userApiKeyAuthClientLayer,
       expected: {
         "user.id": "user-1",
         "organization.id": "org-1",
-        "app.actor.type": "api_key",
-        "app.actor.id": "user-key-1",
-        "app.actor.owner.type": "user",
-        "app.actor.owner.id": "user-1",
+        "app.actor.type": "user",
+        "app.actor.id": "user-1",
+        "app.auth.method": "api_key",
+        "app.auth.credential.id": "user-key-1",
       },
     },
     {
@@ -294,10 +320,10 @@ describe("AuthMiddleware.routerLayer", () => {
       layer: organizationApiKeyAuthClientLayer,
       expected: {
         "organization.id": "org-1",
-        "app.actor.type": "api_key",
-        "app.actor.id": "org-key-1",
-        "app.actor.owner.type": "organization",
-        "app.actor.owner.id": "org-1",
+        "app.actor.type": "organization",
+        "app.actor.id": "org-1",
+        "app.auth.method": "api_key",
+        "app.auth.credential.id": "org-key-1",
       },
     },
   ]) {
@@ -315,11 +341,15 @@ describe("AuthMiddleware.routerLayer", () => {
           Effect.annotateLogs({
             "request.id": "request-1",
             "user.id": "stale-user",
+            "user.full_name": "Stale User",
+            "app.user.image": "https://images.example.test/stale.png",
+            "user.roles": ["owner"],
             "organization.id": "stale-org",
-            "app.actor.type": "api_key",
-            "app.actor.id": "stale-key",
-            "app.actor.owner.type": "user",
-            "app.actor.owner.id": "stale-owner",
+            "app.actor.type": "user",
+            "app.actor.id": "stale-user",
+            "app.auth.method": "api_key",
+            "app.auth.credential.id": "stale-key",
+            "app.auth.impersonator.id": "stale-admin",
           }),
         ),
     );
@@ -630,13 +660,35 @@ describe("AuthenticationLive", () => {
     provideRequestContext(
       Effect.gen(function* () {
         const middleware = yield* AuthMiddleware;
-        const response = yield* middleware.apiKey(
-          Effect.succeed(HttpServerResponse.text("ok")),
-          {
-            ...middlewareOptions,
-            credential: Redacted.make(""),
-          },
-        );
+        const response = yield* middleware
+          .apiKey(
+            Effect.gen(function* () {
+              const logs = yield* References.CurrentLogAnnotations;
+              const span = yield* Effect.currentSpan;
+              const child = yield* Effect.currentSpan.pipe(
+                Effect.withSpan("child"),
+              );
+              for (const attributes of [
+                logs,
+                Object.fromEntries(span.attributes),
+                Object.fromEntries(child.attributes),
+              ]) {
+                expect(attributes).toMatchObject({
+                  "app.actor.type": "user",
+                  "app.actor.id": "user-1",
+                  "app.auth.method": "session",
+                  "app.auth.impersonator.id": "admin-user-1",
+                });
+                expect(attributes).not.toHaveProperty("user.full_name");
+              }
+              return HttpServerResponse.text("ok");
+            }),
+            {
+              ...middlewareOptions,
+              credential: Redacted.make(""),
+            },
+          )
+          .pipe(Effect.withSpan("impersonated-request"));
 
         expect(response.status).toBe(200);
       }),

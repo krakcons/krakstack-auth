@@ -174,7 +174,23 @@ const requiredActor = <Project extends string, Action extends string>(
 const withCurrentActor = <A, E, R>(
   httpEffect: Effect.Effect<A, E, R | CurrentActor>,
   actor: CurrentActor,
-) => httpEffect.pipe(Effect.provideService(CurrentActor, actor));
+) => {
+  const roles =
+    actor.actor.type === "user"
+      ? actor.actor.roles
+      : actor.actor.owner.type === "user"
+        ? actor.actor.owner.roles
+        : [];
+  // These are verified active-organization roles, never the global user.role.
+  return Effect.gen(function* () {
+    yield* Effect.annotateCurrentSpan({ "user.roles": roles });
+    return yield* httpEffect.pipe(
+      Effect.provideService(CurrentActor, actor),
+      Effect.annotateLogs({ "user.roles": roles }),
+      Effect.annotateSpans({ "user.roles": roles }),
+    );
+  });
+};
 
 export function ActorRequired(): typeof AnyActorRequired;
 export function ActorRequired(constraint: {

@@ -74,7 +74,7 @@ import { Layer } from "effect";
 
 const telemetry = HttpApiOtlp.layer.pipe(
   Layer.provide(AuthMiddleware.routerLayer({ paths: ["/api/otel/v1/logs"] })),
-  Layer.provide(Events.processorLayer),
+  Layer.provide(Events.ingestionLayer),
   Layer.provide(eventsLayer),
 );
 ```
@@ -122,16 +122,18 @@ Define project permissions with `defineProjectAccess`, resolve actors with `Acto
 
 `AuthMiddleware` annotates the current span, child spans and handler logs with verified attribution:
 
-| Attribute              | User session           | User-owned API key     | Organization-owned API key |
-| ---------------------- | ---------------------- | ---------------------- | -------------------------- |
-| `app.actor.type`       | `user`                 | `api_key`              | `api_key`                  |
-| `app.actor.id`         | User ID                | API-key ID             | API-key ID                 |
-| `app.actor.owner.type` | Omitted                | `user`                 | `organization`             |
-| `app.actor.owner.id`   | Omitted                | Owner user ID          | Owner organization ID      |
-| `user.id`              | User ID                | Owner user ID          | Omitted                    |
-| `organization.id`      | Active organization ID | Active organization ID | Owner organization ID      |
+| Attribute                  | User session                           | User-owned API key         | Organization-owned API key |
+| -------------------------- | -------------------------------------- | -------------------------- | -------------------------- |
+| `app.actor.type`           | `user`                                 | `user`                     | `organization`             |
+| `app.actor.id`             | User ID                                | Owner user ID              | Owner organization ID      |
+| `app.auth.method`          | `session`                              | `api_key`                  | `api_key`                  |
+| `app.auth.credential.id`   | Omitted                                | API-key record ID          | API-key record ID          |
+| `app.auth.impersonator.id` | Initiating admin ID when impersonating | Omitted                    | Omitted                    |
+| `user.id`                  | User ID                                | Owner user ID              | Omitted                    |
+| `user.roles`               | Organization roles                     | Owner's organization roles | Empty array                |
+| `organization.id`          | Active organization ID                 | Active organization ID     | Owner organization ID      |
 
-The `app.actor.*` fields and existing `organization.id` are application conventions, not standard OTel actor attributes. The public actor model still uses `type: "apiKey"`; `api_key` is its telemetry representation. Only identifiers are emitted, never API-key values or session tokens. Consumers such as transactional audit recording can inherit these log annotations without depending on the auth SDK. MCP and AI execution context belongs to the respective integration layers and does not replace the authenticated actor.
+`user.id` and `user.roles` follow OpenTelemetry user semantic conventions. Roles are added by `ActorRequired`, not session-only router middleware. Names, photos, email addresses, API-key values, and session tokens are not emitted. OTel defines `user.name` as login/username and `user.full_name` as full name; neither is needed for attribution here. The `app.actor.*`, `app.auth.*` and existing `organization.id` fields are application conventions. The public authorization model still uses `type: "apiKey"`, but telemetry identifies its owning user or organization as the responsible principal and records the key separately as a credential. This replaces the previous `app.actor.owner.*` fields and API-key actor IDs; telemetry consumers must migrate together with the SDK. Audit consumers resolve current names/photos from organization membership for display, rather than copying them into logs. MCP and AI execution context belongs to the respective integration layers and does not replace the authenticated actor.
 
 Auth-owned user, organization and actor annotations replace the inherited set,
 preventing stale user/API-key owner attribution. Unrelated request, MCP and agent
@@ -140,10 +142,12 @@ Stale fields on an already-created current span are cleared to empty strings
 because the tracer interface has no attribute-removal method; handler logs and
 new child spans omit those fields entirely.
 
-`ActorRequired` does not construct or rewrite attribution. It resolves the project
-actor, enforces actor constraints, and provides `CurrentActor`, preserving the
-annotations established by `AuthMiddleware`. When supplying `AuthService` directly
-without `AuthMiddleware`, authorization still works, but no auth attribution is
-added automatically.
+`ActorRequired` resolves the project actor, enforces actor constraints, and provides
+`CurrentActor`. It adds `user.roles` to logs and spans from the verified active
+organization membership, not the global user role. Events recorded in the handler
+retain that role snapshot even after membership changes. Session-only router
+middleware does not look up roles. When supplying `AuthService` directly without
+`AuthMiddleware`, only the verified roles are added; session profile/actor
+attribution still requires `AuthMiddleware`.
 
 See the [RBAC guide](https://auth.krakstack.net/en/docs/rbac).
