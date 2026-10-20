@@ -26,8 +26,6 @@ import { m } from "../paraglide/messages.js";
 import { getLocale, locales } from "../paraglide/runtime.js";
 import appCss from "../styles.css?url";
 
-const analyticsWebsiteId = import.meta.env.VITE_ANALYTICS_WEBSITE_ID;
-
 const AppErrorComponent = (props: ErrorComponentProps) => (
   <ErrorComponent {...props} diagnostics={{ app: m.app_name() }} />
 );
@@ -91,15 +89,6 @@ export const Route = createRootRouteWithContext<{
         href: "https://fonts.googleapis.com/css2?family=Poppins:ital,wght@0,400;0,500;0,600;0,700;1,400;1,600&display=swap",
       },
     ],
-    scripts: analyticsWebsiteId
-      ? [
-          {
-            defer: true,
-            src: "https://analytics.krakconsultants.net/script.js",
-            "data-website-id": analyticsWebsiteId,
-          },
-        ]
-      : [],
   }),
   shellComponent: RootDocument,
   errorComponent: AppErrorComponent,
