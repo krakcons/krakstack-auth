@@ -6,6 +6,7 @@ import {
 import { CredentialsFromEnv } from "@distilled.cloud/cloudflare";
 import {
   AuthService,
+  AuthMiddleware,
   authProxyKeyHeader,
   type AuthSession,
 } from "@krak-stack/auth/server";
@@ -52,6 +53,8 @@ import {
   publicOAuthClientsApiHandler,
 } from "@/services/oauth/api.builder";
 import { HttpApiOtlp } from "@krak-stack/registry/opentelemetry/api";
+import { Events } from "@krak-stack/registry/events";
+import { BrowserCrypto } from "@effect/platform-browser";
 import { Otlp } from "@krak-stack/registry/opentelemetry";
 import { Organizations } from "@/services/organizations";
 import { Projects } from "@/services/projects";
@@ -364,7 +367,23 @@ const apiApplicationLayer = Layer.mergeAll(
     authProxyKeyHeader,
   ]),
 ).pipe(
-  Layer.provideMerge(HttpApiOtlp.layer.pipe(Layer.provideMerge(Otlp.layer))),
+  Layer.provideMerge(
+    HttpApiOtlp.layer.pipe(
+      Layer.provide(
+        AuthMiddleware.routerLayer({
+          paths: ["/api/otel/v1/logs"],
+          authLayer: localAuthServiceLayer,
+        }),
+      ),
+      Layer.provide(Events.ingestionLayer),
+      Layer.provideMerge(
+        Events.layerWith({ geolocation: "cloudflare" }).pipe(
+          Layer.provide(BrowserCrypto.layer),
+          Layer.provideMerge(Otlp.layer),
+        ),
+      ),
+    ),
+  ),
 );
 const apiWebHandler = HttpRouter.toWebHandler<
   Layer.Success<typeof apiApplicationLayer>,
