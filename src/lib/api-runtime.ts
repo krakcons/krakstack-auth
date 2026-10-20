@@ -9,7 +9,10 @@ export const apiRuntime = Atom.context();
 
 if (!import.meta.env.SSR) {
   apiRuntime.addGlobalLayer(
-    Layer.mergeAll(BrowserEvents.layer(), BrowserWebVitals.layer()).pipe(
+    Layer.mergeAll(
+      BrowserEvents.layer({ requireConsent: false }),
+      BrowserWebVitals.layer({ requireConsent: false }),
+    ).pipe(
       Layer.provideMerge(
         BrowserOtlp.layer({ serviceName: "krakstack-auth-web" }),
       ),
