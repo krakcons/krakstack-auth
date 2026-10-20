@@ -3,7 +3,7 @@ import { useNavigate, useSearch } from "@tanstack/react-router";
 import { FormBuilder, FormReact } from "@lucas-barake/effect-form-react";
 import { Effect, Schema } from "effect";
 import { Atom, AsyncResult } from "effect/reactivity";
-import { Building2, FolderKanban, Pencil, Trash2 } from "lucide-react";
+import { Pencil, Trash2 } from "lucide-react";
 import { useState } from "react";
 
 import { Button } from "@/components/ui/button";
@@ -18,7 +18,6 @@ import {
   SubmitError,
   TextField,
 } from "@krak-stack/registry/effect-form";
-import { AppBrand } from "@krak-stack/registry/app-brand";
 import { Query } from "@krak-stack/registry/query";
 import {
   AlertDialog,
@@ -345,41 +344,35 @@ const domainColumns = (): DataTableColDef<ServerDomain>[] => [
   {
     field: "projectId",
     headerName: m.project(),
-    cellRenderer: ({ data }) => {
-      const logo = assetUrl(data.projectLogo ?? null, authBaseUrl);
-
-      return data.projectId ? (
-        <AppBrand
-          to={null}
-          label={data.projectName ?? data.projectId}
-          subtitle={data.projectId}
-          icon={FolderKanban}
-          className="min-w-48"
-          {...(logo ? { imageSrc: logo } : {})}
-        />
-      ) : (
-        <span className="text-muted-foreground text-sm">{m.admin_none()}</span>
-      );
+    type: "reference",
+    typeOptions: {
+      imageVariant: "square",
+      emptyLabel: m.admin_none(),
+      getItem: (data) =>
+        data.projectId
+          ? {
+              label: data.projectName ?? data.projectId,
+              description: data.projectId,
+              imageSrc: assetUrl(data.projectLogo ?? null, authBaseUrl),
+            }
+          : null,
     },
   },
   {
     field: "organizationId",
     headerName: m.admin_column_organization(),
-    cellRenderer: ({ data }) => {
-      const logo = assetUrl(data.organizationLogo ?? null, authBaseUrl);
-
-      return data.organizationId ? (
-        <AppBrand
-          to={null}
-          label={data.organizationName ?? data.organizationId}
-          subtitle={data.organizationId}
-          icon={Building2}
-          className="min-w-48"
-          {...(logo ? { imageSrc: logo } : {})}
-        />
-      ) : (
-        <span className="text-muted-foreground text-sm">{m.admin_none()}</span>
-      );
+    type: "reference",
+    typeOptions: {
+      imageVariant: "square",
+      emptyLabel: m.admin_none(),
+      getItem: (data) =>
+        data.organizationId
+          ? {
+              label: data.organizationName ?? data.organizationId,
+              description: data.organizationId,
+              imageSrc: assetUrl(data.organizationLogo ?? null, authBaseUrl),
+            }
+          : null,
     },
   },
   {

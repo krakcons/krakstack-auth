@@ -2,7 +2,7 @@ import { useAtomSet, useAtomValue } from "@effect/atom-react";
 import { useNavigate, useSearch } from "@tanstack/react-router";
 import { Schema } from "effect";
 import { Atom, AsyncResult } from "effect/reactivity";
-import { FolderKanban, KeyRound, Pencil, Trash2 } from "lucide-react";
+import { Pencil, Trash2 } from "lucide-react";
 import { useState } from "react";
 
 import {
@@ -10,7 +10,6 @@ import {
   type DataTableColDef,
 } from "@krak-stack/registry/data-table";
 import { ErrorMessage } from "@krak-stack/registry/effect-form";
-import { AppBrand } from "@krak-stack/registry/app-brand";
 import { Query } from "@krak-stack/registry/query";
 import {
   AlertDialog,
@@ -137,37 +136,27 @@ const clientColumns = (): DataTableColDef<OAuthClientAdmin>[] => [
   {
     field: "name",
     headerName: m.admin_column_client(),
-    cellRenderer: ({ data }) => {
-      const icon = assetUrl(data.icon, authBaseUrl);
-
-      return (
-        <AppBrand
-          to={null}
-          label={data.name ?? data.clientId}
-          subtitle={data.clientId}
-          icon={KeyRound}
-          className="min-w-56"
-          {...(icon ? { imageSrc: icon } : {})}
-        />
-      );
+    type: "reference",
+    typeOptions: {
+      imageVariant: "square",
+      getItem: (data) => ({
+        label: data.name ?? data.clientId,
+        description: data.clientId,
+        imageSrc: assetUrl(data.icon, authBaseUrl),
+      }),
     },
   },
   {
     colId: "project",
     headerName: m.project(),
-    cellRenderer: ({ data }) => {
-      const logo = assetUrl(data.projectLogo, authBaseUrl);
-
-      return (
-        <AppBrand
-          to={null}
-          label={data.projectName ?? m.project_none()}
-          subtitle={data.projectId ?? ""}
-          icon={FolderKanban}
-          className="min-w-48"
-          {...(logo ? { imageSrc: logo } : {})}
-        />
-      );
+    type: "reference",
+    typeOptions: {
+      imageVariant: "square",
+      getItem: (data) => ({
+        label: data.projectName ?? m.project_none(),
+        description: data.projectId,
+        imageSrc: assetUrl(data.projectLogo, authBaseUrl),
+      }),
     },
   },
   {

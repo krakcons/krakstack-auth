@@ -2,7 +2,7 @@ import { useAtomSet, useAtomValue } from "@effect/atom-react";
 import { useNavigate, useSearch } from "@tanstack/react-router";
 import { Schema } from "effect";
 import { Atom, AsyncResult } from "effect/reactivity";
-import { Eye, FolderKanban, Pencil, Trash2 } from "lucide-react";
+import { Eye, Pencil, Trash2 } from "lucide-react";
 import { useState } from "react";
 
 import {
@@ -10,7 +10,6 @@ import {
   type DataTableColDef,
 } from "@krak-stack/registry/data-table";
 import { ErrorMessage } from "@krak-stack/registry/effect-form";
-import { AppBrand } from "@krak-stack/registry/app-brand";
 import { Query } from "@krak-stack/registry/query";
 import {
   AlertDialog,
@@ -138,19 +137,14 @@ const projectColumns = (): DataTableColDef<Project>[] => [
   {
     field: "name",
     headerName: m.project(),
-    cellRenderer: ({ data }) => {
-      const logo = assetUrl(data.logo, authBaseUrl);
-
-      return (
-        <AppBrand
-          to={null}
-          label={data.name}
-          subtitle={data.id}
-          icon={FolderKanban}
-          className="min-w-56"
-          {...(logo ? { imageSrc: logo } : {})}
-        />
-      );
+    type: "reference",
+    typeOptions: {
+      imageVariant: "square",
+      getItem: (data) => ({
+        label: data.name,
+        description: data.id,
+        imageSrc: assetUrl(data.logo, authBaseUrl),
+      }),
     },
   },
   {
