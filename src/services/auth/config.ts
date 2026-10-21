@@ -13,6 +13,7 @@ import {
 import { oauthProvider } from "@better-auth/oauth-provider";
 import { apiKey } from "@better-auth/api-key";
 import { APIError } from "@better-auth/core/error";
+import { isAPIError } from "better-auth/api";
 import { Effect, Option, Schema } from "effect";
 import { SqlClient, SqlSchema } from "effect/sql";
 import { IdRow, OrganizationRow, RoleRow, UserRow } from "@/db/schema";
@@ -41,6 +42,12 @@ import { mergeOrganizationMetadata } from "@/services/auth/organization-metadata
 import { organizationAuthRoles } from "@/services/auth/organization-access";
 import { databasePool, runWithDatabase } from "@/services/database";
 import { connectProjectSession } from "@/services/projects/connections";
+import {
+  makeNativeAudit,
+  markNativeAuthMutation,
+  markNativeSessionRevocation,
+} from "./audit-hooks";
+import { nativeAuditRuntime } from "@/services/audit/layer.server";
 
 const isDev = process.env.NODE_ENV === "development";
 
@@ -248,9 +255,11 @@ const connectSessionProject = async (
 export const createAuth = ({
   allowedHosts,
   cookieDomain,
+  auditRun = (effect) => nativeAuditRuntime.runPromise(effect),
 }: {
   allowedHosts: readonly string[];
   cookieDomain?: string | undefined;
+  auditRun?: Parameters<typeof makeNativeAudit>[0];
 }) => {
   let createPersonalOrganization:
     | ((
@@ -340,8 +349,27 @@ export const createAuth = ({
         }
       : {};
 
+  const nativeAudit = makeNativeAudit(auditRun);
   const auth = betterAuth({
     appName: "Krakstack Auth",
+    // BA diagnostics can interpolate emails and attach OAuth state/provider
+    // errors. Keep diagnostic severity, not their untrusted text or arguments.
+    logger: {
+      level: "warn",
+      log: (level) => console.warn("Better Auth diagnostic", { level }),
+    },
+    onAPIError: {
+      onError: (error) => {
+        if (isAPIError(error)) return;
+        // Otherwise better-call prints the raw exception (including SQL and
+        // provider errors). A generic APIError also gives every audit-outage
+        // rejection the same response, independent of reset-token validity.
+        console.error("Better Auth native handler failed");
+        throw new APIError("INTERNAL_SERVER_ERROR", {
+          message: "Authentication request failed",
+        });
+      },
+    },
     baseURL: {
       allowedHosts: Array.from(allowedHosts),
       protocol: isDev ? "http" : "https",
@@ -371,9 +399,15 @@ export const createAuth = ({
       sendResetPassword: async ({ user, url }, request) => {
         await sendResetPasswordEmail({ request, to: user.email, url });
       },
+      onPasswordReset: async ({ user }) => {
+        markNativeAuthMutation({ userId: user.id, kind: "password_reset" });
+      },
     },
     emailVerification: {
       autoSignInAfterVerification: true,
+      afterEmailVerification: async (user) => {
+        markNativeAuthMutation({ userId: user.id, kind: "email_verified" });
+      },
     },
     ...socialProviderOptions,
     account: {
@@ -405,8 +439,14 @@ export const createAuth = ({
         maxAge: 60 * 5,
       },
     },
+    hooks: nativeAudit.hooks,
     databaseHooks: {
       user: {
+        delete: {
+          after: async (user) => {
+            markNativeAuthMutation({ userId: user.id, kind: "user_deleted" });
+          },
+        },
         create: {
           before: (user, context) =>
             Effect.runPromise(
@@ -423,6 +463,7 @@ export const createAuth = ({
               }),
             ),
           after: async (user) => {
+            markNativeAuthMutation({ userId: user.id, kind: "user_created" });
             if (user.isAnonymous === true) return;
             await runWithDatabase(provisionPersonalOrganization(user));
           },
@@ -443,6 +484,11 @@ export const createAuth = ({
         },
       },
       session: {
+        delete: {
+          after: async (session) => {
+            markNativeSessionRevocation(session.userId);
+          },
+        },
         create: {
           before: async (session) => {
             return await runWithDatabase(
@@ -642,6 +688,7 @@ export const createAuth = ({
         ]),
       ),
       withSqlNames(oauthProvider(oauthOptions)),
+      nativeAudit.plugin,
     ],
   });
 

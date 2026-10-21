@@ -4,6 +4,7 @@ import { HttpApi, OpenApi } from "effect/http-api";
 
 import { LocaleMiddleware } from "@/lib/localization";
 import { AdminApiGroup } from "@/services/admin/api.group";
+import { AuditApiGroup } from "@/services/audit/api.group";
 import {
   AdminOAuthClientsApiGroup,
   PublicOAuthClientsApiGroup,
@@ -22,6 +23,7 @@ export const AdminApi = HttpApi.make("AdminApi")
     }),
   )
   .add(AdminApiGroup)
+  .add(AuditApiGroup)
   .add(AdminOAuthClientsApiGroup)
   .add(AdminProjectsApiGroup)
   .prefix("/api/auth");

@@ -8,6 +8,8 @@ import {
 } from "@/db/schema";
 import { normalizeAuthHost } from "@/lib/domain-utils";
 import { sqlLayer, sqlTestLayer } from "@/services/database";
+import { Events } from "@krak-stack/registry/events";
+import { testEventsLayer } from "@/services/audit/test-layer";
 import { sanitizeThemeCss } from "@/services/oauth/theme";
 import { organizationBranding } from "@/services/organizations/branding";
 
@@ -75,6 +77,7 @@ const fallbackPublicConfig = (projectKey: string) => ({
 export class Projects extends Context.Service<Projects>()("Projects", {
   make: Effect.gen(function* () {
     const sql = yield* SqlClient.SqlClient;
+    const events = yield* Events;
     const findProjects = SqlSchema.findAll({
       Request: Schema.Void,
       Result: ProjectRow,
@@ -106,33 +109,6 @@ export class Projects extends Context.Service<Projects>()("Projects", {
         SELECT * FROM domains WHERE hostname = ${host} AND active = true
         ${rootHost ? sql`AND root_hostname = ${rootHost}` : sql``} LIMIT 2
       `,
-    });
-    const insertProject = SqlSchema.findOne({
-      Request: CreateProjectPayload,
-      Result: ProjectRow,
-      execute: (payload) => sql`INSERT INTO project (id, name, logo, data)
-        VALUES (${crypto.randomUUID()}, ${payload.name.trim()}, ${payload.logo ?? null},
-          ${Schema.encodeSync(ProjectDataJson)(decodeProjectData(payload.data))}::jsonb) RETURNING *`,
-    });
-    const updateProject = SqlSchema.findOneOption({
-      Request: UpdateProjectRequest,
-      Result: ProjectRow,
-      execute: ({ id, payload }) => {
-        const updates: ProjectSqlUpdate = {
-          data: Schema.encodeSync(ProjectDataJson)(
-            decodeProjectData(payload.data),
-          ),
-          updatedAt: new Date(),
-        };
-        if (payload.name !== undefined) updates.name = payload.name.trim();
-        if (payload.logo !== undefined) updates.logo = payload.logo;
-        return sql`UPDATE project SET ${sql.update(updates)} WHERE id = ${id} RETURNING *`;
-      },
-    });
-    const removeProject = SqlSchema.findOneOption({
-      Request: Schema.String,
-      Result: ProjectRow,
-      execute: (id) => sql`DELETE FROM project WHERE id = ${id} RETURNING *`,
     });
 
     const list = Effect.fn("Projects.list")(function* () {
@@ -255,8 +231,20 @@ export class Projects extends Context.Service<Projects>()("Projects", {
     }: {
       payload: CreateProjectPayload;
     }) {
-      return row(yield* insertProject(payload));
-    });
+      const project = yield* SqlSchema.findOne({
+        Request: CreateProjectPayload,
+        Result: ProjectRow,
+        execute: (payload) => sql`INSERT INTO project (id, name, logo, data)
+          VALUES (${crypto.randomUUID()}, ${payload.name.trim()}, ${payload.logo ?? null},
+            ${Schema.encodeSync(ProjectDataJson)(decodeProjectData(payload.data))}::jsonb) RETURNING *`,
+      })(payload);
+      yield* events.track({
+        name: "project.created",
+        category: "audit",
+        target: { id: project.id, name: project.id, type: "project" },
+      });
+      return row(project);
+    }, sql.withTransaction);
 
     const update = Effect.fn("Projects.update")(function* ({
       id,
@@ -265,25 +253,61 @@ export class Projects extends Context.Service<Projects>()("Projects", {
       id: string;
       payload: UpdateProjectPayload;
     }) {
-      const value = Option.getOrNull(yield* updateProject({ id, payload }));
-
+      const value = Option.getOrNull(
+        yield* SqlSchema.findOneOption({
+          Request: UpdateProjectRequest,
+          Result: ProjectRow,
+          execute: ({ id, payload }) => {
+            const updates: ProjectSqlUpdate = {
+              data: Schema.encodeSync(ProjectDataJson)(
+                decodeProjectData(payload.data),
+              ),
+              updatedAt: new Date(),
+            };
+            if (payload.name !== undefined) updates.name = payload.name.trim();
+            if (payload.logo !== undefined) updates.logo = payload.logo;
+            return sql`UPDATE project SET ${sql.update(updates)} WHERE id = ${id} RETURNING *`;
+          },
+        })({ id, payload }),
+      );
+      if (value)
+        yield* events.track({
+          name: "project.updated",
+          category: "audit",
+          target: { id: value.id, name: value.id, type: "project" },
+        });
       return value ? row(value) : null;
-    });
+    }, sql.withTransaction);
 
     const _delete = Effect.fn("Projects.delete")(function* ({
       id,
     }: {
       id: string;
     }) {
-      const value = Option.getOrNull(yield* removeProject(id));
-
+      const value = Option.getOrNull(
+        yield* SqlSchema.findOneOption({
+          Request: Schema.String,
+          Result: ProjectRow,
+          execute: (id) =>
+            sql`DELETE FROM project WHERE id = ${id} RETURNING *`,
+        })(id),
+      );
+      if (value)
+        yield* events.track({
+          name: "project.deleted",
+          category: "audit",
+          target: { id: value.id, name: value.id, type: "project" },
+        });
       return value ? row(value) : null;
-    });
+    }, sql.withTransaction);
 
     return { list, get, getPublicConfig, create, update, delete: _delete };
   }),
 }) {
   static readonly baseLayer = Layer.effect(this, this.make);
   static readonly layer = this.baseLayer.pipe(Layer.provide(sqlLayer));
-  static readonly testLayer = this.baseLayer.pipe(Layer.provide(sqlTestLayer));
+  static readonly testLayer = this.baseLayer.pipe(
+    Layer.provideMerge(testEventsLayer),
+    Layer.provide(sqlTestLayer),
+  );
 }

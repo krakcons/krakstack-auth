@@ -1,5 +1,6 @@
 import { Context, Effect, Layer, Option, Schema } from "effect";
 import { SqlClient, SqlSchema } from "effect/sql";
+import { Events } from "@krak-stack/registry/events";
 import { CredentialsFromEnv } from "@distilled.cloud/cloudflare";
 import * as CustomHostnames from "@distilled.cloud/cloudflare/custom-hostnames";
 import * as FetchHttpClient from "effect/http/FetchHttpClient";
@@ -232,30 +233,6 @@ export class Domains extends Context.Service<Domains>()("Domains", {
       Result: DomainRow,
       execute: () => sql`SELECT * FROM domains ORDER BY created_at DESC`,
     });
-    const updateStatus = SqlSchema.findOneOption({
-      Request: DomainStatusUpdate,
-      Result: DomainRow,
-      execute: ({ id, active }) =>
-        sql`UPDATE domains SET active = ${active}, updated_at = ${new Date()} WHERE id = ${id} RETURNING *`,
-    });
-    const updateLinks = SqlSchema.findOneOption({
-      Request: DomainLinkUpdate,
-      Result: DomainRow,
-      execute: ({ id, ...updates }) =>
-        sql`UPDATE domains SET ${sql.update({ ...updates, updatedAt: new Date() })} WHERE id = ${id} RETURNING *`,
-    });
-    const insertDomain = SqlSchema.findOne({
-      Request: DomainWrite,
-      Result: DomainRow,
-      execute: (value) =>
-        sql`INSERT INTO domains ${sql.insert(value)} RETURNING *`,
-    });
-    const updateDomain = SqlSchema.findOneOption({
-      Request: DomainWrite,
-      Result: DomainRow,
-      execute: ({ id, ...updates }) =>
-        sql`UPDATE domains SET ${sql.update({ ...updates, updatedAt: new Date() })} WHERE id = ${id} RETURNING *`,
-    });
     const findSibling = SqlSchema.findOneOption({
       Request: DomainSiblingRequest,
       Result: DomainRow,
@@ -267,11 +244,6 @@ export class Domains extends Context.Service<Domains>()("Domains", {
       Result: IdRow,
       execute: ({ hostnameId, id }) =>
         sql`SELECT id FROM domains WHERE hostname_id = ${hostnameId} AND id <> ${id} LIMIT 1`,
-    });
-    const removeDomain = SqlSchema.void({
-      Request: DomainRemovalRequest,
-      execute: ({ id, hostnameId }) =>
-        sql`DELETE FROM domains WHERE id = ${id} AND hostname_id = ${hostnameId}`,
     });
 
     const enrichDomains = Effect.fn("Domains.enrichDomains")(function* (
@@ -339,9 +311,24 @@ export class Domains extends Context.Service<Domains>()("Domains", {
       const active = cloudflare.status === "active";
       if (domain.active === active) return domain;
 
-      const updated = Option.getOrNull(
-        yield* updateStatus({ id: domain.id, active }),
-      );
+      const updated = yield* Effect.gen(function* () {
+        const updated = Option.getOrNull(
+          yield* SqlSchema.findOneOption({
+            Request: DomainStatusUpdate,
+            Result: DomainRow,
+            execute: ({ id, active }) =>
+              sql`UPDATE domains SET active = ${active}, updated_at = ${new Date()} WHERE id = ${id} AND active <> ${active} RETURNING *`,
+          })({ id: domain.id, active }),
+        );
+        if (updated)
+          yield* (yield* Events).track({
+            name: "domain.status_changed",
+            category: "audit",
+            target: { id: domain.id, name: domain.id, type: "domain" },
+            properties: { active },
+          });
+        return updated;
+      }).pipe(sql.withTransaction);
 
       return updated ?? { ...domain, active };
     });
@@ -497,14 +484,29 @@ export class Domains extends Context.Service<Domains>()("Domains", {
 
       const [existing] = yield* findMatching(normalized);
       if (existing) {
-        const domain = Option.getOrNull(
-          yield* updateLinks({
-            id: existing.id,
-            projectId: linkedProject?.id ?? null,
-            organizationId: normalized.organizationId,
-            managed: normalized.managed,
-          }),
-        );
+        const domain = yield* Effect.gen(function* () {
+          const domain = Option.getOrNull(
+            yield* SqlSchema.findOneOption({
+              Request: DomainLinkUpdate,
+              Result: DomainRow,
+              execute: ({ id, ...updates }) =>
+                sql`UPDATE domains SET ${sql.update({ ...updates, updatedAt: new Date() })} WHERE id = ${id} RETURNING *`,
+            })({
+              id: existing.id,
+              projectId: linkedProject?.id ?? null,
+              organizationId: normalized.organizationId,
+              managed: normalized.managed,
+            }),
+          );
+          if (domain)
+            yield* (yield* Events).track({
+              name: "domain.updated",
+              category: "audit",
+              target: { id: existing.id, name: existing.id, type: "domain" },
+              properties: { managed: normalized.managed },
+            });
+          return domain;
+        }).pipe(sql.withTransaction);
 
         return yield* enrichDomain(
           domain ?? { ...existing, managed: normalized.managed },
@@ -514,10 +516,16 @@ export class Domains extends Context.Service<Domains>()("Domains", {
       const [hostSibling] = yield* findByHost(normalized.hostname);
 
       let hostnameId: string = hostSibling?.hostnameId ?? crypto.randomUUID();
+      const id = crypto.randomUUID();
+      const operationId = crypto.randomUUID();
       const active = hostSibling?.active ?? !normalized.managed;
       if (!hostSibling && normalized.managed) {
         const zoneId = yield* requireCloudflareZoneId;
-        hostnameId = (yield* CustomHostnames.createCustomHostname({
+        const events = yield* Events;
+        yield* Effect.logDebug("Domain provisioning started").pipe(
+          Effect.annotateLogs({ operationId }),
+        );
+        const result = yield* CustomHostnames.createCustomHostname({
           zoneId,
           hostname: normalized.hostname,
           ssl: {
@@ -525,19 +533,46 @@ export class Domains extends Context.Service<Domains>()("Domains", {
             type: "dv",
             settings: { http2: "on", tls_1_3: "on", minTlsVersion: "1.2" },
           },
-        })).id;
+        }).pipe(Effect.result);
+        if (result._tag === "Failure") {
+          yield* Effect.logDebug("Domain provisioning failed").pipe(
+            Effect.annotateLogs({ operationId }),
+          );
+          return yield* result.failure;
+        }
+        yield* events.track({
+          name: "domain.provisioned",
+          category: "audit",
+          target: { id, name: id, type: "domain" },
+          properties: { operationId },
+        });
+        hostnameId = result.success.id;
       }
 
-      const domain = yield* insertDomain({
-        id: crypto.randomUUID(),
-        hostname: normalized.hostname,
-        rootHostname: normalized.rootHostname,
-        projectId: linkedProject?.id ?? null,
-        organizationId: normalized.organizationId,
-        hostnameId,
-        managed: normalized.managed,
-        active,
-      });
+      const domain = yield* Effect.gen(function* () {
+        const domain = yield* SqlSchema.findOne({
+          Request: DomainWrite,
+          Result: DomainRow,
+          execute: (value) =>
+            sql`INSERT INTO domains ${sql.insert(value)} RETURNING *`,
+        })({
+          id,
+          hostname: normalized.hostname,
+          rootHostname: normalized.rootHostname,
+          projectId: linkedProject?.id ?? null,
+          organizationId: normalized.organizationId,
+          hostnameId,
+          managed: normalized.managed,
+          active,
+        });
+        yield* (yield* Events).track({
+          name: "domain.created",
+          category: "audit",
+          target: { id, name: id, type: "domain" },
+          properties: { operationId, managed: normalized.managed },
+        });
+        return domain;
+      }).pipe(sql.withTransaction);
 
       return yield* enrichDomain(domain ?? null);
     });
@@ -581,6 +616,7 @@ export class Domains extends Context.Service<Domains>()("Domains", {
 
       let hostnameId: string = existing.hostnameId;
       let active = existing.active;
+      const operationId = crypto.randomUUID();
 
       const hostSibling = Option.getOrNull(
         yield* findSibling({ hostname: normalized.hostname, id: existing.id }),
@@ -592,7 +628,11 @@ export class Domains extends Context.Service<Domains>()("Domains", {
       } else if (existing.managed !== normalized.managed) {
         if (normalized.managed) {
           const zoneId = yield* requireCloudflareZoneId;
-          hostnameId = (yield* CustomHostnames.createCustomHostname({
+          const events = yield* Events;
+          yield* Effect.logDebug("Domain provisioning started").pipe(
+            Effect.annotateLogs({ operationId }),
+          );
+          const result = yield* CustomHostnames.createCustomHostname({
             zoneId,
             hostname: normalized.hostname,
             ssl: {
@@ -604,31 +644,75 @@ export class Domains extends Context.Service<Domains>()("Domains", {
                 minTlsVersion: "1.2",
               },
             },
-          })).id;
+          }).pipe(Effect.result);
+          if (result._tag === "Failure") {
+            yield* Effect.logDebug("Domain provisioning failed").pipe(
+              Effect.annotateLogs({ operationId }),
+            );
+            return yield* result.failure;
+          }
+          yield* events.track({
+            name: "domain.provisioned",
+            category: "audit",
+            target: { id, name: id, type: "domain" },
+            properties: { operationId },
+          });
+          hostnameId = result.success.id;
           active = false;
         } else {
           const zoneId = yield* requireCloudflareZoneId;
-          yield* CustomHostnames.deleteCustomHostname({
+          const events = yield* Events;
+          yield* Effect.logDebug("Domain deprovisioning started").pipe(
+            Effect.annotateLogs({ operationId }),
+          );
+          const result = yield* CustomHostnames.deleteCustomHostname({
             zoneId,
             customHostnameId: existing.hostnameId,
+          }).pipe(Effect.result);
+          if (result._tag === "Failure") {
+            yield* Effect.logDebug("Domain deprovisioning failed").pipe(
+              Effect.annotateLogs({ operationId }),
+            );
+            return yield* result.failure;
+          }
+          yield* events.track({
+            name: "domain.deprovisioned",
+            category: "audit",
+            target: { id, name: id, type: "domain" },
+            properties: { operationId },
           });
           hostnameId = crypto.randomUUID();
           active = true;
         }
       }
 
-      const domain = Option.getOrNull(
-        yield* updateDomain({
-          id,
-          hostname: normalized.hostname,
-          rootHostname: normalized.rootHostname,
-          projectId: linkedProject?.id ?? null,
-          organizationId: normalized.organizationId,
-          hostnameId,
-          managed: normalized.managed,
-          active,
-        }),
-      );
+      const domain = yield* Effect.gen(function* () {
+        const domain = Option.getOrNull(
+          yield* SqlSchema.findOneOption({
+            Request: DomainWrite,
+            Result: DomainRow,
+            execute: ({ id, ...updates }) =>
+              sql`UPDATE domains SET ${sql.update({ ...updates, updatedAt: new Date() })} WHERE id = ${id} RETURNING *`,
+          })({
+            id,
+            hostname: normalized.hostname,
+            rootHostname: normalized.rootHostname,
+            projectId: linkedProject?.id ?? null,
+            organizationId: normalized.organizationId,
+            hostnameId,
+            managed: normalized.managed,
+            active,
+          }),
+        );
+        if (domain)
+          yield* (yield* Events).track({
+            name: "domain.updated",
+            category: "audit",
+            target: { id, name: id, type: "domain" },
+            properties: { operationId, managed: normalized.managed },
+          });
+        return domain;
+      }).pipe(sql.withTransaction);
 
       return yield* enrichDomain(domain ?? null);
     });
@@ -664,16 +748,43 @@ export class Domains extends Context.Service<Domains>()("Domains", {
       if (!domain) return null;
 
       const hostSibling = Option.getOrNull(yield* findHostnameSibling(domain));
+      const operationId = crypto.randomUUID();
 
       if (domain.managed && !hostSibling) {
         const zoneId = yield* requireCloudflareZoneId;
-        yield* CustomHostnames.deleteCustomHostname({
+        const events = yield* Events;
+        yield* Effect.logDebug("Domain deprovisioning started").pipe(
+          Effect.annotateLogs({ operationId }),
+        );
+        const result = yield* CustomHostnames.deleteCustomHostname({
           zoneId,
           customHostnameId: domain.hostnameId,
+        }).pipe(Effect.result);
+        if (result._tag === "Failure") {
+          yield* Effect.logDebug("Domain deprovisioning failed").pipe(
+            Effect.annotateLogs({ operationId }),
+          );
+          return yield* result.failure;
+        }
+        yield* events.track({
+          name: "domain.deprovisioned",
+          category: "audit",
+          target: { id, name: id, type: "domain" },
+          properties: { operationId },
         });
       }
 
-      yield* removeDomain({ id, hostnameId: domain.hostnameId });
+      yield* Effect.gen(function* () {
+        const removed =
+          yield* sql`DELETE FROM domains WHERE id = ${id} AND hostname_id = ${domain.hostnameId} RETURNING id`;
+        if (removed.length)
+          yield* (yield* Events).track({
+            name: "domain.deleted",
+            category: "audit",
+            target: { id, name: id, type: "domain" },
+            properties: { operationId },
+          });
+      }).pipe(sql.withTransaction);
 
       return domain;
     });

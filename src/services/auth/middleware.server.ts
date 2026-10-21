@@ -1,4 +1,4 @@
-import { Effect, Layer, Option, Schema } from "effect";
+import { Config, Effect, Layer, Option, Schema } from "effect";
 import { Headers, HttpServerRequest } from "effect/http";
 import { HttpApiError } from "effect/http-api";
 
@@ -65,7 +65,19 @@ export const adminAuthMiddlewareLayer = Layer.succeed(
         return yield* new HttpApiError.Forbidden({});
       }
 
-      return yield* effect;
+      const organizationId = yield* Config.String(
+        "VITE_KRAKSTACK_AUTH_ORGANIZATION_ID",
+      ).pipe(Effect.mapError(internalServerError));
+      return yield* effect.pipe(
+        Effect.annotateLogs({
+          "app.actor.type": "user",
+          "app.actor.id": session.user.id,
+          "user.id": session.user.id,
+          "organization.id": organizationId,
+          "app.auth.method": "session",
+          "app.auth.credential.id": session.session.id,
+        }),
+      );
     }),
 );
 
@@ -113,6 +125,17 @@ export const serviceApiKeyMiddlewareLayer = Layer.succeed(
         });
       }
 
-      return yield* effect;
+      const organizationId = yield* Config.String(
+        "VITE_KRAKSTACK_AUTH_ORGANIZATION_ID",
+      ).pipe(Effect.mapError(internalServerError));
+      return yield* effect.pipe(
+        Effect.annotateLogs({
+          "app.actor.type": "api_key",
+          "app.actor.id": result.key.id,
+          "app.auth.method": "api_key",
+          "app.auth.credential.id": result.key.id,
+          "organization.id": organizationId,
+        }),
+      );
     }),
 );

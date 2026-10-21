@@ -12,11 +12,18 @@ import { AdminAuthMiddleware } from "@/services/auth/middleware";
 import { sqlTestLayer } from "@/services/database";
 import { Domains } from "@/services/domains";
 import { Organizations } from "@/services/organizations";
-import { adminApiHandler } from "./api.builder";
+import { testEventsLayer } from "@/services/audit/test-layer";
+import {
+  adminApiHandler,
+  deleteApiKey,
+  updateApiKey,
+  resetApiKeyRateLimit,
+} from "./api.builder";
 
 // This suite exercises persistence and HTTP codecs. Authentication has separate
 // coverage; no production authorization implementation is replaced here.
 const handlerLayer = adminApiHandler.pipe(
+  Layer.provide(testEventsLayer),
   HttpRouter.provideRequest(
     Layer.mergeAll(
       Organizations.layer,
@@ -24,6 +31,7 @@ const handlerLayer = adminApiHandler.pipe(
       sqlTestLayer,
       FetchHttpClient.layer,
       CredentialsFromEnv,
+      testEventsLayer,
     ),
   ),
   Layer.provideMerge(Layer.succeed(AdminAuthMiddleware, (effect) => effect)),
@@ -44,7 +52,7 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)("Admin SQL handlers", () => {
         yield* sql`INSERT INTO project_user (id, project_id, user_id) VALUES (${id}, ${id}, ${id})`;
         yield* sql`INSERT INTO project_organization (id, project_id, organization_id) VALUES (${id}, ${id}, ${id})`;
         yield* sql`INSERT INTO session (id, token, user_id, created_at, updated_at, expires_at) VALUES (${id}, ${id}, ${id}, ${now}, ${now}, ${new Date(Date.now() + 60_000)})`;
-        yield* sql`INSERT INTO apikey (id, key, config_id, reference_id, created_at, updated_at) VALUES (${id}, ${id}, 'service', ${id}, ${now}, ${now})`;
+        yield* sql`INSERT INTO apikey (id, key, config_id, reference_id, created_at, updated_at) VALUES (${id}, 'never-log-this-key', 'service', ${id}, ${now}, ${now})`;
         const client = yield* HttpApiTest.groups(AdminApi, ["admin"]);
         const query = {
           page: 0,
@@ -107,6 +115,20 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)("Admin SQL handlers", () => {
         expect((yield* client.admin.deleteApiKey({ params: { id } })).id).toBe(
           id,
         );
+        const events =
+          yield* sql`SELECT event_name, payload_json::text AS payload FROM events WHERE payload_json::text LIKE ${`%${id}%`} ORDER BY occurred_at`;
+        expect(events.map((event) => event.eventName).sort()).toEqual([
+          "api_key.deleted",
+          "api_key.rate_limit_reset",
+          "api_key.updated",
+          "api_key.updated",
+          "api_key.updated",
+        ]);
+        for (const event of events) {
+          expect(event.payload).not.toContain("SQL key");
+          expect(event.payload).not.toContain("https://example.com");
+          expect(event.payload).not.toContain("never-log-this-key");
+        }
       }).pipe(
         Effect.ensuring(
           Effect.gen(function* () {
@@ -114,6 +136,7 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)("Admin SQL handlers", () => {
             yield* sql`DELETE FROM apikey WHERE reference_id = ${id}`;
             yield* sql`DELETE FROM project WHERE id = ${id}`;
             yield* sql`DELETE FROM "user" WHERE id = ${id}`;
+            yield* sql`DELETE FROM events WHERE payload_json::text LIKE ${`%${id}%`}`;
           }).pipe(Effect.orDie),
         ),
         Effect.provide(handlerLayer),
@@ -124,5 +147,72 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)("Admin SQL handlers", () => {
         Effect.scoped,
       );
     },
+  );
+
+  it.effect(
+    "rolls back every API-key control when audit persistence fails",
+    () => {
+      const id = crypto.randomUUID();
+      const constraint = `reject_api_key_audit_${id.replaceAll("-", "")}`;
+      return Effect.gen(function* () {
+        const sql = yield* SqlClient.SqlClient;
+        yield* sql`INSERT INTO apikey (id, key, config_id, reference_id, enabled, request_count, created_at, updated_at) VALUES (${id}, 'never-log-this-key', 'service', ${id}, true, 7, now(), now())`;
+        yield* sql`ALTER TABLE events ADD CONSTRAINT ${sql(constraint)} CHECK (event_name NOT LIKE 'api_key.%') NOT VALID`;
+        yield* Effect.gen(function* () {
+          const operations = [
+            updateApiKey({
+              id,
+              payload: {
+                enabled: false,
+                referrers: ["https://private.example.test"],
+              },
+            }),
+            updateApiKey({ id, payload: { rateLimitEnabled: true } }),
+            updateApiKey({ id, payload: { rateLimitEnabled: false } }),
+            resetApiKeyRateLimit(id),
+            deleteApiKey(id),
+          ];
+          for (const operation of operations) {
+            expect((yield* operation.pipe(Effect.result))._tag).toBe("Failure");
+            const [key] =
+              yield* sql`SELECT enabled, request_count, metadata FROM apikey WHERE id = ${id}`;
+            expect(key).toMatchObject({
+              enabled: true,
+              requestCount: 7,
+              metadata: null,
+            });
+            expect(
+              yield* sql`SELECT event_id FROM events WHERE payload_json::text LIKE ${`%${id}%`}`,
+            ).toEqual([]);
+          }
+        }).pipe(
+          Effect.ensuring(
+            Effect.gen(function* () {
+              yield* sql`ALTER TABLE events DROP CONSTRAINT ${sql(constraint)}`;
+              yield* sql`DELETE FROM apikey WHERE id = ${id}`;
+            }).pipe(Effect.orDie),
+          ),
+        );
+      }).pipe(Effect.provide(testEventsLayer), Effect.provide(sqlTestLayer));
+    },
+  );
+
+  it.effect("does not audit missing API keys", () =>
+    Effect.gen(function* () {
+      const id = crypto.randomUUID();
+      const sql = yield* SqlClient.SqlClient;
+      for (const operation of [
+        deleteApiKey(id),
+        resetApiKeyRateLimit(id),
+        updateApiKey({ id, payload: { enabled: false } }),
+      ]) {
+        expect(yield* operation.pipe(Effect.flip)).toMatchObject({
+          _tag: "NotFound",
+        });
+      }
+      expect(
+        yield* sql`SELECT event_id FROM events WHERE payload_json::text LIKE ${`%${id}%`}`,
+      ).toEqual([]);
+    }).pipe(Effect.provide(testEventsLayer), Effect.provide(sqlTestLayer)),
   );
 });

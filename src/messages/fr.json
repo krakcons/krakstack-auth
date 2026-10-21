@@ -1,5 +1,9 @@
 {
   "locale_save_error": "Impossible d’enregistrer votre langue. Veuillez réessayer.",
+  "audit_title": "Activité",
+  "audit_history_title": "Historique d’activité",
+  "audit_description": "Consultez les actions réussies et les acteurs qui les ont effectuées.",
+  "audit_load_error": "Impossible de charger l’historique d’activité.",
   "app_name": "Krakstack Auth",
   "app_initials": "KS",
   "app_tagline": "Serveur central d'identité",

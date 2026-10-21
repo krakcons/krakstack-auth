@@ -35,6 +35,7 @@ import { LocaleMiddlewareLive } from "@/lib/localization";
 import { AuthDocsApi } from "@/api.docs";
 import { corsMiddleware } from "@/lib/cors";
 import { adminApiHandler } from "@/services/admin/api.builder";
+import { auditHandler } from "@/services/audit/api.builder";
 import { authApiHandler } from "@/services/auth/api.builder";
 import { BetterAuthRequest } from "@/services/auth/better-auth-request";
 import {
@@ -54,8 +55,7 @@ import {
 } from "@/services/oauth/api.builder";
 import { HttpApiOtlp } from "@krak-stack/registry/opentelemetry/api";
 import { Events } from "@krak-stack/registry/events";
-import { BrowserCrypto } from "@effect/platform-browser";
-import { Otlp } from "@krak-stack/registry/opentelemetry";
+import { auditEventsLayer } from "@/services/audit/layer.server";
 import { Organizations } from "@/services/organizations";
 import { Projects } from "@/services/projects";
 import {
@@ -322,6 +322,7 @@ const healthServiceLayer = HealthService.layerWith({
 const apiLayer = Layer.mergeAll(
   HttpApiBuilder.layer(AdminApi).pipe(
     Layer.provide(adminApiHandler),
+    Layer.provide(auditHandler),
     Layer.provide(adminOAuthClientsApiHandler),
     Layer.provide(adminProjectsApiHandler),
     Layer.provide(adminAuthMiddlewareLayer),
@@ -376,12 +377,7 @@ const apiApplicationLayer = Layer.mergeAll(
         }),
       ),
       Layer.provide(Events.ingestionLayer),
-      Layer.provideMerge(
-        Events.layerWith({ geolocation: "cloudflare" }).pipe(
-          Layer.provide(BrowserCrypto.layer),
-          Layer.provideMerge(Otlp.layer),
-        ),
-      ),
+      Layer.provideMerge(auditEventsLayer),
     ),
   ),
 );

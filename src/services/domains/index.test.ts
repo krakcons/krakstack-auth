@@ -6,6 +6,7 @@ import { SqlClient } from "effect/sql";
 
 import { sqlTestLayer } from "@/services/database";
 import { Projects } from "@/services/projects";
+import { testEventsLayer } from "@/services/audit/test-layer";
 import { Domains } from ".";
 
 describe.skipIf(!process.env.TEST_DATABASE_URL)(
@@ -86,6 +87,7 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)(
           );
         }).pipe(
           Effect.provide(Projects.baseLayer),
+          Effect.provide(testEventsLayer),
           Effect.provide(Domains.testLayer),
           Effect.provide(sqlTestLayer),
           Effect.provide(

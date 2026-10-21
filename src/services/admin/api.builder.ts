@@ -1,7 +1,11 @@
 import { Effect, Schema } from "effect";
 import { SqlClient, SqlSchema } from "effect/sql";
 import { HttpApiBuilder, HttpApiError } from "effect/http-api";
-import { AdminListQuery } from "@krak-stack/auth/admin";
+import {
+  AdminListQuery,
+  type AdminUpdateApiKeyPayload,
+} from "@krak-stack/auth/admin";
+import { Events } from "@krak-stack/registry/events";
 
 import { AdminApi } from "@/api";
 import { ApiKeyRow, ResourcePreviewRow } from "@/db/schema";
@@ -121,6 +125,120 @@ const serviceApiKeyRow = (value: typeof ApiKeyRow.Type) =>
     })),
   );
 
+export const deleteApiKey = Effect.fn("Admin.deleteApiKey")(function* (
+  id: string,
+) {
+  const sql = yield* SqlClient.SqlClient;
+  return yield* Effect.gen(function* () {
+    const key = yield* SqlSchema.findOneOption({
+      Request: Schema.String,
+      Result: ApiKeyRow,
+      execute: (id) => sql`DELETE FROM apikey WHERE id = ${id} RETURNING *`,
+    })(id);
+    if (key._tag === "None") return yield* new HttpApiError.NotFound({});
+    yield* (yield* Events).track({
+      name: "api_key.deleted",
+      category: "audit",
+      target: { id, name: id, type: "api_key" },
+    });
+    return yield* serviceApiKeyRow(key.value);
+  }).pipe(
+    sql.withTransaction,
+    Effect.mapError((error) =>
+      error instanceof HttpApiError.NotFound
+        ? error
+        : internalServerError(error),
+    ),
+  );
+});
+
+export const updateApiKey = Effect.fn("Admin.updateApiKey")(function* ({
+  id,
+  payload,
+}: {
+  id: string;
+  payload: AdminUpdateApiKeyPayload;
+}) {
+  const sql = yield* SqlClient.SqlClient;
+  return yield* Effect.gen(function* () {
+    const existing = yield* SqlSchema.findOneOption({
+      Request: Schema.String,
+      Result: ApiKeyRow,
+      execute: (id) => sql`SELECT * FROM apikey WHERE id = ${id} FOR UPDATE`,
+    })(id);
+    if (existing._tag === "None") return yield* new HttpApiError.NotFound({});
+    const updates: ApiKeySqlUpdate = { updatedAt: new Date() };
+    if (payload.name !== undefined) updates.name = payload.name?.trim() || null;
+    if (payload.enabled !== undefined) updates.enabled = payload.enabled;
+    if (payload.rateLimitEnabled !== undefined)
+      updates.rateLimitEnabled = payload.rateLimitEnabled;
+    if (payload.rateLimitMax !== undefined)
+      updates.rateLimitMax = payload.rateLimitMax;
+    if (payload.rateLimitTimeWindow !== undefined)
+      updates.rateLimitTimeWindow = payload.rateLimitTimeWindow;
+    if (payload.referrers !== undefined)
+      updates.metadata = encodeApiKeyAllowedOrigins(
+        existing.value.metadata,
+        payload.referrers,
+      );
+    const key = yield* SqlSchema.findOne({
+      Request: Schema.String,
+      Result: ApiKeyRow,
+      execute: (id) =>
+        sql`UPDATE apikey SET ${sql.update(updates)} WHERE id = ${id} RETURNING *`,
+    })(id);
+    yield* (yield* Events).track({
+      name: "api_key.updated",
+      category: "audit",
+      target: { id, name: id, type: "api_key" },
+      // Field names only: key material, names, origins and metadata stay out of history.
+      properties: {
+        changedFields: Object.keys(updates)
+          .filter((field) => field !== "updatedAt")
+          .map((field) => (field === "metadata" ? "referrers" : field)),
+        enabled: key.enabled ?? false,
+        rateLimitEnabled: key.rateLimitEnabled ?? false,
+      },
+    });
+    return yield* serviceApiKeyRow(key);
+  }).pipe(
+    sql.withTransaction,
+    Effect.mapError((error) =>
+      error instanceof HttpApiError.NotFound
+        ? error
+        : internalServerError(error),
+    ),
+  );
+});
+
+export const resetApiKeyRateLimit = Effect.fn("Admin.resetApiKeyRateLimit")(
+  function* (id: string) {
+    const sql = yield* SqlClient.SqlClient;
+    return yield* Effect.gen(function* () {
+      const key = yield* SqlSchema.findOneOption({
+        Request: Schema.String,
+        Result: ApiKeyRow,
+        execute: (id) =>
+          sql`UPDATE apikey SET request_count = 0, last_request = NULL, updated_at = ${new Date()} WHERE id = ${id} RETURNING *`,
+      })(id);
+      if (key._tag === "None") return yield* new HttpApiError.NotFound({});
+      yield* (yield* Events).track({
+        name: "api_key.rate_limit_reset",
+        category: "audit",
+        target: { id, name: id, type: "api_key" },
+      });
+      return yield* serviceApiKeyRow(key.value);
+    }).pipe(
+      sql.withTransaction,
+      Effect.mapError((error) =>
+        error instanceof HttpApiError.NotFound
+          ? error
+          : internalServerError(error),
+      ),
+    );
+  },
+);
+
 export const adminApiHandler = HttpApiBuilder.group(
   AdminApi,
   "admin",
@@ -205,94 +323,18 @@ export const adminApiHandler = HttpApiBuilder.group(
           return yield* Effect.forEach(keys, serviceApiKeyRow);
         }),
       )
-      .handle("deleteApiKey", ({ params }) =>
-        Effect.gen(function* () {
-          const sql = yield* SqlClient.SqlClient;
-          const key = yield* SqlSchema.findOneOption({
-            Request: Schema.String,
-            Result: ApiKeyRow,
-            execute: (id) =>
-              sql`DELETE FROM apikey WHERE id = ${id} RETURNING *`,
-          })(params.id).pipe(Effect.mapError(internalServerError));
-          if (key._tag === "None") return yield* new HttpApiError.NotFound({});
-          return yield* serviceApiKeyRow(key.value);
-        }),
-      )
+      .handle("deleteApiKey", ({ params }) => deleteApiKey(params.id))
       .handle("updateApiKey", ({ params, payload }) =>
-        Effect.gen(function* () {
-          const sql = yield* SqlClient.SqlClient;
-          const existing = yield* SqlSchema.findOneOption({
-            Request: Schema.String,
-            Result: ApiKeyRow,
-            execute: (id) => sql`SELECT * FROM apikey WHERE id = ${id} LIMIT 1`,
-          })(params.id).pipe(Effect.mapError(internalServerError));
-          if (existing._tag === "None")
-            return yield* new HttpApiError.NotFound({});
-          const updates: ApiKeySqlUpdate = {
-            updatedAt: new Date(),
-          };
-          if (payload.name !== undefined)
-            updates.name = payload.name?.trim() || null;
-          if (payload.enabled !== undefined) updates.enabled = payload.enabled;
-          if (payload.rateLimitEnabled !== undefined)
-            updates.rateLimitEnabled = payload.rateLimitEnabled;
-          if (payload.rateLimitMax !== undefined)
-            updates.rateLimitMax = payload.rateLimitMax;
-          if (payload.rateLimitTimeWindow !== undefined)
-            updates.rateLimitTimeWindow = payload.rateLimitTimeWindow;
-          if (payload.referrers !== undefined)
-            updates.metadata = encodeApiKeyAllowedOrigins(
-              existing.value.metadata,
-              payload.referrers,
-            );
-          const key = yield* SqlSchema.findOneOption({
-            Request: Schema.String,
-            Result: ApiKeyRow,
-            execute: (id) =>
-              sql`UPDATE apikey SET ${sql.update(updates)} WHERE id = ${id} RETURNING *`,
-          })(params.id).pipe(Effect.mapError(internalServerError));
-          if (key._tag === "None") return yield* new HttpApiError.NotFound({});
-          return yield* serviceApiKeyRow(key.value);
-        }),
+        updateApiKey({ id: params.id, payload }),
       )
       .handle("resetApiKeyRateLimit", ({ params }) =>
-        Effect.gen(function* () {
-          const sql = yield* SqlClient.SqlClient;
-          const key = yield* SqlSchema.findOneOption({
-            Request: Schema.String,
-            Result: ApiKeyRow,
-            execute: (id) =>
-              sql`UPDATE apikey SET request_count = 0, last_request = NULL, updated_at = ${new Date()} WHERE id = ${id} RETURNING *`,
-          })(params.id).pipe(Effect.mapError(internalServerError));
-          if (key._tag === "None") return yield* new HttpApiError.NotFound({});
-          return yield* serviceApiKeyRow(key.value);
-        }),
+        resetApiKeyRateLimit(params.id),
       )
       .handle("enableApiKeyRateLimit", ({ params }) =>
-        Effect.gen(function* () {
-          const sql = yield* SqlClient.SqlClient;
-          const key = yield* SqlSchema.findOneOption({
-            Request: Schema.String,
-            Result: ApiKeyRow,
-            execute: (id) =>
-              sql`UPDATE apikey SET rate_limit_enabled = true, updated_at = ${new Date()} WHERE id = ${id} RETURNING *`,
-          })(params.id).pipe(Effect.mapError(internalServerError));
-          if (key._tag === "None") return yield* new HttpApiError.NotFound({});
-          return yield* serviceApiKeyRow(key.value);
-        }),
+        updateApiKey({ id: params.id, payload: { rateLimitEnabled: true } }),
       )
       .handle("disableApiKeyRateLimit", ({ params }) =>
-        Effect.gen(function* () {
-          const sql = yield* SqlClient.SqlClient;
-          const key = yield* SqlSchema.findOneOption({
-            Request: Schema.String,
-            Result: ApiKeyRow,
-            execute: (id) =>
-              sql`UPDATE apikey SET rate_limit_enabled = false, updated_at = ${new Date()} WHERE id = ${id} RETURNING *`,
-          })(params.id).pipe(Effect.mapError(internalServerError));
-          if (key._tag === "None") return yield* new HttpApiError.NotFound({});
-          return yield* serviceApiKeyRow(key.value);
-        }),
+        updateApiKey({ id: params.id, payload: { rateLimitEnabled: false } }),
       )
       .handle("listUsers", ({ query }) =>
         Effect.gen(function* () {

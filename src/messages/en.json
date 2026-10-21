@@ -1,5 +1,9 @@
 {
   "locale_save_error": "Unable to save your language. Please try again.",
+  "audit_title": "Activity",
+  "audit_history_title": "Activity history",
+  "audit_description": "Review successful actions and who performed them.",
+  "audit_load_error": "Unable to load the activity history.",
   "app_name": "Krakstack Auth",
   "app_initials": "KS",
   "app_tagline": "Central identity server",

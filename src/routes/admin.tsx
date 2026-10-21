@@ -7,6 +7,7 @@ import {
   FolderKanban,
   Globe2,
   Users,
+  History,
 } from "lucide-react";
 import { Suspense } from "react";
 import { Effect } from "effect";
@@ -80,6 +81,7 @@ const adminNavGroups: NavGroup[] = [
         href: "/admin/oauth/clients",
         icon: KeyRound,
       },
+      { label: m.audit_title, href: "/admin/audit", icon: History },
     ],
   },
   {
@@ -109,7 +111,9 @@ function AdminContent() {
             <>
               <ThemeToggle />
               <LocaleSwitcher
-                onLocaleChange={(locale) => setLocale(locale === "fr" ? "fr" : "en")}
+                onLocaleChange={(locale) =>
+                  setLocale(locale === "fr" ? "fr" : "en")
+                }
               />
               <UserButton
                 baseUrl={authBaseUrl}

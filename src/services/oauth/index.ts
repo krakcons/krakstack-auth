@@ -1,5 +1,7 @@
 import { Context, Effect, Layer, Schema } from "effect";
 import { SqlClient, SqlSchema } from "effect/sql";
+import { HttpApiError } from "effect/http-api";
+import { Events } from "@krak-stack/registry/events";
 import { OAuthClientRow, ProjectRow } from "@/db/schema";
 import { sqlLayer } from "@/services/database";
 import { BetterAuthRequest } from "@/services/auth/better-auth-request";
@@ -122,18 +124,38 @@ export class OAuthClients extends Context.Service<OAuthClients>()(
       });
       const findClient = SqlSchema.findAll({
         Request: Schema.String,
-        Result: OAuthClientRow,
+        Result: Schema.Struct({
+          ...OAuthClientRow.fields,
+          id: Schema.String,
+        }).annotate({ identifier: "StoredOAuthClient" }),
         execute: (clientId) =>
           sql`SELECT * FROM oauth_client WHERE client_id = ${clientId} LIMIT 1`,
       });
-      const assignProject = SqlSchema.void({
-        Request: Schema.Struct({
-          clientId: Schema.String,
-          projectId: Schema.NullOr(Schema.String),
-        }).annotate({ identifier: "OAuthClientProjectAssignment" }),
-        execute: ({ clientId, projectId }) =>
-          sql`UPDATE oauth_client SET project_id = ${projectId}, metadata = '{}'::jsonb, updated_at = ${new Date()} WHERE client_id = ${clientId}`,
-      });
+      const assignProject = Effect.fn("OAuthClients.assignProject")(function* ({
+        clientId,
+        projectId,
+        operationId,
+      }: {
+        clientId: string;
+        projectId: string | null;
+        operationId: string;
+      }) {
+        const assigned =
+          yield* sql`UPDATE oauth_client SET project_id = ${projectId}, metadata = '{}'::jsonb, updated_at = ${new Date()} WHERE client_id = ${clientId} RETURNING id`;
+        if (!assigned.length) return yield* new HttpApiError.NotFound({});
+        const [stored] = yield* findClient(clientId);
+        if (!stored) return yield* new HttpApiError.NotFound({});
+        yield* (yield* Events).track({
+          name: "oauth_client.project_assigned",
+          category: "audit",
+          target: { id: stored.id, name: stored.id, type: "oauth_client" },
+          properties: {
+            operationId,
+            projectIds: projectId === null ? [] : [projectId],
+            assigned: projectId !== null,
+          },
+        });
+      }, sql.withTransaction);
 
       const clientProject = Effect.fn("OAuthClients.clientProject")(function* ({
         projectId,
@@ -196,32 +218,71 @@ export class OAuthClients extends Context.Service<OAuthClients>()(
         payload: CreateOAuthClientPayload;
       }) {
         const betterAuth = yield* BetterAuthRequest;
-        const client = yield* Effect.promise(() =>
-          betterAuth.api.adminCreateOAuthClient({
-            headers: betterAuth.headers,
-            body: {
-              redirect_uris: Array.from(payload.redirectUris),
-              scope: scopesFromString(payload.scope).join(" "),
-              client_name: payload.name || undefined,
-              logo_uri: payload.icon ?? undefined,
-              token_endpoint_auth_method: "client_secret_basic",
-              grant_types: ["authorization_code", "refresh_token"],
-              response_types: ["code"],
-              application_type: "web",
-              require_pkce: true,
-              metadata: {},
-            },
-          }),
+        const events = yield* Events;
+        const operationId = crypto.randomUUID();
+        yield* Effect.logDebug("OAuth client creation started").pipe(
+          Effect.annotateLogs({ operationId }),
         );
+        const result = yield* Effect.gen(function* () {
+          const client = yield* Effect.tryPromise({
+            try: () =>
+              betterAuth.api.adminCreateOAuthClient({
+                headers: betterAuth.headers,
+                body: {
+                  redirect_uris: Array.from(payload.redirectUris),
+                  scope: scopesFromString(payload.scope).join(" "),
+                  client_name: payload.name || undefined,
+                  logo_uri: payload.icon ?? undefined,
+                  token_endpoint_auth_method: "client_secret_basic",
+                  grant_types: ["authorization_code", "refresh_token"],
+                  response_types: ["code"],
+                  application_type: "web",
+                  require_pkce: true,
+                  metadata: {},
+                },
+              }),
+            catch: () => new HttpApiError.InternalServerError({}),
+          });
 
-        const decoded = decodeRawOAuthClient(client);
-        const clientId = decoded.client_id ?? decoded.clientId;
-        if (clientId && payload.projectId !== undefined) {
-          yield* assignProject({ clientId, projectId: payload.projectId });
+          const decoded = decodeRawOAuthClient(client);
+          const clientId = decoded.client_id ?? decoded.clientId;
+          if (clientId && payload.projectId !== undefined) {
+            yield* assignProject({
+              clientId,
+              projectId: payload.projectId,
+              operationId,
+            });
+          }
+
+          const summary = yield* clientProject({
+            projectId: payload.projectId,
+          });
+          return createdRow(client, summary);
+        }).pipe(Effect.result);
+        if (result._tag === "Failure") {
+          yield* Effect.logDebug("OAuth client creation failed").pipe(
+            Effect.annotateLogs({ operationId }),
+          );
+          return yield* result.failure;
         }
-
-        const summary = yield* clientProject({ projectId: payload.projectId });
-        return createdRow(client, summary);
+        const [stored] = yield* findClient(result.success.clientId);
+        yield* events.track({
+          name: "oauth_client.created",
+          category: "audit",
+          target: stored
+            ? {
+                id: stored.id,
+                name: stored.id,
+                type: "oauth_client",
+              }
+            : {
+                id: operationId,
+                name: operationId,
+                type: "oauth_client_operation",
+              },
+          properties: { operationId },
+        });
+        return result.success;
       });
 
       const getPublicConfig = Effect.fn("OAuthClients.getPublicConfig")(
@@ -250,37 +311,71 @@ export class OAuthClients extends Context.Service<OAuthClients>()(
         payload: UpdateOAuthClientPayload;
       }) {
         const betterAuth = yield* BetterAuthRequest;
-        const client = yield* Effect.promise(() =>
-          betterAuth.api.adminUpdateOAuthClient({
-            headers: betterAuth.headers,
-            body: {
-              client_id: clientId,
-              update: {
-                client_name: payload.name || undefined,
-                logo_uri: payload.icon ?? undefined,
-                redirect_uris: payload.redirectUris
-                  ? Array.from(payload.redirectUris)
-                  : undefined,
-                scope: payload.scope
-                  ? scopesFromString(payload.scope).join(" ")
-                  : undefined,
-                metadata: {},
-              },
-            },
-          }),
+        const events = yield* Events;
+        const operationId = crypto.randomUUID();
+        const [stored] = yield* findClient(clientId);
+        // Missing identifiers may be arbitrary request input, not entity IDs.
+        const targetId = stored?.id ?? operationId;
+        const target = {
+          id: targetId,
+          name: targetId,
+          type: stored ? "oauth_client" : "oauth_client_operation",
+        };
+        yield* Effect.logDebug("OAuth client update started").pipe(
+          Effect.annotateLogs({ operationId }),
         );
+        const result = yield* Effect.gen(function* () {
+          const client = yield* Effect.tryPromise({
+            try: () =>
+              betterAuth.api.adminUpdateOAuthClient({
+                headers: betterAuth.headers,
+                body: {
+                  client_id: clientId,
+                  update: {
+                    client_name: payload.name || undefined,
+                    logo_uri: payload.icon ?? undefined,
+                    redirect_uris: payload.redirectUris
+                      ? Array.from(payload.redirectUris)
+                      : undefined,
+                    scope: payload.scope
+                      ? scopesFromString(payload.scope).join(" ")
+                      : undefined,
+                    metadata: {},
+                  },
+                },
+              }),
+            catch: () => new HttpApiError.InternalServerError({}),
+          });
 
-        if (payload.projectId !== undefined) {
-          yield* assignProject({ clientId, projectId: payload.projectId });
+          if (payload.projectId !== undefined) {
+            yield* assignProject({
+              clientId,
+              projectId: payload.projectId,
+              operationId,
+            });
+          }
+
+          const storedProjectId =
+            payload.projectId === undefined
+              ? (yield* findClient(clientId))[0]?.projectId
+              : payload.projectId;
+
+          const summary = yield* clientProject({ projectId: storedProjectId });
+          return adminRow(client, summary);
+        }).pipe(Effect.result);
+        if (result._tag === "Failure") {
+          yield* Effect.logDebug("OAuth client update failed").pipe(
+            Effect.annotateLogs({ operationId }),
+          );
+          return yield* result.failure;
         }
-
-        const storedProjectId =
-          payload.projectId === undefined
-            ? (yield* findClient(clientId))[0]?.projectId
-            : payload.projectId;
-
-        const summary = yield* clientProject({ projectId: storedProjectId });
-        return adminRow(client, summary);
+        yield* events.track({
+          name: "oauth_client.updated",
+          category: "audit",
+          target,
+          properties: { operationId },
+        });
+        return result.success;
       });
 
       const _delete = Effect.fn("OAuthClients.delete")(function* ({
@@ -289,6 +384,7 @@ export class OAuthClients extends Context.Service<OAuthClients>()(
         clientId: string;
       }) {
         const betterAuth = yield* BetterAuthRequest;
+        const events = yield* Events;
         const client = yield* Effect.promise(() =>
           betterAuth.api.getOAuthClient({
             headers: betterAuth.headers,
@@ -296,12 +392,37 @@ export class OAuthClients extends Context.Service<OAuthClients>()(
           }),
         );
 
-        yield* Effect.promise(() =>
-          betterAuth.api.deleteOAuthClient({
-            headers: betterAuth.headers,
-            body: { client_id: clientId },
-          }),
+        const operationId = crypto.randomUUID();
+        const [stored] = yield* findClient(clientId);
+        const targetId = stored?.id ?? operationId;
+        const target = {
+          id: targetId,
+          name: targetId,
+          type: stored ? "oauth_client" : "oauth_client_operation",
+        };
+        yield* Effect.logDebug("OAuth client deletion started").pipe(
+          Effect.annotateLogs({ operationId }),
         );
+        const result = yield* Effect.tryPromise({
+          try: () =>
+            betterAuth.api.deleteOAuthClient({
+              headers: betterAuth.headers,
+              body: { client_id: clientId },
+            }),
+          catch: () => new HttpApiError.InternalServerError({}),
+        }).pipe(Effect.result);
+        if (result._tag === "Failure") {
+          yield* Effect.logDebug("OAuth client deletion failed").pipe(
+            Effect.annotateLogs({ operationId }),
+          );
+          return yield* result.failure;
+        }
+        yield* events.track({
+          name: "oauth_client.deleted",
+          category: "audit",
+          target,
+          properties: { operationId },
+        });
 
         return adminRow(client);
       });

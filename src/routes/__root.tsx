@@ -122,7 +122,9 @@ function RootContent() {
           onLocaleSyncError={() => setLocaleSyncFailed(true)}
           {...(projectId ? { projectId } : {})}
         >
-          {localeSyncFailed ? <ErrorMessage text={m.locale_save_error()} /> : null}
+          {localeSyncFailed ? (
+            <ErrorMessage text={m.locale_save_error()} />
+          ) : null}
           <Outlet />
         </KrakstackAuthProvider>
       </Suspense>
