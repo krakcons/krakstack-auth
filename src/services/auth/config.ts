@@ -79,6 +79,21 @@ export const validateUserLocaleWrite = (locale: typeof Schema.Unknown.Type) =>
     ),
   );
 
+const UserNameWrite = Schema.Trim.check(Schema.isNonEmpty()).annotate({
+  identifier: "UserNameWrite",
+});
+
+export const validateUserNameWrite = (name: typeof Schema.Unknown.Type) =>
+  Schema.decodeUnknownEffect(UserNameWrite)(name).pipe(
+    Effect.mapError(
+      () =>
+        new APIError("BAD_REQUEST", { message: "User name must not be blank" }),
+    ),
+  );
+
+export const defaultUserName = (user: PersonalOrganizationUser) =>
+  user.name.trim() || user.email.split("@")[0]?.trim() || user.id;
+
 interface OrganizationParentInput {
   readonly [key: string]: typeof Schema.Unknown.Type;
   readonly parentId?: typeof Schema.Unknown.Type;
@@ -174,7 +189,7 @@ type PersonalOrganizationUser = {
 };
 
 const personalOrganizationName = (user: PersonalOrganizationUser) =>
-  user.name.trim() || user.email.split("@")[0]?.trim() || user.id;
+  defaultUserName(user);
 
 const personalOrganizationSlugPart = (user: PersonalOrganizationUser) =>
   organizationSlugPart(personalOrganizationName(user)) || "user";
@@ -402,7 +417,9 @@ export const createAuth = ({
                     ? LocaleContext.fromHeaders(new Headers(context?.headers))
                         .locale
                     : yield* validateUserLocaleWrite(user.locale);
-                return { data: { ...user, locale } };
+                return {
+                  data: { ...user, locale, name: defaultUserName(user) },
+                };
               }),
             ),
           after: async (user) => {
@@ -417,6 +434,10 @@ export const createAuth = ({
                 yield* validateUserMetadataWrite(user.metadata);
                 if (user.locale !== undefined)
                   yield* validateUserLocaleWrite(user.locale);
+                if (user.name !== undefined) {
+                  const name = yield* validateUserNameWrite(user.name);
+                  return { data: { ...user, name } };
+                }
               }),
             ),
         },
