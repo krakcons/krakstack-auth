@@ -42,7 +42,7 @@
     "@effect/platform-bun": "4.0.0",
     "@effect/sql-pg": "4.0.0",
     "@krak-stack/auth": "workspace:*",
-    "@krak-stack/registry": "^0.1.54",
+    "@krak-stack/registry": "^0.1.55",
     "@lucas-barake/effect-form-react": "1.1.0",
     "@opentelemetry/api": "^1.9.1",
     "@opentelemetry/exporter-trace-otlp-http": "^0.219.0",

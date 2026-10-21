@@ -1,5 +1,11 @@
 # @krak-stack/auth
 
+## 0.2.27
+
+### Patch Changes
+
+- 8254748: Include trusted OpenTelemetry user.full_name and user.email annotations for cookie sessions and user-owned API keys. Preserve effective-user attribution during impersonation and clear inherited profile fields for anonymous and organization-owned credentials.
+
 ## 0.2.26
 
 ### Patch Changes
