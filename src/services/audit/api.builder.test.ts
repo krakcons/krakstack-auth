@@ -35,9 +35,10 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)(
           const queriedTenants: Array<string> = [];
           const observedEvents = Layer.succeed(Events, {
             ...events,
-            listAudit: (input) => {
+            list: (input) => {
               queriedTenants.push(input.organizationId);
-              return events.listAudit(input);
+              expect(input.category).toBe("audit");
+              return events.list(input);
             },
           });
           const configuredTenant = Layer.succeed(
@@ -110,10 +111,10 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)(
               .filter((value) => value.split("=")[0]?.endsWith("session_token"))
               .map((value) => value.split(";")[0])
               .join("; ");
-            const adminRead = () =>
+            const adminRead = (eventName?: string) =>
               web.handler(
                 new Request(
-                  `${base}/api/auth/admin/audit?page=0&pageSize=10&globalFilter=${id}&organizationId=${otherTenant}`,
+                  `${base}/api/auth/admin/audit?page=0&pageSize=10&globalFilter=${id}&organizationId=${otherTenant}&category=analytics${eventName ? `&eventName=${encodeURIComponent(eventName)}` : ""}`,
                   {
                     headers: {
                       cookie: tokenCookie,
@@ -122,7 +123,7 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)(
                   },
                 ),
               );
-            expect((yield* Effect.promise(adminRead)).status).toBe(403);
+            expect((yield* Effect.promise(() => adminRead())).status).toBe(403);
             yield* sql`UPDATE session SET impersonated_by_organization_id = NULL WHERE user_id = ${id}`;
             yield* events
               .track({
@@ -145,12 +146,13 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)(
               })
               .pipe(Effect.annotateLogs({ "organization.id": otherTenant }));
             expect(
-              (yield* events.listAudit({
+              (yield* events.list({
+                category: "audit",
                 organizationId: tenant,
                 globalFilter: id,
               })).data.map((row) => row.eventName),
             ).toEqual(["audit.global_test"]);
-            const response = yield* Effect.promise(adminRead);
+            const response = yield* Effect.promise(() => adminRead());
             expect(response.status).toBe(200);
             expect(queriedTenants).toEqual([tenant]);
             const body = yield* Schema.decodeUnknownEffect(
@@ -161,6 +163,19 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)(
             expect(body.data.map((row) => row.eventName)).toEqual([
               "audit.global_test",
             ]);
+            const filtered = yield* Effect.promise(() =>
+              adminRead("audit.other_tenant_test"),
+            );
+            expect(filtered.status).toBe(200);
+            const filteredBody = yield* Schema.decodeUnknownEffect(
+              Schema.Struct({
+                data: Schema.Array(Schema.Struct({ eventName: Schema.String })),
+                meta: Schema.Struct({ total: Schema.Number }),
+              }),
+            )(yield* Effect.promise(() => filtered.json()));
+            expect(filteredBody.data).toEqual([]);
+            expect(filteredBody.meta.total).toBe(0);
+            expect(queriedTenants).toEqual([tenant, tenant]);
           }).pipe(
             Effect.ensuring(
               Effect.gen(function* () {

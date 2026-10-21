@@ -15,7 +15,11 @@ export const auditHandler = HttpApiBuilder.group(
           "VITE_KRAKSTACK_AUTH_ORGANIZATION_ID",
         );
         const events = yield* Events;
-        return yield* events.listAudit({ ...query, organizationId });
+        return yield* events.list({
+          ...query,
+          organizationId,
+          category: "audit",
+        });
       }).pipe(Effect.mapError(() => new HttpApiError.InternalServerError({}))),
     ),
 );

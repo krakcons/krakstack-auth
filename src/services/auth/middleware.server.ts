@@ -73,6 +73,8 @@ export const adminAuthMiddlewareLayer = Layer.succeed(
           "app.actor.type": "user",
           "app.actor.id": session.user.id,
           "user.id": session.user.id,
+          "user.full_name": session.user.name,
+          "user.email": session.user.email,
           "organization.id": organizationId,
           "app.auth.method": "session",
           "app.auth.credential.id": session.session.id,
