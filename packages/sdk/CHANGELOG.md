@@ -1,5 +1,11 @@
 # @krak-stack/auth
 
+## 0.2.26
+
+### Patch Changes
+
+- Automatically synchronize the signed-in user's preferred locale from the existing KrakstackProvider context through KrakstackAuthProvider. Existing consumers need only update the SDK version after the auth server has been deployed with locale support; no selector wrapper, provider prop, or consumer database migration is required. Skip synchronization during impersonation, preserve optimistic session updates with rollback, and expose optional onLocaleSyncError handling. The current interface locale is authoritative, including on provider mount and after a page reload.
+
 ## 0.2.25
 
 ### Patch Changes

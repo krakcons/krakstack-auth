@@ -1,4 +1,4 @@
-import { useAtomValue } from "@effect/atom-react";
+import { useAtomSet, useAtomValue } from "@effect/atom-react";
 import { useRouterState } from "@tanstack/react-router";
 import { Cause, Option, Schema } from "effect";
 import { HttpApiError } from "effect/http-api";
@@ -13,7 +13,11 @@ import {
   useRef,
 } from "react";
 
-import { activeAuthOrganizationAtom, authSessionAtom } from "./auth-atoms.js";
+import {
+  activeAuthOrganizationAtom,
+  authSessionAtom,
+  updateUserLocaleAtom,
+} from "./auth-atoms.js";
 import { authClientApi } from "./auth-client-api.js";
 import type { ExtraProjectPublicConfig } from "../extra/schema.js";
 import type {
@@ -40,6 +44,7 @@ export type KrakstackAuthProviderProps = {
   projectId?: string | null | undefined;
   access?: ProjectAccessCatalog | undefined;
   accessLabels?: ProjectAccessLabelCatalog | undefined;
+  onLocaleSyncError?: ((cause: typeof Schema.Unknown.Type) => void) | undefined;
 };
 
 export type KrakstackAuthContextValue = {
@@ -189,6 +194,7 @@ export function KrakstackAuthProvider({
   projectId,
   access,
   accessLabels,
+  onLocaleSyncError,
 }: KrakstackAuthProviderProps) {
   const locale = resolveKrakstackAuthLocale(useKrakstackLocale());
   const searchString = useRouterState({
@@ -199,7 +205,33 @@ export function KrakstackAuthProvider({
   const projectConfigState = useProjectConfigState(baseUrl, projectId);
   const sessionAtom = authSessionAtom(baseUrl);
   const sessionResult = useAtomValue(sessionAtom);
+  const saveLocale = useAtomSet(updateUserLocaleAtom(baseUrl), {
+    mode: "promise",
+  });
+  const lastLocaleSyncKey = useRef<string | null>(null);
   const wasAuthenticated = useRef(false);
+
+  useEffect(() => {
+    if (!AsyncResult.isSuccess(sessionResult) || sessionResult.waiting) return;
+    const session = sessionResult.value;
+    if (
+      !session ||
+      session.session.impersonatedBy ||
+      session.session.impersonatedByOrganizationId
+    ) {
+      lastLocaleSyncKey.current = null;
+      return;
+    }
+    const key = `${session.user.id}:${locale}`;
+    if (lastLocaleSyncKey.current === key) return;
+    // Keep the key through optimistic updates and rollback to avoid retry loops.
+    lastLocaleSyncKey.current = key;
+    if (session.user.locale === locale) return;
+    void saveLocale(locale).catch((cause) => {
+      console.error("Failed to sync account language", cause);
+      onLocaleSyncError?.(cause);
+    });
+  }, [locale, sessionResult, saveLocale, onLocaleSyncError]);
 
   useEffect(() => {
     if (!AsyncResult.isSuccess(sessionResult) || sessionResult.waiting) return;

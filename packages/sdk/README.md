@@ -116,6 +116,31 @@ import { DropdownMenuItem } from "@/components/ui/dropdown-menu";
 
 See [React components and CSS](https://auth.krakstack.net/en/docs/components) for the provider and component requirements.
 
+### Locale syncing
+
+Nest `KrakstackAuthProvider` inside `KrakstackProvider`. The auth provider reads
+the registry locale context and saves it to the signed-in user's `locale` when
+it differs. It does not accept a `locale` prop or restore the interface language
+from the saved account preference. Use `LocaleSwitcher` directly from
+`@krak-stack/registry/locale-switcher` with your application's language-change
+callback; no auth-specific selector wrapper is needed.
+
+The context is authoritative, including after a Paraglide reload. Public pages
+outside the auth provider change only the browser locale; pages inside it can
+update the account even when the language comes from a localized URL. Signed-out
+visitors do not trigger user updates. An optional `onLocaleSyncError` callback
+lets the application display a localized save error without a retry loop.
+
+Existing consumers already nesting `KrakstackAuthProvider` inside
+`KrakstackProvider` only need an SDK version update after the auth server is
+deployed with locale support. No consumer database migration, new provider prop,
+or selector change is required. Impersonated sessions do not sync preferences.
+
+Krakstack Auth emails use the recipient's saved language, falling back to the
+request locale and then English when no valid saved preference exists.
+See [locale syncing](https://auth.krakstack.net/en/docs/components#locale-syncing)
+for setup, lifecycle behavior, and background-notification guidance.
+
 ## Authorization
 
 Define project permissions with `defineProjectAccess`, resolve actors with `ActorRequired`, and enforce backend policies with `withPolicy`. Frontend permission helpers control presentation only.

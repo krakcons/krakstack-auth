@@ -45,6 +45,7 @@ export const UserRow = Schema.Struct({
   name: Schema.String,
   email: Schema.String,
   emailVerified: Schema.Boolean,
+  locale: Schema.optional(Schema.String),
   image: Schema.NullOr(Schema.String),
   metadata: StoredUserMetadata,
   role: Schema.NullOr(Schema.String),

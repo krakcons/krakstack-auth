@@ -1,5 +1,6 @@
 import { describe, expect, it } from "@effect/vitest";
-import { Atom, AtomRegistry } from "effect/reactivity";
+import { Effect } from "effect";
+import { AsyncResult, Atom, AtomRegistry } from "effect/reactivity";
 import { vi } from "vitest";
 
 import {
@@ -7,9 +8,83 @@ import {
   notifyAuthChange,
   refreshOnAuthChange,
   reloadAfterImpersonation,
+  authSessionAtom,
+  updateUserLocaleAtom,
 } from "./auth-atoms.js";
 
 describe("auth atom revalidation", () => {
+  it.effect(
+    "shares optimistic language changes with session readers and rolls back failed saves",
+    () =>
+      Effect.gen(function* () {
+        const registry = AtomRegistry.make();
+        const started = Promise.withResolvers<void>();
+        const response = Promise.withResolvers<Response>();
+        const now = new Date().toISOString();
+        const sessionResponse = {
+          session: {
+            id: "session",
+            userId: "user",
+            token: "token",
+            expiresAt: now,
+            createdAt: now,
+            updatedAt: now,
+          },
+          user: {
+            id: "user",
+            name: "Locale",
+            email: "locale@example.test",
+            emailVerified: true,
+            image: null,
+            role: null,
+            banned: false,
+            locale: "en",
+            createdAt: now,
+            updatedAt: now,
+          },
+        };
+        const capture: typeof fetch = async (input, init) => {
+          const request = new Request(input, init);
+          if (new URL(request.url).pathname.endsWith("/update-user")) {
+            expect(await request.json()).toEqual({ locale: "fr" });
+            started.resolve();
+            return response.promise;
+          }
+          return Response.json(sessionResponse);
+        };
+        vi.stubGlobal("fetch", capture);
+        try {
+          const baseUrl = "https://locale-rollback.example.test";
+          const session = authSessionAtom(baseUrl);
+          const update = updateUserLocaleAtom(baseUrl);
+          registry.mount(session);
+          yield* AtomRegistry.getResult(registry, session);
+          registry.set(update, "fr");
+          yield* Effect.promise(() => started.promise);
+          expect(
+            AsyncResult.getOrElse(registry.get(session), () => null)?.user
+              .locale,
+          ).toBe("fr");
+          response.resolve(
+            Response.json(
+              { code: "BAD_REQUEST", message: "Save failed" },
+              { status: 400 },
+            ),
+          );
+          expect(
+            (yield* AtomRegistry.getResult(registry, update).pipe(Effect.exit))
+              ._tag,
+          ).toBe("Failure");
+          expect(
+            AsyncResult.getOrElse(registry.get(session), () => null)?.user
+              .locale,
+          ).toBe("en");
+        } finally {
+          registry.dispose();
+          vi.unstubAllGlobals();
+        }
+      }),
+  );
   it("reloads after impersonation without refreshing the previous user's guards", () => {
     const reload = vi.fn();
     const window = Object.assign(new EventTarget(), { location: { reload } });

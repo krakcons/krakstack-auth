@@ -13,7 +13,7 @@
     "sdk:dev": "bun --filter @krak-stack/auth dev",
     "sdk:pack:dev": "mkdir -p tmp && bun pm --cwd packages/sdk pack --filename \"$PWD/tmp/auth-effect4.tgz\"",
     "build": "bun --filter @krak-stack/auth build && bun --bun vite build",
-    "start": "bun run db:migrate && bun run server.ts",
+    "start": "bun run server.ts",
     "db:migrate": "bun run scripts/migrate.ts",
     "db:migrate:test": "bun run scripts/migrate.ts --test",
     "db:adopt": "bun run scripts/adopt.ts",

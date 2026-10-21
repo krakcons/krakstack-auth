@@ -31,16 +31,59 @@ Wrap component consumers once near the application root:
 
 ```tsx
 import { KrakstackAuthProvider } from "@krak-stack/auth/components";
+import { KrakstackProvider } from "@krak-stack/registry/krakstack-provider";
+import { getLocale, locales } from "@/paraglide/runtime";
 
-<KrakstackAuthProvider
-  locale="en"
-  projectId={import.meta.env.VITE_KRAKSTACK_AUTH_PROJECT_ID}
->
-  {children}
-</KrakstackAuthProvider>;
+<KrakstackProvider locale={getLocale()} locales={locales}>
+  <KrakstackAuthProvider
+    projectId={import.meta.env.VITE_KRAKSTACK_AUTH_PROJECT_ID}
+  >
+    {children}
+  </KrakstackAuthProvider>
+</KrakstackProvider>;
 ```
 
 Pass `baseUrl` when the default same-origin endpoint is not appropriate. The provider and components use the owned Effect HttpApi client internally; they do not accept a Better Auth client.
+
+## Locale syncing
+
+`KrakstackAuthProvider` reads the interface language from its enclosing `KrakstackProvider`. It does not accept a `locale` prop. The context language is authoritative: the provider saves it to the signed-in user's `locale` for emails and other asynchronous communications. It does **not** restore the interface language from the saved account preference on sign-in.
+
+Use the language selector directly from the registry. It only changes the interface language; account persistence belongs to the auth provider, not a custom selector wrapper:
+
+```tsx
+import { LocaleSwitcher } from "@krak-stack/registry/locale-switcher";
+import { setLocale } from "@/paraglide/runtime";
+
+<LocaleSwitcher
+  onLocaleChange={(locale) => setLocale(locale === "fr" ? "fr" : "en")}
+/>;
+```
+
+The flow is `LocaleSwitcher → Paraglide → KrakstackProvider → KrakstackAuthProvider → user.locale`. With Paraglide's default reload behavior, the new page supplies the updated context locale and synchronization runs after its session loads. If your application changes language without a reload, it must rerender `KrakstackProvider` with the new `locale` value.
+
+| Situation | Behavior |
+| --- | --- |
+| Session is loading or refreshing | Wait; do not update the user. |
+| Visitor is signed out | Keep the browser language; do not update a user. |
+| Session is impersonating another user | Do not change the impersonated user's saved preference. |
+| Saved locale matches the context | Do not send an update request. |
+| Signed-in user's saved locale differs or is missing | Save the context locale with an optimistic update, then revalidate session queries. |
+| Saving fails | Roll back optimistic state, log the failure, and call `onLocaleSyncError` if provided. Do not continuously retry the same user/locale pair. |
+
+Use the optional `onLocaleSyncError` callback on `KrakstackAuthProvider` to show a localized, application-owned error notice. The callback receives the failure cause; changing its reference does not retry a failed save.
+
+### Public pages and localized links
+
+Place `KrakstackProvider` around the whole site and `KrakstackAuthProvider` only around the routes that should sync account language. A selector on a public page outside the auth provider changes only the browser locale, even if the visitor has a session. Entering a provider-wrapped route later syncs that current locale to the account.
+
+Synchronization follows context, not explicit selector clicks. Opening a localized URL **inside** the auth provider can therefore update the saved preference. Opening a localized public page outside it does not. If you wrap the entire site in the auth provider, public pages will sync too.
+
+### Signup and recipient communications
+
+New accounts initialize their language from the validated signup flow, falling back to English. Existing accounts without a previously recorded preference default to English after migration. English (`en`) and French (`fr`) are currently supported; the database locale column has no language constraint, while API writes validate supported values.
+
+Krakstack Auth's email senders prefer the recipient's saved locale. If no valid saved preference exists, they use the request locale when available, otherwise English. This works without a browser request for known recipients. For application-owned background notifications, resolve the recipient's saved language too—not the initiating administrator's or worker's locale. Delivery channels do not need a separate language preference.
 
 ## Account controls
 

@@ -20,6 +20,7 @@ import { DomainRow, OrganizationRow, ProjectRow } from "@/db/schema";
 import { hostFromRequest } from "@/services/domains";
 import { m } from "@/paraglide/messages";
 import { notificationLayer } from "@/services/auth/notification.server";
+import { resolveRecipientLocale } from "@/services/auth/locale.server";
 import { organizationBranding } from "@/services/organizations/branding";
 
 const fallbackAppName = process.env.AUTH_EMAIL_NAME ?? "Krakstack Auth";
@@ -300,11 +301,6 @@ const resolveEmailIdentity = async (
   };
 };
 
-const localeFromRequest = (request?: Request | undefined) => {
-  const language = request?.headers.get("accept-language") ?? "";
-  return language.toLowerCase().startsWith("fr") ? "fr" : "en";
-};
-
 const sendAuthEmail = (email: SesEmailNotification) =>
   Effect.gen(function* () {
     const notifications = yield* NotificationService;
@@ -320,7 +316,9 @@ export const sendResetPasswordEmail = async ({
   readonly to: string;
   readonly url: string;
 }) => {
-  const locale = localeFromRequest(request);
+  const locale = await runWithDatabase(
+    resolveRecipientLocale({ email: to, request }),
+  );
   const identity = await resolveEmailIdentity(request, locale);
   const text = m.email_reset_password_text({ url }, { locale });
   await sendAuthEmail({
@@ -354,7 +352,9 @@ export const sendTwoFactorOtpEmail = async ({
   readonly to: string;
   readonly otp: string;
 }) => {
-  const locale = localeFromRequest(request);
+  const locale = await runWithDatabase(
+    resolveRecipientLocale({ email: to, request }),
+  );
   const identity = await resolveEmailIdentity(request, locale);
   const text = m.email_two_factor_otp_text({ otp }, { locale });
   await sendAuthEmail({
@@ -395,7 +395,9 @@ export const sendEmailVerificationOtpEmail = async ({
     | "change-email";
 }) => {
   await writeLocalOtp(to, type, otp);
-  const locale = localeFromRequest(request);
+  const locale = await runWithDatabase(
+    resolveRecipientLocale({ email: to, request }),
+  );
   const identity = await resolveEmailIdentity(request, locale);
   const isPasswordReset = type === "forget-password";
   const subject = isPasswordReset

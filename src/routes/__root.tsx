@@ -8,7 +8,8 @@ import {
   useRouterState,
 } from "@tanstack/react-router";
 import type { AtomRegistry } from "effect/reactivity";
-import { Suspense } from "react";
+import { Suspense, useState } from "react";
+import { ErrorMessage } from "@krak-stack/registry/effect-form";
 import { KrakstackAuthProvider } from "@krak-stack/auth/components";
 import { useAtomValue } from "@effect/atom-react";
 import {
@@ -96,6 +97,7 @@ export const Route = createRootRouteWithContext<{
 });
 
 function RootContent() {
+  const [localeSyncFailed, setLocaleSyncFailed] = useState(false);
   const needsAuth = useRouterState({
     select: (state) =>
       state.matches.some(
@@ -117,8 +119,10 @@ function RootContent() {
         <KrakstackAuthProvider
           baseUrl={authBaseUrl}
           accessLabels={authAccessLabels()}
+          onLocaleSyncError={() => setLocaleSyncFailed(true)}
           {...(projectId ? { projectId } : {})}
         >
+          {localeSyncFailed ? <ErrorMessage text={m.locale_save_error()} /> : null}
           <Outlet />
         </KrakstackAuthProvider>
       </Suspense>

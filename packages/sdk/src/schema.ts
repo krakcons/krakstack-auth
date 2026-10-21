@@ -258,11 +258,17 @@ const CompatibleUserMetadata = Schema.Unknown.pipe(
   }),
 );
 
+export const UserLocale = Schema.Literals(["en", "fr"]).annotate({
+  identifier: "UserLocale",
+  description: "Preferred language for the interface and communications.",
+});
+
 export const User = Schema.Struct({
   id: Schema.String,
   name: Schema.String,
   email: Schema.String,
   emailVerified: Schema.Boolean,
+  locale: Schema.optional(UserLocale),
   image: Schema.NullOr(Schema.String),
   metadata: Schema.optional(Schema.NullOr(CompatibleUserMetadata)),
   role: Schema.NullOr(Schema.String),

@@ -1,7 +1,17 @@
 import { describe, expect, it } from "@effect/vitest";
 import { Schema } from "effect";
 
-import { AuthRedirectURLFromString } from "./schema.js";
+import { AuthRedirectURLFromString, UpdateUserPayload } from "./schema.js";
+
+describe("user language updates", () => {
+  it("accepts supported languages without requiring unrelated profile fields", () => {
+    const decode = Schema.decodeUnknownSync(UpdateUserPayload);
+    expect(decode({ locale: "fr" })).toEqual({ locale: "fr" });
+    expect(decode({ name: "Ada" })).toEqual({ name: "Ada" });
+    expect(() => decode({ locale: "unsupported" })).toThrow();
+    expect(() => decode({ locale: null })).toThrow();
+  });
+});
 
 describe("authentication redirect URL transformation", () => {
   const schema = AuthRedirectURLFromString("https://auth.example.com");

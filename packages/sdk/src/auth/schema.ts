@@ -1,6 +1,6 @@
 import { Effect, Schema, SchemaIssue, SchemaTransformation } from "effect";
 
-import { User, UserMetadata } from "../schema.js";
+import { User, UserLocale, UserMetadata } from "../schema.js";
 
 const JsonRecord = Schema.Record(Schema.String, Schema.Json);
 const StringArrayRecord = Schema.Record(
@@ -40,6 +40,7 @@ export const AuthUser = Schema.Struct({
   name: Schema.String,
   email: Schema.String,
   emailVerified: Schema.Boolean,
+  locale: User.fields.locale,
   image: Schema.NullOr(Schema.String),
   metadata: User.fields.metadata,
   role: Schema.NullOr(Schema.String),
@@ -205,6 +206,7 @@ export class AuthInternalServerError extends Schema.TaggedError<AuthInternalServ
 ) {}
 
 export const UpdateUserPayload = Schema.Struct({
+  locale: Schema.optional(UserLocale),
   name: Schema.optional(Schema.String),
   image: Schema.optional(Schema.NullOr(Schema.String)),
   metadata: Schema.optional(Schema.NullOr(UserMetadata)),

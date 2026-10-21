@@ -10,6 +10,7 @@ import {
 import { PgClient } from "@effect/sql-pg";
 import { SqlClient } from "effect/sql";
 import { defaults, Pool } from "pg";
+import { migrate } from "@/db/migrate";
 
 // The existing schema uses timestamp without time zone and stores UTC.
 defaults.parseInputDatesAsUTC = true;
@@ -45,30 +46,38 @@ const naming = {
 
 // Effect 4 uses its native PostgreSQL pool; Better Auth retains the pg pool above.
 // Native timestamp codecs already decode timestamp-without-time-zone as UTC.
-export const sqlLayer = PgClient.layerConfig({
-  url: Config.Redacted(
-    process.env.NODE_ENV === "test" ? "TEST_DATABASE_URL" : "DATABASE_URL",
+export const sqlLayer = Layer.effectDiscard(migrate).pipe(
+  Layer.provideMerge(
+    PgClient.layerConfig({
+      url: Config.Redacted(
+        process.env.NODE_ENV === "test" ? "TEST_DATABASE_URL" : "DATABASE_URL",
+      ),
+      applicationName: Config.succeed("krakstack-auth"),
+      connectTimeout: Config.succeed("5 seconds"),
+      idleTimeout: Config.succeed("30 seconds"),
+      maxConnections: Config.succeed(databasePoolSize),
+      startupParameters: Config.succeed({ TimeZone: "UTC" }),
+      transformQueryNames: Config.succeed(naming.transformQueryNames),
+      transformResultNames: Config.succeed(naming.transformResultNames),
+      transformJson: Config.succeed(naming.transformJson),
+    }),
   ),
-  applicationName: Config.succeed("krakstack-auth"),
-  connectTimeout: Config.succeed("5 seconds"),
-  idleTimeout: Config.succeed("30 seconds"),
-  maxConnections: Config.succeed(databasePoolSize),
-  startupParameters: Config.succeed({ TimeZone: "UTC" }),
-  transformQueryNames: Config.succeed(naming.transformQueryNames),
-  transformResultNames: Config.succeed(naming.transformResultNames),
-  transformJson: Config.succeed(naming.transformJson),
-});
+);
 
 const pgLayer = (url: Redacted.Redacted) =>
-  PgClient.layer({
-    url,
-    applicationName: "krakstack-auth-test",
-    connectTimeout: "5 seconds",
-    idleTimeout: "30 seconds",
-    maxConnections: databasePoolSize,
-    startupParameters: { TimeZone: "UTC" },
-    ...naming,
-  });
+  Layer.effectDiscard(migrate).pipe(
+    Layer.provideMerge(
+      PgClient.layer({
+        url,
+        applicationName: "krakstack-auth-test",
+        connectTimeout: "5 seconds",
+        idleTimeout: "30 seconds",
+        maxConnections: databasePoolSize,
+        startupParameters: { TimeZone: "UTC" },
+        ...naming,
+      }),
+    ),
+  );
 
 const pgLayerFromConfig = (name: string) =>
   Layer.unwrap(

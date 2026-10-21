@@ -1,4 +1,5 @@
 {
+  "locale_save_error": "Unable to save your language. Please try again.",
   "app_name": "Krakstack Auth",
   "app_initials": "KS",
   "app_tagline": "Central identity server",

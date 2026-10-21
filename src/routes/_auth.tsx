@@ -7,7 +7,8 @@ import { Users } from "lucide-react";
 
 import { AppBrand } from "@krak-stack/registry/app-brand";
 import { Loading } from "@krak-stack/registry/loading";
-import { LocaleSwitcher } from "@/components/locale-switcher";
+import { LocaleSwitcher } from "@krak-stack/registry/locale-switcher";
+import { setLocale } from "@/paraglide/runtime";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { m } from "@/paraglide/messages";
 import { AuthBrandingProvider } from "@/services/auth/client/branding";
@@ -60,7 +61,11 @@ function AuthLayout() {
         </div>
         <div className="absolute top-6 right-6 flex items-center gap-2 md:top-10 md:right-10">
           <ThemeToggle />
-          <LocaleSwitcher />
+          <LocaleSwitcher
+            onLocaleChange={(locale) =>
+              setLocale(locale === "fr" ? "fr" : "en")
+            }
+          />
         </div>
         <AuthBrandingProvider value={projectConfig}>
           <div className="flex w-full flex-col items-center">

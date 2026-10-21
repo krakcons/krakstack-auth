@@ -13,7 +13,8 @@ import { Effect } from "effect";
 
 import { m } from "@/paraglide/messages";
 import { ThemeToggle } from "@/components/theme-toggle";
-import { LocaleSwitcher } from "@/components/locale-switcher";
+import { LocaleSwitcher } from "@krak-stack/registry/locale-switcher";
+import { setLocale } from "@/paraglide/runtime";
 import { Loading } from "@krak-stack/registry/loading";
 import {
   SidebarLayout,
@@ -107,7 +108,9 @@ function AdminContent() {
           headerActions={
             <>
               <ThemeToggle />
-              <LocaleSwitcher />
+              <LocaleSwitcher
+                onLocaleChange={(locale) => setLocale(locale === "fr" ? "fr" : "en")}
+              />
               <UserButton
                 baseUrl={authBaseUrl}
                 {...(import.meta.env.DEV

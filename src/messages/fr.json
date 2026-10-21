@@ -1,4 +1,5 @@
 {
+  "locale_save_error": "Impossible d’enregistrer votre langue. Veuillez réessayer.",
   "app_name": "Krakstack Auth",
   "app_initials": "KS",
   "app_tagline": "Serveur central d'identité",

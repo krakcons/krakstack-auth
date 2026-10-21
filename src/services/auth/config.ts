@@ -17,7 +17,12 @@ import { Effect, Option, Schema } from "effect";
 import { SqlClient, SqlSchema } from "effect/sql";
 import { IdRow, OrganizationRow, RoleRow, UserRow } from "@/db/schema";
 import { coreSqlFields, withSqlNames } from "./database-schema";
-import { UserMetadata, UserMetadataStandard } from "@krak-stack/auth/schema";
+import {
+  UserLocale,
+  UserMetadata,
+  UserMetadataStandard,
+} from "@krak-stack/auth/schema";
+import { LocaleContext } from "@/lib/localization";
 
 import {
   allowedHostsForRequest,
@@ -60,6 +65,16 @@ export const validateUserMetadataWrite = (
       () =>
         new APIError("BAD_REQUEST", {
           message: "Invalid user contact metadata",
+        }),
+    ),
+  );
+
+export const validateUserLocaleWrite = (locale: typeof Schema.Unknown.Type) =>
+  Schema.decodeUnknownEffect(UserLocale)(locale).pipe(
+    Effect.mapError(
+      () =>
+        new APIError("BAD_REQUEST", {
+          message: "Unsupported user language",
         }),
     ),
   );
@@ -356,6 +371,11 @@ export const createAuth = ({
     user: {
       fields: coreSqlFields.user,
       additionalFields: {
+        locale: {
+          type: "string",
+          required: false,
+          validator: { input: Schema.toStandardSchemaV1(UserLocale) },
+        },
         metadata: {
           type: "json",
           required: false,
@@ -373,8 +393,18 @@ export const createAuth = ({
     databaseHooks: {
       user: {
         create: {
-          before: (user) =>
-            Effect.runPromise(validateUserMetadataWrite(user.metadata)),
+          before: (user, context) =>
+            Effect.runPromise(
+              Effect.gen(function* () {
+                yield* validateUserMetadataWrite(user.metadata);
+                const locale =
+                  user.locale === undefined
+                    ? LocaleContext.fromHeaders(new Headers(context?.headers))
+                        .locale
+                    : yield* validateUserLocaleWrite(user.locale);
+                return { data: { ...user, locale } };
+              }),
+            ),
           after: async (user) => {
             if (user.isAnonymous === true) return;
             await runWithDatabase(provisionPersonalOrganization(user));
@@ -382,7 +412,13 @@ export const createAuth = ({
         },
         update: {
           before: (user) =>
-            Effect.runPromise(validateUserMetadataWrite(user.metadata)),
+            Effect.runPromise(
+              Effect.gen(function* () {
+                yield* validateUserMetadataWrite(user.metadata);
+                if (user.locale !== undefined)
+                  yield* validateUserLocaleWrite(user.locale);
+              }),
+            ),
         },
       },
       session: {

@@ -21,20 +21,23 @@ Placez `KrakstackAuthProvider` au-dessus de toutes les pages auth. Avec le proxy
 ```tsx
 import { Outlet, createRootRoute } from "@tanstack/react-router";
 import { KrakstackAuthProvider } from "@krak-stack/auth/components";
+import { KrakstackProvider } from "@krak-stack/registry/krakstack-provider";
+import { getLocale, locales } from "@/paraglide/runtime";
 
 export const Route = createRootRoute({
   component: () => (
-    <KrakstackAuthProvider
-      locale="fr"
-      projectId={import.meta.env.VITE_KRAKSTACK_AUTH_PROJECT_ID}
-    >
-      <Outlet />
-    </KrakstackAuthProvider>
+    <KrakstackProvider locale={getLocale()} locales={locales}>
+      <KrakstackAuthProvider
+        projectId={import.meta.env.VITE_KRAKSTACK_AUTH_PROJECT_ID}
+      >
+        <Outlet />
+      </KrakstackAuthProvider>
+    </KrakstackProvider>
   ),
 });
 ```
 
-Le fournisseur charge la marque et les méthodes activées pour le projet. Transmettez la langue Paraglide active sous forme `en` ou `fr`.
+Le fournisseur charge la marque et les méthodes activées pour le projet. Transmettez la langue Paraglide active via le `KrakstackProvider` englobant, pas par une prop sur `KrakstackAuthProvider`. Le fournisseur auth synchronise aussi cette langue avec le compte de l'utilisateur connecté; consultez la [synchronisation de la langue](/docs/components#synchronisation-de-la-langue) pour les limites des pages publiques et la gestion des échecs.
 
 ## Mise en page auth
 

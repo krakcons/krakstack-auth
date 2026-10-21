@@ -1,12 +1,20 @@
 import { describe, expect, it } from "@effect/vitest";
 import * as BunServices from "@effect/platform-bun/BunServices";
 import { PgClient, PgMigrator } from "@effect/sql-pg";
-import { Config, Effect, Redacted, Schema, String } from "effect";
+import {
+  Config,
+  ConfigProvider,
+  Effect,
+  Redacted,
+  Schema,
+  String,
+} from "effect";
 import { SqlClient, SqlSchema } from "effect/sql";
 import { adopt, verifyBaseline } from "./adopt";
 import { migrate } from "./migrate";
 import initialMigration from "./migrations/0001_initial";
 import { applicationTables } from "./migration-schema";
+import { sqlTestLayer } from "@/services/database";
 
 const Presence = Schema.Struct({ present: Schema.Boolean }).annotate({
   identifier: "MigrationTestPresence",
@@ -73,6 +81,10 @@ const installExisting = Effect.gen(function* () {
   yield* legacyLedger;
 });
 
+const migrateBaseline = PgMigrator.run({
+  loader: PgMigrator.fromRecord({ "1_legacy": initialMigration }),
+});
+
 const applicationSnapshot = Effect.gen(function* () {
   const sql = yield* SqlClient.SqlClient;
   const rows: Array<string> = [];
@@ -91,14 +103,59 @@ const applicationSnapshot = Effect.gen(function* () {
 describe.skipIf(!process.env.TEST_DATABASE_URL)(
   "Verified Effect SQL baseline",
   () => {
+    it.effect("migrates before exposing the configured SQL client", () =>
+      withDatabase(
+        Effect.gen(function* () {
+          const sql = yield* SqlClient.SqlClient;
+          const database = yield* SqlSchema.findOne({
+            Request: Schema.Void,
+            Result: Schema.Struct({ name: Schema.String }).annotate({
+              identifier: "MigrationTestDatabaseName",
+            }),
+            execute: () => sql`SELECT current_database() AS name`,
+          })();
+          const url = new URL(
+            Redacted.value(yield* Config.Redacted("TEST_DATABASE_URL")),
+          );
+          url.pathname = `/${database.name}`;
+          yield* Effect.gen(function* () {
+            const migrated = yield* SqlClient.SqlClient;
+            expect(
+              yield* migrated`SELECT migration_id FROM effect_sql_migrations ORDER BY migration_id`,
+            ).toEqual([{ migrationId: 1 }, { migrationId: 2 }]);
+            yield* migrated`INSERT INTO "user" (id, name, email) VALUES ('automatic', 'Automatic', 'automatic@example.test')`;
+            expect(
+              yield* migrated`SELECT locale FROM "user" WHERE id = 'automatic'`,
+            ).toEqual([{ locale: "en" }]);
+          }).pipe(
+            Effect.provide(sqlTestLayer),
+            Effect.provide(
+              ConfigProvider.layer(
+                ConfigProvider.fromEnvRecord({
+                  TEST_DATABASE_URL: url.toString(),
+                }),
+              ),
+            ),
+          );
+        }),
+      ),
+    );
     it.effect(
       "installs the independently verified current schema and repeats safely",
       () =>
         withDatabase(
           Effect.gen(function* () {
             const sql = yield* SqlClient.SqlClient;
-            expect(yield* migrate).toEqual([[1, "legacy"]]);
-            yield* sql.withTransaction(verifyBaseline);
+            expect(yield* migrate).toEqual([
+              [1, "legacy"],
+              [2, "user_locale"],
+            ]);
+            yield* sql`INSERT INTO "user" (id, name, email) VALUES ('locale-default', 'Default', 'default@example.test')`;
+            expect(
+              yield* sql`SELECT locale FROM "user" WHERE id = 'locale-default'`,
+            ).toEqual([{ locale: "en" }]);
+            // New supported languages must not require a database migration.
+            yield* sql`UPDATE "user" SET locale = 'es' WHERE id = 'locale-default'`;
             expect(yield* migrate).toEqual([]);
           }),
         ),
@@ -128,7 +185,7 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)(
             );
             yield* noLedger;
             // Without application objects, ordinary migration is a genuine fresh install.
-            expect(yield* migrate).toEqual([[1, "legacy"]]);
+            expect(yield* migrateBaseline).toEqual([[1, "legacy"]]);
             const sql = yield* SqlClient.SqlClient;
             yield* sql.withTransaction(verifyBaseline);
           }),
@@ -154,11 +211,15 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)(
             yield* noLedger;
             expect(yield* adopt).toBe(true);
             expect(yield* adopt).toBe(false);
-            expect(yield* migrate).toEqual([]);
             expect(yield* applicationSnapshot).toEqual(before);
             expect(
               yield* sql`SELECT * FROM drizzle.__drizzle_migrations`,
             ).toEqual(history);
+            expect(yield* migrate).toEqual([[2, "user_locale"]]);
+            expect(
+              yield* sql`SELECT locale FROM "user" WHERE id = 'u'`,
+            ).toEqual([{ locale: "en" }]);
+            expect(yield* migrate).toEqual([]);
           }),
         ),
     );
@@ -168,7 +229,7 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)(
         withDatabase(
           Effect.gen(function* () {
             const sql = yield* SqlClient.SqlClient;
-            yield* migrate;
+            yield* migrateBaseline;
             const before = yield* sql`SELECT * FROM effect_sql_migrations`;
             expect(yield* adopt).toBe(false);
             expect(yield* sql`SELECT * FROM effect_sql_migrations`).toEqual(
@@ -230,7 +291,7 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)(
         withDatabase(
           Effect.gen(function* () {
             const sql = yield* SqlClient.SqlClient;
-            yield* migrate;
+            yield* migrateBaseline;
             const ledger = yield* sql`SELECT * FROM effect_sql_migrations`;
             yield* sql`ALTER TABLE "user" ALTER COLUMN email_verified SET DEFAULT true`;
             expect((yield* adopt.pipe(Effect.flip)).message).toContain("user");
@@ -244,7 +305,7 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)(
       withDatabase(
         Effect.gen(function* () {
           const sql = yield* SqlClient.SqlClient;
-          yield* migrate;
+          yield* migrateBaseline;
           yield* sql`UPDATE effect_sql_migrations SET name = 'unknown'`;
           const before = yield* sql`SELECT * FROM effect_sql_migrations`;
           expect((yield* adopt.pipe(Effect.flip)).message).toContain(
@@ -287,7 +348,7 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)(
           });
           expect(
             results.map((rows) => rows.length).sort((a, b) => a - b),
-          ).toEqual([0, 1]);
+          ).toEqual([0, 2]);
         }),
       ),
     );
@@ -297,7 +358,7 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)(
           yield* installExisting;
           const results = yield* Effect.all([adopt, adopt], { concurrency: 2 });
           expect(results.filter(Boolean)).toHaveLength(1);
-          expect(yield* migrate).toEqual([]);
+          expect(yield* migrate).toEqual([[2, "user_locale"]]);
         }),
       ),
     );

@@ -29,16 +29,59 @@ Les composants utilisent les variables shadcn comme `--background`, `--foregroun
 
 ```tsx
 import { KrakstackAuthProvider } from "@krak-stack/auth/components";
+import { KrakstackProvider } from "@krak-stack/registry/krakstack-provider";
+import { getLocale, locales } from "@/paraglide/runtime";
 
-<KrakstackAuthProvider
-  locale="fr"
-  projectId={import.meta.env.VITE_KRAKSTACK_AUTH_PROJECT_ID}
->
-  {children}
-</KrakstackAuthProvider>;
+<KrakstackProvider locale={getLocale()} locales={locales}>
+  <KrakstackAuthProvider
+    projectId={import.meta.env.VITE_KRAKSTACK_AUTH_PROJECT_ID}
+  >
+    {children}
+  </KrakstackAuthProvider>
+</KrakstackProvider>;
 ```
 
 Fournissez `baseUrl` si le point de même origine par défaut ne convient pas. Le fournisseur et les composants utilisent en interne le client Effect HttpApi fourni; ils n'acceptent pas de client Better Auth.
+
+## Synchronisation de la langue
+
+`KrakstackAuthProvider` lit la langue de l'interface depuis le `KrakstackProvider` qui l'englobe. Il n'accepte pas de prop `locale`. La langue du contexte fait autorité : le fournisseur l'enregistre dans le champ `locale` de l'utilisateur connecté pour les courriels et les autres communications asynchrones. Il ne restaure **pas** la langue de l'interface depuis la préférence du compte lors de la connexion.
+
+Utilisez le sélecteur de langue directement depuis le registre. Il change uniquement la langue de l'interface; l'enregistrement de la préférence appartient au fournisseur auth, pas à un composant personnalisé autour du sélecteur :
+
+```tsx
+import { LocaleSwitcher } from "@krak-stack/registry/locale-switcher";
+import { setLocale } from "@/paraglide/runtime";
+
+<LocaleSwitcher
+  onLocaleChange={(locale) => setLocale(locale === "fr" ? "fr" : "en")}
+/>;
+```
+
+Le flux est `LocaleSwitcher → Paraglide → KrakstackProvider → KrakstackAuthProvider → user.locale`. Avec le rechargement par défaut de Paraglide, la nouvelle page fournit la langue actualisée du contexte et la synchronisation démarre après le chargement de sa session. Si votre application change de langue sans rechargement, elle doit effectuer un nouveau rendu de `KrakstackProvider` avec la nouvelle valeur de `locale`.
+
+| Situation | Comportement |
+| --- | --- |
+| La session se charge ou s'actualise | Attendre; ne pas modifier l'utilisateur. |
+| Le visiteur n'est pas connecté | Conserver la langue du navigateur; ne modifier aucun utilisateur. |
+| La session utilise l'identité d'un autre utilisateur | Ne pas modifier la préférence enregistrée de cet utilisateur. |
+| La langue enregistrée correspond au contexte | Ne pas envoyer de requête de mise à jour. |
+| La langue enregistrée de l'utilisateur connecté diffère ou est absente | Enregistrer la langue du contexte avec une mise à jour optimiste, puis revalider les requêtes de session. |
+| L'enregistrement échoue | Annuler l'état optimiste, journaliser l'échec et appeler `onLocaleSyncError` si fourni. Ne pas réessayer en boucle pour la même paire utilisateur/langue. |
+
+Utilisez le callback facultatif `onLocaleSyncError` de `KrakstackAuthProvider` pour afficher un message d'erreur localisé propre à l'application. Il reçoit la cause de l'échec; modifier sa référence ne relance pas un enregistrement échoué.
+
+### Pages publiques et liens localisés
+
+Placez `KrakstackProvider` autour de tout le site et `KrakstackAuthProvider` uniquement autour des routes qui doivent synchroniser la langue du compte. Un sélecteur sur une page publique hors du fournisseur auth change uniquement la langue du navigateur, même si le visiteur possède une session. L'accès ultérieur à une route englobée par le fournisseur synchronise cette langue avec le compte.
+
+La synchronisation suit le contexte, pas seulement les clics explicites sur le sélecteur. Ouvrir une URL localisée **dans** le fournisseur auth peut donc modifier la préférence enregistrée. Ouvrir une page publique localisée hors de ce fournisseur ne la modifie pas. Si le fournisseur auth englobe tout le site, les pages publiques synchroniseront aussi la langue.
+
+### Inscription et communications aux destinataires
+
+Les nouveaux comptes initialisent leur langue depuis le contexte validé du parcours d'inscription, avec l'anglais comme repli. Les comptes existants sans préférence précédemment enregistrée utilisent l'anglais après la migration. L'anglais (`en`) et le français (`fr`) sont actuellement pris en charge; la colonne de langue en base n'impose aucune contrainte de langue, tandis que les écritures API valident les valeurs prises en charge.
+
+Les fonctions d'envoi de courriels de Krakstack Auth privilégient la langue enregistrée du destinataire. En l'absence de préférence valide, elles utilisent la langue de la requête si elle est disponible, sinon l'anglais. Pour un destinataire connu, cela fonctionne sans requête navigateur. Pour les notifications de fond propres à votre application, utilisez aussi la langue enregistrée du destinataire, pas celle de l'administrateur ou du processus à l'origine de l'envoi. Les canaux de livraison n'ont pas besoin d'une préférence de langue distincte.
 
 ## Contrôles de compte
 

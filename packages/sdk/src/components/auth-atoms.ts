@@ -1,7 +1,8 @@
-import { Option } from "effect";
+import { Effect, Option } from "effect";
 import { AsyncResult, Atom } from "effect/reactivity";
 
-import { authClientApi } from "./auth-client-api.js";
+import { authClientApi, authHttpClient } from "./auth-client-api.js";
+import type { UserLocale } from "../schema.js";
 
 const LAST_LOGIN_METHOD_COOKIE = "krakstack-auth.last_used_login_method";
 export const AUTH_CLIENT_CHANGE_EVENT = "krakstack-auth:change";
@@ -43,8 +44,25 @@ export const authSessionAtom = Atom.family((baseUrl?: string) =>
             ? AsyncResult.success(null)
             : result;
         }),
+      )
+      .pipe(refreshOnAuthChange),
+  ),
+);
+
+export const updateUserLocaleAtom = Atom.family((baseUrl?: string) =>
+  Atom.optimisticFn(authSessionAtom(baseUrl), {
+    reducer: (state, locale: typeof UserLocale.Type) =>
+      AsyncResult.map(state, (session) =>
+        session ? { ...session, user: { ...session.user, locale } } : session,
       ),
-  ).pipe(refreshOnAuthChange),
+    fn: authClientApi(baseUrl).runtime.fn((locale: typeof UserLocale.Type) =>
+      Effect.gen(function* () {
+        const client = yield* authHttpClient(baseUrl);
+        yield* client.auth.updateUser({ payload: { locale } });
+        notifyAuthChange();
+      }),
+    ),
+  }),
 );
 
 export const authOrganizationsAtom = Atom.family((baseUrl?: string) =>

@@ -1,7 +1,7 @@
 import { createFileRoute, notFound, redirect } from "@tanstack/react-router";
 
 import { ThemeToggle } from "@/components/theme-toggle";
-import { LocaleSwitcher } from "@/components/locale-switcher";
+import { LocaleSwitcher } from "@krak-stack/registry/locale-switcher";
 import {
   DocsNotFound,
   DocsPage,
@@ -9,7 +9,7 @@ import {
   type DocsLocale,
 } from "@krak-stack/registry/docs";
 import { getDocsPages, makeAuthDocs } from "@/lib/docs";
-import { getLocale } from "@/paraglide/runtime";
+import { getLocale, setLocale } from "@/paraglide/runtime";
 
 const docsLocale = (): DocsLocale => (getLocale() === "fr" ? "fr" : "en");
 
@@ -52,7 +52,11 @@ function DocsRoutePage() {
       headerActions={
         <>
           <ThemeToggle />
-          <LocaleSwitcher />
+          <LocaleSwitcher
+            onLocaleChange={(locale) =>
+              setLocale(locale === "fr" ? "fr" : "en")
+            }
+          />
         </>
       }
     >

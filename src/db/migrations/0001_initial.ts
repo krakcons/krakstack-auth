@@ -1,9 +1,8 @@
-import * as BunServices from "@effect/platform-bun/BunServices";
 import { PgMigrator } from "@effect/sql-pg";
-import { Effect, FileSystem, Schema } from "effect";
+import { Effect, Schema } from "effect";
 import { SqlClient, SqlSchema } from "effect/sql";
-import { fileURLToPath } from "node:url";
 import { applicationTables } from "../migration-schema";
+import content from "./0001_initial.sql?raw";
 
 const ExistingTable = Schema.Struct({ name: Schema.String }).annotate({
   identifier: "ExistingApplicationTable",
@@ -11,7 +10,6 @@ const ExistingTable = Schema.Struct({ name: Schema.String }).annotate({
 
 export default Effect.gen(function* () {
   const sql = yield* SqlClient.SqlClient;
-  const fs = yield* FileSystem.FileSystem;
   const existing = yield* SqlSchema.findAll({
     Request: Schema.Void,
     Result: ExistingTable,
@@ -26,9 +24,6 @@ export default Effect.gen(function* () {
         "Existing application schema requires verified adoption: run bun run db:adopt (or db:adopt:test).",
     });
   yield* sql`SET LOCAL search_path TO public`;
-  const content = yield* fs.readFileString(
-    fileURLToPath(new URL("./0001_initial.sql", import.meta.url)),
-  );
   // This fixed baseline contains only semicolon-delimited DDL (no procedural
   // bodies or semicolons in literals). The native driver executes one statement
   // per query. Preserve the SQL and persisted migration ID/name unchanged.
@@ -37,4 +32,4 @@ export default Effect.gen(function* () {
     .map((value) => value.trim())) {
     if (statement) yield* sql.unsafe(statement);
   }
-}).pipe(Effect.provide(BunServices.layer));
+});

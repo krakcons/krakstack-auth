@@ -24,9 +24,9 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { LocaleSwitcher } from "@/components/locale-switcher";
+import { LocaleSwitcher } from "@krak-stack/registry/locale-switcher";
 import { m } from "@/paraglide/messages";
-import { getLocale } from "@/paraglide/runtime";
+import { getLocale, setLocale } from "@/paraglide/runtime";
 import { createSeo } from "@/lib/seo";
 
 const siteOrigin = "https://auth.krakstack.net";
@@ -140,7 +140,11 @@ function Home() {
             </a>
             <MobileHeaderMenu />
             <ThemeToggle />
-            <LocaleSwitcher />
+            <LocaleSwitcher
+              onLocaleChange={(locale) =>
+                setLocale(locale === "fr" ? "fr" : "en")
+              }
+            />
           </div>
         </nav>
       </header>

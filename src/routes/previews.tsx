@@ -18,7 +18,8 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { LocaleSwitcher } from "@/components/locale-switcher";
+import { LocaleSwitcher } from "@krak-stack/registry/locale-switcher";
+import { setLocale } from "@/paraglide/runtime";
 import { m } from "@/paraglide/messages";
 import { authBaseUrl } from "@/services/auth/client";
 
@@ -41,7 +42,9 @@ function AuthPreviews() {
     <main className="bg-muted/30 relative flex min-h-screen justify-center overflow-hidden px-4 pt-20 pb-10 sm:px-6">
       <div className="absolute top-4 right-4 flex items-center gap-2 sm:top-6 sm:right-6">
         <ThemeToggle />
-        <LocaleSwitcher />
+        <LocaleSwitcher
+          onLocaleChange={(locale) => setLocale(locale === "fr" ? "fr" : "en")}
+        />
       </div>
       <div className="flex w-full max-w-xl flex-col gap-4">
         <Card>
