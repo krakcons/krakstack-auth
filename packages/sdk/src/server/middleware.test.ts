@@ -271,6 +271,8 @@ describe("AuthMiddleware.routerLayer", () => {
       layer: authClientLayer,
       expected: {
         "user.id": "user-1",
+        "user.full_name": user.name,
+        "user.email": user.email,
         "organization.id": "org-1",
         "app.actor.type": "user",
         "app.actor.id": "user-1",
@@ -296,6 +298,8 @@ describe("AuthMiddleware.routerLayer", () => {
       ).pipe(Layer.provide(baseAuthServiceLayer)),
       expected: {
         "user.id": "user-1",
+        "user.full_name": user.name,
+        "user.email": user.email,
         "organization.id": "org-1",
         "app.actor.type": "user",
         "app.actor.id": "user-1",
@@ -308,6 +312,8 @@ describe("AuthMiddleware.routerLayer", () => {
       layer: userApiKeyAuthClientLayer,
       expected: {
         "user.id": "user-1",
+        "user.full_name": user.name,
+        "user.email": user.email,
         "organization.id": "org-1",
         "app.actor.type": "user",
         "app.actor.id": "user-1",
@@ -342,6 +348,7 @@ describe("AuthMiddleware.routerLayer", () => {
             "request.id": "request-1",
             "user.id": "stale-user",
             "user.full_name": "Stale User",
+            "user.email": "stale@example.test",
             "app.user.image": "https://images.example.test/stale.png",
             "user.roles": ["owner"],
             "organization.id": "stale-org",
@@ -679,7 +686,8 @@ describe("AuthenticationLive", () => {
                   "app.auth.method": "session",
                   "app.auth.impersonator.id": "admin-user-1",
                 });
-                expect(attributes).not.toHaveProperty("user.full_name");
+                expect(attributes["user.full_name"]).toBe(user.name);
+                expect(attributes["user.email"]).toBe(user.email);
               }
               return HttpServerResponse.text("ok");
             }),

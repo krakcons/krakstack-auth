@@ -167,6 +167,8 @@ const sessionAnnotations = (session: AuthSession | null) => {
       session.authMethod.apiKey.configId === "user")
   ) {
     attributes["user.id"] = session.user.id;
+    attributes["user.full_name"] = session.user.name;
+    attributes["user.email"] = session.user.email;
   }
   if (session.session.activeOrganizationId) {
     attributes["organization.id"] = session.session.activeOrganizationId;

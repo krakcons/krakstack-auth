@@ -438,7 +438,13 @@ describe("ActorRequired", () => {
               expect(child.attributes.get("user.roles")).toEqual(
                 scenario.roles,
               );
-              expect(annotations).not.toHaveProperty("user.full_name");
+              if (scenario.name === "organization key") {
+                expect(annotations).not.toHaveProperty("user.full_name");
+                expect(annotations).not.toHaveProperty("user.email");
+              } else {
+                expect(annotations["user.full_name"]).toBe(user.name);
+                expect(annotations["user.email"]).toBe(user.email);
+              }
               expect(annotations).not.toHaveProperty("app.user.image");
               return HttpServerResponse.empty();
             }),
