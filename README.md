@@ -52,7 +52,7 @@ bun run dev
 | `bun run test`            | Run Vitest                                   |
 | `bun check`               | Check TypeScript                             |
 | `bun run lint`            | Run Oxlint                                   |
-| `bun run fmt`             | Format with Oxfmt                            |
+| `bun fmt`                 | Format with Bun's built-in formatter         |
 | `bun run auth:generate`   | Generate reference Better Auth SQL in `tmp/` |
 | `bun run db:migrate`      | Apply Effect SQL migrations                  |
 | `bun run db:migrate:test` | Apply migrations to `TEST_DATABASE_URL`      |

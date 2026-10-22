@@ -23,8 +23,6 @@
     "changeset": "changeset",
     "version:packages": "changeset version",
     "lint": "oxlint",
-    "fmt": "oxfmt",
-    "fmt:check": "oxfmt --check .",
     "auth:generate": "bun x auth generate --config ./src/services/auth/config.ts --output ./tmp/auth-schema.sql",
     "shadcn:update": "for file in src/components/ui/*.tsx; do bunx shadcn@latest add -y -o $(basename \"$file\" .tsx); done",
     "prepare": "effect-tsgo patch"
@@ -84,7 +82,6 @@
     "@typescript/native-preview": "latest",
     "@vitejs/plugin-react": "^6.1.1",
     "auth": "1.7.6",
-    "oxfmt": "^0.52.0",
     "oxlint": "1.73.0",
     "shadcn": "^4.21.0",
     "typescript": "7.0.2",
