@@ -1,6 +1,6 @@
 # @krak-stack/auth
 
-## Unreleased
+## 0.2.29
 
 ### Patch Changes
 
