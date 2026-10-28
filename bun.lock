@@ -68,7 +68,7 @@
     },
     "packages/sdk": {
       "name": "@krak-stack/auth",
-      "version": "0.2.27",
+      "version": "0.2.28",
       "dependencies": {
         "@effect/atom-react": "^4.0.0",
         "@lucas-barake/effect-form-react": "1.1.0",

@@ -1,4 +1,9 @@
-import { useAtomSet, useAtomSuspense, useAtomValue } from "@effect/atom-react";
+import {
+  RegistryContext,
+  useAtomSet,
+  useAtomSuspense,
+  useAtomValue,
+} from "@effect/atom-react";
 import { FormBuilder, FormReact } from "@lucas-barake/effect-form-react";
 import {
   Link,
@@ -11,7 +16,7 @@ import { Atom, AsyncResult } from "effect/reactivity";
 import { HttpClientError } from "effect/http";
 import { REGEXP_ONLY_DIGITS } from "input-otp";
 import { ArrowLeft, KeyRound, Loader2, Mail } from "lucide-react";
-import { useEffect, useRef, useState } from "react";
+import { useContext, useEffect, useRef, useState } from "react";
 
 import { Button, buttonVariants } from "@/components/ui/button";
 import {
@@ -35,7 +40,11 @@ import {
   InputOTPSlot,
 } from "@/components/ui/input-otp";
 
-import { getLastUsedLoginMethod, notifyAuthChange } from "./auth-atoms.js";
+import {
+  getLastUsedLoginMethod,
+  notifyAuthChange,
+  refreshAuthSession,
+} from "./auth-atoms.js";
 import { authClientApi, authHttpClient } from "./auth-client-api.js";
 import { PasswordField } from "./password-field.js";
 import {
@@ -437,6 +446,7 @@ export const resolveInitialAuthMethod = ({
 };
 
 export function Signin(props: AuthFormProps) {
+  const registry = useContext(RegistryContext);
   const {
     baseUrl,
     locale,
@@ -646,7 +656,7 @@ export function Signin(props: AuthFormProps) {
                 }),
               ),
             );
-            notifyAuthChange();
+            yield* refreshAuthSession(registry, baseUrl);
             onNavigate(redirectTarget);
             return;
           }
@@ -672,7 +682,7 @@ export function Signin(props: AuthFormProps) {
             );
             return;
           }
-          notifyAuthChange();
+          yield* refreshAuthSession(registry, baseUrl);
           onNavigate(result.url ?? redirectTarget);
         }),
     }),
@@ -978,6 +988,7 @@ export function Signin(props: AuthFormProps) {
 }
 
 export function VerifyEmail(props: AuthFormProps) {
+  const registry = useContext(RegistryContext);
   const { baseUrl, locale, labels: m } = useAuthFormOptions(props);
   const navigate = useNavigate();
   const searchString = useRouterState({
@@ -1022,7 +1033,7 @@ export function VerifyEmail(props: AuthFormProps) {
               }),
             ),
           );
-          notifyAuthChange();
+          yield* refreshAuthSession(registry, baseUrl);
           onNavigate(redirectTarget);
         }),
     }),
@@ -1330,6 +1341,7 @@ function ResetPasswordForm({
 }
 
 export function TwoFactor(props: AuthFormProps) {
+  const registry = useContext(RegistryContext);
   const { baseUrl, locale, labels: m } = useAuthFormOptions(props);
   const navigate = useNavigate();
   const searchString = useRouterState({
@@ -1394,7 +1406,7 @@ export function TwoFactor(props: AuthFormProps) {
                     }),
             ),
           );
-          notifyAuthChange();
+          yield* refreshAuthSession(registry, baseUrl);
           onNavigate(getResultRedirectUrl(result) ?? redirectTarget);
         }),
     }),

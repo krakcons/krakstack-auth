@@ -1,5 +1,5 @@
 import { Effect, Option } from "effect";
-import { AsyncResult, Atom } from "effect/reactivity";
+import { AsyncResult, Atom, AtomRegistry } from "effect/reactivity";
 
 import { authClientApi, authHttpClient } from "./auth-client-api.js";
 import type { UserLocale } from "../schema.js";
@@ -27,27 +27,43 @@ export const refreshOnAuthChange = <A>(atom: Atom.Atom<A>): Atom.Atom<A> => {
   return globalThis.window ? Atom.refreshOnWindowFocus(reactive) : reactive;
 };
 
-export const authSessionAtom = Atom.family((baseUrl?: string) =>
-  Atom.optimistic(
-    authClientApi(baseUrl)
-      .query("auth", "getSession", {
-        query: {},
-        timeToLive: "1 minute",
-        reactivityKeys: ["auth-session"],
-      })
-      .pipe(
-        Atom.map((result) => {
-          const unauthorized = AsyncResult.error(result).pipe(
-            Option.exists((error) => error._tag === "AuthUnauthorized"),
-          );
-          return unauthorized && !result.waiting
-            ? AsyncResult.success(null)
-            : result;
-        }),
-      )
-      .pipe(refreshOnAuthChange),
-  ),
+const authSessionQueryAtom = Atom.family((baseUrl?: string) =>
+  authClientApi(baseUrl)
+    .query("auth", "getSession", {
+      query: {},
+      timeToLive: "1 minute",
+      reactivityKeys: ["auth-session"],
+    })
+    .pipe(
+      Atom.map((result) => {
+        const unauthorized = AsyncResult.error(result).pipe(
+          Option.exists((error) => error._tag === "AuthUnauthorized"),
+        );
+        return unauthorized && !result.waiting
+          ? AsyncResult.success(null)
+          : result;
+      }),
+    )
+    .pipe(refreshOnAuthChange),
 );
+
+export const authSessionAtom = Atom.family((baseUrl?: string) =>
+  Atom.optimistic(authSessionQueryAtom(baseUrl)),
+);
+
+export const refreshAuthSession = Effect.fn("refreshAuthSession")(function* (
+  registry: AtomRegistry.AtomRegistry,
+  baseUrl?: string,
+) {
+  const query = authSessionQueryAtom(baseUrl);
+  notifyAuthChange();
+  registry.refresh(query);
+  // Wait on the authoritative query, not its optimistic view, which retains
+  // the previous success without a waiting flag during revalidation.
+  return yield* AtomRegistry.getResult(registry, query, {
+    suspendOnWaiting: true,
+  });
+});
 
 export const updateUserLocaleAtom = Atom.family((baseUrl?: string) =>
   Atom.optimisticFn(authSessionAtom(baseUrl), {

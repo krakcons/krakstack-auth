@@ -1,5 +1,11 @@
 # @krak-stack/auth
 
+## 0.2.28
+
+### Patch Changes
+
+- Wait for authoritative session revalidation before navigating after password, email-code, email-verification, and two-factor authentication. This prevents host route guards from reading a cached anonymous session and sending a successful first login back to sign-in.
+
 ## 0.2.27
 
 ### Patch Changes
