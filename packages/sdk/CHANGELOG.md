@@ -1,5 +1,11 @@
 # @krak-stack/auth
 
+## Unreleased
+
+### Patch Changes
+
+- Keep email-code send history in memory for the current sign-in attempt instead of local storage, so resend cooldowns do not carry across login/logout. Switching between password and email code reuses an unexpired code and preserves its countdown without sending duplicate emails. Track cooldowns separately for each email address, allow explicit resends after 60 seconds, and send a fresh code when the previous one has expired. Refreshing the email-code page starts a new countdown without automatically sending another email. Disable resend while a request is pending.
+
 ## 0.2.28
 
 ### Patch Changes

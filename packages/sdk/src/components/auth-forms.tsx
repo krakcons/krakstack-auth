@@ -48,8 +48,8 @@ import {
 import { authClientApi, authHttpClient } from "./auth-client-api.js";
 import { PasswordField } from "./password-field.js";
 import {
-  emailOtpSendsAtom,
-  emailOtpSendState,
+  emailOtpResendSeconds as getEmailOtpResendSeconds,
+  shouldSendEmailOtp,
   EMAIL_OTP_RESEND_COOLDOWN_SECONDS,
 } from "./email-otp-state.js";
 import {
@@ -493,12 +493,25 @@ export function Signin(props: AuthFormProps) {
   const [otpSentTo, setOtpSentTo] = useState(
     initialMethodStep && initialAuthMethod === "emailOtp" ? initialEmail : "",
   );
-  const [emailOtpResendAvailableAt, setEmailOtpResendAvailableAt] = useState(0);
+  const [emailOtpResendAvailableAt, setEmailOtpResendAvailableAt] = useState(() =>
+    initialMethodStep && initialAuthMethod === "emailOtp"
+      ? Date.now() + EMAIL_OTP_RESEND_COOLDOWN_SECONDS * 1000
+      : 0,
+  );
   const [emailOtpResendSeconds, setEmailOtpResendSeconds] = useState(0);
-  const otpSends = useAtomValue(emailOtpSendsAtom(baseUrl ?? ""));
-  const persistOtpSends = useAtomSet(emailOtpSendsAtom(baseUrl ?? ""));
-  const otpSendsRef = useRef(otpSends);
-  otpSendsRef.current = otpSends;
+  const otpSendsRef = useRef(
+    new Map<string, number>(
+      initialMethodStep && initialAuthMethod === "emailOtp"
+        ? [
+            [
+              initialEmail,
+              emailOtpResendAvailableAt -
+                EMAIL_OTP_RESEND_COOLDOWN_SECONDS * 1000,
+            ],
+          ]
+        : [],
+    ),
+  );
   const [errorContext, setErrorContext] =
     useState<SigninErrorContext>("signIn");
   const selectedAuthMethod =
@@ -516,9 +529,9 @@ export function Signin(props: AuthFormProps) {
     }
 
     const updateResendSeconds = () => {
-      const seconds = Math.max(
-        0,
-        Math.ceil((emailOtpResendAvailableAt - Date.now()) / 1000),
+      const seconds = getEmailOtpResendSeconds(
+        emailOtpResendAvailableAt,
+        Date.now(),
       );
       setEmailOtpResendSeconds(seconds);
       if (seconds === 0) setEmailOtpResendAvailableAt(0);
@@ -573,33 +586,27 @@ export function Signin(props: AuthFormProps) {
             );
             return;
           }
-          const previousSend = otpSendsRef.current[email];
-          const previousSendState = emailOtpSendState(previousSend, Date.now());
-          const reuseCode =
-            previousSendState.reusable &&
-            (action.type !== "resendEmailOtp" ||
-              previousSendState.resendSeconds > 0);
+          const sendEmailOtpRequest = authHttpClient(baseUrl, locale).pipe(
+            Effect.flatMap((client) =>
+              client.auth.sendVerificationOtp({
+                payload: { email, type: "sign-in" },
+              }),
+            ),
+            Effect.asVoid,
+            Effect.tap(() =>
+              Effect.sync(() => {
+                otpSendsRef.current.set(email, Date.now());
+              }),
+            ),
+          );
           const sendEmailOtp = (
-            reuseCode
-              ? Effect.void
-              : authHttpClient(baseUrl, locale).pipe(
-                  Effect.flatMap((client) =>
-                    client.auth.sendVerificationOtp({
-                      payload: { email, type: "sign-in" },
-                    }),
-                  ),
-                  Effect.asVoid,
-                  Effect.tap(() =>
-                    Effect.sync(() => {
-                      const sends = {
-                        ...otpSendsRef.current,
-                        [email]: Date.now(),
-                      };
-                      otpSendsRef.current = sends;
-                      persistOtpSends(sends);
-                    }),
-                  ),
-                )
+            shouldSendEmailOtp({
+              sentAt: otpSendsRef.current.get(email),
+              now: Date.now(),
+              resend: action.type === "resendEmailOtp",
+            })
+              ? sendEmailOtpRequest
+              : Effect.void
           ).pipe(
             Effect.tap(() =>
               Effect.sync(() => {
@@ -612,7 +619,7 @@ export function Signin(props: AuthFormProps) {
                   replace: true,
                 });
                 setEmailOtpResendAvailableAt(
-                  (otpSendsRef.current[email] ?? 0) +
+                  (otpSendsRef.current.get(email) ?? 0) +
                     EMAIL_OTP_RESEND_COOLDOWN_SECONDS * 1000,
                 );
               }),
@@ -725,12 +732,6 @@ export function Signin(props: AuthFormProps) {
     password: "",
     otp: "",
   }));
-  const lastOtpSentAt = otpSends[formValues.email.trim()];
-  useEffect(() => {
-    setEmailOtpResendAvailableAt(
-      (lastOtpSentAt ?? 0) + EMAIL_OTP_RESEND_COOLDOWN_SECONDS * 1000,
-    );
-  }, [lastOtpSentAt]);
   const resetForm = useAtomSet(form.reset);
   const setEmail = useAtomSet(form.getFieldAtoms(form.fields.email).setValue);
   const setPassword = useAtomSet(
@@ -877,7 +878,9 @@ export function Signin(props: AuthFormProps) {
                         type="button"
                         variant="link"
                         className="h-auto px-0"
-                        disabled={emailOtpResendSeconds > 0}
+                        disabled={
+                          submitResult.waiting || emailOtpResendSeconds > 0
+                        }
                         onClick={resendEmailOtp}
                       >
                         {emailOtpResendSeconds > 0
