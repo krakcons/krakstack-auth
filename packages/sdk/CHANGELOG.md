@@ -1,5 +1,11 @@
 # @krak-stack/auth
 
+## 0.2.30
+
+### Patch Changes
+
+- Upgrade Effect dependencies to 4.1.0 for compatibility with the registry crypto migration.
+
 ## 0.2.29
 
 ### Patch Changes

@@ -1,3 +1,4 @@
+import { SecureRandom } from "effect/crypto";
 import { Context, Effect, Layer, Option, Schema } from "effect";
 import { SqlClient, SqlSchema } from "effect/sql";
 import {
@@ -76,6 +77,9 @@ const fallbackPublicConfig = (projectKey: string) => ({
 
 export class Projects extends Context.Service<Projects>()("Projects", {
   make: Effect.gen(function* () {
+    const random = yield* SecureRandom.SecureRandom.pipe(
+      Effect.provide(SecureRandom.layerWebCrypto),
+    );
     const sql = yield* SqlClient.SqlClient;
     const events = yield* Events;
     const findProjects = SqlSchema.findAll({
@@ -231,11 +235,12 @@ export class Projects extends Context.Service<Projects>()("Projects", {
     }: {
       payload: CreateProjectPayload;
     }) {
+      const id = yield* random.uuidV7();
       const project = yield* SqlSchema.findOne({
         Request: CreateProjectPayload,
         Result: ProjectRow,
         execute: (payload) => sql`INSERT INTO project (id, name, logo, data)
-          VALUES (${crypto.randomUUID()}, ${payload.name.trim()}, ${payload.logo ?? null},
+          VALUES (${id}, ${payload.name.trim()}, ${payload.logo ?? null},
             ${Schema.encodeSync(ProjectDataJson)(decodeProjectData(payload.data))}::jsonb) RETURNING *`,
       })(payload);
       yield* events.track({

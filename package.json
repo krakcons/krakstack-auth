@@ -1,7 +1,6 @@
 {
   "name": "auth",
   "private": true,
-  "packageManager": "bun@1.4.4",
   "workspaces": [
     "packages/*"
   ],
@@ -34,14 +33,14 @@
     "@better-auth/api-key": "1.7.6",
     "@better-auth/core": "1.7.6",
     "@better-auth/oauth-provider": "1.7.6",
-    "@distilled.cloud/aws": "1.0.0-rc.13",
+    "@distilled.cloud/aws": "1.0.0-rc.17",
     "@distilled.cloud/cloudflare": "1.0.0-rc.13",
-    "@effect/atom-react": "4.0.0",
-    "@effect/platform-browser": "4.0.0",
-    "@effect/platform-bun": "4.0.0",
-    "@effect/sql-pg": "4.0.0",
+    "@effect/atom-react": "4.1.0",
+    "@effect/platform-browser": "4.1.0",
+    "@effect/platform-bun": "4.1.0",
+    "@effect/sql-pg": "4.1.0",
     "@krak-stack/auth": "workspace:*",
-    "@krak-stack/registry": "^0.1.55",
+    "@krak-stack/registry": "^0.1.56",
     "@lucas-barake/effect-form-react": "1.1.0",
     "@opentelemetry/api": "^1.9.1",
     "@opentelemetry/exporter-trace-otlp-http": "^0.219.0",
@@ -58,7 +57,7 @@
     "class-variance-authority": "^0.7.1",
     "cmdk": "^1.1.1",
     "cn": "^0.3.3",
-    "effect": "4.0.0",
+    "effect": "4.1.0",
     "input-otp": "^1.5.0",
     "lucide-react": "^1.47.0",
     "pg": "^8.23.0",
@@ -70,7 +69,7 @@
   "devDependencies": {
     "@changesets/cli": "3.0.3",
     "@effect/tsgo": "0.14.6",
-    "@effect/vitest": "4.0.0",
+    "@effect/vitest": "4.1.0",
     "@inlang/paraglide-js": "^2.25.4",
     "@oxlint/plugins": "1.79.0",
     "@tailwindcss/typography": "^0.5.20",
@@ -90,6 +89,7 @@
     "vitest": "^5.0.3"
   },
   "overrides": {
-    "@effect/platform-node-shared": "4.0.0"
-  }
+    "@effect/platform-node-shared": "4.1.0"
+  },
+  "packageManager": "bun@1.4.4"
 }

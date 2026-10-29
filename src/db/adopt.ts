@@ -1,7 +1,7 @@
 import { PgMigrator } from "@effect/sql-pg";
 import { Effect, Schema } from "effect";
 import { SqlClient, SqlSchema } from "effect/sql";
-import { createHash } from "node:crypto";
+import { Digest } from "effect/crypto";
 import { baselineFingerprints } from "./baseline";
 import { applicationTables, schemaDefinitions } from "./migration-schema";
 
@@ -11,13 +11,17 @@ const NativeMigration = Schema.Struct({
 }).annotate({ identifier: "AdoptionNativeMigration" });
 
 export const verifyBaseline = Effect.gen(function* () {
+  const digest = yield* Digest.Digest.pipe(
+    Effect.provide(Digest.layerWebCrypto),
+  );
   const sql = yield* SqlClient.SqlClient;
   yield* sql`SET LOCAL search_path TO public`;
   const actual = new Map(
-    (yield* schemaDefinitions()).map(({ name, definition }) => [
-      name,
-      createHash("sha256").update(definition).digest("hex"),
-    ]),
+    yield* Effect.forEach(yield* schemaDefinitions(), ({ name, definition }) =>
+      digest
+        .digestHex(Digest.sha256, new TextEncoder().encode(definition))
+        .pipe(Effect.map((hash) => [name, hash] as const)),
+    ),
   );
   const differences = [...baselineFingerprints]
     .filter(([name, fingerprint]) => actual.get(name) !== fingerprint)

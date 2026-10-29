@@ -1,3 +1,4 @@
+import { SecureRandom } from "effect/crypto";
 import {
   createAuthMiddleware,
   getAuthoritativeSessionFromCtx,
@@ -97,7 +98,11 @@ export const makeNativeAudit = (
     if (!operation) return;
     const session = await getAuthoritativeSessionFromCtx(ctx);
     const state = {
-      operationId: crypto.randomUUID(),
+      operationId: await Effect.runPromise(
+        SecureRandom.SecureRandom.use((random) => random.uuidV7()).pipe(
+          Effect.provide(SecureRandom.layerWebCrypto),
+        ),
+      ),
       operation,
       actorType: session ? "user" : "system",
       actorId: session

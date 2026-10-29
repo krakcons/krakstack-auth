@@ -1,3 +1,4 @@
+import { SecureRandom } from "effect/crypto";
 import { Context, Effect, Layer, Option, Schema } from "effect";
 import { SqlClient, SqlSchema } from "effect/sql";
 import { Events } from "@krak-stack/registry/events";
@@ -182,6 +183,9 @@ const normalizeUpdatePayload = (payload: ServerUpdateDomainPayload) => {
 
 export class Domains extends Context.Service<Domains>()("Domains", {
   make: Effect.gen(function* () {
+    const random = yield* SecureRandom.SecureRandom.pipe(
+      Effect.provide(SecureRandom.layerWebCrypto),
+    );
     const sql = yield* SqlClient.SqlClient;
     const findDomain = SqlSchema.findAll({
       Request: Schema.String,
@@ -515,9 +519,10 @@ export class Domains extends Context.Service<Domains>()("Domains", {
 
       const [hostSibling] = yield* findByHost(normalized.hostname);
 
-      let hostnameId: string = hostSibling?.hostnameId ?? crypto.randomUUID();
-      const id = crypto.randomUUID();
-      const operationId = crypto.randomUUID();
+      let hostnameId: string =
+        hostSibling?.hostnameId ?? (yield* random.uuidV7());
+      const id = yield* random.uuidV7();
+      const operationId = yield* random.uuidV7();
       const active = hostSibling?.active ?? !normalized.managed;
       if (!hostSibling && normalized.managed) {
         const zoneId = yield* requireCloudflareZoneId;
@@ -616,7 +621,7 @@ export class Domains extends Context.Service<Domains>()("Domains", {
 
       let hostnameId: string = existing.hostnameId;
       let active = existing.active;
-      const operationId = crypto.randomUUID();
+      const operationId = yield* random.uuidV7();
 
       const hostSibling = Option.getOrNull(
         yield* findSibling({ hostname: normalized.hostname, id: existing.id }),
@@ -681,7 +686,7 @@ export class Domains extends Context.Service<Domains>()("Domains", {
             target: { id, name: id, type: "domain" },
             properties: { operationId },
           });
-          hostnameId = crypto.randomUUID();
+          hostnameId = yield* random.uuidV7();
           active = true;
         }
       }
@@ -748,7 +753,7 @@ export class Domains extends Context.Service<Domains>()("Domains", {
       if (!domain) return null;
 
       const hostSibling = Option.getOrNull(yield* findHostnameSibling(domain));
-      const operationId = crypto.randomUUID();
+      const operationId = yield* random.uuidV7();
 
       if (domain.managed && !hostSibling) {
         const zoneId = yield* requireCloudflareZoneId;

@@ -1,3 +1,4 @@
+import { SecureRandom } from "effect/crypto";
 import { Array as Arr, Effect, Stream } from "effect";
 import { Multipart } from "effect/http";
 import { S3Service } from "@krak-stack/registry/service-s3";
@@ -44,7 +45,10 @@ export const uploadImageFromMultipart = <BadRequest, InternalServerError>({
     }
 
     const s3 = yield* S3Service;
-    const key = `${prefix.replace(/\/+$/g, "")}/${crypto.randomUUID()}-${safeFileName(upload.file.name, fallbackFileName)}`;
+    const random = yield* SecureRandom.SecureRandom.pipe(
+      Effect.provide(SecureRandom.layerWebCrypto),
+    );
+    const key = `${prefix.replace(/\/+$/g, "")}/${yield* random.uuidV7()}-${safeFileName(upload.file.name, fallbackFileName)}`;
     yield* s3
       .write(key, upload.content, { type: upload.file.contentType })
       .pipe(Effect.mapError(internalServerError));

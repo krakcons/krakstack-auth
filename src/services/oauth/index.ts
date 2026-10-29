@@ -1,3 +1,4 @@
+import { SecureRandom } from "effect/crypto";
 import { Context, Effect, Layer, Schema } from "effect";
 import { SqlClient, SqlSchema } from "effect/sql";
 import { HttpApiError } from "effect/http-api";
@@ -116,6 +117,9 @@ export class OAuthClients extends Context.Service<OAuthClients>()(
   "OAuthClients",
   {
     make: Effect.gen(function* () {
+      const random = yield* SecureRandom.SecureRandom.pipe(
+        Effect.provide(SecureRandom.layerWebCrypto),
+      );
       const sql = yield* SqlClient.SqlClient;
       const findProject = SqlSchema.findAll({
         Request: Schema.String,
@@ -219,7 +223,7 @@ export class OAuthClients extends Context.Service<OAuthClients>()(
       }) {
         const betterAuth = yield* BetterAuthRequest;
         const events = yield* Events;
-        const operationId = crypto.randomUUID();
+        const operationId = yield* random.uuidV7();
         yield* Effect.logDebug("OAuth client creation started").pipe(
           Effect.annotateLogs({ operationId }),
         );
@@ -312,7 +316,7 @@ export class OAuthClients extends Context.Service<OAuthClients>()(
       }) {
         const betterAuth = yield* BetterAuthRequest;
         const events = yield* Events;
-        const operationId = crypto.randomUUID();
+        const operationId = yield* random.uuidV7();
         const [stored] = yield* findClient(clientId);
         // Missing identifiers may be arbitrary request input, not entity IDs.
         const targetId = stored?.id ?? operationId;
@@ -392,7 +396,7 @@ export class OAuthClients extends Context.Service<OAuthClients>()(
           }),
         );
 
-        const operationId = crypto.randomUUID();
+        const operationId = yield* random.uuidV7();
         const [stored] = yield* findClient(clientId);
         const targetId = stored?.id ?? operationId;
         const target = {

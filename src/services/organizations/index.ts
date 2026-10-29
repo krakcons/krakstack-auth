@@ -1,3 +1,4 @@
+import { SecureRandom } from "effect/crypto";
 import { Context, Effect, Layer, Schema } from "effect";
 import { SqlClient, SqlSchema } from "effect/sql";
 import { Events } from "@krak-stack/registry/events";
@@ -30,7 +31,10 @@ export class Organizations extends Context.Service<Organizations>()(
         const betterAuth = yield* BetterAuthRequest;
         const { parentId, ...data } = payload;
         const events = yield* Events;
-        const operationId = crypto.randomUUID();
+        const random = yield* SecureRandom.SecureRandom.pipe(
+          Effect.provide(SecureRandom.layerWebCrypto),
+        );
+        const operationId = yield* random.uuidV7();
         yield* Effect.logDebug("Organization creation started").pipe(
           Effect.annotateLogs({ operationId }),
         );
@@ -127,7 +131,10 @@ export class Organizations extends Context.Service<Organizations>()(
       }) {
         const betterAuth = yield* BetterAuthRequest;
         const events = yield* Events;
-        const operationId = crypto.randomUUID();
+        const random = yield* SecureRandom.SecureRandom.pipe(
+          Effect.provide(SecureRandom.layerWebCrypto),
+        );
+        const operationId = yield* random.uuidV7();
         yield* Effect.logDebug("Organization deletion started").pipe(
           Effect.annotateLogs({ operationId }),
         );

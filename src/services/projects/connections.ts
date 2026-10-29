@@ -1,3 +1,4 @@
+import { SecureRandom } from "effect/crypto";
 import { Effect, Schema } from "effect";
 import { SqlClient, SqlSchema } from "effect/sql";
 
@@ -34,6 +35,9 @@ export const connectProjectUser = ({
     if (!(yield* projectExists(normalizedProjectId))) return;
 
     const sql = yield* SqlClient.SqlClient;
+    const id = yield* SecureRandom.SecureRandom.use((random) =>
+      random.uuidV7(),
+    ).pipe(Effect.provide(SecureRandom.layerWebCrypto));
     yield* SqlSchema.void({
       Request: Schema.Struct({
         projectId: Schema.String,
@@ -43,7 +47,7 @@ export const connectProjectUser = ({
         projectId,
         userId,
       }) => sql`INSERT INTO project_user (id, project_id, user_id)
-        VALUES (${crypto.randomUUID()}, ${projectId}, ${userId}) ON CONFLICT DO NOTHING`,
+        VALUES (${id}, ${projectId}, ${userId}) ON CONFLICT DO NOTHING`,
     })({ projectId: normalizedProjectId, userId: normalizedUserId });
   });
 
@@ -61,6 +65,9 @@ export const connectProjectOrganization = ({
     if (!(yield* projectExists(normalizedProjectId))) return;
 
     const sql = yield* SqlClient.SqlClient;
+    const id = yield* SecureRandom.SecureRandom.use((random) =>
+      random.uuidV7(),
+    ).pipe(Effect.provide(SecureRandom.layerWebCrypto));
     yield* SqlSchema.void({
       Request: Schema.Struct({
         projectId: Schema.String,
@@ -70,7 +77,7 @@ export const connectProjectOrganization = ({
         projectId,
         organizationId,
       }) => sql`INSERT INTO project_organization (id, project_id, organization_id)
-        VALUES (${crypto.randomUUID()}, ${projectId}, ${organizationId}) ON CONFLICT DO NOTHING`,
+        VALUES (${id}, ${projectId}, ${organizationId}) ON CONFLICT DO NOTHING`,
     })({
       projectId: normalizedProjectId,
       organizationId: normalizedOrganizationId,

@@ -4,7 +4,7 @@ import * as Sesv2 from "@distilled.cloud/aws/sesv2";
 import { NotificationService } from "@krak-stack/registry/service-notification";
 import type { SesEmailNotification } from "@krak-stack/registry/notification-channel-email-ses/schema";
 import { render } from "@react-email/components";
-import { Effect, Layer, Option, Schema } from "effect";
+import { Effect, Layer, Option, Redacted, Schema } from "effect";
 import * as FetchHttpClient from "effect/http/FetchHttpClient";
 import { mkdir, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
@@ -107,8 +107,8 @@ const SesLive = Layer.mergeAll(
   FetchHttpClient.layer,
   AwsCredentials.fromCredentials(
     {
-      accessKeyId: process.env.SES_ACCESS_KEY_ID ?? "",
-      secretAccessKey: process.env.SES_SECRET_ACCESS_KEY ?? "",
+      accessKeyId: Redacted.make(process.env.SES_ACCESS_KEY_ID ?? ""),
+      secretAccessKey: Redacted.make(process.env.SES_SECRET_ACCESS_KEY ?? ""),
     },
     process.env.SES_REGION ?? "ca-central-1",
   ),
