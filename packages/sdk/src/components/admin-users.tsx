@@ -322,12 +322,13 @@ export function AdminUsersTable({
           },
         }}
         state={tableRequest.search}
-        onStateChange={({ page, pageSize, globalFilter, sort }) => {
+        onStateChange={({ page, pageSize, globalFilter, sort, filters }) => {
           const nextSearch = Schema.decodeUnknownSync(Query)({
             page,
             pageSize,
             globalFilter,
             sort,
+            filters,
           });
           setTableRequest((current) => ({
             ...current,
@@ -408,6 +409,7 @@ const userColumns = (
   {
     field: "organizations",
     headerName: m.admin_column_organizations,
+    filterable: false,
     type: "list",
     typeOptions: {
       emptyLabel: "-",
@@ -430,6 +432,7 @@ const userColumns = (
   {
     field: "projects",
     headerName: m.admin_column_projects,
+    filterable: false,
     type: "list",
     typeOptions: {
       emptyLabel: "-",
@@ -452,6 +455,11 @@ const userColumns = (
   {
     field: "emailVerified",
     headerName: m.admin_column_verified,
+    type: "boolean",
+    typeOptions: {
+      trueLabel: m.admin_column_verified,
+      falseLabel: m.admin_column_unverified,
+    },
     cellRenderer: ({ data }) =>
       data.emailVerified ? (
         <Badge variant="outline">{m.admin_column_verified}</Badge>
@@ -462,6 +470,7 @@ const userColumns = (
   {
     field: "role",
     headerName: m.admin_column_role,
+    filterValueGetter: ({ data }) => data.role ?? "user",
     cellRenderer: ({ data }) => {
       const role = data.role;
       if (!role) return <Badge variant="outline">{m.user_role_default}</Badge>;
@@ -482,6 +491,12 @@ const userColumns = (
   {
     field: "banned",
     headerName: m.admin_column_status,
+    type: "boolean",
+    filterValueGetter: ({ data }) => Boolean(data.banned),
+    typeOptions: {
+      trueLabel: m.admin_status_banned,
+      falseLabel: m.admin_status_active,
+    },
     cellRenderer: ({ data }) =>
       data.banned ? (
         <Badge variant="destructive">{m.admin_status_banned}</Badge>
@@ -492,6 +507,7 @@ const userColumns = (
   {
     field: "lastSignedIn",
     headerName: m.admin_column_last_signed_in,
+    type: "dateTime",
     cellRenderer: ({ data }) => (
       <span className="text-muted-foreground text-sm">
         {data.lastSignedIn ? new Date(data.lastSignedIn).toLocaleString() : "-"}
@@ -501,6 +517,7 @@ const userColumns = (
   {
     field: "createdAt",
     headerName: m.admin_column_created,
+    type: "date",
     cellRenderer: ({ data }) => (
       <span className="text-muted-foreground text-sm">
         {new Date(data.createdAt).toLocaleDateString()}

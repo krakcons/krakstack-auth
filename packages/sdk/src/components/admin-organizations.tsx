@@ -380,12 +380,13 @@ export function AdminOrganizationsTable({
           },
         }}
         state={tableRequest.search}
-        onStateChange={({ page, pageSize, globalFilter, sort }) => {
+        onStateChange={({ page, pageSize, globalFilter, sort, filters }) => {
           const nextSearch = Schema.decodeUnknownSync(Query)({
             page,
             pageSize,
             globalFilter,
             sort,
+            filters,
           });
           setTableRequest((current) => ({
             ...current,
@@ -462,6 +463,7 @@ const organizationColumns = (
   {
     field: "memberCount",
     headerName: m.admin_column_members,
+    filterable: false,
     type: "list",
     typeOptions: {
       emptyLabel: "0",
@@ -504,6 +506,11 @@ const organizationColumns = (
   {
     field: "userId",
     headerName: m.organization_type,
+    filterOptions: [
+      { value: "personal", label: m.organization_type_personal },
+      { value: "standard", label: m.organization_type_standard },
+    ],
+    filterValueGetter: ({ data }) => (data.userId ? "personal" : "standard"),
     cellRenderer: ({ data }) => (
       <Badge variant={data.userId ? "secondary" : "outline"}>
         {data.userId
@@ -515,6 +522,7 @@ const organizationColumns = (
   {
     field: "projects",
     headerName: m.admin_column_projects,
+    filterable: false,
     type: "list",
     typeOptions: {
       emptyLabel: "-",
@@ -537,6 +545,7 @@ const organizationColumns = (
   {
     field: "createdAt",
     headerName: m.admin_column_created,
+    type: "date",
     cellRenderer: ({ data }) => (
       <span className="text-muted-foreground text-sm">
         {new Date(data.createdAt).toLocaleDateString()}

@@ -16,6 +16,7 @@ import {
 } from "@/services/auth/api-key-referrers";
 import { Domains } from "@/services/domains";
 import { Organizations } from "@/services/organizations";
+import { adminFilterPredicate } from "./filters";
 import {
   AdminListRequest,
   AdminOrganizationRow,
@@ -341,6 +342,7 @@ export const adminApiHandler = HttpApiBuilder.group(
           const sql = yield* SqlClient.SqlClient;
           const pattern = `%${query.globalFilter?.trim() ?? ""}%`;
           const filters = sql`WHERE (u.name ILIKE ${pattern} OR u.email ILIKE ${pattern} OR u.role ILIKE ${pattern})
+      AND ${adminFilterPredicate(sql, query.filters, "user")}
       ${query.projectId ? sql`AND EXISTS (SELECT 1 FROM project_user pu WHERE pu.user_id = u.id AND pu.project_id = ${query.projectId})` : sql``}`;
           const totals = yield* SqlSchema.findOne({
             Request: Schema.Void,
@@ -392,6 +394,7 @@ export const adminApiHandler = HttpApiBuilder.group(
           const sql = yield* SqlClient.SqlClient;
           const pattern = `%${query.globalFilter?.trim() ?? ""}%`;
           const filters = sql`WHERE (o.name ILIKE ${pattern} OR o.slug ILIKE ${pattern} OR o.logo ILIKE ${pattern})
+      AND ${adminFilterPredicate(sql, query.filters, "organization")}
       ${query.projectId ? sql`AND EXISTS (SELECT 1 FROM project_organization po WHERE po.organization_id = o.id AND po.project_id = ${query.projectId})` : sql``}`;
           const totals = yield* SqlSchema.findOne({
             Request: Schema.Void,

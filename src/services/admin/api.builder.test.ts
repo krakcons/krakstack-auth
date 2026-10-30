@@ -69,6 +69,42 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)("Admin SQL handlers", () => {
         ]);
         expect(users.data[0]?.lastSignedIn).toBeInstanceOf(Date);
         expect(users.data[0]?.lastSignedIn?.getTime()).toBe(now.getTime());
+        const day = now.toISOString().slice(0, 10);
+        const filteredUsers = yield* client.admin.listUsers({
+          query: {
+            ...query,
+            filters: [
+              { id: "email", kind: "text", operator: "startsWith", value: id },
+              { id: "banned", kind: "boolean", value: false },
+              { id: "lastSignedIn", kind: "date", from: day, to: day },
+            ],
+            pageSize: 1,
+            page: 1,
+          },
+        });
+        expect(filteredUsers.data).toEqual([]);
+        expect(filteredUsers.meta.total).toBe(1);
+        for (const value of ["%", "_", "' OR 1=1 --"]) {
+          expect(
+            (yield* client.admin.listUsers({
+              query: {
+                ...query,
+                filters: [
+                  { id: "email", kind: "text", operator: "contains", value },
+                ],
+              },
+            })).meta.total,
+          ).toBe(0);
+        }
+        expect(
+          (yield* client.admin.listUsers({
+            query: {
+              ...query,
+              projectId: `${id}-missing`,
+              filters: [{ id: "banned", kind: "boolean", value: false }],
+            },
+          })).meta.total,
+        ).toBe(0);
         const organizations = yield* client.admin.listOrganizations({ query });
         expect(organizations.meta.total).toBe(1);
         expect(organizations.data[0]?.memberCount).toBe(1);
@@ -79,6 +115,34 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)("Admin SQL handlers", () => {
         expect(organizations.data[0]?.projects).toEqual([
           { id, name: id, logo: null },
         ]);
+        expect(
+          (yield* client.admin.listOrganizations({
+            query: {
+              ...query,
+              filters: [
+                { id: "userId", kind: "values", values: ["personal"] },
+                { id: "createdAt", kind: "date", from: day, to: day },
+              ],
+            },
+          })).meta.total,
+        ).toBe(1);
+        expect(
+          (yield* client.admin.listOrganizations({
+            query: {
+              ...query,
+              filters: [{ id: "userId", kind: "values", values: ["standard"] }],
+            },
+          })).meta.total,
+        ).toBe(0);
+        expect(
+          (yield* client.admin.listOrganizations({
+            query: {
+              ...query,
+              projectId: `${id}-missing`,
+              filters: [{ id: "userId", kind: "values", values: ["personal"] }],
+            },
+          })).meta.total,
+        ).toBe(0);
         const stats = yield* client.admin.dashboardStats({
           query: { days: "7" },
         });

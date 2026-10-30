@@ -1,7 +1,12 @@
 import { Schema } from "effect";
 import { ApiKeyPermissionGrant } from "../access.js";
 
-import { PaginatedResponse, Query } from "@krak-stack/registry/query";
+import {
+  ColumnFilter,
+  ColumnFilters,
+  PaginatedResponse,
+  Query,
+} from "@krak-stack/registry/query";
 
 import {
   ServerCreateDomainPayload,
@@ -21,6 +26,68 @@ export const AdminListQuery = Schema.Struct({
     "Paginated administrative list query optionally scoped to linked project records.",
   examples: [{ page: 0, pageSize: 10, projectId: "project-id" }],
 });
+
+export const AdminUserColumnFilter = ColumnFilter.check(
+  Schema.makeFilter((filter) => {
+    switch (filter.id) {
+      case "name":
+      case "email":
+      case "role":
+        return filter.kind === "text";
+      case "emailVerified":
+      case "banned":
+        return filter.kind === "boolean";
+      case "createdAt":
+      case "lastSignedIn":
+        return filter.kind === "date";
+      default:
+        return false;
+    }
+  }),
+).annotate({ identifier: "AdminUserColumnFilter" });
+
+export const AdminOrganizationColumnFilter = ColumnFilter.check(
+  Schema.makeFilter((filter) => {
+    switch (filter.id) {
+      case "name":
+      case "slug":
+        return filter.kind === "text";
+      case "createdAt":
+        return filter.kind === "date";
+      case "userId":
+        return (
+          filter.kind === "values" &&
+          filter.values.every((value) =>
+            ["personal", "standard"].includes(value),
+          )
+        );
+      default:
+        return false;
+    }
+  }),
+).annotate({ identifier: "AdminOrganizationColumnFilter" });
+
+export const AdminUserListQuery = Schema.Struct({
+  ...AdminListQuery.fields,
+  filters: Schema.optional(
+    ColumnFilters.check(
+      Schema.makeFilter((filters) =>
+        filters.every(Schema.is(AdminUserColumnFilter)),
+      ),
+    ),
+  ),
+}).annotate({ identifier: "AdminUserListQuery" });
+
+export const AdminOrganizationListQuery = Schema.Struct({
+  ...AdminListQuery.fields,
+  filters: Schema.optional(
+    ColumnFilters.check(
+      Schema.makeFilter((filters) =>
+        filters.every(Schema.is(AdminOrganizationColumnFilter)),
+      ),
+    ),
+  ),
+}).annotate({ identifier: "AdminOrganizationListQuery" });
 
 export const AdminProjectPreview = Schema.Struct({
   id: Schema.String,

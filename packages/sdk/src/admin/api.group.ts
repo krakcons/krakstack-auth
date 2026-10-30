@@ -10,7 +10,8 @@ import {
   AdminCreateOrganizationPayload,
   AdminApiKey,
   AdminApiKeyIdParams,
-  AdminListQuery,
+  AdminUserListQuery,
+  AdminOrganizationListQuery,
   AdminOrganization,
   AdminOrganizationIdParams,
   AdminUpdateApiKeyPayload,
@@ -171,7 +172,7 @@ export const AdminApiGroup = HttpApiGroup.make("admin")
   )
   .add(
     HttpApiEndpoint.get("listUsers", "/admin/users", {
-      query: AdminListQuery.fields,
+      query: AdminUserListQuery.fields,
       success: PaginatedAdminUsers,
       error: [
         HttpApiError.Unauthorized,
@@ -189,7 +190,7 @@ export const AdminApiGroup = HttpApiGroup.make("admin")
   )
   .add(
     HttpApiEndpoint.get("listOrganizations", "/admin/organizations", {
-      query: AdminListQuery.fields,
+      query: AdminOrganizationListQuery.fields,
       success: PaginatedAdminOrganizations,
       error: [
         HttpApiError.Unauthorized,

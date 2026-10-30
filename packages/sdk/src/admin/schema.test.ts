@@ -1,9 +1,72 @@
 import { describe, expect, it } from "@effect/vitest";
 import { Schema } from "effect";
 
-import { AdminListQuery } from "./schema.js";
+import {
+  AdminListQuery,
+  AdminUserListQuery,
+  AdminOrganizationListQuery,
+} from "./schema.js";
 
 describe("AdminListQuery", () => {
+  it("round-trips validated column filters with project scope through HTTP and atom keys", () => {
+    const filters = [
+      { id: "email", kind: "text", operator: "contains", value: "example.com" },
+      { id: "emailVerified", kind: "boolean", value: false },
+      { id: "createdAt", kind: "date", from: "2026-01-01", to: "2026-01-31" },
+    ];
+    const query = Schema.decodeUnknownSync(AdminUserListQuery)({
+      filters,
+      projectId: "project-a",
+    });
+    const http = Schema.toCodecStringTree(AdminUserListQuery);
+    expect(
+      Schema.decodeUnknownSync(http)(Schema.encodeSync(http)(query)),
+    ).toEqual(query);
+    const atom = Schema.fromJsonString(AdminListQuery);
+    expect(
+      Schema.decodeUnknownSync(atom)(Schema.encodeSync(atom)(query)),
+    ).toEqual(query);
+    expect(
+      Schema.decodeUnknownSync(AdminOrganizationListQuery)({
+        filters: [
+          { id: "userId", kind: "values", values: ["standard", "personal"] },
+        ],
+      }).filters,
+    ).toHaveLength(1);
+  });
+
+  it("rejects unsupported IDs, mismatched kinds, and unknown organization types", () => {
+    for (const filter of [
+      {
+        id: "email; DROP TABLE user",
+        kind: "text",
+        operator: "contains",
+        value: "a",
+      },
+      {
+        id: "emailVerified",
+        kind: "text",
+        operator: "contains",
+        value: "true",
+      },
+      { id: "projects", kind: "values", values: ["project-a"] },
+    ])
+      expect(() =>
+        Schema.decodeUnknownSync(AdminUserListQuery)({ filters: [filter] }),
+      ).toThrow();
+    expect(() =>
+      Schema.decodeUnknownSync(AdminOrganizationListQuery)({
+        filters: [{ id: "userId", kind: "values", values: ["unknown"] }],
+      }),
+    ).toThrow();
+    expect(() =>
+      Schema.decodeUnknownSync(AdminOrganizationListQuery)({
+        filters: [
+          { id: "email", kind: "text", operator: "equals", value: "a" },
+        ],
+      }),
+    ).toThrow();
+  });
   it("decodes numeric pagination strings and supplies Registry defaults", () => {
     expect(
       Schema.decodeUnknownSync(AdminListQuery)({ page: "0", pageSize: "10" }),

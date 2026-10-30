@@ -1,5 +1,11 @@
 # @krak-stack/auth
 
+## 0.2.31
+
+### Patch Changes
+
+- Preserve shared table column filters through admin user and organization query state and HTTP requests. Validate endpoint-specific fields and filter kinds, apply parameterized predicates before pagination and counting, and retain project scope. Configure typed boolean/date and organization-type controls; hide preview-only relationship filters until full option catalogs are available. Require registry 0.1.58 or later for the shared filter and menu updates.
+
 ## 0.2.30
 
 ### Patch Changes
