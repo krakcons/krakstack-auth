@@ -5,6 +5,8 @@
   "webhooks_disabled": "Disabled",
   "webhooks_status": "Status",
   "webhooks_activity": "Activity",
+  "project_webhook_secret_show": "Show signing secret",
+  "project_webhook_secret_hide": "Hide signing secret",
   "webhooks_event": "Event",
   "audit_event_user_deletion_requested": "Account deletion requested",
   "audit_event_organization_deletion_requested": "Organization deletion requested",

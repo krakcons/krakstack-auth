@@ -2,12 +2,21 @@ import { useAtomSet, useAtomValue } from "@effect/atom-react";
 import { AsyncResult, Atom, Reactivity } from "effect/reactivity";
 import { Effect, Schema } from "effect";
 import { useState } from "react";
+import { Eye, EyeOff } from "lucide-react";
 import { CopyButton } from "@krak-stack/registry/copy-button";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Separator } from "@/components/ui/separator";
 import { FieldLabel } from "@/components/ui/field";
+import {
+  InputGroup,
+  InputGroupAddon,
+  InputGroupButton,
+  InputGroupInput,
+} from "@/components/ui/input-group";
 import { AdminApiClient } from "@/lib/admin-api-client";
 import { m } from "@/paraglide/messages";
+import { getLocale } from "@/paraglide/runtime";
 import { ConfigureProjectWebhook } from "@/services/webhooks/schema";
 
 const endpoints = Atom.family((projectId: string) =>
@@ -40,6 +49,7 @@ export const ProjectWebhook = ({ projectId }: { projectId: string }) => {
   const result = useAtomValue(saves(projectId));
   const save = useAtomSet(saves(projectId));
   const [url, setUrl] = useState<string | undefined>();
+  const [secretRevealed, setSecretRevealed] = useState(false);
   const endpoint = AsyncResult.match(current, {
     onInitial: () => null,
     onFailure: () => null,
@@ -49,7 +59,51 @@ export const ProjectWebhook = ({ projectId }: { projectId: string }) => {
   const valid = Schema.is(ConfigureProjectWebhook)({ url: value });
   const invalid = value.length > 0 && !valid;
   return (
-    <section className="mt-6 flex flex-col gap-3 border-t pt-4">
+    <section className="flex flex-col gap-3 pt-4">
+      {endpoint ? (
+        <section className="flex flex-wrap items-end justify-between gap-2">
+          <div className="flex flex-col gap-1.5">
+            <h3 className="font-medium">{m.project_webhook_secret()}</h3>
+            <p className="text-muted-foreground text-sm">
+              {m.project_webhook_secret_help()}
+            </p>
+          </div>
+          <InputGroup className="w-fit max-w-full">
+            <InputGroupInput
+              aria-label={m.project_webhook_secret()}
+              className="flex-initial font-mono"
+              style={{ width: `calc(${endpoint.secret.length}ch + 1.25rem)` }}
+              type={secretRevealed ? "text" : "password"}
+              autoComplete="off"
+              readOnly
+              value={endpoint.secret}
+              onFocus={(event) => event.currentTarget.select()}
+            />
+            <InputGroupAddon align="inline-end">
+              <InputGroupButton
+                size="icon-sm"
+                aria-label={
+                  secretRevealed
+                    ? m.project_webhook_secret_hide()
+                    : m.project_webhook_secret_show()
+                }
+                aria-pressed={secretRevealed}
+                onClick={() => setSecretRevealed((revealed) => !revealed)}
+              >
+                {secretRevealed ? <EyeOff /> : <Eye />}
+              </InputGroupButton>
+              <CopyButton
+                value={endpoint.secret}
+                valueDescription={m.project_webhook_secret()}
+                locale={getLocale()}
+                variant="ghost"
+                copyVariant="large"
+              />
+            </InputGroupAddon>
+          </InputGroup>
+        </section>
+      ) : null}
+      {endpoint ? <Separator className="my-4" /> : null}
       <h3 className="font-medium">{m.project_webhook_title()}</h3>
       <p className="text-muted-foreground text-sm">
         {m.project_webhook_description()}
@@ -93,28 +147,6 @@ export const ProjectWebhook = ({ projectId }: { projectId: string }) => {
           <p role="alert">{m.project_webhook_error()}</p>
         ) : null}
       </form>
-      {endpoint ? (
-        <div className="flex flex-col gap-2">
-          <FieldLabel htmlFor={`webhook-secret-${projectId}`}>
-            {m.project_webhook_secret()}
-          </FieldLabel>
-          <div className="flex gap-2">
-            <Input
-              id={`webhook-secret-${projectId}`}
-              type="password"
-              readOnly
-              value={endpoint.secret}
-            />
-            <CopyButton
-              value={endpoint.secret}
-              valueDescription={m.project_webhook_secret()}
-            />
-          </div>
-          <p className="text-muted-foreground text-sm">
-            {m.project_webhook_secret_help()}
-          </p>
-        </div>
-      ) : null}
     </section>
   );
 };

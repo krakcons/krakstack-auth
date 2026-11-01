@@ -389,10 +389,7 @@ export const sendEmailVerificationOtpEmail = async ({
   readonly to: string;
   readonly otp: string;
   readonly type:
-    | "sign-in"
-    | "email-verification"
-    | "forget-password"
-    | "change-email";
+    "sign-in" | "email-verification" | "forget-password" | "change-email";
 }) => {
   await writeLocalOtp(to, type, otp);
   const locale = await runWithDatabase(
