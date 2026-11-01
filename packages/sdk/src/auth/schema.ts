@@ -625,6 +625,10 @@ export const RemoveMemberPayload = Schema.Struct({
   title: "Remove member payload",
 });
 
+export const DeleteOrganizationPayload = Schema.Struct({
+  organizationId: Schema.NonEmptyString,
+}).annotate({ identifier: "DeleteOrganizationPayload" });
+
 export const LeaveOrganizationPayload = Schema.Struct({
   organizationId: Schema.String,
 }).annotate({

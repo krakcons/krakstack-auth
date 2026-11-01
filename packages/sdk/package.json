@@ -80,7 +80,7 @@
     "react-qr-code": "^2.2.0"
   },
   "devDependencies": {
-    "@krak-stack/registry": "file:/Users/billyhawkes/Projects/kokobi/tmp/registry-webhooks-local-v1.tgz"
+    "@krak-stack/registry": "file:/Users/billyhawkes/Projects/kokobi/tmp/registry-signed-webhook-id-v1.tgz"
   },
   "peerDependencies": {
     "@krak-stack/registry": "^0.1.58",

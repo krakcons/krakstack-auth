@@ -1,7 +1,9 @@
 import { Option, Schema, SchemaGetter } from "effect";
 
 export const AuthWebhookData = Schema.StructWithRest(
-  Schema.Struct({ version: Schema.Literal(1), requestId: Schema.NonEmptyString, projectId: Schema.NonEmptyString }),
+  Schema.Struct({
+    projectId: Schema.NonEmptyString,
+  }),
   [Schema.Record(Schema.String, Schema.Json)],
 ).annotate({ identifier: "AuthWebhookData" });
 export const AuthWebhook = Schema.Struct({
@@ -10,8 +12,6 @@ export const AuthWebhook = Schema.Struct({
 }).annotate({ identifier: "AuthWebhook" });
 
 export const AccountDeletionData = Schema.Struct({
-  version: Schema.Literal(1),
-  requestId: Schema.NonEmptyString,
   projectId: Schema.NonEmptyString,
   userId: Schema.NonEmptyString,
   scope: Schema.Literal("account"),
@@ -21,6 +21,17 @@ export const AccountDeletionWebhook = Schema.Struct({
   event: Schema.Literal("user.deletion_requested"),
   data: AccountDeletionData,
 }).annotate({ identifier: "AccountDeletionWebhook" });
+
+export const OrganizationDeletionData = Schema.Struct({
+  projectId: Schema.NonEmptyString,
+  organizationId: Schema.NonEmptyString,
+  scope: Schema.Literal("organization"),
+}).annotate({ identifier: "OrganizationDeletionData" });
+
+export const OrganizationDeletionWebhook = Schema.Struct({
+  event: Schema.Literal("organization.deletion_requested"),
+  data: OrganizationDeletionData,
+}).annotate({ identifier: "OrganizationDeletionWebhook" });
 
 export const Session = Schema.Struct({
   id: Schema.String,

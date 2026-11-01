@@ -59,7 +59,7 @@ Use `AuthMiddleware.layer()` to provide request headers and configuration in an 
 
 ### Auth webhooks (development)
 
-`AuthMiddleware.layer({ onDeleteUser })` requires a cleanup callback; there is no opt-out or default
+`AuthMiddleware.layer({ onDeleteUser, onDeleteOrganization })` requires both cleanup callbacks; there is no opt-out or default
 successful cleanup. The SDK automatically mounts `POST /api/webhooks/auth`.
 Every consuming project supplies only its application-specific SQL cleanup:
 
@@ -69,6 +69,7 @@ import { Layer } from "effect";
 
 const authentication = AuthMiddleware.layer({
   onDeleteUser: ({ userId }) => eraseLocalUserData(userId),
+  onDeleteOrganization: ({ organizationId }) => eraseLocalOrganizationData(organizationId),
   // Optional: handle other Auth events. Validate event-specific data here.
   onWebhook: (webhook) => handleOtherAuthEvent(webhook),
 }).pipe(Layer.provide(databaseLayer));
@@ -82,14 +83,21 @@ Do not perform external side effects or launch unawaited work in the callback.
 
 The middleware uses `WebhooksReceiver` from `@krak-stack/registry/webhooks`.
 Receiver migrations create only deduplication receipts, not delivery tables or
-workers. Signed `user.deletion_requested` envelopes have version `1` and data
-fields `requestId`, `projectId`, `userId`, and `scope: "account"`. Requests are
+workers. Signed `user.deletion_requested` envelopes have data
+fields `projectId`, `userId`, and `scope: "account"`. Requests are
 HMAC-authenticated, project-validated, limited to 16 KiB, and acknowledged only
 after commit. The timestamp window is five minutes. Duplicates return 204;
-changed content under the same signed event type and request ID returns 409. Other
+changed content under the same signed `webhook-id` returns 409.
+`organization.deletion_requested` routes validated data (
+`projectId`, `organizationId`, `scope: "organization"`) to `onDeleteOrganization`.
+Neither deletion event routes to `onWebhook`. Other
 events retain their event-specific JSON data and route to `onWebhook`; without a
 handler they return 400, never a successful acknowledgement. Cleanup failures
 roll back the receipt and return 500 so delivery can retry.
+
+Signatures cover `${webhookId}.${timestamp}.${rawBody}`. Upgrade sender and receiver
+together: legacy signatures over only timestamp/body are rejected. Neither `requestId`
+nor `version` is required in webhook data.
 
 Explicitly schedule `WebhooksReceiver.cleanup()` for receipts older than 30 days;
 handlers must remain idempotent after expiry. Central Auth uses Better Auth's
@@ -101,7 +109,7 @@ callback covers all personal data. Inventory invitations, logs, exports,
 processors, and backups before claiming complete erasure. Development uses
 local tarballs until the matching registry and Auth releases are published.
 
-**Français :** `AuthMiddleware.layer({ onDeleteUser })` exige la fonction de nettoyage et monte la route de
+**Français :** `AuthMiddleware.layer({ onDeleteUser, onDeleteOrganization })` exige les deux fonctions de nettoyage et monte la route de
 réception automatiquement. Chaque projet doit fournir son nettoyage SQL et le
 secret de signature côté serveur ; une configuration absente empêche le
 démarrage. Le reçu et le nettoyage sont validés dans la même transaction.
@@ -111,9 +119,13 @@ des reçus après 30 jours et conserver un traitement idempotent. Le parcours de
 suppression central utilise Better Auth et notifie les projets après suppression
 de l’utilisateur. Configurez l’URL du webhook et son secret de signature dans le
 projet. Les administrateurs de plateforme et propriétaires d’organisation doivent
-d’abord transférer leurs rôles. Le gestionnaire facultatif `onWebhook` reçoit les
+d’abord transférer leurs rôles. `onDeleteUser` reçoit les données validées de suppression du compte ;
+`onDeleteOrganization` reçoit celles de suppression de l’organisation.
+Le gestionnaire facultatif `onWebhook` reçoit les
 autres événements avec leurs données JSON ; sans gestionnaire, ils retournent 400.
-La déduplication associe le type d’événement et l’identifiant de requête signé.
+La déduplication utilise l’en-tête `webhook-id` signé. Aucun `requestId` n’est requis dans les données.
+La signature couvre `${webhookId}.${timestamp}.${rawBody}`. Mettre à jour les deux côtés ensemble :
+les anciennes signatures sont refusées. Aucun champ `version` n’est requis dans les données.
 Ce mécanisme ne garantit pas, à lui seul, la conformité ou l’effacement complet.
 
 `AuthMiddleware` also annotates request logs and spans with verified user,

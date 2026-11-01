@@ -12,8 +12,20 @@ import {
 } from "../schema.js";
 
 export const ExtraAccountDeletionPlan = Schema.Struct({
-  projects: Schema.Array(Schema.Struct({ id: Schema.String, name: Schema.String, ready: Schema.Boolean })),
-  organizations: Schema.Array(Schema.Struct({ id: Schema.String, name: Schema.String })),
+  projects: Schema.Array(
+    Schema.Struct({
+      id: Schema.String,
+      name: Schema.String,
+      ready: Schema.Boolean,
+    }),
+  ),
+  organizations: Schema.Array(
+    Schema.Struct({
+      id: Schema.String,
+      name: Schema.String,
+      personal: Schema.Boolean,
+    }),
+  ),
   adminAccount: Schema.Boolean,
 }).annotate({ identifier: "ExtraAccountDeletionPlan" });
 

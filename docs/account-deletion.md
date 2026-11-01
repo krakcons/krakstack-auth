@@ -21,8 +21,8 @@ Delivery failures do not restore the central identity; they retry independently.
 
 Set the project's **Webhook URL** to its HTTPS `/api/webhooks/auth` endpoint. Copy
 the **Signing secret** to server-only `KRAKSTACK_AUTH_WEBHOOK_SECRET` on the receiver.
-Use `AuthMiddleware.layer({ onDeleteUser })` with the same SQL pool as cleanup.
-Only `onDeleteUser` is required; optional `onWebhook` handles future event types.
+Use `AuthMiddleware.layer({ onDeleteUser, onDeleteOrganization })` with the same SQL pool as cleanup.
+Both deletion callbacks are required; optional `onWebhook` handles other event types.
 The endpoint accepts all published project Auth event types, but only deletion is
 currently published by this flow. It does not forward every internal audit event.
 

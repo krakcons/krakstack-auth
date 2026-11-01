@@ -127,16 +127,18 @@ import {
 const messages = {
   en: {
     user_delete_title: "Delete account",
-    user_delete_description: "Permanently delete your central account and request personal-data cleanup from every connected project. Shared organization data is not deleted. Some records may be retained where legally required.",
+    user_delete_description: "Permanently delete your account and unshared personal organizations. This cannot be undone.",
     user_delete_projects: "Connected projects",
-    user_delete_missing: "Some projects need administrator setup. Their cleanup may require support after your account is deleted.",
-    user_delete_owner: "Transfer ownership or explicitly delete these organizations first:",
-    user_delete_admin: "Ask another administrator to remove your platform admin role before deleting your account.",
+    user_delete_organizations: "Organizations to resolve",
+    user_delete_retention: "Project cleanup is requested separately. Legal retention may apply.",
+    user_delete_missing: "Some projects need support to complete cleanup.",
+    user_delete_owner: "Transfer ownership or delete these in the organization switcher. Shared personal organizations need support.",
+    user_delete_admin: "Remove your platform admin role before continuing.",
     user_delete_confirm: "Type DELETE to confirm",
-    user_delete_password: "Current password (optional if you signed in within the last five minutes)",
+    user_delete_password: "Current password (if required)",
     user_delete_error: "Unable to delete your account. Check your password, or sign in again and retry.",
-    user_delete_load_error: "Loading deletion requirements. If this does not finish, close this dialog and retry.",
-    user_delete_complete: "Your central account is deleted. Project cleanup is processed separately and may need administrator attention; this is not confirmation that every retained copy has been erased.",
+    user_delete_load_error: "Loading requirements… Close and retry if this takes too long.",
+    user_delete_complete: "Your account is deleted. Project cleanup may still be pending; retained records are not necessarily erased.",
     user_delete_done: "Done",
     table_empty: "No results.",
     user_account_cancel: "Cancel",
@@ -309,16 +311,18 @@ const messages = {
   },
   fr: {
     user_delete_title: "Supprimer le compte",
-    user_delete_description: "Supprimez définitivement votre compte central et demandez le nettoyage des données personnelles dans chaque projet lié. Les données partagées des organisations ne sont pas supprimées. Certains dossiers peuvent être conservés lorsque la loi l’exige.",
+    user_delete_description: "Supprimez définitivement votre compte et vos organisations personnelles non partagées. Cette action est irréversible.",
     user_delete_projects: "Projets liés",
-    user_delete_missing: "Certains projets nécessitent une configuration administrateur. Leur nettoyage peut demander une intervention après la suppression du compte.",
-    user_delete_owner: "Transférez la propriété ou supprimez explicitement ces organisations d’abord :",
-    user_delete_admin: "Demandez à un autre administrateur de retirer votre rôle administrateur de la plateforme avant de supprimer votre compte.",
+    user_delete_organizations: "Organisations à régler",
+    user_delete_retention: "Le nettoyage des projets est demandé séparément. Une conservation légale peut s’appliquer.",
+    user_delete_missing: "Certains projets nécessitent l’assistance pour terminer le nettoyage.",
+    user_delete_owner: "Transférez la propriété ou supprimez ces organisations dans le sélecteur. Les organisations personnelles partagées nécessitent l’assistance.",
+    user_delete_admin: "Retirez votre rôle administrateur de plateforme avant de continuer.",
     user_delete_confirm: "Saisissez DELETE pour confirmer",
-    user_delete_password: "Mot de passe actuel (facultatif si vous vous êtes connecté il y a moins de cinq minutes)",
+    user_delete_password: "Mot de passe actuel (si nécessaire)",
     user_delete_error: "Impossible de supprimer le compte. Vérifiez votre mot de passe ou reconnectez-vous, puis réessayez.",
-    user_delete_load_error: "Chargement des conditions de suppression. Si le chargement ne termine pas, fermez cette fenêtre et réessayez.",
-    user_delete_complete: "Votre compte central est supprimé. Le nettoyage des projets est traité séparément et peut nécessiter une intervention ; cela ne confirme pas l’effacement de toutes les copies conservées.",
+    user_delete_load_error: "Chargement des conditions… Fermez et réessayez si l’attente se prolonge.",
+    user_delete_complete: "Votre compte est supprimé. Le nettoyage des projets peut être en attente ; les données conservées ne sont pas nécessairement effacées.",
     user_delete_done: "Terminé",
     table_empty: "Aucun résultat.",
     user_account_cancel: "Annuler",
@@ -1104,7 +1108,7 @@ export const UserButton = ({
                   <DropdownMenuSeparator />
                 </>
               ) : null}
-              {!isImpersonating && !isOrganizationImpersonating ? <DropdownMenuItem onClick={() => setSettingsDialog("deleteAccount")}><Trash2 />{m.user_delete_title()}</DropdownMenuItem> : null}
+              {!isImpersonating && !isOrganizationImpersonating ? <DropdownMenuItem variant="destructive" onClick={() => setSettingsDialog("deleteAccount")}><Trash2 />{m.user_delete_title()}</DropdownMenuItem> : null}
               {(isAdmin && canUseAdminSettings) || isImpersonating ? (
                 <>
                   {isAdmin && canUseAdminSettings ? (
@@ -1164,6 +1168,7 @@ export const UserButton = ({
         onDeleted={() => { notifyAuthChange(); void navigate({ href: signOutRedirect }); }}
         labels={{
           title: m.user_delete_title(), description: m.user_delete_description(), projects: m.user_delete_projects(),
+          organizations: m.user_delete_organizations(), retention: m.user_delete_retention(),
           missing: m.user_delete_missing(), owner: m.user_delete_owner(), admin: m.user_delete_admin(),
           confirm: m.user_delete_confirm(), password: m.user_delete_password(), error: m.user_delete_error(),
           loadError: m.user_delete_load_error(), cancel: m.user_account_cancel(), submit: m.user_delete_title(),

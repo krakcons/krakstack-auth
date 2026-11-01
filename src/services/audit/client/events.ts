@@ -119,6 +119,14 @@ export const auditEventOptions = () => {
   ];
   return [
     {
+      value: "user.deletion_requested",
+      label: m.audit_event_user_deletion_requested(),
+    },
+    {
+      value: "organization.deletion_requested",
+      label: m.audit_event_organization_deletion_requested(),
+    },
+    {
       value: "organization.created",
       label: m.audit_event_organization_created(),
     },

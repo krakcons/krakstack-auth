@@ -21,8 +21,8 @@ chaque projet. Les échecs d’envoi sont réessayés sans restaurer l’identit
 
 Configurer **URL du webhook** avec le point d’entrée HTTPS `/api/webhooks/auth`.
 Copier le **Secret de signature** dans `KRAKSTACK_AUTH_WEBHOOK_SECRET`, uniquement
-côté serveur du récepteur. Utiliser `AuthMiddleware.layer({ onDeleteUser })` avec
-le même pool SQL que le nettoyage. Seul `onDeleteUser` est obligatoire ;
+côté serveur du récepteur. Utiliser `AuthMiddleware.layer({ onDeleteUser, onDeleteOrganization })` avec
+le même pool SQL que le nettoyage. Les deux fonctions de suppression sont obligatoires ;
 `onWebhook` est facultatif pour les futurs événements. Le point d’entrée accepte
 les types Auth publiés pour le projet, mais seul l’événement de suppression est
 actuellement publié par ce parcours, pas tous les événements d’audit internes.

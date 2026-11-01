@@ -49,8 +49,12 @@ import {
 } from "./audit-hooks";
 import { nativeAuditRuntime } from "@/services/audit/layer.server";
 import { accountDeletionRuntime } from "@/services/account-deletion/runtime.server";
-import { prepareNativeDeletion, captureNativeDeletion } from "@/services/account-deletion/hooks";
-import type { AccountDeletions } from "@/services/account-deletion";
+import {
+  prepareNativeDeletion,
+  captureNativeDeletion,
+  nativeDeletionInput,
+} from "@/services/account-deletion/hooks";
+import { AccountDeletions } from "@/services/account-deletion";
 
 const isDev = process.env.NODE_ENV === "development";
 
@@ -656,11 +660,29 @@ export const createAuth = ({
               );
             },
             beforeDeleteOrganization: async ({ organization }) => {
-              if (!organization.userId) return;
-
-              throw new APIError("FORBIDDEN", {
-                message: "Personal organizations cannot be deleted",
-              });
+              if (organization.userId) {
+                throw new APIError("FORBIDDEN", {
+                  message: "Personal organizations cannot be deleted",
+                });
+              }
+              await deletionRun(
+                Effect.gen(function* () {
+                  const service = yield* AccountDeletions;
+                  const input = yield* nativeDeletionInput(organization.id);
+                  yield* service.captureOrganization({
+                    organizationId: organization.id,
+                    requestId: input.requestId,
+                  });
+                }),
+              );
+            },
+            afterDeleteOrganization: async ({ organization }) => {
+              await runWithDatabase(
+                Effect.gen(function* () {
+                  const sql = yield* SqlClient.SqlClient;
+                  yield* sql`DELETE FROM apikey WHERE config_id = 'organization' AND reference_id = ${organization.id}`;
+                }),
+              );
             },
           },
         }),

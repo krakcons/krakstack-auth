@@ -54,6 +54,14 @@ import { AppBrand } from "@krak-stack/registry/app-brand";
 import { FieldSet } from "@/components/ui/field";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import {
+  AlertDialog,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { CopyButton } from "@krak-stack/registry/copy-button";
 import {
   Dialog,
@@ -99,6 +107,11 @@ import {
 } from "../roles.js";
 
 import { authClientApi, authHttpClient } from "./auth-client-api.js";
+import { adminOrganizationsMessages } from "./admin-organizations.js";
+import {
+  canDeleteOrganization,
+  requestOrganizationDeletion,
+} from "./organization-deletion-request.js";
 import {
   activeAuthOrganizationAtom,
   authOrganizationsAtom,
@@ -497,7 +510,10 @@ type OrganizationMessageFunction = (
   params?: Record<string, string | number>,
 ) => string;
 
-const interpolate = (value: string, params?: Record<string, string | number>) =>
+const interpolate = (
+  value: string,
+  params?: Record<string, string | number>,
+) =>
   params
     ? value.replace(/\{([^}]+)\}/g, (_, key: string) =>
         String(params[key] ?? `{${key}}`),
@@ -585,11 +601,7 @@ type OrganizationSummary = {
 };
 
 export type OrganizationSwitcherDialog =
-  | "create"
-  | "manage"
-  | "members"
-  | "apiKeys"
-  | "invitations";
+  "create" | "manage" | "members" | "apiKeys" | "invitations";
 type ApiKeySummary = Omit<ApiKey, "key">;
 type OrganizationMemberSummary = AuthMember;
 type OrganizationInvitationSummary = AuthInvitation;
@@ -1203,6 +1215,11 @@ export function OrganizationSwitcher({
     );
   const [uncontrolledDialog, setUncontrolledDialog] =
     useState<OrganizationSwitcherDialog | null>(defaultDialog);
+  const [deletingOrganization, setDeletingOrganization] = useState<{
+    id: string;
+    name: string;
+  } | null>(null);
+  const deletionLabels = adminOrganizationsMessages(auth?.locale ?? "en");
   const [editingOrganizationLocale, setEditingOrganizationLocale] =
     useState<OrganizationLocale>(currentOrganizationLocale);
   const dialog =
@@ -1503,12 +1520,42 @@ export function OrganizationSwitcher({
                       {m.user_button_api_keys()}
                     </DropdownMenuItem>
                   ) : null}
+                  {canDeleteOrganization(
+                    activeOrganization,
+                    session.user.id,
+                  ) ? (
+                    <DropdownMenuItem
+                      variant="destructive"
+                      onClick={() =>
+                        setDeletingOrganization({
+                          id: activeOrganization.id,
+                          name: activeOrganization.name,
+                        })
+                      }
+                    >
+                      <Trash2 />
+                      {deletionLabels.organization_action_delete}
+                    </DropdownMenuItem>
+                  ) : null}
                 </>
               ) : null}
             </DropdownMenuGroup>
           </DropdownMenuContent>
         </DropdownMenu>
       )}
+      {deletingOrganization ? (
+        <OrganizationDeletionDialog
+          key={deletingOrganization.id}
+          baseUrl={baseUrl}
+          organization={deletingOrganization}
+          onClose={() => setDeletingOrganization(null)}
+          onDeleted={() => {
+            setDeletingOrganization(null);
+            setDialog(null);
+            onChange?.(null);
+          }}
+        />
+      ) : null}
       <Dialog
         open={dialog === "create" && canCreateOrganization}
         onOpenChange={(open) => {
@@ -1680,6 +1727,79 @@ export function OrganizationSwitcher({
     </OrganizationMessagesContext.Provider>
   );
 }
+
+const OrganizationDeletionDialog = ({
+  baseUrl,
+  organization,
+  onClose,
+  onDeleted,
+}: {
+  baseUrl: string | undefined;
+  organization: { id: string; name: string };
+  onClose: () => void;
+  onDeleted: () => void;
+}) => {
+  const auth = useKrakstackAuth();
+  const labels = adminOrganizationsMessages(auth?.locale ?? "en");
+  // Cross-project deletion cannot be predicted or rolled back on the client.
+  const [mutation] = useState(() =>
+    authClientApi(baseUrl).runtime.fn(() =>
+      requestOrganizationDeletion(organization.id, baseUrl).pipe(
+        Effect.tap(() =>
+          Effect.sync(() => {
+            notifyAuthChange();
+            onDeleted();
+          }),
+        ),
+      ),
+    ),
+  );
+  const remove = useAtomSet(mutation);
+  const result = useAtomValue(mutation);
+  return (
+    <AlertDialog
+      open
+      onOpenChange={(open) => {
+        if (!open && !result.waiting) onClose();
+      }}
+    >
+      <AlertDialogContent>
+        <AlertDialogHeader>
+          <AlertDialogTitle>
+            {labels.organization_delete_title}
+          </AlertDialogTitle>
+          <AlertDialogDescription>
+            {labels.organization_delete_description.replace(
+              "{name}",
+              organization.name,
+            )}
+          </AlertDialogDescription>
+        </AlertDialogHeader>
+        {AsyncResult.isFailure(result) ? (
+          <p role="alert">{labels.organization_delete_error}</p>
+        ) : null}
+        <AlertDialogFooter>
+          <Button
+            type="button"
+            variant="outline"
+            disabled={result.waiting}
+            onClick={onClose}
+          >
+            {labels.organization_delete_cancel}
+          </Button>
+          <Button
+            type="button"
+            variant="destructive"
+            disabled={result.waiting}
+            onClick={() => remove()}
+          >
+            {labels.organization_delete_confirm}
+          </Button>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
+  );
+};
 
 function UserInvitationsManager({
   baseUrl,

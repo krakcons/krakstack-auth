@@ -3,6 +3,7 @@ import { HttpApiEndpoint, HttpApiGroup, OpenApi } from "effect/http-api";
 
 import {
   DeleteUserPayload,
+  DeleteOrganizationPayload,
   DeleteUserResponse,
   AdminBanUserPayload,
   AdminStopImpersonatingPayload,
@@ -94,11 +95,19 @@ const docs = (title: string, description: string) =>
   OpenApi.annotations({ title, summary: title, description });
 
 export const AuthApiGroup = HttpApiGroup.make("auth")
-  .add(HttpApiEndpoint.post("deleteUser", "/delete-user", {
-    payload: DeleteUserPayload,
-    success: DeleteUserResponse,
-    error: [AuthBadRequest, AuthUnauthorized, AuthForbidden, AuthNotFound, AuthInternalServerError],
-  }))
+  .add(
+    HttpApiEndpoint.post("deleteUser", "/delete-user", {
+      payload: DeleteUserPayload,
+      success: DeleteUserResponse,
+      error: [
+        AuthBadRequest,
+        AuthUnauthorized,
+        AuthForbidden,
+        AuthNotFound,
+        AuthInternalServerError,
+      ],
+    }),
+  )
   .add(
     HttpApiEndpoint.get("getSession", "/get-session", {
       query: GetSessionQuery.fields,
@@ -325,6 +334,18 @@ export const AuthApiGroup = HttpApiGroup.make("auth")
       success: AuthOrganization,
       error: errors,
     }).annotateMerge(docs("Create organization", "Creates an organization.")),
+  )
+  .add(
+    HttpApiEndpoint.post("organizationDelete", "/organization/delete", {
+      payload: DeleteOrganizationPayload,
+      success: AuthOrganization,
+      error: errors,
+    }).annotateMerge(
+      docs(
+        "Delete organization",
+        "Permanently deletes an organization owned by the current user. Personal organizations are protected.",
+      ),
+    ),
   )
   .add(
     HttpApiEndpoint.post("organizationUpdate", "/organization/update", {
