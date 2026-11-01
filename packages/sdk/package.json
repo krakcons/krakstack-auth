@@ -11,6 +11,10 @@
   "type": "module",
   "sideEffects": false,
   "exports": {
+    "./server/webhooks": {
+      "types": "./dist/server/webhooks.d.ts",
+      "default": "./dist/server/webhooks.js"
+    },
     ".": {
       "types": "./dist/index.d.ts",
       "default": "./dist/index.js"
@@ -76,7 +80,7 @@
     "react-qr-code": "^2.2.0"
   },
   "devDependencies": {
-    "@krak-stack/registry": "0.1.58"
+    "@krak-stack/registry": "file:/Users/billyhawkes/Projects/kokobi/tmp/registry-webhooks-local-v1.tgz"
   },
   "peerDependencies": {
     "@krak-stack/registry": "^0.1.58",

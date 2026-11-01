@@ -1,5 +1,27 @@
 import { Option, Schema, SchemaGetter } from "effect";
 
+export const AuthWebhookData = Schema.StructWithRest(
+  Schema.Struct({ version: Schema.Literal(1), requestId: Schema.NonEmptyString, projectId: Schema.NonEmptyString }),
+  [Schema.Record(Schema.String, Schema.Json)],
+).annotate({ identifier: "AuthWebhookData" });
+export const AuthWebhook = Schema.Struct({
+  event: Schema.NonEmptyString,
+  data: AuthWebhookData,
+}).annotate({ identifier: "AuthWebhook" });
+
+export const AccountDeletionData = Schema.Struct({
+  version: Schema.Literal(1),
+  requestId: Schema.NonEmptyString,
+  projectId: Schema.NonEmptyString,
+  userId: Schema.NonEmptyString,
+  scope: Schema.Literal("account"),
+}).annotate({ identifier: "AccountDeletionData" });
+
+export const AccountDeletionWebhook = Schema.Struct({
+  event: Schema.Literal("user.deletion_requested"),
+  data: AccountDeletionData,
+}).annotate({ identifier: "AccountDeletionWebhook" });
+
 export const Session = Schema.Struct({
   id: Schema.String,
   expiresAt: Schema.Date,

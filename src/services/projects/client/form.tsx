@@ -24,6 +24,7 @@ import { AdminApiClient } from "@/lib/admin-api-client";
 import { assetPath, assetUrl } from "@/lib/assets";
 import { authBaseUrl } from "@/services/auth/client";
 import { ProjectData, type Project } from "@/services/projects/schema";
+import { ProjectWebhook } from "./webhook";
 
 const createProjectAtom = AdminApiClient.mutation("projects", "createProject");
 const updateProjectAtom = AdminApiClient.mutation("projects", "updateProject");
@@ -175,6 +176,7 @@ export function ProjectForm({
             <SubmitButton form={form}>{m.form_submit()}</SubmitButton>
           </form>
         </form.Initialize>
+        {project ? <ProjectWebhook projectId={project.id} /> : null}
       </DialogContent>
     </Dialog>
   );

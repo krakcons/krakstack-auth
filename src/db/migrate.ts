@@ -5,12 +5,14 @@ import { SqlClient } from "effect/sql";
 
 import initialMigration from "./migrations/0001_initial";
 import userLocaleMigration from "./migrations/0002_user_locale";
+import accountDeletionMigration from "./migrations/0003_account_deletion";
 
 // Keep the already-persisted ID/name; replacing the implementation must not
 // rewrite an existing Effect ledger or reapply migration 1.
 export const migrationLoader = PgMigrator.fromRecord({
   "1_legacy": initialMigration,
   "2_user_locale": userLocaleMigration,
+  "3_account_deletion": accountDeletionMigration,
 });
 
 export const migrate = Effect.gen(function* () {

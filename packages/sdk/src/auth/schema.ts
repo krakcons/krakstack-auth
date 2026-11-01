@@ -1,5 +1,15 @@
 import { Effect, Schema, SchemaIssue, SchemaTransformation } from "effect";
 
+export const DeleteUserPayload = Schema.Struct({
+  password: Schema.optional(Schema.String),
+  token: Schema.optional(Schema.String),
+  callbackURL: Schema.optional(Schema.String),
+}).annotate({ identifier: "DeleteUserPayload" });
+export const DeleteUserResponse = Schema.Struct({
+  success: Schema.Boolean,
+  message: Schema.String,
+}).annotate({ identifier: "DeleteUserResponse" });
+
 import { User, UserLocale, UserMetadata } from "../schema.js";
 
 const JsonRecord = Schema.Record(Schema.String, Schema.Json);

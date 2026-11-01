@@ -23,5 +23,6 @@ RUN bun run prepare
 RUN bun run build
 
 EXPOSE 3000
+EXPOSE 34431
 
 CMD ["bun", "run", "start"]

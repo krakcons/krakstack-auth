@@ -1,4 +1,5 @@
 export { AuthService } from "../service.js";
+export { AccountDeletionData, AccountDeletionWebhook, AuthWebhook, AuthWebhookData } from "../schema.js";
 export type {
   AuthSession,
   AuthSessionWithOrganization,
@@ -26,12 +27,9 @@ export {
 } from "./proxy-origin.js";
 export { ActorRequired } from "./actor.js";
 export type { ActorConstraint } from "./actor.js";
-export {
-  ApiKeySecurity,
-  AuthMiddleware,
-  makeAuthenticationLive,
-} from "./middleware.js";
+export { ApiKeySecurity, AuthMiddleware, makeAuthenticationLive } from "./middleware.js";
 export type {
+  AuthMiddlewareOptions,
   AuthenticationLiveOptions,
   AuthRouterOptions,
 } from "./middleware.js";

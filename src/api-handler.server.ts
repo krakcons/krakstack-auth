@@ -55,9 +55,12 @@ import {
 } from "@/services/oauth/api.builder";
 import { HttpApiOtlp } from "@krak-stack/registry/opentelemetry/api";
 import { Events } from "@krak-stack/registry/events";
-import { auditEventsLayer } from "@/services/audit/layer.server";
 import { Organizations } from "@/services/organizations";
 import { Projects } from "@/services/projects";
+import { AccountDeletions } from "@/services/account-deletion";
+import { accountDeletionEventsLayer } from "@/services/account-deletion/subscriber";
+import { accountDeletionRuntime } from "@/services/account-deletion/runtime.server";
+import { projectWebhooksHandler } from "@/services/webhooks/api.builder";
 import {
   adminProjectsApiHandler,
   publicProjectsApiHandler,
@@ -325,6 +328,7 @@ const apiLayer = Layer.mergeAll(
     Layer.provide(auditHandler),
     Layer.provide(adminOAuthClientsApiHandler),
     Layer.provide(adminProjectsApiHandler),
+    Layer.provide(projectWebhooksHandler),
     Layer.provide(adminAuthMiddlewareLayer),
   ),
   HttpApiBuilder.layer(FrontendApi).pipe(
@@ -353,6 +357,7 @@ const appServicesLayer = Layer.mergeAll(
   Domains.layer,
   Organizations.layer,
   Projects.layer,
+  AccountDeletions.layer,
   S3Service.layer,
   healthServiceLayer,
   CloudflareLive,
@@ -377,7 +382,7 @@ const apiApplicationLayer = Layer.mergeAll(
         }),
       ),
       Layer.provide(Events.ingestionLayer),
-      Layer.provideMerge(auditEventsLayer),
+      Layer.provideMerge(accountDeletionEventsLayer),
     ),
   ),
 );
@@ -387,8 +392,15 @@ const apiWebHandler = HttpRouter.toWebHandler<
   Layer.Services<typeof apiApplicationLayer>,
   never,
   never
->(apiApplicationLayer);
+>(apiApplicationLayer, { memoMap: accountDeletionRuntime.memoMap });
 
 export const apiHandler = corsMiddleware((request) =>
   apiWebHandler.handler(request),
 );
+
+export const initializeApi = () => accountDeletionRuntime.runPromise(Effect.void);
+export const disposeApi = async () => {
+  await apiWebHandler.dispose();
+  await accountDeletionRuntime.dispose();
+};
+if (import.meta.hot) import.meta.hot.dispose(disposeApi);

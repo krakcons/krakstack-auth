@@ -2,6 +2,8 @@ import { Schema } from "effect";
 import { HttpApiEndpoint, HttpApiGroup, OpenApi } from "effect/http-api";
 
 import {
+  DeleteUserPayload,
+  DeleteUserResponse,
   AdminBanUserPayload,
   AdminStopImpersonatingPayload,
   AdminUserIdPayload,
@@ -92,6 +94,11 @@ const docs = (title: string, description: string) =>
   OpenApi.annotations({ title, summary: title, description });
 
 export const AuthApiGroup = HttpApiGroup.make("auth")
+  .add(HttpApiEndpoint.post("deleteUser", "/delete-user", {
+    payload: DeleteUserPayload,
+    success: DeleteUserResponse,
+    error: [AuthBadRequest, AuthUnauthorized, AuthForbidden, AuthNotFound, AuthInternalServerError],
+  }))
   .add(
     HttpApiEndpoint.get("getSession", "/get-session", {
       query: GetSessionQuery.fields,

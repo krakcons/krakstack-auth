@@ -103,6 +103,7 @@ import {
 } from "./scrollable-dialog.js";
 import type { ProjectAccessLabelCatalog } from "../access.js";
 import { AssociatedProjectsNotice } from "./associated-projects-notice.js";
+import { AccountDeletionDialog } from "./account-deletion.js";
 import {
   ContactEmailsField,
   ContactPhonesField,
@@ -125,6 +126,18 @@ import {
 
 const messages = {
   en: {
+    user_delete_title: "Delete account",
+    user_delete_description: "Permanently delete your central account and request personal-data cleanup from every connected project. Shared organization data is not deleted. Some records may be retained where legally required.",
+    user_delete_projects: "Connected projects",
+    user_delete_missing: "Some projects need administrator setup. Their cleanup may require support after your account is deleted.",
+    user_delete_owner: "Transfer ownership or explicitly delete these organizations first:",
+    user_delete_admin: "Ask another administrator to remove your platform admin role before deleting your account.",
+    user_delete_confirm: "Type DELETE to confirm",
+    user_delete_password: "Current password (optional if you signed in within the last five minutes)",
+    user_delete_error: "Unable to delete your account. Check your password, or sign in again and retry.",
+    user_delete_load_error: "Loading deletion requirements. If this does not finish, close this dialog and retry.",
+    user_delete_complete: "Your central account is deleted. Project cleanup is processed separately and may need administrator attention; this is not confirmation that every retained copy has been erased.",
+    user_delete_done: "Done",
     table_empty: "No results.",
     user_account_cancel: "Cancel",
     user_account_back: "Back",
@@ -295,6 +308,18 @@ const messages = {
     user_two_factor_verify_error: "Could not verify the code.",
   },
   fr: {
+    user_delete_title: "Supprimer le compte",
+    user_delete_description: "Supprimez définitivement votre compte central et demandez le nettoyage des données personnelles dans chaque projet lié. Les données partagées des organisations ne sont pas supprimées. Certains dossiers peuvent être conservés lorsque la loi l’exige.",
+    user_delete_projects: "Projets liés",
+    user_delete_missing: "Certains projets nécessitent une configuration administrateur. Leur nettoyage peut demander une intervention après la suppression du compte.",
+    user_delete_owner: "Transférez la propriété ou supprimez explicitement ces organisations d’abord :",
+    user_delete_admin: "Demandez à un autre administrateur de retirer votre rôle administrateur de la plateforme avant de supprimer votre compte.",
+    user_delete_confirm: "Saisissez DELETE pour confirmer",
+    user_delete_password: "Mot de passe actuel (facultatif si vous vous êtes connecté il y a moins de cinq minutes)",
+    user_delete_error: "Impossible de supprimer le compte. Vérifiez votre mot de passe ou reconnectez-vous, puis réessayez.",
+    user_delete_load_error: "Chargement des conditions de suppression. Si le chargement ne termine pas, fermez cette fenêtre et réessayez.",
+    user_delete_complete: "Votre compte central est supprimé. Le nettoyage des projets est traité séparément et peut nécessiter une intervention ; cela ne confirme pas l’effacement de toutes les copies conservées.",
+    user_delete_done: "Terminé",
     table_empty: "Aucun résultat.",
     user_account_cancel: "Annuler",
     user_account_back: "Retour",
@@ -800,6 +825,7 @@ export type UserButtonProps = {
 };
 
 export type UserButtonDialog =
+  | "deleteAccount"
   | "account"
   | "security"
   | "apiKeys"
@@ -1078,6 +1104,7 @@ export const UserButton = ({
                   <DropdownMenuSeparator />
                 </>
               ) : null}
+              {!isImpersonating && !isOrganizationImpersonating ? <DropdownMenuItem onClick={() => setSettingsDialog("deleteAccount")}><Trash2 />{m.user_delete_title()}</DropdownMenuItem> : null}
               {(isAdmin && canUseAdminSettings) || isImpersonating ? (
                 <>
                   {isAdmin && canUseAdminSettings ? (
@@ -1130,6 +1157,19 @@ export const UserButton = ({
           </DropdownMenuContent>
         </DropdownMenu>
       )}
+      {settingsDialog === "deleteAccount" && !isImpersonating && !isOrganizationImpersonating ? <AccountDeletionDialog
+        baseUrl={resolvedBaseUrl}
+        userId={session.user.id}
+        onClose={() => setSettingsDialog(null)}
+        onDeleted={() => { notifyAuthChange(); void navigate({ href: signOutRedirect }); }}
+        labels={{
+          title: m.user_delete_title(), description: m.user_delete_description(), projects: m.user_delete_projects(),
+          missing: m.user_delete_missing(), owner: m.user_delete_owner(), admin: m.user_delete_admin(),
+          confirm: m.user_delete_confirm(), password: m.user_delete_password(), error: m.user_delete_error(),
+          loadError: m.user_delete_load_error(), cancel: m.user_account_cancel(), submit: m.user_delete_title(),
+          done: m.user_delete_done(), complete: m.user_delete_complete(),
+        }}
+      /> : null}
       <Dialog
         open={canManageUserSettings && settingsDialog === "account"}
         onOpenChange={(open) => {

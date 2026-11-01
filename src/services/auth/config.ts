@@ -48,6 +48,9 @@ import {
   markNativeSessionRevocation,
 } from "./audit-hooks";
 import { nativeAuditRuntime } from "@/services/audit/layer.server";
+import { accountDeletionRuntime } from "@/services/account-deletion/runtime.server";
+import { prepareNativeDeletion, captureNativeDeletion } from "@/services/account-deletion/hooks";
+import type { AccountDeletions } from "@/services/account-deletion";
 
 const isDev = process.env.NODE_ENV === "development";
 
@@ -256,10 +259,12 @@ export const createAuth = ({
   allowedHosts,
   cookieDomain,
   auditRun = (effect) => nativeAuditRuntime.runPromise(effect),
+  deletionRun = (effect) => accountDeletionRuntime.runPromise(effect),
 }: {
   allowedHosts: readonly string[];
   cookieDomain?: string | undefined;
   auditRun?: Parameters<typeof makeNativeAudit>[0];
+  deletionRun?: (effect: Effect.Effect<void, unknown, AccountDeletions>) => Promise<void>;
 }) => {
   let createPersonalOrganization:
     | ((
@@ -419,6 +424,10 @@ export const createAuth = ({
     },
     user: {
       fields: coreSqlFields.user,
+      deleteUser: {
+        enabled: true,
+        beforeDelete: (user) => deletionRun(prepareNativeDeletion(user.id)),
+      },
       additionalFields: {
         locale: {
           type: "string",
@@ -434,8 +443,9 @@ export const createAuth = ({
     },
     session: {
       fields: coreSqlFields.session,
+      freshAge: 60 * 5,
       cookieCache: {
-        enabled: true,
+        enabled: false,
         maxAge: 60 * 5,
       },
     },
@@ -443,6 +453,7 @@ export const createAuth = ({
     databaseHooks: {
       user: {
         delete: {
+          before: (user) => deletionRun(captureNativeDeletion(user.id)),
           after: async (user) => {
             markNativeAuthMutation({ userId: user.id, kind: "user_deleted" });
           },

@@ -5,6 +5,7 @@ import { HttpApi, OpenApi } from "effect/http-api";
 import { LocaleMiddleware } from "@/lib/localization";
 import { AdminApiGroup } from "@/services/admin/api.group";
 import { AuditApiGroup } from "@/services/audit/api.group";
+import { AdminProjectWebhooksApiGroup } from "@/services/webhooks/api.group";
 import {
   AdminOAuthClientsApiGroup,
   PublicOAuthClientsApiGroup,
@@ -26,6 +27,7 @@ export const AdminApi = HttpApi.make("AdminApi")
   .add(AuditApiGroup)
   .add(AdminOAuthClientsApiGroup)
   .add(AdminProjectsApiGroup)
+  .add(AdminProjectWebhooksApiGroup)
   .prefix("/api/auth");
 
 export const FrontendApi = HttpApi.make("FrontendApi")

@@ -57,6 +57,65 @@ const program = Effect.gen(function* () {
 
 Use `AuthMiddleware.layer()` to provide request headers and configuration in an Effect HttpApi application. See the [middleware guide](https://auth.krakstack.net/en/docs/middleware).
 
+### Auth webhooks (development)
+
+`AuthMiddleware.layer({ onDeleteUser })` requires a cleanup callback; there is no opt-out or default
+successful cleanup. The SDK automatically mounts `POST /api/webhooks/auth`.
+Every consuming project supplies only its application-specific SQL cleanup:
+
+```ts
+import { AuthMiddleware } from "@krak-stack/auth/server";
+import { Layer } from "effect";
+
+const authentication = AuthMiddleware.layer({
+  onDeleteUser: ({ userId }) => eraseLocalUserData(userId),
+  // Optional: handle other Auth events. Validate event-specific data here.
+  onWebhook: (webhook) => handleOtherAuthEvent(webhook),
+}).pipe(Layer.provide(databaseLayer));
+```
+
+Set server-only `KRAKSTACK_AUTH_WEBHOOK_SECRET` (at least 32 characters) and
+`VITE_KRAKSTACK_AUTH_PROJECT_ID`, or pass explicit `webhookSecret: Redacted<string>` and
+`projectId` options. Missing/invalid configuration fails setup. The cleanup must
+use the same SQL pool as the receiver; it executes in the receipt transaction.
+Do not perform external side effects or launch unawaited work in the callback.
+
+The middleware uses `WebhooksReceiver` from `@krak-stack/registry/webhooks`.
+Receiver migrations create only deduplication receipts, not delivery tables or
+workers. Signed `user.deletion_requested` envelopes have version `1` and data
+fields `requestId`, `projectId`, `userId`, and `scope: "account"`. Requests are
+HMAC-authenticated, project-validated, limited to 16 KiB, and acknowledged only
+after commit. The timestamp window is five minutes. Duplicates return 204;
+changed content under the same signed event type and request ID returns 409. Other
+events retain their event-specific JSON data and route to `onWebhook`; without a
+handler they return 400, never a successful acknowledgement. Cleanup failures
+roll back the receipt and return 500 so delivery can retry.
+
+Explicitly schedule `WebhooksReceiver.cleanup()` for receipts older than 30 days;
+handlers must remain idempotent after expiry. Central Auth uses Better Auth's
+native delete-user flow and durably notifies connected projects after the user
+has been removed. Configure the project's **Webhook URL** and copy its **Signing
+secret** into the receiving server. Platform admins and organization owners must
+transfer their roles before self-deleting. This does not guarantee that a project's
+callback covers all personal data. Inventory invitations, logs, exports,
+processors, and backups before claiming complete erasure. Development uses
+local tarballs until the matching registry and Auth releases are published.
+
+**Français :** `AuthMiddleware.layer({ onDeleteUser })` exige la fonction de nettoyage et monte la route de
+réception automatiquement. Chaque projet doit fournir son nettoyage SQL et le
+secret de signature côté serveur ; une configuration absente empêche le
+démarrage. Le reçu et le nettoyage sont validés dans la même transaction.
+Un doublon retourne 204, un conflit de contenu 409 et un échec de nettoyage 500.
+La réception seule ne démarre aucun travailleur d’envoi. Planifier le nettoyage
+des reçus après 30 jours et conserver un traitement idempotent. Le parcours de
+suppression central utilise Better Auth et notifie les projets après suppression
+de l’utilisateur. Configurez l’URL du webhook et son secret de signature dans le
+projet. Les administrateurs de plateforme et propriétaires d’organisation doivent
+d’abord transférer leurs rôles. Le gestionnaire facultatif `onWebhook` reçoit les
+autres événements avec leurs données JSON ; sans gestionnaire, ils retournent 400.
+La déduplication associe le type d’événement et l’identifiant de requête signé.
+Ce mécanisme ne garantit pas, à lui seul, la conformité ou l’effacement complet.
+
 `AuthMiddleware` also annotates request logs and spans with verified user,
 organization, and actor IDs using its existing session lookup. Missing sessions
 are anonymous; auth service failures are not silently treated as anonymous.
@@ -87,7 +146,7 @@ as `AuthMiddleware.layer()`. It does not grant permissions or provide `CurrentAc
 
 ## React Components
 
-The component bundle uses the optional peer dependencies declared in `package.json` and Krakstack/shadcn UI primitives from `@krak-stack/registry`. Install the component peers used by your application; server-only consumers only need `effect`.
+The component bundle uses the optional peer dependencies declared in `package.json` and Krakstack/shadcn UI primitives from `@krak-stack/registry`. Install the component peers used by your application. Server middleware needs `effect`, the matching registry package, and an SQL pool; React component peers are not needed for server-only use.
 
 When components are configured, register their Tailwind source:
 

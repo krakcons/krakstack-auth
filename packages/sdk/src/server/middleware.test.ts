@@ -656,7 +656,7 @@ describe("AuthenticationLive", () => {
       }),
     ).pipe(
       Effect.provide(
-        AuthMiddleware.layer({
+        makeAuthenticationLive({
           authLayer: organizationImpersonationAuthClientLayer,
         }),
       ),
@@ -702,7 +702,7 @@ describe("AuthenticationLive", () => {
       }),
     ).pipe(
       Effect.provide(
-        AuthMiddleware.layer({
+        makeAuthenticationLive({
           allowedOrganizationImpersonationRoutes: [
             { method: "GET", path: "/test" },
           ],
@@ -729,7 +729,7 @@ describe("AuthenticationLive", () => {
       }),
     ).pipe(
       Effect.provide(
-        AuthMiddleware.layer({
+        makeAuthenticationLive({
           allowedOrganizationImpersonationRoutes: [
             { method: "GET", path: "/api/learner/collections/:id/courses" },
           ],
@@ -757,7 +757,7 @@ describe("AuthenticationLive", () => {
         }),
       ).pipe(
         Effect.provide(
-          AuthMiddleware.layer({
+          makeAuthenticationLive({
             allowedOrganizationImpersonationRoutes: [
               { method: "GET", path: "/test" },
             ],
@@ -785,7 +785,7 @@ describe("AuthenticationLive", () => {
         }),
       ).pipe(
         Effect.provide(
-          AuthMiddleware.layer({
+          makeAuthenticationLive({
             allowedOrganizationImpersonationRoutes: [
               { method: "GET", path: "/api/learner/collections/:id/courses" },
             ],

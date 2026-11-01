@@ -5,7 +5,6 @@ import { vi } from "vitest";
 import { Events } from "@krak-stack/registry/events";
 import {
   EventsPersistenceError,
-  type TrackEvent,
 } from "@krak-stack/registry/events/schema";
 import { testEventsLayer } from "@/services/audit/test-layer";
 import { BetterAuthRequest } from "@/services/auth/better-auth-request";
@@ -20,10 +19,10 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)("organization auditing", () => {
         const request = yield* BetterAuthRequest;
         const organizations = yield* Organizations;
         const events = yield* Events;
-        const tracked: Array<typeof TrackEvent.Type> = [];
+        const tracked: Array<Parameters<typeof events.track>[0]> = [];
         const recording = {
           ...events,
-          track: (event: typeof TrackEvent.Type) =>
+          track: (event: Parameters<typeof events.track>[0]) =>
             Effect.sync(() => {
               tracked.push(event);
               return { eventId: crypto.randomUUID(), inserted: true };
@@ -83,7 +82,7 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)("organization auditing", () => {
           create.mockResolvedValue(organization);
           const completionRejected = {
             ...recording,
-            track: (event: typeof TrackEvent.Type) =>
+            track: (event: Parameters<typeof events.track>[0]) =>
               event.name === "organization.created"
                 ? Effect.fail(
                     new EventsPersistenceError({

@@ -3,6 +3,7 @@ import { OpenApi } from "effect/http-api";
 import { HttpApiEndpoint, HttpApiError, HttpApiGroup } from "effect/http-api";
 
 import {
+  ExtraAccountDeletionPlan,
   ExtraBadRequest,
   ExtraAssociatedProjects,
   ExtraAssociatedProjectsQuery,
@@ -26,6 +27,10 @@ export * from "./schema.js";
 export type { Organization, OrganizationMetadata } from "../schema.js";
 
 export const ExtraApiGroup = HttpApiGroup.make("authExtra")
+  .add(HttpApiEndpoint.get("getAccountDeletionPlan", "/auth/account-deletion", {
+    success: ExtraAccountDeletionPlan,
+    error: [HttpApiError.Unauthorized, HttpApiError.Forbidden, HttpApiError.InternalServerError],
+  }))
   .add(
     HttpApiEndpoint.get("getProjectPublicConfig", "/auth/project-config", {
       query: ExtraProjectPublicConfigQuery.fields,

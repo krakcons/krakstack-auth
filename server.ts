@@ -505,7 +505,7 @@ async function initializeServer() {
   log.header("Starting Production Server");
 
   // Load TanStack Start server handler
-  let handler: { fetch: (request: Request) => Response | Promise<Response> };
+  let handler: { fetch: (request: Request) => Response | Promise<Response>; dispose?: () => Promise<void> };
   try {
     const serverModule = await import(SERVER_ENTRY_POINT);
     handler = serverModule.default;
@@ -547,6 +547,22 @@ async function initializeServer() {
   });
 
   log.success(`Server listening on http://localhost:${String(server.port)}`);
+  let stopping = false;
+  const shutdown = async () => {
+    if (stopping) return;
+    stopping = true;
+    await server.stop();
+    await handler.dispose?.();
+    process.exit(0);
+  };
+  for (const signal of ["SIGTERM", "SIGINT"] as const) {
+    process.once(signal, () => {
+      void shutdown().catch(() => {
+        log.error("Graceful shutdown failed");
+        process.exit(1);
+      });
+    });
+  }
 }
 
 // Initialize the server

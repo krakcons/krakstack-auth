@@ -11,6 +11,12 @@ import {
   FormattedOrganizationAddress,
 } from "../schema.js";
 
+export const ExtraAccountDeletionPlan = Schema.Struct({
+  projects: Schema.Array(Schema.Struct({ id: Schema.String, name: Schema.String, ready: Schema.Boolean })),
+  organizations: Schema.Array(Schema.Struct({ id: Schema.String, name: Schema.String })),
+  adminAccount: Schema.Boolean,
+}).annotate({ identifier: "ExtraAccountDeletionPlan" });
+
 export const ExtraImageUploadPayload = Schema.Struct({
   file: Multipart.SingleFileSchema,
 }).annotate({

@@ -22,6 +22,7 @@ import {
   decodeOrganizationMetadata,
 } from "@krak-stack/auth/schema";
 import { Projects } from "@/services/projects";
+import { AccountDeletions } from "@/services/account-deletion";
 import { uploadImageFromMultipart } from "@/services/s3/upload";
 
 const authError = (fallback: string) => (cause: unknown) =>
@@ -203,6 +204,12 @@ export const authApiHandler = HttpApiBuilder.group(
   "authExtra",
   (handlers) =>
     handlers
+      .handle("getAccountDeletionPlan", ({ request }) => Effect.gen(function* () {
+        const session = yield* requireMutableUserSession(request);
+        if (session.session.impersonatedBy) return yield* new HttpApiError.Forbidden({});
+        const service = yield* AccountDeletions;
+        return yield* service.plan({ userId: session.user.id }).pipe(Effect.mapError(internalServerError));
+      }))
       .handle("getProjectPublicConfig", ({ query }) =>
         Effect.gen(function* () {
           const projects = yield* Projects;
