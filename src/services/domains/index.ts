@@ -35,6 +35,7 @@ export type AuthDomainContext = {
   readonly hosts: readonly string[];
   readonly origins: readonly string[];
   readonly cookieDomain: string | undefined;
+  readonly projectId: string | null;
 };
 
 const firstForwardedValue = (value: string | null) =>
@@ -403,6 +404,7 @@ export class Domains extends Context.Service<Domains>()("Domains", {
 
         return {
           requestHost,
+          projectId: hostDomain?.projectId ?? null,
           hosts: hostList,
           origins: originsForHosts(hostList, requestProtocol(request)),
           cookieDomain: cookieDomainForAuthDomainContext({

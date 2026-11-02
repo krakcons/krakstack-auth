@@ -329,7 +329,8 @@ export const DailyActiveUsersByDay = Schema.Struct({
 }).annotate({
   identifier: "DailyActiveUsersByDay",
   title: "Daily active users by day",
-  description: "Distinct authenticated users active on a calendar day.",
+  description:
+    "Distinct users with recorded successful sign-ins or authenticated session checks on a UTC calendar day.",
   examples: [{ date: "2026-06-26", count: 18 }],
 });
 
@@ -369,7 +370,10 @@ export const DashboardStatsResponse = Schema.Struct({
   totalDomains: Schema.Number,
   totalApiKeys: Schema.Number,
   totalOauthClients: Schema.Number,
-  dailyActiveUsers: Schema.Number,
+  dailyActiveUsers: Schema.Number.annotate({
+    description:
+      "Distinct users with recorded authentication activity today (UTC), not a rolling 24-hour window.",
+  }),
   dailyActiveUsersByDay: Schema.Array(DailyActiveUsersByDay),
   signupsByDay: Schema.Array(SignupsByDay),
   projectConnections: Schema.Array(ProjectConnections),

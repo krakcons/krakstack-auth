@@ -1,8 +1,7 @@
 import { useAtomSet, useAtomValue } from "@effect/atom-react";
-import { useNavigate, useSearch } from "@tanstack/react-router";
 import { Schema } from "effect";
 import { Atom, AsyncResult } from "effect/reactivity";
-import { Pencil, Trash2 } from "lucide-react";
+import { Pencil, Plus, Trash2 } from "lucide-react";
 import { useState } from "react";
 
 import {
@@ -11,6 +10,15 @@ import {
 } from "@krak-stack/registry/data-table";
 import { ErrorMessage } from "@krak-stack/registry/effect-form";
 import { Query } from "@krak-stack/registry/query";
+import {
+  MenubarMenu,
+  MenubarTrigger,
+  MenubarContent,
+  MenubarItem,
+  MenubarSub,
+  MenubarSubContent,
+  MenubarSubTrigger,
+} from "@/components/ui/menubar";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -42,9 +50,21 @@ const deleteOAuthClientAtom = AdminApiClient.mutation(
   "deleteOAuthClient",
 );
 
-export function OAuthClientsTable({ reloadKey = 0 }: { reloadKey?: number }) {
-  const navigate = useNavigate({ from: "/admin/oauth/clients" });
-  const search = useSearch({ from: "/admin/oauth/clients" });
+export function OAuthClientsTable({
+  reloadKey = 0,
+  projectId,
+  query,
+  onStateChange,
+  onCreate,
+  onAssign,
+}: {
+  reloadKey?: number;
+  projectId?: string;
+  query: typeof Query.Type;
+  onStateChange: (query: typeof Query.Encoded) => void;
+  onCreate: () => void;
+  onAssign?: (client: OAuthClientAdmin) => void;
+}) {
   const result = useAtomValue(oauthClientsAtom(reloadKey));
   const deleteOAuthClient = useAtomSet(deleteOAuthClientAtom, {
     mode: "promise",
@@ -56,13 +76,19 @@ export function OAuthClientsTable({ reloadKey = 0 }: { reloadKey?: number }) {
   const [deletingClient, setDeletingClient] = useState<OAuthClientAdmin | null>(
     null,
   );
-  const rows =
+  const allRows =
     clients ??
     AsyncResult.match(result, {
       onInitial: () => [],
       onFailure: () => [],
       onSuccess: ({ value }) => Array.from(value),
     });
+  const rows = projectId
+    ? allRows.filter((client) => client.projectId === projectId)
+    : allRows;
+  const unassignedClients = AsyncResult.getOrElse(result, () => []).filter(
+    (client) => client.projectId === null,
+  );
   const error = AsyncResult.match(result, {
     onInitial: () => "",
     onFailure: () => m.oauth_client_fetch_error(),
@@ -73,9 +99,45 @@ export function OAuthClientsTable({ reloadKey = 0 }: { reloadKey?: number }) {
     <div className="flex flex-col gap-4">
       {error ? <ErrorMessage text={error} /> : null}
       <DataTable
-        columnDefs={clientColumns()}
+        columnDefs={clientColumns(!projectId)}
         rowData={rows}
         features={{
+          toolbar: {
+            items: (
+              <MenubarMenu>
+                <MenubarTrigger>{m.actions_title()}</MenubarTrigger>
+                <MenubarContent>
+                  <MenubarItem onClick={onCreate}>
+                    <Plus />
+                    {m.admin_create_client()}
+                  </MenubarItem>
+                  {onAssign ? (
+                    <MenubarSub>
+                      <MenubarSubTrigger>
+                        {m.oauth_client_assign_existing()}
+                      </MenubarSubTrigger>
+                      <MenubarSubContent>
+                        {unassignedClients.length ? (
+                          unassignedClients.map((client) => (
+                            <MenubarItem
+                              key={client.clientId}
+                              onClick={() => onAssign(client)}
+                            >
+                              {client.name ?? client.clientId}
+                            </MenubarItem>
+                          ))
+                        ) : (
+                          <MenubarItem disabled>
+                            {m.oauth_client_no_unassigned()}
+                          </MenubarItem>
+                        )}
+                      </MenubarSubContent>
+                    </MenubarSub>
+                  ) : null}
+                </MenubarContent>
+              </MenubarMenu>
+            ),
+          },
           export: { baseName: "oauth-clients" },
           gallery: false,
           rowActions: {
@@ -94,16 +156,15 @@ export function OAuthClientsTable({ reloadKey = 0 }: { reloadKey?: number }) {
             ],
           },
         }}
-        initialState={search}
+        initialState={query}
         onStateChange={(state) =>
-          void navigate({
-            search: Schema.encodeSync(Query)(state),
-          })
+          onStateChange(Schema.encodeSync(Query)(state))
         }
       />
       {editingClient ? (
         <OAuthClientForm
           client={editingClient}
+          projectId={projectId}
           onClose={() => setEditingClient(null)}
           onSaved={(updated) => {
             setClients((current) =>
@@ -132,7 +193,9 @@ export function OAuthClientsTable({ reloadKey = 0 }: { reloadKey?: number }) {
   );
 }
 
-const clientColumns = (): DataTableColDef<OAuthClientAdmin>[] => [
+const clientColumns = (
+  showProject: boolean,
+): DataTableColDef<OAuthClientAdmin>[] => [
   {
     field: "name",
     headerName: m.admin_column_client(),
@@ -146,19 +209,7 @@ const clientColumns = (): DataTableColDef<OAuthClientAdmin>[] => [
       }),
     },
   },
-  {
-    colId: "project",
-    headerName: m.project(),
-    type: "reference",
-    typeOptions: {
-      imageVariant: "square",
-      getItem: (data) => ({
-        label: data.projectName ?? m.project_none(),
-        description: data.projectId,
-        imageSrc: assetUrl(data.projectLogo, authBaseUrl),
-      }),
-    },
-  },
+  ...projectColumns(showProject),
   {
     field: "redirectUris",
     headerName: m.admin_column_redirect_uris(),
@@ -188,6 +239,27 @@ const clientColumns = (): DataTableColDef<OAuthClientAdmin>[] => [
     ),
   },
 ];
+
+const projectColumns = (
+  showProject: boolean,
+): DataTableColDef<OAuthClientAdmin>[] =>
+  showProject
+    ? [
+        {
+          colId: "project",
+          headerName: m.project(),
+          type: "reference",
+          typeOptions: {
+            imageVariant: "square",
+            getItem: (data) => ({
+              label: data.projectName ?? m.project_none(),
+              description: data.projectId,
+              imageSrc: assetUrl(data.projectLogo, authBaseUrl),
+            }),
+          },
+        },
+      ]
+    : [];
 
 function DeleteOAuthClientDialog({
   client,

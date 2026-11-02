@@ -14,10 +14,6 @@ export type ApiKeySqlUpdate = {
 export const CountRow = Schema.Struct({ count: Schema.Number }).annotate({
   identifier: "AdminCountRow",
 });
-export const SessionActivityRow = Schema.Struct({
-  userId: Schema.String,
-  updatedAt: Schema.Date,
-}).annotate({ identifier: "SessionActivityRow" });
 export const SignupRow = Schema.Struct({ createdAt: Schema.Date }).annotate({
   identifier: "SignupRow",
 });
@@ -58,7 +54,6 @@ export const DashboardTotalsRow = Schema.Struct({
   totalDomains: Schema.Number,
   totalApiKeys: Schema.Number,
   totalOauthClients: Schema.Number,
-  dailyActiveUsers: Schema.Number,
 }).annotate({ identifier: "DashboardTotalsRow" });
 
 export const ApiKeyPermissionsJson = Schema.fromJsonString(

@@ -5,7 +5,13 @@ import {
   Outlet,
   useLocation,
 } from "@tanstack/react-router";
-import { Globe2, LayoutDashboard, Settings, Webhook } from "lucide-react";
+import {
+  Globe2,
+  KeyRound,
+  LayoutDashboard,
+  Settings,
+  Webhook,
+} from "lucide-react";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { AsyncResult } from "effect/reactivity";
 import { SidebarPageHeader } from "@krak-stack/registry/sidebar-layout";
@@ -25,7 +31,9 @@ function ProjectPage() {
       ? "domains"
       : pathname.endsWith("/webhooks")
         ? "webhooks"
-        : "dashboard";
+        : pathname.endsWith("/oauth-clients")
+          ? "oauth-clients"
+          : "dashboard";
   const result = useAtomValue(projectsAtom);
   const project = AsyncResult.getOrElse(result, () => []).find(
     (item) => item.id === projectId,
@@ -90,6 +98,19 @@ function ProjectPage() {
               >
                 <Webhook />
                 {m.project_webhook_title()}
+              </TabsTrigger>
+              <TabsTrigger
+                value="oauth-clients"
+                nativeButton={false}
+                render={
+                  <Link
+                    to="/admin/projects/$projectId/oauth-clients"
+                    params={{ projectId }}
+                  />
+                }
+              >
+                <KeyRound />
+                {m.admin_oauth_clients()}
               </TabsTrigger>
               <TabsTrigger
                 value="settings"

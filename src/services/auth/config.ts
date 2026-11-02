@@ -27,7 +27,7 @@ import { LocaleContext } from "@/lib/localization";
 
 import {
   allowedHostsForRequest,
-  cookieDomainFromRequest,
+  authDomainContextForRequest,
   hostFromRequest,
   parseCsv,
   trustedOriginsForRequest,
@@ -51,6 +51,12 @@ import { nativeAuditRuntime } from "@/services/audit/layer.server";
 import { accountDeletionRuntime } from "@/services/account-deletion/runtime.server";
 import { prepareNativeDeletion } from "@/services/account-deletion/hooks";
 import { AccountDeletions } from "@/services/account-deletion";
+import {
+  AuthenticationActivityProject,
+  OAuthAuthorizationActivity,
+  OAuthAuthorizationSession,
+} from "@/services/authentication-activity/schema";
+import { trackActiveUser } from "@/services/authentication-activity/active-user";
 import {
   assertDeletionEnabled,
   deletionEnabled,
@@ -264,13 +270,17 @@ const connectSessionProject = async (
 export const createAuth = ({
   allowedHosts,
   cookieDomain,
+  projectId = null,
   auditRun = (effect) => nativeAuditRuntime.runPromise(effect),
   deletionRun = (effect) => accountDeletionRuntime.runPromise(effect),
 }: {
   allowedHosts: readonly string[];
   cookieDomain?: string | undefined;
+  projectId?: string | null;
   auditRun?: Parameters<typeof makeNativeAudit>[0];
-  deletionRun?: (effect: Effect.Effect<void, unknown, AccountDeletions>) => Promise<void>;
+  deletionRun?: (
+    effect: Effect.Effect<void, unknown, AccountDeletions>,
+  ) => Promise<void>;
 }) => {
   let createPersonalOrganization:
     | ((
@@ -360,7 +370,7 @@ export const createAuth = ({
         }
       : {};
 
-  const nativeAudit = makeNativeAudit(auditRun);
+  const nativeAudit = makeNativeAudit(auditRun, projectId);
   const auth = betterAuth({
     appName: "Krakstack Auth",
     // BA diagnostics can interpolate emails and attach OAuth state/provider
@@ -457,6 +467,64 @@ export const createAuth = ({
     },
     hooks: nativeAudit.hooks,
     databaseHooks: {
+      verification: {
+        create: {
+          after: async (verification, context) => {
+            if (
+              !context ||
+              ![
+                "/oauth2/authorize",
+                "/oauth2/consent",
+                "/oauth2/continue",
+              ].includes(context.path ?? "")
+            )
+              return;
+            const authorization = Schema.decodeUnknownOption(
+              OAuthAuthorizationActivity,
+            )(verification.value);
+            const session = Schema.decodeUnknownOption(
+              OAuthAuthorizationSession,
+            )(context.context.session);
+            if (
+              Option.isNone(authorization) ||
+              Option.isNone(session) ||
+              authorization.value.userId !== session.value.user.id ||
+              authorization.value.sessionId !== session.value.session.id
+            )
+              return;
+            // Only the provider's persisted, validated authorization code supplies
+            // the client ID. Never infer project attribution from browser cookies.
+            const record = async () => {
+              const [client] = await runWithDatabase(
+                Effect.gen(function* () {
+                  const sql = yield* SqlClient.SqlClient;
+                  return yield* SqlSchema.findAll({
+                    Request: Schema.String,
+                    Result: AuthenticationActivityProject,
+                    execute: (clientId) =>
+                      sql`SELECT project_id FROM oauth_client WHERE client_id = ${clientId} AND disabled IS NOT TRUE LIMIT 1`,
+                  })(authorization.value.query.client_id);
+                }),
+              );
+              if (client?.projectId)
+                await auditRun(
+                  trackActiveUser(session.value, client.projectId).pipe(
+                    Effect.catch(() =>
+                      Effect.logWarning(
+                        "OAuth authentication activity could not be recorded",
+                      ),
+                    ),
+                  ),
+                );
+            };
+            await record().catch(() =>
+              console.warn(
+                "OAuth authentication activity could not be recorded",
+              ),
+            );
+          },
+        },
+      },
       user: {
         delete: {
           before: (user) => {
@@ -741,14 +809,18 @@ const authByRequestScope = new Map<string, ReturnType<typeof createAuth>>();
 
 export const authForRequest = async (request: Request) => {
   const host = hostFromRequest(request);
-  const allowedHosts = await allowedHostsForRequest(request);
-  const cookieDomain = await cookieDomainFromRequest(request);
-  const cacheKey = `${host}|${cookieDomain ?? ""}|${allowedHosts.join(",")}`;
+  const context = await authDomainContextForRequest(request);
+  const allowedHosts = Array.from(
+    new Set([...(await allowedHostsForRequest()), ...(context?.hosts ?? [])]),
+  );
+  const cookieDomain = context?.cookieDomain;
+  const projectId = context?.projectId ?? null;
+  const cacheKey = `${host}|${cookieDomain ?? ""}|${allowedHosts.join(",")}|${projectId ?? ""}`;
 
   const cached = authByRequestScope.get(cacheKey);
   if (cached) return cached;
 
-  const next = createAuth({ allowedHosts, cookieDomain });
+  const next = createAuth({ allowedHosts, cookieDomain, projectId });
   authByRequestScope.set(cacheKey, next);
   return next;
 };

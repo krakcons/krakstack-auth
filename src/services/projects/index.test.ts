@@ -9,7 +9,7 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)(
   "Projects SQL persistence",
   () => {
     it.effect(
-      "scopes project stats and counts distinct recently active users",
+      "scopes project stats without inferring activity from session timestamps",
       () =>
         Effect.gen(function* () {
           const projects = yield* Projects;
@@ -82,20 +82,20 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)(
             expect(stats).toMatchObject({
               users: 3,
               organizations: 1,
-              dailyActiveUsers: 1,
+              dailyActiveUsers: 0,
             });
             expect(stats.dailyActiveUsersByDay).toHaveLength(7);
             expect(stats.dailyActiveUsersByDay.at(-1)).toEqual({
               date: now.toISOString().slice(0, 10),
-              count: 1,
+              count: 0,
             });
             expect(stats.dailyActiveUsersByDay.at(-3)).toEqual({
               date: old.toISOString().slice(0, 10),
-              count: 1,
+              count: 0,
             });
             expect(
               stats.dailyActiveUsersByDay.filter(({ count }) => count === 0),
-            ).toHaveLength(5);
+            ).toHaveLength(7);
             expect(
               (yield* projects.stats({ id: projectId, days: 30 }))
                 .dailyActiveUsersByDay,
@@ -104,7 +104,7 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)(
             expect(otherStats).toMatchObject({
               users: 1,
               organizations: 0,
-              dailyActiveUsers: 1,
+              dailyActiveUsers: 0,
             });
             expect(otherStats.dailyActiveUsersByDay).toHaveLength(14);
             expect(otherStats.dailyActiveUsersByDay.at(-3)?.count).toBe(0);

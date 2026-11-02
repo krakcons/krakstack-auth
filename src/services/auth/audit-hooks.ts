@@ -8,6 +8,8 @@ import { tryGetCurrentAuthEndpointContext } from "@better-auth/core/context";
 import { Events } from "@krak-stack/registry/events";
 import { Config, Effect, Option, References, Schema } from "effect";
 import { nativeAuditDiagnostic, nativeAuditOperation } from "./audit-policy";
+import { trackActiveUser } from "@/services/authentication-activity/active-user";
+import { AuthenticationActivitySession } from "@/services/authentication-activity/schema";
 
 const AuditState = Schema.Struct({
   operationId: Schema.String,
@@ -80,6 +82,7 @@ type NativeAuditAnnotations = {
 
 export const makeNativeAudit = (
   run: (effect: Effect.Effect<void, unknown, Events>) => Promise<void>,
+  projectId: string | null = null,
 ) => {
   const before = createAuthMiddleware(async (ctx) => {
     const diagnostic = nativeAuditDiagnostic(ctx.path, Boolean(ctx.request));
@@ -120,6 +123,20 @@ export const makeNativeAudit = (
   });
 
   const after = createAuthMiddleware(async (ctx) => {
+    if (ctx.path === "/get-session" && !isAPIError(ctx.context.returned)) {
+      const session = Schema.decodeUnknownOption(AuthenticationActivitySession)(
+        ctx.context.returned,
+      );
+      if (Option.isNone(session)) return;
+      await run(
+        trackActiveUser(session.value, projectId).pipe(
+          Effect.catch(() =>
+            Effect.logWarning("Authentication activity could not be recorded"),
+          ),
+        ),
+      );
+      return;
+    }
     // BA's adapter effects have already run; this is not their SQL transaction.
     // A success-audit failure cannot roll back a reset/session. In particular
     // this hook runs after BA has finished revoking sessions on password reset.
@@ -150,6 +167,7 @@ export const makeNativeAudit = (
     // temporary session. A redirect is not proof of authentication; a live
     // server-issued session is. Tokens are used only for this internal lookup.
     const issued = ctx.context.newSession;
+    let activeSession: typeof AuthenticationActivitySession.Type | undefined;
     if (issued && issued.session.id !== state.priorSessionId) {
       const authoritative = await ctx.context.internalAdapter.findSession(
         issued.session.token,
@@ -162,6 +180,15 @@ export const makeNativeAudit = (
         properties.sessionIssued = true;
         properties.issuedSessionId = authoritative.session.id;
         properties.subjectUserId = authoritative.user.id;
+        const activitySession = Schema.decodeUnknownOption(
+          AuthenticationActivitySession,
+        )(authoritative);
+        if (
+          Option.isSome(activitySession) &&
+          ["session.signed_in", "user.registered"].includes(state.operation)
+        ) {
+          activeSession = activitySession.value;
+        }
       }
     }
     const result = Schema.decodeUnknownOption(
@@ -276,6 +303,14 @@ export const makeNativeAudit = (
           },
           properties,
         });
+        if (activeSession)
+          yield* trackActiveUser(activeSession, projectId).pipe(
+            Effect.catch(() =>
+              Effect.logWarning(
+                "Authentication activity could not be recorded",
+              ),
+            ),
+          );
       }).pipe(
         Effect.provideService(References.CurrentLogAnnotations, annotations),
       ),

@@ -38,6 +38,7 @@ import { Route as AdminWebhooksProjectIdRouteImport } from './routes/admin/webho
 import { Route as DotwellKnownOauthAuthorizationServerApiAuthRouteImport } from './routes/[.]well-known/oauth-authorization-server/api/auth'
 import { Route as AdminProjectsProjectIdIndexRouteImport } from './routes/admin/projects.$projectId.index'
 import { Route as AdminProjectsProjectIdDomainsRouteImport } from './routes/admin/projects.$projectId.domains'
+import { Route as AdminProjectsProjectIdOauthClientsRouteImport } from './routes/admin/projects.$projectId.oauth-clients'
 import { Route as AdminProjectsProjectIdSettingsRouteImport } from './routes/admin/projects.$projectId.settings'
 import { Route as AdminProjectsProjectIdWebhooksRouteImport } from './routes/admin/projects.$projectId.webhooks'
 
@@ -190,6 +191,12 @@ const AdminProjectsProjectIdDomainsRoute =
     path: '/domains',
     getParentRoute: () => AdminProjectsProjectIdRoute,
   } as any)
+const AdminProjectsProjectIdOauthClientsRoute =
+  AdminProjectsProjectIdOauthClientsRouteImport.update({
+    id: '/oauth-clients',
+    path: '/oauth-clients',
+    getParentRoute: () => AdminProjectsProjectIdRoute,
+  } as any)
 const AdminProjectsProjectIdSettingsRoute =
   AdminProjectsProjectIdSettingsRouteImport.update({
     id: '/settings',
@@ -231,6 +238,7 @@ export interface FileRoutesByFullPath {
   '/admin/webhooks/': typeof AdminWebhooksIndexRoute
   '/.well-known/oauth-authorization-server/api/auth': typeof DotwellKnownOauthAuthorizationServerApiAuthRoute
   '/admin/projects/$projectId/domains': typeof AdminProjectsProjectIdDomainsRoute
+  '/admin/projects/$projectId/oauth-clients': typeof AdminProjectsProjectIdOauthClientsRoute
   '/admin/projects/$projectId/settings': typeof AdminProjectsProjectIdSettingsRoute
   '/admin/projects/$projectId/webhooks': typeof AdminProjectsProjectIdWebhooksRoute
   '/admin/projects/$projectId/': typeof AdminProjectsProjectIdIndexRoute
@@ -261,6 +269,7 @@ export interface FileRoutesByTo {
   '/admin/webhooks': typeof AdminWebhooksIndexRoute
   '/.well-known/oauth-authorization-server/api/auth': typeof DotwellKnownOauthAuthorizationServerApiAuthRoute
   '/admin/projects/$projectId/domains': typeof AdminProjectsProjectIdDomainsRoute
+  '/admin/projects/$projectId/oauth-clients': typeof AdminProjectsProjectIdOauthClientsRoute
   '/admin/projects/$projectId/settings': typeof AdminProjectsProjectIdSettingsRoute
   '/admin/projects/$projectId/webhooks': typeof AdminProjectsProjectIdWebhooksRoute
   '/admin/projects/$projectId': typeof AdminProjectsProjectIdIndexRoute
@@ -295,6 +304,7 @@ export interface FileRoutesById {
   '/admin/webhooks/': typeof AdminWebhooksIndexRoute
   '/.well-known/oauth-authorization-server/api/auth': typeof DotwellKnownOauthAuthorizationServerApiAuthRoute
   '/admin/projects/$projectId/domains': typeof AdminProjectsProjectIdDomainsRoute
+  '/admin/projects/$projectId/oauth-clients': typeof AdminProjectsProjectIdOauthClientsRoute
   '/admin/projects/$projectId/settings': typeof AdminProjectsProjectIdSettingsRoute
   '/admin/projects/$projectId/webhooks': typeof AdminProjectsProjectIdWebhooksRoute
   '/admin/projects/$projectId/': typeof AdminProjectsProjectIdIndexRoute
@@ -329,6 +339,7 @@ export interface FileRouteTypes {
     | '/admin/webhooks/'
     | '/.well-known/oauth-authorization-server/api/auth'
     | '/admin/projects/$projectId/domains'
+    | '/admin/projects/$projectId/oauth-clients'
     | '/admin/projects/$projectId/settings'
     | '/admin/projects/$projectId/webhooks'
     | '/admin/projects/$projectId/'
@@ -359,6 +370,7 @@ export interface FileRouteTypes {
     | '/admin/webhooks'
     | '/.well-known/oauth-authorization-server/api/auth'
     | '/admin/projects/$projectId/domains'
+    | '/admin/projects/$projectId/oauth-clients'
     | '/admin/projects/$projectId/settings'
     | '/admin/projects/$projectId/webhooks'
     | '/admin/projects/$projectId'
@@ -392,6 +404,7 @@ export interface FileRouteTypes {
     | '/admin/webhooks/'
     | '/.well-known/oauth-authorization-server/api/auth'
     | '/admin/projects/$projectId/domains'
+    | '/admin/projects/$projectId/oauth-clients'
     | '/admin/projects/$projectId/settings'
     | '/admin/projects/$projectId/webhooks'
     | '/admin/projects/$projectId/'
@@ -615,6 +628,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AdminProjectsProjectIdDomainsRouteImport
       parentRoute: typeof AdminProjectsProjectIdRoute
     }
+    '/admin/projects/$projectId/oauth-clients': {
+      id: '/admin/projects/$projectId/oauth-clients'
+      path: '/oauth-clients'
+      fullPath: '/admin/projects/$projectId/oauth-clients'
+      preLoaderRoute: typeof AdminProjectsProjectIdOauthClientsRouteImport
+      parentRoute: typeof AdminProjectsProjectIdRoute
+    }
     '/admin/projects/$projectId/settings': {
       id: '/admin/projects/$projectId/settings'
       path: '/settings'
@@ -652,6 +672,7 @@ const AuthRouteWithChildren = AuthRoute._addFileChildren(AuthRouteChildren)
 
 interface AdminProjectsProjectIdRouteChildren {
   AdminProjectsProjectIdDomainsRoute: typeof AdminProjectsProjectIdDomainsRoute
+  AdminProjectsProjectIdOauthClientsRoute: typeof AdminProjectsProjectIdOauthClientsRoute
   AdminProjectsProjectIdSettingsRoute: typeof AdminProjectsProjectIdSettingsRoute
   AdminProjectsProjectIdWebhooksRoute: typeof AdminProjectsProjectIdWebhooksRoute
   AdminProjectsProjectIdIndexRoute: typeof AdminProjectsProjectIdIndexRoute
@@ -660,6 +681,8 @@ interface AdminProjectsProjectIdRouteChildren {
 const AdminProjectsProjectIdRouteChildren: AdminProjectsProjectIdRouteChildren =
   {
     AdminProjectsProjectIdDomainsRoute: AdminProjectsProjectIdDomainsRoute,
+    AdminProjectsProjectIdOauthClientsRoute:
+      AdminProjectsProjectIdOauthClientsRoute,
     AdminProjectsProjectIdSettingsRoute: AdminProjectsProjectIdSettingsRoute,
     AdminProjectsProjectIdWebhooksRoute: AdminProjectsProjectIdWebhooksRoute,
     AdminProjectsProjectIdIndexRoute: AdminProjectsProjectIdIndexRoute,

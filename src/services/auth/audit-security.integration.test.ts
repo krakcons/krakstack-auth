@@ -37,7 +37,7 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)(
           const recording = {
             ...events,
             track: (event: typeof TrackEvent.Type) => {
-              tracked.push(event);
+              if (event.category === "audit") tracked.push(event);
               return events.track(event);
             },
           };
@@ -122,6 +122,7 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)(
                   yield* sql`SELECT id FROM "user" WHERE email = ${email}`;
                 for (const user of users) {
                   yield* sql`DELETE FROM organization WHERE user_id = ${user.id}`;
+                  yield* sql`DELETE FROM events WHERE user_id = ${user.id} AND event_name = 'auth.user_active'`;
                   yield* sql`DELETE FROM "user" WHERE id = ${user.id}`;
                 }
                 yield* sql`DELETE FROM verification WHERE identifier LIKE ${`%${email}%`}`;
@@ -142,7 +143,7 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)(
           const recording = {
             ...events,
             track: (event: typeof TrackEvent.Type) => {
-              tracked.push(event);
+              if (event.category === "audit") tracked.push(event);
               return events.track(event);
             },
           };
@@ -245,6 +246,7 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)(
           }).pipe(
             Effect.ensuring(
               Effect.gen(function* () {
+                yield* sql`DELETE FROM events WHERE user_id = ${id} AND event_name = 'auth.user_active'`;
                 yield* sql`DELETE FROM "user" WHERE id = ${id}`;
                 yield* sql`DELETE FROM verification WHERE value = ${id}`;
                 for (const event of tracked)
@@ -265,7 +267,7 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)(
           const recording = {
             ...events,
             track: (event: typeof TrackEvent.Type) => {
-              tracked.push(event);
+              if (event.category === "audit") tracked.push(event);
               if (event.name === "auth.password.reset")
                 return Effect.fail(
                   new EventsPersistenceError({
@@ -354,6 +356,7 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)(
           }).pipe(
             Effect.ensuring(
               Effect.gen(function* () {
+                yield* sql`DELETE FROM events WHERE user_id = ${id} AND event_name = 'auth.user_active'`;
                 yield* sql`DELETE FROM "user" WHERE id = ${id}`;
                 yield* sql`DELETE FROM verification WHERE value = ${id}`;
                 for (const event of tracked)
@@ -374,7 +377,7 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)(
           const recording = {
             ...events,
             track: (event: typeof TrackEvent.Type) => {
-              tracked.push(event);
+              if (event.category === "audit") tracked.push(event);
               return events.track(event);
             },
           };
@@ -558,6 +561,7 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)(
                   yield* sql`SELECT id FROM "user" WHERE email = ${email}`;
                 for (const user of users) {
                   yield* sql`DELETE FROM organization WHERE user_id = ${user.id}`;
+                  yield* sql`DELETE FROM events WHERE user_id = ${user.id} AND event_name = 'auth.user_active'`;
                   yield* sql`DELETE FROM "user" WHERE id = ${user.id}`;
                 }
                 for (const event of tracked)
@@ -578,7 +582,7 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)(
           const recording = {
             ...events,
             track: (event: typeof TrackEvent.Type) => {
-              tracked.push(event);
+              if (event.category === "audit") tracked.push(event);
               return events.track(event);
             },
           };
@@ -711,6 +715,7 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)(
             Effect.ensuring(
               Effect.gen(function* () {
                 yield* sql`DELETE FROM organization WHERE user_id = ${id}`;
+                yield* sql`DELETE FROM events WHERE user_id = ${id} AND event_name = 'auth.user_active'`;
                 yield* sql`DELETE FROM "user" WHERE id = ${id}`;
                 yield* sql`DELETE FROM verification WHERE value = ${id}`;
                 for (const event of tracked)

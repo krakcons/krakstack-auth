@@ -1,6 +1,5 @@
 import { Outlet, createFileRoute, redirect } from "@tanstack/react-router";
 import {
-  KeyRound,
   KeySquare,
   LayoutDashboard,
   Building2,
@@ -69,11 +68,6 @@ const adminNavGroups: NavGroup[] = [
         label: m.sidebar_nav_api_keys,
         href: "/admin/api-keys",
         icon: KeySquare,
-      },
-      {
-        label: m.sidebar_nav_clients,
-        href: "/admin/oauth/clients",
-        icon: KeyRound,
       },
       { label: m.audit_title, href: "/admin/audit", icon: History },
     ],

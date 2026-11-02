@@ -83,23 +83,29 @@ const redirectUrisFromValue = (value: string): [string, ...string[]] => {
   return [firstRedirectUri, ...redirectUris.slice(1)];
 };
 
-const valuesToPayload = (value: OAuthClientFormValues) => {
+export const valuesToPayload = (
+  value: OAuthClientFormValues,
+  projectId?: string,
+) => {
   return {
     name: value.name.trim() || undefined,
-    projectId: value.projectId || null,
+    projectId: projectId ?? (value.projectId || null),
     redirectUris: redirectUrisFromValue(value.redirectUris),
     scope: value.scope.length ? value.scope.join(" ") : defaultScope.join(" "),
   } satisfies UpdateOAuthClientPayload;
 };
 
-const valuesToCreatePayload = (value: OAuthClientFormValues) => {
+export const valuesToCreatePayload = (
+  value: OAuthClientFormValues,
+  projectId?: string,
+) => {
   return {
-    ...valuesToPayload(value),
+    ...valuesToPayload(value, projectId),
     scope: value.scope.length ? value.scope.join(" ") : defaultScope.join(" "),
   } satisfies CreateOAuthClientPayload;
 };
 
-const makeOAuthClientForm = (client?: OAuthClientAdmin) =>
+const makeOAuthClientForm = (client?: OAuthClientAdmin, projectId?: string) =>
   FormReact.make(oauthClientFormBuilder, {
     fields: {
       name: TextField,
@@ -111,19 +117,23 @@ const makeOAuthClientForm = (client?: OAuthClientAdmin) =>
       client
         ? get.setResult(updateOAuthClientAtom, {
             params: { clientId: client.clientId },
-            payload: valuesToPayload(value),
+            payload: valuesToPayload(value, projectId),
+            reactivityKeys: ["oauth-clients"],
           })
         : get.setResult(createOAuthClientAtom, {
-            payload: valuesToCreatePayload(value),
+            payload: valuesToCreatePayload(value, projectId),
+            reactivityKeys: ["oauth-clients"],
           }),
   });
 
 export function OAuthClientForm({
   client,
+  projectId,
   onClose,
   onSaved,
 }: {
   client?: OAuthClientAdmin;
+  projectId?: string;
   onClose: () => void;
   onSaved: (client: OAuthClientFormSaved) => void;
 }) {
@@ -135,7 +145,7 @@ export function OAuthClientForm({
   });
   const isEditing = Boolean(client);
 
-  const [form] = useState(() => makeOAuthClientForm(client));
+  const [form] = useState(() => makeOAuthClientForm(client, projectId));
   const submit = useAtomSet(form.submit);
   const submitResult = useAtomValue(form.submit);
   useAtomSubscribe(form.submit, (result) => {
@@ -145,7 +155,7 @@ export function OAuthClientForm({
   });
   const defaultValues = {
     name: client?.name ?? "",
-    projectId: client?.projectId ?? "",
+    projectId: projectId ?? client?.projectId ?? "",
     redirectUris: client?.redirectUris.join("\n") ?? "",
     scope: client?.scope
       ? parseList(client.scope.replaceAll(" ", "\n"))
@@ -177,17 +187,19 @@ export function OAuthClientForm({
             }}
           >
             <form.name label={m.admin_field_display_name()} />
-            <form.projectId
-              label={m.project()}
-              options={[
-                { label: m.project_none(), value: "" },
-                ...projects.map((project) => ({
-                  label: project.name,
-                  value: project.id,
-                })),
-              ]}
-              description={m.oauth_client_project_description()}
-            />
+            {!projectId ? (
+              <form.projectId
+                label={m.project()}
+                options={[
+                  { label: m.project_none(), value: "" },
+                  ...projects.map((project) => ({
+                    label: project.name,
+                    value: project.id,
+                  })),
+                ]}
+                description={m.oauth_client_project_description()}
+              />
+            ) : null}
             <form.redirectUris
               label={m.admin_field_redirect_uris()}
               description={m.admin_field_redirect_uris_description()}

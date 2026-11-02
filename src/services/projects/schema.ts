@@ -47,11 +47,11 @@ export const Project = Schema.Struct({
 export const ProjectStatsTotals = Schema.Struct({
   users: Schema.Number,
   organizations: Schema.Number,
-  dailyActiveUsers: Schema.Number,
 }).annotate({ identifier: "ProjectStatsTotals" });
 
 export const ProjectStats = Schema.Struct({
   ...ProjectStatsTotals.fields,
+  dailyActiveUsers: Schema.Number,
   dailyActiveUsersByDay: Schema.Array(DailyActiveUsersByDay),
 }).annotate({ identifier: "ProjectStats" });
 

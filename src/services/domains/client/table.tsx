@@ -377,23 +377,6 @@ const domainColumns = (): DataTableColDef<ServerDomain>[] => [
     ),
   },
   {
-    field: "projectId",
-    headerName: m.project(),
-    type: "reference",
-    typeOptions: {
-      imageVariant: "square",
-      emptyLabel: m.admin_none(),
-      getItem: (data) =>
-        data.projectId
-          ? {
-              label: data.projectName ?? data.projectId,
-              description: data.projectId,
-              imageSrc: assetUrl(data.projectLogo ?? null, authBaseUrl),
-            }
-          : null,
-    },
-  },
-  {
     field: "organizationId",
     headerName: m.admin_column_organization(),
     type: "reference",

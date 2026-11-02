@@ -6,6 +6,7 @@ import {
   type AdminUpdateApiKeyPayload,
 } from "@krak-stack/auth/admin";
 import { Events } from "@krak-stack/registry/events";
+import { authenticationActivitySummary } from "@/services/authentication-activity";
 
 import { AdminApi } from "@/api";
 import { ApiKeyRow, ResourcePreviewRow } from "@/db/schema";
@@ -26,7 +27,6 @@ import {
   DashboardTotalsRow,
   OrganizationMemberRow,
   ProjectConnectionRow,
-  SessionActivityRow,
   SignupRow,
   type ApiKeySqlUpdate,
 } from "./schema";
@@ -250,7 +250,6 @@ export const adminApiHandler = HttpApiBuilder.group(
           const sql = yield* SqlClient.SqlClient;
           const chartDays = query.days ? Number(query.days) : 14;
           const chartStart = daysAgo(chartDays - 1);
-          const since = new Date(Date.now() - 24 * 60 * 60 * 1000);
           const totals = yield* SqlSchema.findOne({
             Request: Schema.Void,
             Result: DashboardTotalsRow,
@@ -260,15 +259,8 @@ export const adminApiHandler = HttpApiBuilder.group(
         (SELECT count(*)::int FROM project) AS total_projects,
         (SELECT count(*)::int FROM domains) AS total_domains,
         (SELECT count(*)::int FROM apikey) AS total_api_keys,
-        (SELECT count(*)::int FROM oauth_client) AS total_oauth_clients,
-        (SELECT count(DISTINCT user_id)::int FROM session WHERE updated_at >= ${since} AND expires_at > ${new Date()}) AS daily_active_users`,
+        (SELECT count(*)::int FROM oauth_client) AS total_oauth_clients`,
           })(undefined).pipe(Effect.mapError(internalServerError));
-          const recentSessions = yield* SqlSchema.findAll({
-            Request: Schema.Date,
-            Result: SessionActivityRow,
-            execute: (start) =>
-              sql`SELECT user_id, updated_at FROM session WHERE updated_at >= ${start} AND expires_at > ${new Date()}`,
-          })(chartStart).pipe(Effect.mapError(internalServerError));
           const recentUsers = yield* SqlSchema.findAll({
             Request: Schema.Date,
             Result: SignupRow,
@@ -284,13 +276,6 @@ export const adminApiHandler = HttpApiBuilder.group(
         FROM project p LEFT JOIN project_user pu ON pu.project_id = p.id
         LEFT JOIN project_organization po ON po.project_id = p.id GROUP BY p.id ORDER BY p.name`,
           })(undefined).pipe(Effect.mapError(internalServerError));
-          const activeUsers = new Map<string, Set<string>>();
-          for (const item of recentSessions) {
-            const key = dayKey(item.updatedAt);
-            const users = activeUsers.get(key) ?? new Set<string>();
-            users.add(item.userId);
-            activeUsers.set(key, users);
-          }
           const signups = new Map<string, number>();
           for (const item of recentUsers) {
             const key = dayKey(item.createdAt);
@@ -298,14 +283,10 @@ export const adminApiHandler = HttpApiBuilder.group(
           }
           return {
             ...totals,
+            ...(yield* authenticationActivitySummary({ days: chartDays }).pipe(
+              Effect.mapError(internalServerError),
+            )),
             projectConnections,
-            dailyActiveUsersByDay: Array.from(
-              { length: chartDays },
-              (_, index) => {
-                const date = dayKey(daysAgo(chartDays - 1 - index));
-                return { date, count: activeUsers.get(date)?.size ?? 0 };
-              },
-            ),
             signupsByDay: Array.from({ length: chartDays }, (_, index) => {
               const date = dayKey(daysAgo(chartDays - 1 - index));
               return { date, count: signups.get(date) ?? 0 };

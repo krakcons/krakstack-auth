@@ -239,7 +239,7 @@ function DashboardPage() {
               />
             </Link>
             <Link
-              to="/admin/oauth/clients"
+              to="/admin/projects"
               preload="intent"
               className="group/card-link focus-visible:ring-ring/50 min-w-0 rounded-xl outline-none focus-visible:ring-[3px]"
             >
