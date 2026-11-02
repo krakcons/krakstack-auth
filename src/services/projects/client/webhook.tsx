@@ -6,7 +6,6 @@ import { Eye, EyeOff } from "lucide-react";
 import { CopyButton } from "@krak-stack/registry/copy-button";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Separator } from "@/components/ui/separator";
 import { FieldLabel } from "@/components/ui/field";
 import {
   InputGroup,
@@ -58,52 +57,54 @@ export const ProjectWebhook = ({ projectId }: { projectId: string }) => {
   const value = url ?? endpoint?.url ?? "";
   const valid = Schema.is(ConfigureProjectWebhook)({ url: value });
   const invalid = value.length > 0 && !valid;
+  const signingSecret = endpoint ? (
+    <div className="flex flex-col gap-2">
+      <div className="flex flex-col gap-1.5">
+        <FieldLabel htmlFor={`webhook-secret-${projectId}`}>
+          {m.project_webhook_secret()}
+        </FieldLabel>
+        <p className="text-muted-foreground text-sm">
+          {m.project_webhook_secret_help()}
+        </p>
+      </div>
+      <InputGroup className="w-fit max-w-full">
+        <InputGroupInput
+          id={`webhook-secret-${projectId}`}
+          aria-label={m.project_webhook_secret()}
+          className="flex-initial font-mono"
+          style={{ width: `calc(${endpoint.secret.length}ch + 1.25rem)` }}
+          type={secretRevealed ? "text" : "password"}
+          autoComplete="off"
+          readOnly
+          value={endpoint.secret}
+          onFocus={(event) => event.currentTarget.select()}
+        />
+        <InputGroupAddon align="inline-end">
+          <InputGroupButton
+            size="icon-sm"
+            aria-label={
+              secretRevealed
+                ? m.project_webhook_secret_hide()
+                : m.project_webhook_secret_show()
+            }
+            aria-pressed={secretRevealed}
+            onClick={() => setSecretRevealed((revealed) => !revealed)}
+          >
+            {secretRevealed ? <EyeOff /> : <Eye />}
+          </InputGroupButton>
+          <CopyButton
+            value={endpoint.secret}
+            valueDescription={m.project_webhook_secret()}
+            locale={getLocale()}
+            variant="ghost"
+            copyVariant="large"
+          />
+        </InputGroupAddon>
+      </InputGroup>
+    </div>
+  ) : null;
   return (
     <section className="flex flex-col gap-3 pt-4">
-      {endpoint ? (
-        <section className="flex flex-wrap items-end justify-between gap-2">
-          <div className="flex flex-col gap-1.5">
-            <h3 className="font-medium">{m.project_webhook_secret()}</h3>
-            <p className="text-muted-foreground text-sm">
-              {m.project_webhook_secret_help()}
-            </p>
-          </div>
-          <InputGroup className="w-fit max-w-full">
-            <InputGroupInput
-              aria-label={m.project_webhook_secret()}
-              className="flex-initial font-mono"
-              style={{ width: `calc(${endpoint.secret.length}ch + 1.25rem)` }}
-              type={secretRevealed ? "text" : "password"}
-              autoComplete="off"
-              readOnly
-              value={endpoint.secret}
-              onFocus={(event) => event.currentTarget.select()}
-            />
-            <InputGroupAddon align="inline-end">
-              <InputGroupButton
-                size="icon-sm"
-                aria-label={
-                  secretRevealed
-                    ? m.project_webhook_secret_hide()
-                    : m.project_webhook_secret_show()
-                }
-                aria-pressed={secretRevealed}
-                onClick={() => setSecretRevealed((revealed) => !revealed)}
-              >
-                {secretRevealed ? <EyeOff /> : <Eye />}
-              </InputGroupButton>
-              <CopyButton
-                value={endpoint.secret}
-                valueDescription={m.project_webhook_secret()}
-                locale={getLocale()}
-                variant="ghost"
-                copyVariant="large"
-              />
-            </InputGroupAddon>
-          </InputGroup>
-        </section>
-      ) : null}
-      {endpoint ? <Separator className="my-4" /> : null}
       <h3 className="font-medium">{m.project_webhook_title()}</h3>
       <p className="text-muted-foreground text-sm">
         {m.project_webhook_description()}
@@ -140,6 +141,7 @@ export const ProjectWebhook = ({ projectId }: { projectId: string }) => {
             </p>
           ) : null}
         </div>
+        {signingSecret}
         <Button type="submit" disabled={result.waiting || !valid}>
           {m.form_submit()}
         </Button>

@@ -5,10 +5,8 @@ import {
   LayoutDashboard,
   Building2,
   FolderKanban,
-  Globe2,
   Users,
   History,
-  Webhook,
 } from "lucide-react";
 import { Suspense } from "react";
 import { Effect } from "effect";
@@ -68,11 +66,6 @@ const adminNavGroups: NavGroup[] = [
         icon: FolderKanban,
       },
       {
-        label: m.sidebar_nav_domains,
-        href: "/admin/domains",
-        icon: Globe2,
-      },
-      {
         label: m.sidebar_nav_api_keys,
         href: "/admin/api-keys",
         icon: KeySquare,
@@ -83,11 +76,6 @@ const adminNavGroups: NavGroup[] = [
         icon: KeyRound,
       },
       { label: m.audit_title, href: "/admin/audit", icon: History },
-      {
-        label: m.project_webhook_title,
-        href: "/admin/webhooks",
-        icon: Webhook,
-      },
     ],
   },
   {

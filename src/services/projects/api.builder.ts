@@ -47,6 +47,21 @@ export const adminProjectsApiHandler = HttpApiBuilder.group(
   "projects",
   (handlers) =>
     handlers
+      .handle("projectStats", ({ params, query }) =>
+        Effect.gen(function* () {
+          const projects = yield* Projects;
+          const project = yield* projects
+            .get({ id: params.id })
+            .pipe(Effect.mapError(internalServerError));
+          if (!project) return yield* new HttpApiError.NotFound({});
+          return yield* projects
+            .stats({
+              id: params.id,
+              days: query.days ? Number(query.days) : 14,
+            })
+            .pipe(Effect.mapError(internalServerError));
+        }),
+      )
       .handle("listProjects", () =>
         Effect.gen(function* () {
           const projects = yield* Projects;

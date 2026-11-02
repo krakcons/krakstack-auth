@@ -1,4 +1,5 @@
 import { Schema } from "effect";
+import { DashboardStatsQuery } from "@krak-stack/auth/admin";
 import {
   HttpApiEndpoint,
   HttpApiError,
@@ -15,6 +16,7 @@ import { AdminAuthMiddleware } from "@/services/auth/middleware";
 import {
   CreateProjectPayload,
   Project,
+  ProjectStats,
   ProjectIdParams,
   ProjectPublicConfig,
   ProjectPublicConfigQuery,
@@ -44,6 +46,19 @@ export const PublicProjectsApiGroup = HttpApiGroup.make("publicProjects")
   );
 
 export const AdminProjectsApiGroup = HttpApiGroup.make("projects")
+  .add(
+    HttpApiEndpoint.get("projectStats", "/admin/projects/:id/stats", {
+      params: ProjectIdParams,
+      query: DashboardStatsQuery,
+      success: ProjectStats,
+      error: [
+        HttpApiError.Unauthorized,
+        HttpApiError.Forbidden,
+        HttpApiError.NotFound,
+        HttpApiError.InternalServerError,
+      ],
+    }),
+  )
   .add(
     HttpApiEndpoint.get("listProjects", "/admin/projects", {
       success: Schema.Array(Project),

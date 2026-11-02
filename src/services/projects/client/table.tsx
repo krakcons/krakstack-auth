@@ -28,8 +28,6 @@ import { m } from "@/paraglide/messages";
 import { authBaseUrl } from "@/services/auth/client";
 import type { Project } from "@/services/projects/schema";
 
-import { ProjectForm } from "./form";
-
 const projectsAtom = Atom.family((reloadKey: number) =>
   AdminApiClient.query("projects", "listProjects", {
     timeToLive: "1 minute",
@@ -41,12 +39,11 @@ const projectsAtom = Atom.family((reloadKey: number) =>
 const deleteProjectAtom = AdminApiClient.mutation("projects", "deleteProject");
 
 export function ProjectsTable({ reloadKey = 0 }: { reloadKey?: number }) {
-  const navigate = useNavigate({ from: "/admin/projects" });
-  const search = useSearch({ from: "/admin/projects" });
+  const navigate = useNavigate({ from: "/admin/projects/" });
+  const search = useSearch({ from: "/admin/projects/" });
   const result = useAtomValue(projectsAtom(reloadKey));
   const deleteProject = useAtomSet(deleteProjectAtom, { mode: "promise" });
   const [projects, setProjects] = useState<Project[] | null>(null);
-  const [editingProject, setEditingProject] = useState<Project | null>(null);
   const [deletingProject, setDeletingProject] = useState<Project | null>(null);
   const rows =
     projects ??
@@ -67,6 +64,12 @@ export function ProjectsTable({ reloadKey = 0 }: { reloadKey?: number }) {
       <DataTable
         columnDefs={projectColumns()}
         rowData={rows}
+        onRowClicked={(project) =>
+          void navigate({
+            to: "/admin/projects/$projectId",
+            params: { projectId: project.id },
+          })
+        }
         features={{
           export: { baseName: "projects" },
           gallery: false,
@@ -86,7 +89,11 @@ export function ProjectsTable({ reloadKey = 0 }: { reloadKey?: number }) {
               {
                 name: m.admin_action_edit(),
                 icon: <Pencil className="size-4" />,
-                onClick: setEditingProject,
+                onClick: (project) =>
+                  void navigate({
+                    to: "/admin/projects/$projectId/settings",
+                    params: { projectId: project.id },
+                  }),
               },
               {
                 name: m.actions_delete(),
@@ -104,19 +111,6 @@ export function ProjectsTable({ reloadKey = 0 }: { reloadKey?: number }) {
           })
         }
       />
-      {editingProject ? (
-        <ProjectForm
-          project={editingProject}
-          onClose={() => setEditingProject(null)}
-          onSaved={(updated) => {
-            setProjects((current) =>
-              (current ?? rows).map((project) =>
-                project.id === updated.id ? updated : project,
-              ),
-            );
-          }}
-        />
-      ) : null}
       {deletingProject ? (
         <DeleteProjectDialog
           project={deletingProject}

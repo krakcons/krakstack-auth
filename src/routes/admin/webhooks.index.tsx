@@ -28,12 +28,11 @@ function WebhooksPage() {
         }
         onSelect={(row) => {
           void navigate({
-            to: "/admin/webhooks/$projectId",
+            to: "/admin/projects/$projectId/webhooks",
             params: { projectId: row.projectId },
             search: {
               page: 0,
               pageSize: 20,
-              tab: row.url ? "activity" : "settings",
             },
           });
         }}

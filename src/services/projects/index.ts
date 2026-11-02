@@ -1,5 +1,6 @@
 import { SecureRandom } from "effect/crypto";
-import { Context, Effect, Layer, Option, Schema } from "effect";
+import { DailyActiveUsersByDay } from "@krak-stack/auth/admin";
+import { Context, DateTime, Effect, Layer, Option, Schema } from "effect";
 import { SqlClient, SqlSchema } from "effect/sql";
 import {
   DomainRow,
@@ -16,6 +17,7 @@ import { organizationBranding } from "@/services/organizations/branding";
 
 import {
   ProjectData,
+  ProjectStatsTotals,
   ProjectDataJson,
   CreateProjectPayload,
   UpdateProjectPayload,
@@ -123,6 +125,47 @@ export class Projects extends Context.Service<Projects>()("Projects", {
     const get = Effect.fn("Projects.get")(function* ({ id }: { id: string }) {
       const value = Option.getOrNull(yield* findProject(id));
       return value ? row(value) : null;
+    });
+
+    const stats = Effect.fn("Projects.stats")(function* ({
+      id,
+      days = 14,
+    }: {
+      id: string;
+      days?: number;
+    }) {
+      const now = DateTime.toDateUtc(yield* DateTime.now);
+      const since = new Date(now.getTime() - 24 * 60 * 60 * 1000);
+      const start = new Date(now);
+      start.setUTCHours(0, 0, 0, 0);
+      start.setUTCDate(start.getUTCDate() - days + 1);
+      const totals = yield* SqlSchema.findOne({
+        Request: Schema.String,
+        Result: ProjectStatsTotals,
+        execute: (projectId) => sql`SELECT
+          (SELECT count(*)::int FROM project_user WHERE project_id = ${projectId}) AS users,
+          (SELECT count(*)::int FROM project_organization WHERE project_id = ${projectId}) AS organizations,
+          (SELECT count(DISTINCT pu.user_id)::int FROM project_user pu
+            JOIN session s ON s.user_id = pu.user_id
+            WHERE pu.project_id = ${projectId} AND s.updated_at >= ${since}
+              AND s.expires_at > ${now}) AS daily_active_users`,
+      })(id);
+      const dailyActiveUsersByDay = yield* SqlSchema.findAll({
+        Request: Schema.String,
+        Result: DailyActiveUsersByDay,
+        execute: (projectId) => sql`
+          WITH activity AS (
+            SELECT s.updated_at::date AS day, count(DISTINCT s.user_id)::int AS count
+            FROM session s JOIN project_user pu ON pu.user_id = s.user_id
+            WHERE pu.project_id = ${projectId} AND s.updated_at >= ${start}
+              AND s.updated_at <= ${now} AND s.expires_at > ${now}
+            GROUP BY s.updated_at::date
+          )
+          SELECT to_char(d.day, 'YYYY-MM-DD') AS date, coalesce(a.count, 0)::int AS count
+          FROM generate_series(${start}::timestamp, ${start}::timestamp + (${days} - 1) * interval '1 day', interval '1 day') d(day)
+          LEFT JOIN activity a ON a.day = d.day::date ORDER BY d.day`,
+      })(id);
+      return { ...totals, dailyActiveUsersByDay };
     });
 
     const publicConfigFrom = ({
@@ -306,7 +349,15 @@ export class Projects extends Context.Service<Projects>()("Projects", {
       return value ? row(value) : null;
     }, sql.withTransaction);
 
-    return { list, get, getPublicConfig, create, update, delete: _delete };
+    return {
+      list,
+      get,
+      stats,
+      getPublicConfig,
+      create,
+      update,
+      delete: _delete,
+    };
   }),
 }) {
   static readonly baseLayer = Layer.effect(this, this.make);

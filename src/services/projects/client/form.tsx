@@ -24,10 +24,9 @@ import { AdminApiClient } from "@/lib/admin-api-client";
 import { assetPath, assetUrl } from "@/lib/assets";
 import { authBaseUrl } from "@/services/auth/client";
 import { ProjectData, type Project } from "@/services/projects/schema";
-import { ProjectWebhook } from "./webhook";
+import { updateProjectAtom } from "./atom";
 
 const createProjectAtom = AdminApiClient.mutation("projects", "createProject");
-const updateProjectAtom = AdminApiClient.mutation("projects", "updateProject");
 const uploadLogoAtom = AdminApiClient.mutation("projects", "uploadProjectLogo");
 
 type ProjectFormValues = {
@@ -87,7 +86,6 @@ const makeProjectForm = (project?: Project) =>
           ? get.setResult(updateProjectAtom, {
               params: { id: project.id },
               payload: { name: value.name.trim(), logo, data },
-              reactivityKeys: ["projects"],
             })
           : get.setResult(createProjectAtom, {
               payload: { name: value.name.trim(), logo, data },
@@ -109,18 +107,20 @@ export function ProjectForm({
   project,
   onClose,
   onSaved,
+  inline = false,
 }: {
   project?: Project;
-  onClose: () => void;
-  onSaved: (project: Project) => void;
+  onClose?: () => void;
+  onSaved?: (project: Project) => void;
+  inline?: boolean;
 }) {
   const [form] = useState(() => makeProjectForm(project));
   const submit = useAtomSet(form.submit);
   const submitResult = useAtomValue(form.submit);
   useAtomSubscribe(form.submit, (result) => {
     if (!AsyncResult.isSuccess(result)) return;
-    onSaved(result.value);
-    onClose();
+    onSaved?.(result.value);
+    onClose?.();
   });
   const defaultValues = {
     name: project?.name ?? "",
@@ -131,8 +131,47 @@ export function ProjectForm({
     google: project?.data.authOptions?.google ?? true,
   } satisfies ProjectFormValues;
 
+  const fields = (
+    <form.Initialize defaultValues={defaultValues}>
+      <form
+        className="flex flex-col gap-4"
+        onSubmit={(event) => {
+          event.preventDefault();
+          event.stopPropagation();
+          submit();
+        }}
+      >
+        <form.name label={m.admin_field_display_name()} />
+        <form.logo
+          label={m.oauth_client_logo_url()}
+          size={{
+            width: 140,
+            height: 40,
+            suggestedWidth: 512,
+            suggestedHeight: 512,
+          }}
+        />
+        <form.themeCss
+          label={m.oauth_client_theme_css()}
+          description={m.oauth_client_theme_css_description()}
+          rows={12}
+          spellCheck={false}
+        />
+        <div className="grid gap-3 rounded-lg border p-4 md:grid-cols-3">
+          <form.emailPassword label={m.oauth_client_auth_email_password()} />
+          <form.emailOtp label={m.oauth_client_auth_email_otp()} />
+          <form.google label={m.oauth_client_auth_google()} />
+        </div>
+        <SubmitError result={submitResult} />
+        <SubmitButton form={form}>{m.form_submit()}</SubmitButton>
+      </form>
+    </form.Initialize>
+  );
+
+  if (inline) return fields;
+
   return (
-    <Dialog open onOpenChange={(open) => !open && onClose()}>
+    <Dialog open onOpenChange={(open) => !open && onClose?.()}>
       <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-3xl">
         <DialogHeader>
           <DialogTitle>
@@ -140,43 +179,7 @@ export function ProjectForm({
           </DialogTitle>
           <DialogDescription>{m.project_form_description()}</DialogDescription>
         </DialogHeader>
-        <form.Initialize defaultValues={defaultValues}>
-          <form
-            className="flex flex-col gap-4"
-            onSubmit={(event) => {
-              event.preventDefault();
-              event.stopPropagation();
-              submit();
-            }}
-          >
-            <form.name label={m.admin_field_display_name()} />
-            <form.logo
-              label={m.oauth_client_logo_url()}
-              size={{
-                width: 140,
-                height: 40,
-                suggestedWidth: 512,
-                suggestedHeight: 512,
-              }}
-            />
-            <form.themeCss
-              label={m.oauth_client_theme_css()}
-              description={m.oauth_client_theme_css_description()}
-              rows={12}
-              spellCheck={false}
-            />
-            <div className="grid gap-3 rounded-lg border p-4 md:grid-cols-3">
-              <form.emailPassword
-                label={m.oauth_client_auth_email_password()}
-              />
-              <form.emailOtp label={m.oauth_client_auth_email_otp()} />
-              <form.google label={m.oauth_client_auth_google()} />
-            </div>
-            <SubmitError result={submitResult} />
-            <SubmitButton form={form}>{m.form_submit()}</SubmitButton>
-          </form>
-        </form.Initialize>
-        {project ? <ProjectWebhook projectId={project.id} /> : null}
+        {fields}
       </DialogContent>
     </Dialog>
   );

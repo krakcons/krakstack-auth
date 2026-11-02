@@ -1,18 +1,15 @@
 import { Link, createFileRoute } from "@tanstack/react-router";
 import { useAtomValue } from "@effect/atom-react";
-import type {
-  DailyActiveUsersByDay,
-  ProjectConnections,
-} from "@krak-stack/auth/admin";
+import type { ProjectConnections } from "@krak-stack/auth/admin";
 import { AsyncResult } from "effect/reactivity";
-import { areaY, barY, defineChart, group } from "@tanstack/charts";
+import { barY, defineChart, group } from "@tanstack/charts";
 import { Chart } from "@tanstack/charts/react";
 import { scaleBand } from "@tanstack/charts/scales/band";
 import { scaleLinear } from "@tanstack/charts/scales/linear";
-import { scalePoint } from "@tanstack/charts/scales/point";
 import { tooltip } from "@tanstack/charts/tooltip";
 import {
   Building2,
+  Activity,
   FolderKanban,
   Globe2,
   KeyRound,
@@ -22,6 +19,7 @@ import {
 import { useMemo, useState } from "react";
 
 import { m } from "@/paraglide/messages";
+import { TrendChart } from "@/services/admin/client/trend-chart";
 import {
   dashboardStatsAtom,
   type ChartRange,
@@ -47,7 +45,6 @@ export const Route = createFileRoute("/admin/")({
   component: DashboardPage,
 });
 
-type DailyCount = typeof DailyActiveUsersByDay.Type;
 type ProjectConnection = typeof ProjectConnections.Type;
 
 const chartRanges = ["7", "14", "30", "90"] as const;
@@ -62,88 +59,8 @@ const chartRangeOptions: { value: ChartRange; label: string }[] = [
 const isChartRange = (value: string): value is ChartRange =>
   chartRanges.some((range) => range === value);
 
-const formatDay = (value: string) =>
-  new Date(`${value}T00:00:00Z`).toLocaleDateString(undefined, {
-    month: "short",
-    day: "numeric",
-    timeZone: "UTC",
-  });
-
 const chartDomainMax = (dataMax: number) =>
   Math.max(1, Math.ceil(dataMax * 1.1));
-
-function TrendChart({
-  data,
-  title,
-  valueLabel,
-}: {
-  data: ReadonlyArray<DailyCount>;
-  title: string;
-  valueLabel: string;
-}) {
-  const definition = useMemo(() => {
-    const domainMax = chartDomainMax(
-      Math.max(0, ...data.map(({ count }) => count)),
-    );
-    const yScale = scaleLinear().domain([0, domainMax]);
-
-    return defineChart({
-      marks: [
-        areaY(data, {
-          x: "date",
-          y1: 0,
-          y2: "count",
-          fill: "var(--chart-1)",
-          fillOpacity: 0.2,
-          stroke: "var(--chart-1)",
-          strokeWidth: 2,
-        }),
-      ],
-      x: {
-        scale: scalePoint<string>,
-        grid: false,
-        axis: {
-          line: false,
-          ticks: {
-            size: 0,
-            padding: 10,
-            format: (value) => formatDay(String(value)),
-          },
-        },
-      },
-      y: {
-        scale: yScale,
-        grid: true,
-        axis: {
-          line: false,
-          ticks: {
-            values: yScale.ticks(5).filter(Number.isInteger),
-            size: 0,
-          },
-        },
-      },
-      tooltip: {
-        use: tooltip,
-        items: [
-          {
-            channel: "y",
-            label: valueLabel,
-            text: (point) => point.datum.count.toLocaleString(),
-          },
-        ],
-      },
-    });
-  }, [data, valueLabel]);
-
-  return (
-    <Chart
-      ariaLabel={title}
-      className="text-muted-foreground min-h-[260px] w-full text-xs"
-      definition={definition}
-      height={260}
-    />
-  );
-}
 
 function ProjectConnectionBars({
   data,
@@ -252,7 +169,7 @@ function DashboardPage() {
         </p>
       ) : (
         <>
-          <div className="grid gap-4 md:grid-cols-2">
+          <div className="grid gap-4 md:grid-cols-3">
             <Link
               to="/admin/users"
               preload="intent"
@@ -277,6 +194,12 @@ function DashboardPage() {
                 icon={<Building2 className="text-muted-foreground" />}
               />
             </Link>
+            <StatsCard
+              title={m.admin_daily_active_users()}
+              value={formatStat(stats?.dailyActiveUsers)}
+              description={m.admin_dau_card_description()}
+              icon={<Activity className="text-muted-foreground" />}
+            />
           </div>
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
             <Link
@@ -292,7 +215,7 @@ function DashboardPage() {
               />
             </Link>
             <Link
-              to="/admin/domains"
+              to="/admin/projects"
               preload="intent"
               className="group/card-link focus-visible:ring-ring/50 min-w-0 rounded-xl outline-none focus-visible:ring-[3px]"
             >

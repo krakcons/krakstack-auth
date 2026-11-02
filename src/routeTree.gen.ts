@@ -27,14 +27,19 @@ import { Route as AdminApiKeysRouteImport } from './routes/admin/api-keys'
 import { Route as AdminAuditRouteImport } from './routes/admin/audit'
 import { Route as AdminDomainsRouteImport } from './routes/admin/domains'
 import { Route as AdminOrganizationsRouteImport } from './routes/admin/organizations'
-import { Route as AdminProjectsRouteImport } from './routes/admin/projects'
 import { Route as AdminUsersRouteImport } from './routes/admin/users'
 import { Route as ApiSplatRouteImport } from './routes/api/$'
 import { Route as DocsChar123SlugChar125RouteImport } from './routes/docs.{-$slug}'
 import { Route as AdminOauthClientsRouteImport } from './routes/admin/oauth/clients'
+import { Route as AdminProjectsIndexRouteImport } from './routes/admin/projects.index'
+import { Route as AdminProjectsProjectIdRouteImport } from './routes/admin/projects.$projectId'
 import { Route as AdminWebhooksIndexRouteImport } from './routes/admin/webhooks.index'
 import { Route as AdminWebhooksProjectIdRouteImport } from './routes/admin/webhooks.$projectId'
 import { Route as DotwellKnownOauthAuthorizationServerApiAuthRouteImport } from './routes/[.]well-known/oauth-authorization-server/api/auth'
+import { Route as AdminProjectsProjectIdIndexRouteImport } from './routes/admin/projects.$projectId.index'
+import { Route as AdminProjectsProjectIdDomainsRouteImport } from './routes/admin/projects.$projectId.domains'
+import { Route as AdminProjectsProjectIdSettingsRouteImport } from './routes/admin/projects.$projectId.settings'
+import { Route as AdminProjectsProjectIdWebhooksRouteImport } from './routes/admin/projects.$projectId.webhooks'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
@@ -127,11 +132,6 @@ const AdminOrganizationsRoute = AdminOrganizationsRouteImport.update({
   path: '/organizations',
   getParentRoute: () => AdminRoute,
 } as any)
-const AdminProjectsRoute = AdminProjectsRouteImport.update({
-  id: '/projects',
-  path: '/projects',
-  getParentRoute: () => AdminRoute,
-} as any)
 const AdminUsersRoute = AdminUsersRouteImport.update({
   id: '/users',
   path: '/users',
@@ -152,6 +152,16 @@ const AdminOauthClientsRoute = AdminOauthClientsRouteImport.update({
   path: '/oauth/clients',
   getParentRoute: () => AdminRoute,
 } as any)
+const AdminProjectsIndexRoute = AdminProjectsIndexRouteImport.update({
+  id: '/projects/',
+  path: '/projects/',
+  getParentRoute: () => AdminRoute,
+} as any)
+const AdminProjectsProjectIdRoute = AdminProjectsProjectIdRouteImport.update({
+  id: '/projects/$projectId',
+  path: '/projects/$projectId',
+  getParentRoute: () => AdminRoute,
+} as any)
 const AdminWebhooksIndexRoute = AdminWebhooksIndexRouteImport.update({
   id: '/webhooks/',
   path: '/webhooks/',
@@ -167,6 +177,30 @@ const DotwellKnownOauthAuthorizationServerApiAuthRoute =
     id: '/api/auth',
     path: '/api/auth',
     getParentRoute: () => DotwellKnownOauthAuthorizationServerRoute,
+  } as any)
+const AdminProjectsProjectIdIndexRoute =
+  AdminProjectsProjectIdIndexRouteImport.update({
+    id: '/',
+    path: '/',
+    getParentRoute: () => AdminProjectsProjectIdRoute,
+  } as any)
+const AdminProjectsProjectIdDomainsRoute =
+  AdminProjectsProjectIdDomainsRouteImport.update({
+    id: '/domains',
+    path: '/domains',
+    getParentRoute: () => AdminProjectsProjectIdRoute,
+  } as any)
+const AdminProjectsProjectIdSettingsRoute =
+  AdminProjectsProjectIdSettingsRouteImport.update({
+    id: '/settings',
+    path: '/settings',
+    getParentRoute: () => AdminProjectsProjectIdRoute,
+  } as any)
+const AdminProjectsProjectIdWebhooksRoute =
+  AdminProjectsProjectIdWebhooksRouteImport.update({
+    id: '/webhooks',
+    path: '/webhooks',
+    getParentRoute: () => AdminProjectsProjectIdRoute,
   } as any)
 
 export interface FileRoutesByFullPath {
@@ -186,15 +220,20 @@ export interface FileRoutesByFullPath {
   '/admin/audit': typeof AdminAuditRoute
   '/admin/domains': typeof AdminDomainsRoute
   '/admin/organizations': typeof AdminOrganizationsRoute
-  '/admin/projects': typeof AdminProjectsRoute
   '/admin/users': typeof AdminUsersRoute
   '/api/$': typeof ApiSplatRoute
   '/docs/{-$slug}': typeof DocsChar123SlugChar125Route
   '/admin/': typeof AdminIndexRoute
   '/admin/oauth/clients': typeof AdminOauthClientsRoute
+  '/admin/projects/$projectId': typeof AdminProjectsProjectIdRouteWithChildren
   '/admin/webhooks/$projectId': typeof AdminWebhooksProjectIdRoute
+  '/admin/projects/': typeof AdminProjectsIndexRoute
   '/admin/webhooks/': typeof AdminWebhooksIndexRoute
   '/.well-known/oauth-authorization-server/api/auth': typeof DotwellKnownOauthAuthorizationServerApiAuthRoute
+  '/admin/projects/$projectId/domains': typeof AdminProjectsProjectIdDomainsRoute
+  '/admin/projects/$projectId/settings': typeof AdminProjectsProjectIdSettingsRoute
+  '/admin/projects/$projectId/webhooks': typeof AdminProjectsProjectIdWebhooksRoute
+  '/admin/projects/$projectId/': typeof AdminProjectsProjectIdIndexRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -212,15 +251,19 @@ export interface FileRoutesByTo {
   '/admin/audit': typeof AdminAuditRoute
   '/admin/domains': typeof AdminDomainsRoute
   '/admin/organizations': typeof AdminOrganizationsRoute
-  '/admin/projects': typeof AdminProjectsRoute
   '/admin/users': typeof AdminUsersRoute
   '/api/$': typeof ApiSplatRoute
   '/docs/{-$slug}': typeof DocsChar123SlugChar125Route
   '/admin': typeof AdminIndexRoute
   '/admin/oauth/clients': typeof AdminOauthClientsRoute
   '/admin/webhooks/$projectId': typeof AdminWebhooksProjectIdRoute
+  '/admin/projects': typeof AdminProjectsIndexRoute
   '/admin/webhooks': typeof AdminWebhooksIndexRoute
   '/.well-known/oauth-authorization-server/api/auth': typeof DotwellKnownOauthAuthorizationServerApiAuthRoute
+  '/admin/projects/$projectId/domains': typeof AdminProjectsProjectIdDomainsRoute
+  '/admin/projects/$projectId/settings': typeof AdminProjectsProjectIdSettingsRoute
+  '/admin/projects/$projectId/webhooks': typeof AdminProjectsProjectIdWebhooksRoute
+  '/admin/projects/$projectId': typeof AdminProjectsProjectIdIndexRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -241,15 +284,20 @@ export interface FileRoutesById {
   '/admin/audit': typeof AdminAuditRoute
   '/admin/domains': typeof AdminDomainsRoute
   '/admin/organizations': typeof AdminOrganizationsRoute
-  '/admin/projects': typeof AdminProjectsRoute
   '/admin/users': typeof AdminUsersRoute
   '/api/$': typeof ApiSplatRoute
   '/docs/{-$slug}': typeof DocsChar123SlugChar125Route
   '/admin/': typeof AdminIndexRoute
   '/admin/oauth/clients': typeof AdminOauthClientsRoute
+  '/admin/projects/$projectId': typeof AdminProjectsProjectIdRouteWithChildren
   '/admin/webhooks/$projectId': typeof AdminWebhooksProjectIdRoute
+  '/admin/projects/': typeof AdminProjectsIndexRoute
   '/admin/webhooks/': typeof AdminWebhooksIndexRoute
   '/.well-known/oauth-authorization-server/api/auth': typeof DotwellKnownOauthAuthorizationServerApiAuthRoute
+  '/admin/projects/$projectId/domains': typeof AdminProjectsProjectIdDomainsRoute
+  '/admin/projects/$projectId/settings': typeof AdminProjectsProjectIdSettingsRoute
+  '/admin/projects/$projectId/webhooks': typeof AdminProjectsProjectIdWebhooksRoute
+  '/admin/projects/$projectId/': typeof AdminProjectsProjectIdIndexRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -270,15 +318,20 @@ export interface FileRouteTypes {
     | '/admin/audit'
     | '/admin/domains'
     | '/admin/organizations'
-    | '/admin/projects'
     | '/admin/users'
     | '/api/$'
     | '/docs/{-$slug}'
     | '/admin/'
     | '/admin/oauth/clients'
+    | '/admin/projects/$projectId'
     | '/admin/webhooks/$projectId'
+    | '/admin/projects/'
     | '/admin/webhooks/'
     | '/.well-known/oauth-authorization-server/api/auth'
+    | '/admin/projects/$projectId/domains'
+    | '/admin/projects/$projectId/settings'
+    | '/admin/projects/$projectId/webhooks'
+    | '/admin/projects/$projectId/'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -296,15 +349,19 @@ export interface FileRouteTypes {
     | '/admin/audit'
     | '/admin/domains'
     | '/admin/organizations'
-    | '/admin/projects'
     | '/admin/users'
     | '/api/$'
     | '/docs/{-$slug}'
     | '/admin'
     | '/admin/oauth/clients'
     | '/admin/webhooks/$projectId'
+    | '/admin/projects'
     | '/admin/webhooks'
     | '/.well-known/oauth-authorization-server/api/auth'
+    | '/admin/projects/$projectId/domains'
+    | '/admin/projects/$projectId/settings'
+    | '/admin/projects/$projectId/webhooks'
+    | '/admin/projects/$projectId'
   id:
     | '__root__'
     | '/'
@@ -324,15 +381,20 @@ export interface FileRouteTypes {
     | '/admin/audit'
     | '/admin/domains'
     | '/admin/organizations'
-    | '/admin/projects'
     | '/admin/users'
     | '/api/$'
     | '/docs/{-$slug}'
     | '/admin/'
     | '/admin/oauth/clients'
+    | '/admin/projects/$projectId'
     | '/admin/webhooks/$projectId'
+    | '/admin/projects/'
     | '/admin/webhooks/'
     | '/.well-known/oauth-authorization-server/api/auth'
+    | '/admin/projects/$projectId/domains'
+    | '/admin/projects/$projectId/settings'
+    | '/admin/projects/$projectId/webhooks'
+    | '/admin/projects/$projectId/'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -476,13 +538,6 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AdminOrganizationsRouteImport
       parentRoute: typeof AdminRoute
     }
-    '/admin/projects': {
-      id: '/admin/projects'
-      path: '/projects'
-      fullPath: '/admin/projects'
-      preLoaderRoute: typeof AdminProjectsRouteImport
-      parentRoute: typeof AdminRoute
-    }
     '/admin/users': {
       id: '/admin/users'
       path: '/users'
@@ -511,6 +566,20 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AdminOauthClientsRouteImport
       parentRoute: typeof AdminRoute
     }
+    '/admin/projects/': {
+      id: '/admin/projects/'
+      path: '/projects'
+      fullPath: '/admin/projects/'
+      preLoaderRoute: typeof AdminProjectsIndexRouteImport
+      parentRoute: typeof AdminRoute
+    }
+    '/admin/projects/$projectId': {
+      id: '/admin/projects/$projectId'
+      path: '/projects/$projectId'
+      fullPath: '/admin/projects/$projectId'
+      preLoaderRoute: typeof AdminProjectsProjectIdRouteImport
+      parentRoute: typeof AdminRoute
+    }
     '/admin/webhooks/': {
       id: '/admin/webhooks/'
       path: '/webhooks'
@@ -531,6 +600,34 @@ declare module '@tanstack/react-router' {
       fullPath: '/.well-known/oauth-authorization-server/api/auth'
       preLoaderRoute: typeof DotwellKnownOauthAuthorizationServerApiAuthRouteImport
       parentRoute: typeof DotwellKnownOauthAuthorizationServerRoute
+    }
+    '/admin/projects/$projectId/': {
+      id: '/admin/projects/$projectId/'
+      path: '/'
+      fullPath: '/admin/projects/$projectId/'
+      preLoaderRoute: typeof AdminProjectsProjectIdIndexRouteImport
+      parentRoute: typeof AdminProjectsProjectIdRoute
+    }
+    '/admin/projects/$projectId/domains': {
+      id: '/admin/projects/$projectId/domains'
+      path: '/domains'
+      fullPath: '/admin/projects/$projectId/domains'
+      preLoaderRoute: typeof AdminProjectsProjectIdDomainsRouteImport
+      parentRoute: typeof AdminProjectsProjectIdRoute
+    }
+    '/admin/projects/$projectId/settings': {
+      id: '/admin/projects/$projectId/settings'
+      path: '/settings'
+      fullPath: '/admin/projects/$projectId/settings'
+      preLoaderRoute: typeof AdminProjectsProjectIdSettingsRouteImport
+      parentRoute: typeof AdminProjectsProjectIdRoute
+    }
+    '/admin/projects/$projectId/webhooks': {
+      id: '/admin/projects/$projectId/webhooks'
+      path: '/webhooks'
+      fullPath: '/admin/projects/$projectId/webhooks'
+      preLoaderRoute: typeof AdminProjectsProjectIdWebhooksRouteImport
+      parentRoute: typeof AdminProjectsProjectIdRoute
     }
   }
 }
@@ -553,16 +650,37 @@ const AuthRouteChildren: AuthRouteChildren = {
 
 const AuthRouteWithChildren = AuthRoute._addFileChildren(AuthRouteChildren)
 
+interface AdminProjectsProjectIdRouteChildren {
+  AdminProjectsProjectIdDomainsRoute: typeof AdminProjectsProjectIdDomainsRoute
+  AdminProjectsProjectIdSettingsRoute: typeof AdminProjectsProjectIdSettingsRoute
+  AdminProjectsProjectIdWebhooksRoute: typeof AdminProjectsProjectIdWebhooksRoute
+  AdminProjectsProjectIdIndexRoute: typeof AdminProjectsProjectIdIndexRoute
+}
+
+const AdminProjectsProjectIdRouteChildren: AdminProjectsProjectIdRouteChildren =
+  {
+    AdminProjectsProjectIdDomainsRoute: AdminProjectsProjectIdDomainsRoute,
+    AdminProjectsProjectIdSettingsRoute: AdminProjectsProjectIdSettingsRoute,
+    AdminProjectsProjectIdWebhooksRoute: AdminProjectsProjectIdWebhooksRoute,
+    AdminProjectsProjectIdIndexRoute: AdminProjectsProjectIdIndexRoute,
+  }
+
+const AdminProjectsProjectIdRouteWithChildren =
+  AdminProjectsProjectIdRoute._addFileChildren(
+    AdminProjectsProjectIdRouteChildren,
+  )
+
 interface AdminRouteChildren {
   AdminApiKeysRoute: typeof AdminApiKeysRoute
   AdminAuditRoute: typeof AdminAuditRoute
   AdminDomainsRoute: typeof AdminDomainsRoute
   AdminOrganizationsRoute: typeof AdminOrganizationsRoute
-  AdminProjectsRoute: typeof AdminProjectsRoute
   AdminUsersRoute: typeof AdminUsersRoute
   AdminIndexRoute: typeof AdminIndexRoute
   AdminOauthClientsRoute: typeof AdminOauthClientsRoute
+  AdminProjectsProjectIdRoute: typeof AdminProjectsProjectIdRouteWithChildren
   AdminWebhooksProjectIdRoute: typeof AdminWebhooksProjectIdRoute
+  AdminProjectsIndexRoute: typeof AdminProjectsIndexRoute
   AdminWebhooksIndexRoute: typeof AdminWebhooksIndexRoute
 }
 
@@ -571,11 +689,12 @@ const AdminRouteChildren: AdminRouteChildren = {
   AdminAuditRoute: AdminAuditRoute,
   AdminDomainsRoute: AdminDomainsRoute,
   AdminOrganizationsRoute: AdminOrganizationsRoute,
-  AdminProjectsRoute: AdminProjectsRoute,
   AdminUsersRoute: AdminUsersRoute,
   AdminIndexRoute: AdminIndexRoute,
   AdminOauthClientsRoute: AdminOauthClientsRoute,
+  AdminProjectsProjectIdRoute: AdminProjectsProjectIdRouteWithChildren,
   AdminWebhooksProjectIdRoute: AdminWebhooksProjectIdRoute,
+  AdminProjectsIndexRoute: AdminProjectsIndexRoute,
   AdminWebhooksIndexRoute: AdminWebhooksIndexRoute,
 }
 

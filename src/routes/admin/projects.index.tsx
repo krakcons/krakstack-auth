@@ -9,7 +9,7 @@ import { m } from "@/paraglide/messages";
 import { ProjectForm } from "@/services/projects/client/form";
 import { ProjectsTable } from "@/services/projects/client/table";
 
-export const Route = createFileRoute("/admin/projects")({
+export const Route = createFileRoute("/admin/projects/")({
   validateSearch: QueryStandard,
   component: ProjectsPage,
 });

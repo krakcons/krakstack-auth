@@ -1,4 +1,5 @@
 import { Schema } from "effect";
+import { DailyActiveUsersByDay } from "@krak-stack/auth/admin";
 
 export const ProjectData = Schema.Struct({
   branding: Schema.optional(
@@ -42,6 +43,17 @@ export const Project = Schema.Struct({
   title: "Project",
   description: "Project-owned branding and auth configuration.",
 });
+
+export const ProjectStatsTotals = Schema.Struct({
+  users: Schema.Number,
+  organizations: Schema.Number,
+  dailyActiveUsers: Schema.Number,
+}).annotate({ identifier: "ProjectStatsTotals" });
+
+export const ProjectStats = Schema.Struct({
+  ...ProjectStatsTotals.fields,
+  dailyActiveUsersByDay: Schema.Array(DailyActiveUsersByDay),
+}).annotate({ identifier: "ProjectStats" });
 
 export const ProjectIdParams = Schema.Struct({
   id: Schema.String,

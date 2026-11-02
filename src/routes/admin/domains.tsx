@@ -1,8 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { Plus } from "lucide-react";
 import { useState } from "react";
 
-import { Button } from "@/components/ui/button";
 import { QueryStandard } from "@krak-stack/registry/query";
 import { SidebarPageHeader } from "@krak-stack/registry/sidebar-layout";
 import { m } from "@/paraglide/messages";
@@ -14,6 +12,8 @@ export const Route = createFileRoute("/admin/domains")({
 });
 
 function DomainsPage() {
+  const query = Route.useSearch();
+  const navigate = Route.useNavigate();
   const [creatingDomain, setCreatingDomain] = useState(false);
 
   return (
@@ -22,14 +22,10 @@ function DomainsPage() {
         title={m.domains_title()}
         description={m.domains_description()}
         badge={{ label: m.admin_badge_admin() }}
-        actions={
-          <Button onClick={() => setCreatingDomain(true)}>
-            <Plus className="size-4" />
-            {m.domain_create()}
-          </Button>
-        }
       />
       <DomainsTable
+        query={query}
+        onStateChange={(search) => void navigate({ search })}
         creatingDomain={creatingDomain}
         onCreatingDomainChange={setCreatingDomain}
       />

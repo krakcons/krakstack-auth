@@ -1,12 +1,17 @@
 import { useAtomSet, useAtomSubscribe, useAtomValue } from "@effect/atom-react";
-import { useNavigate, useSearch } from "@tanstack/react-router";
 import { FormBuilder, FormReact } from "@lucas-barake/effect-form-react";
 import { Effect, Schema } from "effect";
 import { Atom, AsyncResult } from "effect/reactivity";
-import { Pencil, Trash2 } from "lucide-react";
+import { Pencil, Plus, Trash2 } from "lucide-react";
 import { useState } from "react";
 
 import { Button } from "@/components/ui/button";
+import {
+  MenubarMenu,
+  MenubarTrigger,
+  MenubarContent,
+  MenubarItem,
+} from "@/components/ui/menubar";
 import {
   DataTable,
   type DataTableColDef,
@@ -63,13 +68,17 @@ export function DomainsTable({
   reloadKey = 0,
   creatingDomain = false,
   onCreatingDomainChange,
+  projectId,
+  query,
+  onStateChange,
 }: {
   reloadKey?: number;
   creatingDomain?: boolean;
   onCreatingDomainChange?: (open: boolean) => void;
+  projectId?: string;
+  query: typeof Query.Type;
+  onStateChange: (query: typeof Query.Encoded) => void;
 }) {
-  const navigate = useNavigate({ from: "/admin/domains" });
-  const search = useSearch({ from: "/admin/domains" });
   const result = useAtomValue(domainsAtom(reloadKey));
   const deleteDomain = useAtomSet(deleteDomainAtom, { mode: "promise" });
   const [domains, setDomains] = useState<ServerDomain[] | null>(null);
@@ -77,13 +86,16 @@ export function DomainsTable({
   const [deletingDomain, setDeletingDomain] = useState<ServerDomain | null>(
     null,
   );
-  const rows =
+  const allRows =
     domains ??
     AsyncResult.match(result, {
       onInitial: () => [],
       onFailure: () => [],
       onSuccess: ({ value }) => Array.from(value),
     });
+  const rows = projectId
+    ? allRows.filter((domain) => domain.projectId === projectId)
+    : allRows;
   const error = AsyncResult.match(result, {
     onInitial: () => "",
     onFailure: () => m.domain_fetch_error(),
@@ -97,6 +109,19 @@ export function DomainsTable({
         columnDefs={domainColumns()}
         rowData={rows}
         features={{
+          toolbar: {
+            items: (
+              <MenubarMenu>
+                <MenubarTrigger>{m.actions_title()}</MenubarTrigger>
+                <MenubarContent>
+                  <MenubarItem onClick={() => onCreatingDomainChange?.(true)}>
+                    <Plus />
+                    {m.domain_create()}
+                  </MenubarItem>
+                </MenubarContent>
+              </MenubarMenu>
+            ),
+          },
           export: { baseName: "domains" },
           gallery: false,
           rowActions: {
@@ -115,11 +140,9 @@ export function DomainsTable({
             ],
           },
         }}
-        initialState={search}
+        initialState={query}
         onStateChange={(state) =>
-          void navigate({
-            search: Schema.encodeSync(Query)(state),
-          })
+          onStateChange(Schema.encodeSync(Query)(state))
         }
       />
       {deletingDomain ? (
@@ -137,6 +160,7 @@ export function DomainsTable({
       {editingDomain ? (
         <DomainDialog
           domain={editingDomain}
+          projectId={projectId}
           onClose={() => setEditingDomain(null)}
           onSaved={(updated) => {
             setDomains((current) =>
@@ -149,6 +173,7 @@ export function DomainsTable({
       ) : null}
       {creatingDomain ? (
         <DomainDialog
+          projectId={projectId}
           onClose={() => onCreatingDomainChange?.(false)}
           onSaved={(created) => {
             setDomains((current) => [
@@ -197,7 +222,7 @@ const updateDomainPayloadFromValue = (
   managed: value.managed,
 });
 
-const makeDomainForm = (domain?: ServerDomain) =>
+const makeDomainForm = (domain?: ServerDomain, projectId?: string) =>
   FormReact.make(domainFormBuilder, {
     fields: {
       hostname: TextField,
@@ -211,7 +236,10 @@ const makeDomainForm = (domain?: ServerDomain) =>
         ? get
             .setResult(updateDomainAtom, {
               params: { id: domain.id },
-              payload: updateDomainPayloadFromValue(value),
+              payload: updateDomainPayloadFromValue({
+                ...value,
+                projectId: projectId ?? value.projectId,
+              }),
               reactivityKeys: ["domains"],
             })
             .pipe(
@@ -221,7 +249,10 @@ const makeDomainForm = (domain?: ServerDomain) =>
             )
         : get
             .setResult(createDomainAtom, {
-              payload: createDomainPayloadFromValue(value),
+              payload: createDomainPayloadFromValue({
+                ...value,
+                projectId: projectId ?? value.projectId,
+              }),
               reactivityKeys: ["domains"],
             })
             .pipe(
@@ -233,15 +264,17 @@ const makeDomainForm = (domain?: ServerDomain) =>
 
 function DomainDialog({
   domain,
+  projectId,
   onClose,
   onSaved,
 }: {
   domain?: ServerDomain;
+  projectId?: string;
   onClose: () => void;
   onSaved: (domain: ServerDomain) => void;
 }) {
   const isEditing = Boolean(domain);
-  const [form] = useState(() => makeDomainForm(domain));
+  const [form] = useState(() => makeDomainForm(domain, projectId));
   const submit = useAtomSet(form.submit);
   const submitResult = useAtomValue(form.submit);
   useAtomSubscribe(form.submit, (result) => {
@@ -267,7 +300,7 @@ function DomainDialog({
           defaultValues={{
             hostname: domain?.hostname ?? "",
             rootHostname: domain?.rootHostname ?? "",
-            projectId: domain?.projectId ?? "",
+            projectId: projectId ?? domain?.projectId ?? "",
             organizationId: domain?.organizationId ?? "",
             managed: domain?.managed ?? true,
           }}
@@ -289,10 +322,12 @@ function DomainDialog({
               label={m.domain_root_hostname()}
               description={m.domain_root_hostname_description()}
             />
-            <form.projectId
-              label={m.project()}
-              description={m.domain_project_id_description()}
-            />
+            {!projectId ? (
+              <form.projectId
+                label={m.project()}
+                description={m.domain_project_id_description()}
+              />
+            ) : null}
             <form.organizationId
               label={m.admin_column_organization()}
               description={m.domain_organization_id_description()}
