@@ -104,6 +104,7 @@ import {
 import type { ProjectAccessLabelCatalog } from "../access.js";
 import { AssociatedProjectsNotice } from "./associated-projects-notice.js";
 import { AccountDeletionDialog } from "./account-deletion.js";
+import { deletionControlsEnabled } from "./deletion-visibility.js";
 import {
   ContactEmailsField,
   ContactPhonesField,
@@ -1068,15 +1069,13 @@ export const UserButton = ({
                   {...(displayImage ? { imageSrc: displayImage } : {})}
                 />
               </DropdownMenuLabel>
-              <div className="px-1 py-2">
-                <AssociatedProjectsNotice
-                  baseUrl={resolvedBaseUrl}
-                  getSummary={(count) =>
-                    m.user_form_projects_summary({ count })
-                  }
-                  viewLabel={m.user_form_projects_view()}
-                />
-              </div>
+              <AssociatedProjectsNotice
+                baseUrl={resolvedBaseUrl}
+                getSummary={(count) =>
+                  m.user_form_projects_summary({ count })
+                }
+                viewLabel={m.user_form_projects_view()}
+              />
               {menuActions ? (
                 <>
                   <DropdownMenuSeparator />
@@ -1108,7 +1107,7 @@ export const UserButton = ({
                   <DropdownMenuSeparator />
                 </>
               ) : null}
-              {!isImpersonating && !isOrganizationImpersonating ? <DropdownMenuItem variant="destructive" onClick={() => setSettingsDialog("deleteAccount")}><Trash2 />{m.user_delete_title()}</DropdownMenuItem> : null}
+              {deletionControlsEnabled && !isImpersonating && !isOrganizationImpersonating ? <DropdownMenuItem variant="destructive" onClick={() => setSettingsDialog("deleteAccount")}><Trash2 />{m.user_delete_title()}</DropdownMenuItem> : null}
               {(isAdmin && canUseAdminSettings) || isImpersonating ? (
                 <>
                   {isAdmin && canUseAdminSettings ? (
@@ -1161,7 +1160,7 @@ export const UserButton = ({
           </DropdownMenuContent>
         </DropdownMenu>
       )}
-      {settingsDialog === "deleteAccount" && !isImpersonating && !isOrganizationImpersonating ? <AccountDeletionDialog
+      {deletionControlsEnabled && settingsDialog === "deleteAccount" && !isImpersonating && !isOrganizationImpersonating ? <AccountDeletionDialog
         baseUrl={resolvedBaseUrl}
         userId={session.user.id}
         onClose={() => setSettingsDialog(null)}

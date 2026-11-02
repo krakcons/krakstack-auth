@@ -26,6 +26,7 @@ import {
 import { AdminListQuery, type AdminOrganization } from "../admin/schema.js";
 import { normalizeOrganizationRoles } from "../roles.js";
 import { AdminOrganizationForm } from "./admin-organization-form.js";
+import { deletionControlsEnabled } from "./deletion-visibility.js";
 import { authClientApi, authHttpClient } from "./auth-client-api.js";
 import { type KrakstackAuthLocale, useKrakstackAuth } from "./auth-provider.js";
 import { assetUrl, organizationBranding } from "./utils.js";
@@ -374,7 +375,8 @@ export function AdminOrganizationsTable({
                 icon: <Trash2 className="size-4" />,
                 variant: "destructive",
                 onClick: setDeletingOrganization,
-                visible: (organization) => !organization.userId,
+                visible: (organization) =>
+                  deletionControlsEnabled && !organization.userId,
               },
             ],
           },
@@ -410,7 +412,7 @@ export function AdminOrganizationsTable({
           }
         />
       ) : null}
-      {deletingOrganization ? (
+      {deletionControlsEnabled && deletingOrganization ? (
         <DeleteOrganizationDialog
           labels={m}
           organization={deletingOrganization}

@@ -108,6 +108,7 @@ import {
 
 import { authClientApi, authHttpClient } from "./auth-client-api.js";
 import { adminOrganizationsMessages } from "./admin-organizations.js";
+import { deletionControlsEnabled } from "./deletion-visibility.js";
 import {
   canDeleteOrganization,
   requestOrganizationDeletion,
@@ -1372,16 +1373,14 @@ export function OrganizationSwitcher({
                 />
               </DropdownMenuLabel>
               {active ? (
-                <div className="px-1 py-2">
-                  <AssociatedProjectsNotice
-                    baseUrl={baseUrl}
-                    getSummary={(count) =>
-                      m.organization_projects_summary({ count })
-                    }
-                    organizationId={active.id}
-                    viewLabel={m.organization_projects_view()}
-                  />
-                </div>
+                <AssociatedProjectsNotice
+                  baseUrl={baseUrl}
+                  getSummary={(count) =>
+                    m.organization_projects_summary({ count })
+                  }
+                  organizationId={active.id}
+                  viewLabel={m.organization_projects_view()}
+                />
               ) : null}
               {menuActions ? (
                 <>
@@ -1520,10 +1519,8 @@ export function OrganizationSwitcher({
                       {m.user_button_api_keys()}
                     </DropdownMenuItem>
                   ) : null}
-                  {canDeleteOrganization(
-                    activeOrganization,
-                    session.user.id,
-                  ) ? (
+                  {deletionControlsEnabled &&
+                  canDeleteOrganization(activeOrganization, session.user.id) ? (
                     <DropdownMenuItem
                       variant="destructive"
                       onClick={() =>
@@ -1543,7 +1540,7 @@ export function OrganizationSwitcher({
           </DropdownMenuContent>
         </DropdownMenu>
       )}
-      {deletingOrganization ? (
+      {deletionControlsEnabled && deletingOrganization ? (
         <OrganizationDeletionDialog
           key={deletingOrganization.id}
           baseUrl={baseUrl}

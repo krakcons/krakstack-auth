@@ -1,5 +1,16 @@
 # @krak-stack/auth
 
+## 0.2.32
+
+### Patch Changes
+
+- Require published Registry `0.1.61` or later for signed webhook-ID deduplication and the shared delivery table. Remove local Registry archive dependencies.
+- Remove empty project-notice padding beneath user and organization menu headers.
+- b497b8f: Require onDeleteUser when calling AuthMiddleware.layer. Projects provide their SQL cleanup callback; the middleware reads signing configuration, mounts the endpoint, and uses registry WebhooksReceiver for transactional deduplication. No separate auth-webhook service is needed. The layer now requires SQL; the former bare-auth-layer argument must be passed as authLayer in the options object.
+- Temporarily hide account and organization deletion controls and dialogs in production builds, including admin organization deletion. Development builds retain these controls. Backend deletion authorization and cleanup remain unchanged.
+- a46fb60: Add owner-confirmed organization deletion to the organization switcher and validated `organization.deletion_requested` cleanup webhooks, routed through the required `onDeleteOrganization` callback alongside `onDeleteUser`. Account deletion lists blocking organizations without deleting them. Unshared personal organizations are cleaned up with account deletion; standalone deletion remains protected.
+- a46fb60: Use Registry's signed webhook-id for receiver deduplication and remove requestId and version from Auth webhook data. Requires the matching Registry signature protocol update on both sender and receiver.
+
 ## 0.2.31
 
 ### Patch Changes

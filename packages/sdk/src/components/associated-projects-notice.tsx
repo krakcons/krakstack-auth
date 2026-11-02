@@ -39,20 +39,22 @@ export const AssociatedProjectsNotice = ({
   if (projects.length <= 1) return null;
 
   return (
-    <details className="border-primary/60 text-muted-foreground border-l-2 pl-3 text-sm">
-      <summary className="cursor-pointer list-none [&::-webkit-details-marker]:hidden">
-        {getSummary(projects.length)}{" "}
-        <span className="text-foreground underline underline-offset-4">
-          {viewLabel}
-        </span>
-      </summary>
-      <div className="mt-2 flex flex-wrap gap-2">
-        {projects.map((project) => (
-          <Badge key={project.id} variant="secondary">
-            {project.name}
-          </Badge>
-        ))}
-      </div>
-    </details>
+    <div className="px-1 py-2">
+      <details className="border-primary/60 text-muted-foreground border-l-2 pl-3 text-sm">
+        <summary className="cursor-pointer list-none [&::-webkit-details-marker]:hidden">
+          {getSummary(projects.length)}{" "}
+          <span className="text-foreground underline underline-offset-4">
+            {viewLabel}
+          </span>
+        </summary>
+        <div className="mt-2 flex flex-wrap gap-2">
+          {projects.map((project) => (
+            <Badge key={project.id} variant="secondary">
+              {project.name}
+            </Badge>
+          ))}
+        </div>
+      </details>
+    </div>
   );
 };

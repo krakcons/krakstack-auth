@@ -27,7 +27,7 @@ le même pool SQL que le nettoyage. Les deux fonctions de suppression sont oblig
 les types Auth publiés pour le projet, mais seul l’événement de suppression est
 actuellement publié par ce parcours, pas tous les événements d’audit internes.
 
-Voir le [contrat SDK](../packages/sdk/README.md#auth-webhooks-development).
+Voir le [contrat SDK](../packages/sdk/README.md#auth-webhooks).
 Kokobi Learning est le premier récepteur. Les destinations `AuthAccountDeletionV1`
 sont reconnues et deviennent `AuthProjectWebhooksV1` à l’enregistrement, sans
 modifier le secret.

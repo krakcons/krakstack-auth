@@ -57,7 +57,7 @@ const program = Effect.gen(function* () {
 
 Use `AuthMiddleware.layer()` to provide request headers and configuration in an Effect HttpApi application. See the [middleware guide](https://auth.krakstack.net/en/docs/middleware).
 
-### Auth webhooks (development)
+### Auth webhooks
 
 `AuthMiddleware.layer({ onDeleteUser, onDeleteOrganization })` requires both cleanup callbacks; there is no opt-out or default
 successful cleanup. The SDK automatically mounts `POST /api/webhooks/auth`.
@@ -106,8 +106,11 @@ has been removed. Configure the project's **Webhook URL** and copy its **Signing
 secret** into the receiving server. Platform admins and organization owners must
 transfer their roles before self-deleting. This does not guarantee that a project's
 callback covers all personal data. Inventory invitations, logs, exports,
-processors, and backups before claiming complete erasure. Development uses
-local tarballs until the matching registry and Auth releases are published.
+processors, and backups before claiming complete erasure. Use
+`@krak-stack/registry` `0.1.61` or later and upgrade sender and receiver together.
+Account and organization deletion controls are temporarily hidden in production
+builds, including admin organization deletion. Development controls remain available;
+this UI rollout gate does not disable server endpoints or change authorization.
 
 **Français :** `AuthMiddleware.layer({ onDeleteUser, onDeleteOrganization })` exige les deux fonctions de nettoyage et monte la route de
 réception automatiquement. Chaque projet doit fournir son nettoyage SQL et le
@@ -127,6 +130,10 @@ La déduplication utilise l’en-tête `webhook-id` signé. Aucun `requestId` n�
 La signature couvre `${webhookId}.${timestamp}.${rawBody}`. Mettre à jour les deux côtés ensemble :
 les anciennes signatures sont refusées. Aucun champ `version` n’est requis dans les données.
 Ce mécanisme ne garantit pas, à lui seul, la conformité ou l’effacement complet.
+Utilisez `@krak-stack/registry` `0.1.61` ou une version ultérieure et mettez à jour les deux côtés ensemble.
+Les commandes de suppression de compte et d’organisation, y compris dans l’administration,
+sont temporairement masquées en production. Elles restent disponibles en développement ;
+ce masquage ne désactive pas les points d’entrée serveur ni leurs contrôles d’autorisation.
 
 `AuthMiddleware` also annotates request logs and spans with verified user,
 organization, and actor IDs using its existing session lookup. Missing sessions

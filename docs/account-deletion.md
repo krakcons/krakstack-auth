@@ -26,7 +26,7 @@ Both deletion callbacks are required; optional `onWebhook` handles other event t
 The endpoint accepts all published project Auth event types, but only deletion is
 currently published by this flow. It does not forward every internal audit event.
 
-See [the SDK receiver contract](../packages/sdk/README.md#auth-webhooks-development)
+See [the SDK receiver contract](../packages/sdk/README.md#auth-webhooks)
 for signatures, transactions, deduplication, and error responses. Kokobi Learning
 is the first receiver. Existing `AuthAccountDeletionV1` endpoint settings are
 recognized; saving upgrades them to `AuthProjectWebhooksV1` without changing the secret.
