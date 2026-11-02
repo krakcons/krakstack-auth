@@ -33,7 +33,7 @@ const resolveCurrentActor = <Project extends string, Action extends string>(
 
     if (session.authMethod.type === "apiKey") {
       const apiKey = session.authMethod.apiKey;
-      const grant = yield* Schema.decodeUnknownEffect(ApiKeyPermissionGrant)(
+      const grant = yield* Schema.decodeEffect(ApiKeyPermissionGrant)(
         apiKey.permissions ?? {},
       ).pipe(Effect.mapError(() => new HttpApiError.Unauthorized({})));
 
@@ -164,10 +164,9 @@ const requiredActor = <Project extends string, Action extends string>(
   constraint?: ActorConstraint,
 ) =>
   resolveCurrentActor(access).pipe(
-    Effect.flatMap((actor) =>
-      matchesConstraint(actor, constraint)
-        ? Effect.succeed(actor)
-        : Effect.fail(new HttpApiError.Forbidden({})),
+    Effect.filterOrFail(
+      (actor) => matchesConstraint(actor, constraint),
+      () => new HttpApiError.Forbidden({}),
     ),
   );
 

@@ -1,8 +1,9 @@
 import { describe, expect, it } from "@effect/vitest";
+import { build } from "bun";
 
 describe("Auth middleware browser boundary", () => {
   it("imports API middleware contracts without loading the webhook receiver or Postgres", async () => {
-    const result = await Bun.build({
+    const result = await build({
       entrypoints: [new URL("./middleware.ts", import.meta.url).pathname],
       target: "browser",
       plugins: [

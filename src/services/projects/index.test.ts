@@ -1,3 +1,4 @@
+import * as Layer from "effect/Layer";
 import { describe, expect, it } from "@effect/vitest";
 import { DateTime, Effect } from "effect";
 import { SqlClient } from "effect/sql";
@@ -118,8 +119,9 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)(
             ),
           );
         }).pipe(
-          Effect.provide(Projects.testLayer),
-          Effect.provide(sqlTestLayer),
+          Effect.provide(
+            Projects.testLayer.pipe(Layer.provideMerge(sqlTestLayer)),
+          ),
         ),
     );
 

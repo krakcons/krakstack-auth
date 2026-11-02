@@ -43,8 +43,8 @@ const authSessionQueryAtom = Atom.family((baseUrl?: string) =>
           ? AsyncResult.success(null)
           : result;
       }),
-    )
-    .pipe(refreshOnAuthChange),
+      refreshOnAuthChange,
+    ),
 );
 
 export const authSessionAtom = Atom.family((baseUrl?: string) =>

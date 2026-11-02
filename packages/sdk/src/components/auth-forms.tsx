@@ -337,10 +337,7 @@ type AuthFormProps = {
 };
 
 type SigninErrorContext =
-  | "signIn"
-  | "sendEmailOtp"
-  | "verifyEmailOtp"
-  | "resetPassword";
+  "signIn" | "sendEmailOtp" | "verifyEmailOtp" | "resetPassword";
 
 const useAuthFormOptions = ({ baseUrl, locale }: AuthFormProps) => {
   const auth = useKrakstackAuth();
@@ -399,7 +396,7 @@ const useAuthProjectConfig = (
 
   return result.value === null
     ? null
-    : Schema.decodeUnknownSync(ExtraProjectPublicConfigSchema)(result.value);
+    : Schema.decodeSync(ExtraProjectPublicConfigSchema)(result.value);
 };
 
 const text = (value: string, params?: Record<string, string>) =>
@@ -493,23 +490,30 @@ export function Signin(props: AuthFormProps) {
   const [otpSentTo, setOtpSentTo] = useState(
     initialMethodStep && initialAuthMethod === "emailOtp" ? initialEmail : "",
   );
-  const [emailOtpResendAvailableAt, setEmailOtpResendAvailableAt] = useState(() =>
+  const [emailOtpResendAvailableAt, setEmailOtpResendAvailableAt] = useState(
+    () =>
+      initialMethodStep && initialAuthMethod === "emailOtp"
+        ? Date.now() + EMAIL_OTP_RESEND_COOLDOWN_SECONDS * 1000
+        : 0,
+  );
+  const [emailOtpResendSeconds, setEmailOtpResendSeconds] = useState(
     initialMethodStep && initialAuthMethod === "emailOtp"
-      ? Date.now() + EMAIL_OTP_RESEND_COOLDOWN_SECONDS * 1000
+      ? EMAIL_OTP_RESEND_COOLDOWN_SECONDS
       : 0,
   );
-  const [emailOtpResendSeconds, setEmailOtpResendSeconds] = useState(0);
-  const otpSendsRef = useRef(
-    new Map<string, number>(
-      initialMethodStep && initialAuthMethod === "emailOtp"
-        ? [
-            [
-              initialEmail,
-              emailOtpResendAvailableAt -
-                EMAIL_OTP_RESEND_COOLDOWN_SECONDS * 1000,
-            ],
-          ]
-        : [],
+  const [otpSendsAtom] = useState(() =>
+    Atom.make(
+      new Map<string, number>(
+        initialMethodStep && initialAuthMethod === "emailOtp"
+          ? [
+              [
+                initialEmail,
+                emailOtpResendAvailableAt -
+                  EMAIL_OTP_RESEND_COOLDOWN_SECONDS * 1000,
+              ],
+            ]
+          : [],
+      ),
     ),
   );
   const [errorContext, setErrorContext] =
@@ -523,10 +527,7 @@ export function Signin(props: AuthFormProps) {
   const hasPrimaryAuth = options.emailPassword || options.emailOtp;
   const canChangeAuthMethod = options.emailPassword && options.emailOtp;
   useEffect(() => {
-    if (!emailOtpResendAvailableAt) {
-      setEmailOtpResendSeconds(0);
-      return;
-    }
+    if (!emailOtpResendAvailableAt) return;
 
     const updateResendSeconds = () => {
       const seconds = getEmailOtpResendSeconds(
@@ -537,7 +538,6 @@ export function Signin(props: AuthFormProps) {
       if (seconds === 0) setEmailOtpResendAvailableAt(0);
     };
 
-    updateResendSeconds();
     const interval = window.setInterval(updateResendSeconds, 1000);
 
     return () => window.clearInterval(interval);
@@ -559,7 +559,7 @@ export function Signin(props: AuthFormProps) {
           | { type: "sendEmailOtp" }
           | { type: "resendEmailOtp" }
           | { type: "resetPassword" },
-        { decoded: value },
+        { decoded: value, get },
       ) =>
         Effect.gen(function* () {
           const email = value.email.trim();
@@ -595,13 +595,16 @@ export function Signin(props: AuthFormProps) {
             Effect.asVoid,
             Effect.tap(() =>
               Effect.sync(() => {
-                otpSendsRef.current.set(email, Date.now());
+                get.set(
+                  otpSendsAtom,
+                  new Map(get(otpSendsAtom)).set(email, Date.now()),
+                );
               }),
             ),
           );
           const sendEmailOtp = (
             shouldSendEmailOtp({
-              sentAt: otpSendsRef.current.get(email),
+              sentAt: get(otpSendsAtom).get(email),
               now: Date.now(),
               resend: action.type === "resendEmailOtp",
             })
@@ -613,14 +616,17 @@ export function Signin(props: AuthFormProps) {
                 setAuthMethod("emailOtp");
                 setEmailSubmitted(true);
                 setOtpSentTo(email);
-                navigate({
+                void navigate({
                   to: "/sign-in",
                   search: authMethodSearch(searchString, "emailOtp", email),
                   replace: true,
                 });
-                setEmailOtpResendAvailableAt(
-                  (otpSendsRef.current.get(email) ?? 0) +
-                    EMAIL_OTP_RESEND_COOLDOWN_SECONDS * 1000,
+                const availableAt =
+                  (get(otpSendsAtom).get(email) ?? 0) +
+                  EMAIL_OTP_RESEND_COOLDOWN_SECONDS * 1000;
+                setEmailOtpResendAvailableAt(availableAt);
+                setEmailOtpResendSeconds(
+                  getEmailOtpResendSeconds(availableAt, Date.now()),
                 );
               }),
             ),
@@ -638,7 +644,7 @@ export function Signin(props: AuthFormProps) {
             if (action.method === "emailOtp") yield* sendEmailOtp;
             else {
               setEmailSubmitted(true);
-              navigate({
+              void navigate({
                 to: "/sign-in",
                 search: authMethodSearch(searchString, "password", email),
                 replace: true,
@@ -664,7 +670,9 @@ export function Signin(props: AuthFormProps) {
               ),
             );
             yield* refreshAuthSession(registry, baseUrl);
-            onNavigate(redirectTarget);
+            yield* Effect.promise(() =>
+              Promise.resolve(onNavigate(redirectTarget)),
+            );
             return;
           }
 
@@ -684,13 +692,19 @@ export function Signin(props: AuthFormProps) {
             Effect.flatMap((client) => client.auth.signInEmail({ payload })),
           );
           if (hasTwoFactorRedirect(result)) {
-            onTwoFactorRedirect(
-              `/2fa${oauthQuery ? `?${oauthQuery}` : `?callbackURL=${encodeURIComponent(redirectTarget)}`}`,
+            yield* Effect.promise(() =>
+              Promise.resolve(
+                onTwoFactorRedirect(
+                  `/2fa${oauthQuery ? `?${oauthQuery}` : `?callbackURL=${encodeURIComponent(redirectTarget)}`}`,
+                ),
+              ),
             );
             return;
           }
           yield* refreshAuthSession(registry, baseUrl);
-          onNavigate(result.url ?? redirectTarget);
+          yield* Effect.promise(() =>
+            Promise.resolve(onNavigate(result.url ?? redirectTarget)),
+          );
         }),
     }),
   );
@@ -721,7 +735,11 @@ export function Signin(props: AuthFormProps) {
             Effect.flatMap((client) => client.auth.signInSocial({ payload })),
           );
           notifyAuthChange();
-          if (result.url) onNavigate(result.url);
+          const redirectUrl = result.url;
+          if (redirectUrl)
+            yield* Effect.promise(() =>
+              Promise.resolve(onNavigate(redirectUrl)),
+            );
         }),
     ),
   );
@@ -746,7 +764,7 @@ export function Signin(props: AuthFormProps) {
     setEmailSubmitted(false);
     setOtpSentTo("");
     setEmailOtpResendAvailableAt(0);
-    navigate({
+    void navigate({
       to: "/sign-in",
       search: authMethodSearch(searchString, selectedAuthMethod, ""),
       replace: true,
@@ -760,7 +778,7 @@ export function Signin(props: AuthFormProps) {
       resetForm();
       setEmail(formValues.email);
       setAuthMethod("password");
-      navigate({
+      void navigate({
         to: "/sign-in",
         search: authMethodSearch(searchString, "password", formValues.email),
         replace: true,
@@ -1037,7 +1055,9 @@ export function VerifyEmail(props: AuthFormProps) {
             ),
           );
           yield* refreshAuthSession(registry, baseUrl);
-          onNavigate(redirectTarget);
+          yield* Effect.promise(() =>
+            Promise.resolve(onNavigate(redirectTarget)),
+          );
         }),
     }),
   );
@@ -1296,7 +1316,7 @@ function ResetPasswordForm({
             token,
           });
           notifyAuthChange();
-          onSuccess();
+          yield* Effect.promise(() => Promise.resolve(onSuccess()));
         }),
     }),
   );
@@ -1410,7 +1430,11 @@ export function TwoFactor(props: AuthFormProps) {
             ),
           );
           yield* refreshAuthSession(registry, baseUrl);
-          onNavigate(getResultRedirectUrl(result) ?? redirectTarget);
+          yield* Effect.promise(() =>
+            Promise.resolve(
+              onNavigate(getResultRedirectUrl(result) ?? redirectTarget),
+            ),
+          );
         }),
     }),
   );
@@ -1637,9 +1661,7 @@ export const getSocialRedirectTarget = (
   // A relative callback is otherwise resolved against the auth backend, which
   // may be a different origin from the site displaying the sign-in form.
   if (!origin) return target;
-  return Schema.decodeUnknownOption(AuthRedirectURLFromString(origin))(
-    target,
-  ).pipe(
+  return Schema.decodeOption(AuthRedirectURLFromString(origin))(target).pipe(
     Option.map((url) => url.href),
     Option.getOrElse(() => origin),
   );
@@ -1650,16 +1672,16 @@ export const getSocialSignInDestinations = (
   defaultRedirectTo = "/",
   browserHref: string,
 ) => {
-  const browserURL = Schema.decodeUnknownSync(AuthRedirectURLFromString())(
+  const browserURL = Schema.decodeSync(AuthRedirectURLFromString())(
     browserHref,
   );
   const searchString = router.state.location.searchStr;
   const defaultTarget = getRedirectTarget("", defaultRedirectTo);
-  const defaultURL = Schema.decodeUnknownSync(
+  const defaultURL = Schema.decodeSync(
     AuthRedirectURLFromString(browserURL.origin),
   )(defaultTarget);
   const defaultHref = Option.isSome(
-    Schema.decodeUnknownOption(Schema.URLFromString)(defaultTarget),
+    Schema.decodeOption(Schema.URLFromString)(defaultTarget),
   )
     ? defaultTarget
     : router.buildLocation({

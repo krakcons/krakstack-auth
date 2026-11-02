@@ -1,3 +1,4 @@
+import * as Data from "effect/Data";
 import { SecureRandom } from "effect/crypto";
 import { Context, Effect, Layer, Schema } from "effect";
 import { SqlClient, SqlSchema } from "effect/sql";
@@ -11,6 +12,13 @@ import type {
   AdminCreateOrganizationPayload,
   AdminUpdateOrganizationPayload,
 } from "@krak-stack/auth/admin";
+
+class OrganizationHierarchyError extends Data.TaggedError(
+  "OrganizationHierarchyError",
+)<{
+  readonly message: string;
+  readonly cause?: unknown;
+}> {}
 
 export class Organizations extends Context.Service<Organizations>()(
   "Organizations",
@@ -79,9 +87,9 @@ export class Organizations extends Context.Service<Organizations>()(
         return yield* Effect.gen(function* () {
           if (payload.parentId) {
             if (payload.parentId === id) {
-              return yield* Effect.fail(
-                new Error("An organization cannot be its own parent"),
-              );
+              return yield* new OrganizationHierarchyError({
+                message: "An organization cannot be its own parent",
+              });
             }
 
             const [parent] = yield* SqlSchema.findAll({
@@ -91,9 +99,9 @@ export class Organizations extends Context.Service<Organizations>()(
                 sql`SELECT * FROM organization WHERE id = ${id} LIMIT 1`,
             })(payload.parentId);
             if (!parent || parent.parentId) {
-              return yield* Effect.fail(
-                new Error("Parent organization must be a root organization"),
-              );
+              return yield* new OrganizationHierarchyError({
+                message: "Parent organization must be a root organization",
+              });
             }
           }
 

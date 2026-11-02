@@ -58,7 +58,7 @@ const isFile = (value: typeof Schema.Unknown.Type): value is File =>
   value instanceof File;
 
 const valuesToData = (value: ProjectFormValues) =>
-  Schema.decodeUnknownSync(ProjectData)({
+  Schema.decodeSync(ProjectData)({
     branding: { themeCss: value.themeCss.trim() || undefined },
     authOptions: {
       emailPassword: value.emailPassword,

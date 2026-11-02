@@ -167,7 +167,7 @@ export const AdminOrganization = Schema.Struct({
   metadata: Schema.optional(Schema.NullOr(Schema.String)),
   userId: Schema.optional(Schema.NullOr(Schema.String)),
   parentId: Schema.optional(Schema.NullOr(Schema.String)),
-  memberCount: Schema.optional(Schema.Number),
+  memberCount: Schema.optional(Schema.Finite),
   memberPreviews: Schema.optional(Schema.Array(AdminOrganizationMember)),
   projects: Schema.optional(Schema.Array(AdminProjectPreview)),
   createdAt: Schema.Date,
@@ -221,10 +221,10 @@ export const AdminApiKey = Schema.Struct({
   prefix: Schema.NullOr(Schema.String),
   enabled: Schema.Boolean,
   rateLimitEnabled: Schema.Boolean,
-  rateLimitTimeWindow: Schema.NullOr(Schema.Number),
-  rateLimitMax: Schema.NullOr(Schema.Number),
-  requestCount: Schema.Number,
-  remaining: Schema.NullOr(Schema.Number),
+  rateLimitTimeWindow: Schema.NullOr(Schema.Finite),
+  rateLimitMax: Schema.NullOr(Schema.Finite),
+  requestCount: Schema.Finite,
+  remaining: Schema.NullOr(Schema.Finite),
   lastRequest: Schema.NullOr(Schema.Date),
   expiresAt: Schema.NullOr(Schema.Date),
   referrers: Schema.Array(Schema.String),
@@ -263,8 +263,8 @@ export const AdminUpdateApiKeyPayload = Schema.Struct({
   name: Schema.optional(Schema.NullOr(Schema.String)),
   enabled: Schema.optional(Schema.Boolean),
   rateLimitEnabled: Schema.optional(Schema.Boolean),
-  rateLimitMax: Schema.optional(Schema.NullOr(Schema.Number)),
-  rateLimitTimeWindow: Schema.optional(Schema.NullOr(Schema.Number)),
+  rateLimitMax: Schema.optional(Schema.NullOr(Schema.Finite)),
+  rateLimitTimeWindow: Schema.optional(Schema.NullOr(Schema.Finite)),
   referrers: Schema.optional(Schema.Array(Schema.String)),
 }).annotate({
   identifier: "AdminUpdateApiKeyPayload",
@@ -325,7 +325,7 @@ export const DashboardStatsQuery = Schema.Struct({
 
 export const DailyActiveUsersByDay = Schema.Struct({
   date: Schema.String,
-  count: Schema.Number,
+  count: Schema.Finite,
 }).annotate({
   identifier: "DailyActiveUsersByDay",
   title: "Daily active users by day",
@@ -336,7 +336,7 @@ export const DailyActiveUsersByDay = Schema.Struct({
 
 export const SignupsByDay = Schema.Struct({
   date: Schema.String,
-  count: Schema.Number,
+  count: Schema.Finite,
 }).annotate({
   identifier: "SignupsByDay",
   title: "Signups by day",
@@ -347,8 +347,8 @@ export const SignupsByDay = Schema.Struct({
 export const ProjectConnections = Schema.Struct({
   projectId: Schema.String,
   projectName: Schema.String,
-  users: Schema.Number,
-  organizations: Schema.Number,
+  users: Schema.Finite,
+  organizations: Schema.Finite,
 }).annotate({
   identifier: "ProjectConnections",
   title: "Project connections",
@@ -364,13 +364,13 @@ export const ProjectConnections = Schema.Struct({
 });
 
 export const DashboardStatsResponse = Schema.Struct({
-  totalUsers: Schema.Number,
-  totalOrganizations: Schema.Number,
-  totalProjects: Schema.Number,
-  totalDomains: Schema.Number,
-  totalApiKeys: Schema.Number,
-  totalOauthClients: Schema.Number,
-  dailyActiveUsers: Schema.Number.annotate({
+  totalUsers: Schema.Finite,
+  totalOrganizations: Schema.Finite,
+  totalProjects: Schema.Finite,
+  totalDomains: Schema.Finite,
+  totalApiKeys: Schema.Finite,
+  totalOauthClients: Schema.Finite,
+  dailyActiveUsers: Schema.Finite.annotate({
     description:
       "Distinct users with recorded authentication activity today (UTC), not a rolling 24-hour window.",
   }),

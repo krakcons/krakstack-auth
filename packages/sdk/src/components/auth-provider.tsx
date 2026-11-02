@@ -29,12 +29,12 @@ import { parseRoleList } from "../roles.js";
 export type KrakstackAuthLocale = "en" | "fr";
 export type KrakstackAuthStatus = "loading" | "ready" | "degraded" | "error";
 
-export class KrakstackAuthUnavailableError extends Schema.TaggedError<KrakstackAuthUnavailableError>()(
-  "KrakstackAuthUnavailableError",
-  {
-    cause: Schema.Defect(),
-  },
-) {
+export class KrakstackAuthUnavailableError extends Schema.TaggedError<
+  KrakstackAuthUnavailableError,
+  { readonly brand: unique symbol }
+>()("KrakstackAuthUnavailableError", {
+  cause: Schema.Defect(),
+}) {
   readonly status = 503;
 }
 

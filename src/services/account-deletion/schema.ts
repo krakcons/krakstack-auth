@@ -33,21 +33,21 @@ export const DeletionDispatch = Schema.Struct({
   eventId: Schema.String,
   data: AccountDeletionData,
 }).annotate({ identifier: "DeletionDispatch" });
-export class DeletionEndpointMissing extends Schema.TaggedError<DeletionEndpointMissing>()(
-  "DeletionEndpointMissing",
-  {},
-) {}
-export class DeletionNotCommitted extends Schema.TaggedError<DeletionNotCommitted>()(
-  "DeletionNotCommitted",
-  {},
-) {}
-export class AccountDeletionBlocked extends Schema.TaggedError<AccountDeletionBlocked>()(
-  "AccountDeletionBlocked",
-  {
-    reason: Schema.Literals([
-      "impersonation",
-      "organization_owner",
-      "admin_account",
-    ]),
-  },
-) {}
+export class DeletionEndpointMissing extends Schema.TaggedError<
+  DeletionEndpointMissing,
+  { readonly brand: unique symbol }
+>()("DeletionEndpointMissing", {}) {}
+export class DeletionNotCommitted extends Schema.TaggedError<
+  DeletionNotCommitted,
+  { readonly brand: unique symbol }
+>()("DeletionNotCommitted", {}) {}
+export class AccountDeletionBlocked extends Schema.TaggedError<
+  AccountDeletionBlocked,
+  { readonly brand: unique symbol }
+>()("AccountDeletionBlocked", {
+  reason: Schema.Literals([
+    "impersonation",
+    "organization_owner",
+    "admin_account",
+  ]),
+}) {}

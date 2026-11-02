@@ -14,7 +14,7 @@ import { oauthProvider } from "@better-auth/oauth-provider";
 import { apiKey } from "@better-auth/api-key";
 import { APIError } from "@better-auth/core/error";
 import { isAPIError } from "better-auth/api";
-import { Effect, Option, Schema } from "effect";
+import { Data, Effect, Option, Schema } from "effect";
 import { SqlClient, SqlSchema } from "effect/sql";
 import { IdRow, OrganizationRow, RoleRow, UserRow } from "@/db/schema";
 import { coreSqlFields, withSqlNames } from "./database-schema";
@@ -64,6 +64,12 @@ import {
   onDeleteOrganization,
 } from "./deletion";
 
+class PersonalOrganizationProvisionError extends Data.TaggedError(
+  "PersonalOrganizationProvisionError",
+)<{
+  readonly cause: unknown;
+}> {}
+
 const isDev = process.env.NODE_ENV === "development";
 
 const validAudiences = parseCsv(process.env.BETTER_AUTH_VALID_AUDIENCES);
@@ -82,7 +88,7 @@ export const validateUserMetadataWrite = (
   Schema.decodeUnknownEffect(UserMetadataWrite, {
     onExcessProperty: "error",
   })(metadata).pipe(
-    Effect.map(() => undefined),
+    Effect.asVoid,
     Effect.mapError(
       () =>
         new APIError("BAD_REQUEST", {
@@ -278,8 +284,8 @@ export const createAuth = ({
   cookieDomain?: string | undefined;
   projectId?: string | null;
   auditRun?: Parameters<typeof makeNativeAudit>[0];
-  deletionRun?: (
-    effect: Effect.Effect<void, unknown, AccountDeletions>,
+  deletionRun?: <E>(
+    effect: Effect.Effect<void, E, AccountDeletions>,
   ) => Promise<void>;
 }) => {
   let createPersonalOrganization:
@@ -318,14 +324,14 @@ export const createAuth = ({
     }
     return yield* Effect.tryPromise({
       try: () => createOrganization(user, slug),
-      catch: (cause) => cause,
+      catch: (cause) => new PersonalOrganizationProvisionError({ cause }),
     }).pipe(
       Effect.map((created) => created.id),
       Effect.catch((cause) =>
         Effect.gen(function* () {
           const [concurrentlyCreated] = yield* findPersonal(user.id);
           if (concurrentlyCreated) return concurrentlyCreated.id;
-          return yield* Effect.fail(cause);
+          return yield* cause;
         }),
       ),
     );
@@ -479,7 +485,7 @@ export const createAuth = ({
               ].includes(context.path ?? "")
             )
               return;
-            const authorization = Schema.decodeUnknownOption(
+            const authorization = Schema.decodeOption(
               OAuthAuthorizationActivity,
             )(verification.value);
             const session = Schema.decodeUnknownOption(

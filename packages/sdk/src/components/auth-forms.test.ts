@@ -1,4 +1,5 @@
 import { describe, expect, it } from "@effect/vitest";
+import { mockFetch } from "../../test/fetch.js";
 import { vi } from "vitest";
 import { Effect } from "effect";
 import { FetchHttpClient } from "effect/http";
@@ -23,10 +24,10 @@ describe("password reset session cleanup", () => {
   it.effect("clears browser session cookies after resetting the password", () =>
     Effect.gen(function* () {
       const requests: Request[] = [];
-      const capture: typeof fetch = async (input, init) => {
+      const capture: typeof fetch = mockFetch(async (input, init) => {
         requests.push(new Request(input, init));
         return Response.json({ status: true, success: true });
-      };
+      });
 
       yield* resetPasswordAndSignOut({
         baseUrl: "https://auth.example.com",
@@ -53,13 +54,13 @@ describe("password reset session cleanup", () => {
   it.effect("does not sign the user out when the reset is rejected", () =>
     Effect.gen(function* () {
       const requests: Request[] = [];
-      const reject: typeof fetch = async (input, init) => {
+      const reject: typeof fetch = mockFetch(async (input, init) => {
         requests.push(new Request(input, init));
         return Response.json(
           { code: "INVALID_TOKEN", message: "Invalid token" },
           { status: 400 },
         );
-      };
+      });
 
       const error = yield* resetPasswordAndSignOut({
         baseUrl: "https://auth.example.com",

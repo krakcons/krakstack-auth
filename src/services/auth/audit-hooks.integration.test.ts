@@ -1,5 +1,5 @@
 import { describe, expect, it } from "@effect/vitest";
-import { Effect, ManagedRuntime, Schema } from "effect";
+import { Data, Effect, ManagedRuntime, Schema } from "effect";
 import { SqlClient } from "effect/sql";
 import { sqlTestLayer } from "@/services/database";
 import { testEventsLayer } from "@/services/audit/test-layer";
@@ -7,6 +7,12 @@ import { createAuth } from "./config";
 import { symmetricDecrypt } from "better-auth/crypto";
 import { BetterAuthRequest } from "./better-auth-request";
 import { Organizations } from "@/services/organizations";
+
+class NativeAuditFixtureError extends Data.TaggedError(
+  "NativeAuditFixtureError",
+)<{
+  readonly cause: unknown;
+}> {}
 
 describe.skipIf(!process.env.TEST_DATABASE_URL)(
   "native Better Auth audit hooks",
@@ -128,7 +134,7 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)(
             expect(denied.status).toBe(403);
             const native = (
               path: string,
-              body: typeof Schema.Json.Type,
+              body: Schema.Json,
               requestCookie = cookie,
             ) =>
               auth.handler(
@@ -278,7 +284,13 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)(
             expect(anonymous.status).toBe(401);
             const events =
               yield* sql`SELECT event_name, organization_id, payload_json::text AS payload FROM events WHERE payload_json::text LIKE ${`%${id}%`} AND event_name LIKE 'auth.%'`;
-            expect(events.map((row) => row.eventName).sort()).toEqual([
+            expect(
+              events
+                .map((row) =>
+                  Schema.decodeUnknownSync(Schema.String)(row.eventName),
+                )
+                .sort((a, b) => a.localeCompare(b)),
+            ).toEqual([
               "auth.api_key.created",
               "auth.invitation.created",
               "auth.organization.created",
@@ -305,7 +317,7 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)(
               const rejected = yield* Effect.tryPromise({
                 try: () =>
                   native("/update-user", { name: "PRIVATE-already-applied" }),
-                catch: (error) => error,
+                catch: (cause) => new NativeAuditFixtureError({ cause }),
               }).pipe(Effect.result);
               if (rejected._tag === "Success")
                 expect(rejected.success.status).toBe(500);

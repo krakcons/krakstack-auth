@@ -115,13 +115,11 @@ export const deletionSubscriberLayer = Layer.effectDiscard(
           return yield* new DeletionEndpointMissing({});
         }
         yield* sql.withTransaction(
-          Effect.gen(function* () {
-            yield* webhooks.publish({
-              organizationId: dispatch.data.projectId,
-              eventId: dispatch.eventId,
-              event: "user.deletion_requested",
-              data: dispatch.data,
-            });
+          webhooks.publish({
+            organizationId: dispatch.data.projectId,
+            eventId: dispatch.eventId,
+            event: "user.deletion_requested",
+            data: dispatch.data,
           }),
         );
       }),

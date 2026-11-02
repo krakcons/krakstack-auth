@@ -149,7 +149,7 @@ type AccessResult =
       organization: FullOrganization | null;
     };
 
-const acceptInvitationAtom = Atom.family((baseUrl?: string | undefined) =>
+const acceptInvitationAtom = Atom.family((baseUrl?: string) =>
   authClientApi(baseUrl).runtime.fn(
     (
       {
@@ -187,7 +187,7 @@ const acceptInvitationAtom = Atom.family((baseUrl?: string | undefined) =>
   ),
 );
 
-const organizationProfileAtom = Atom.family((baseUrl?: string | undefined) =>
+const organizationProfileAtom = Atom.family((baseUrl?: string) =>
   Atom.family((key: string) => {
     const ProfileKey = Schema.fromJsonString(
       Schema.Struct({
@@ -195,8 +195,7 @@ const organizationProfileAtom = Atom.family((baseUrl?: string | undefined) =>
         organizationId: Schema.String,
       }),
     );
-    const { locale, organizationId } =
-      Schema.decodeUnknownSync(ProfileKey)(key);
+    const { locale, organizationId } = Schema.decodeSync(ProfileKey)(key);
     const query = locale ? { organizationId, locale } : { organizationId };
 
     return authClientApi(baseUrl).query(
@@ -211,7 +210,7 @@ const organizationProfileAtom = Atom.family((baseUrl?: string | undefined) =>
   }),
 );
 
-const invitationsAtom = Atom.family((baseUrl?: string | undefined) =>
+const invitationsAtom = Atom.family((baseUrl?: string) =>
   Atom.family((accessKey: string) =>
     authClientApi(baseUrl)
       .query("auth", "organizationListUserInvitations", {
@@ -222,7 +221,7 @@ const invitationsAtom = Atom.family((baseUrl?: string | undefined) =>
   ),
 );
 
-const accessAtom = Atom.family((baseUrl?: string | undefined) =>
+const accessAtom = Atom.family((baseUrl?: string) =>
   Atom.family((key: string) => {
     const AccessKey = Schema.fromJsonString(
       Schema.Struct({
@@ -232,7 +231,7 @@ const accessAtom = Atom.family((baseUrl?: string | undefined) =>
         userId: Schema.optional(Schema.String),
       }),
     );
-    const { locale, organizationId } = Schema.decodeUnknownSync(AccessKey)(key);
+    const { locale, organizationId } = Schema.decodeSync(AccessKey)(key);
 
     return Atom.optimistic(
       Atom.keepAlive(
@@ -243,10 +242,9 @@ const accessAtom = Atom.family((baseUrl?: string | undefined) =>
               .organizationSetActive({ payload: { organizationId } })
               .pipe(
                 Effect.as(true),
-                Effect.catch((error) =>
-                  error instanceof AuthForbidden
-                    ? Effect.succeed(false)
-                    : Effect.fail(error),
+                Effect.catchIf(
+                  (error) => error instanceof AuthForbidden,
+                  () => Effect.succeed(false),
                 ),
               );
 

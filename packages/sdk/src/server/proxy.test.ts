@@ -38,8 +38,7 @@ type FetchHandler = (
 const mockFetch = (handler: FetchHandler): typeof fetch => {
   const implementation = (request: RequestInfo | URL, init?: RequestInit) =>
     handler(request, init);
-  implementation.preconnect = globalThis.fetch.preconnect;
-  return implementation;
+  return Object.assign(implementation, globalThis.fetch);
 };
 
 describe("proxyAuthHttpEffect", () => {
@@ -62,7 +61,9 @@ describe("proxyAuthHttpEffect", () => {
           expect(outgoing.headers["x-krakstack-forwarded-host"]).toBe(
             "localhost:3000",
           );
-          const web = yield* HttpClientRequest.toWeb(outgoing);
+          const web = yield* HttpClientRequest.toWeb(outgoing).pipe(
+            Effect.orDie,
+          );
           expect(yield* Effect.promise(() => web.text())).toBe(body);
           return HttpClientResponse.fromWeb(
             outgoing,

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "@effect/vitest";
-import { Effect, Layer, Option, Redacted, References } from "effect";
+import { Effect, Layer, Option, Redacted, References, Schema } from "effect";
 import { HttpRouter, HttpServerRequest, HttpServerResponse } from "effect/http";
 import { HttpApiEndpoint, HttpApiError, HttpApiGroup } from "effect/http-api";
 
@@ -77,10 +77,16 @@ const organizationApiKey = {
 };
 
 const middlewareOptions = {
-  endpoint: HttpApiEndpoint.get("test", "/test", {
-    error: HttpApiError.Unauthorized,
-  }),
-  group: HttpApiGroup.make("test"),
+  endpoint: Schema.decodeUnknownSync(
+    Schema.declare(HttpApiEndpoint.isHttpApiEndpoint),
+  )(
+    HttpApiEndpoint.get("test", "/test", {
+      error: HttpApiError.Unauthorized,
+    }),
+  ),
+  group: Schema.decodeUnknownSync(Schema.declare(HttpApiGroup.isHttpApiGroup))(
+    HttpApiGroup.make("test"),
+  ),
 };
 
 const request = HttpServerRequest.fromWeb(new Request("http://localhost/test"));
@@ -240,7 +246,7 @@ const organizationApiKeyAuthClientLayer = Layer.effect(
 ).pipe(Layer.provide(baseAuthServiceLayer));
 
 describe("AuthMiddleware.routerLayer", () => {
-  const run = (authLayer: Layer.Layer<AuthService, unknown>, path = "/test") =>
+  const run = <E>(authLayer: Layer.Layer<AuthService, E>, path = "/test") =>
     Effect.gen(function* () {
       let annotations: Effect.Success<typeof References.CurrentLogAnnotations> =
         {};
@@ -671,9 +677,10 @@ describe("AuthenticationLive", () => {
           .apiKey(
             Effect.gen(function* () {
               const logs = yield* References.CurrentLogAnnotations;
-              const span = yield* Effect.currentSpan;
+              const span = yield* Effect.currentSpan.pipe(Effect.orDie);
               const child = yield* Effect.currentSpan.pipe(
                 Effect.withSpan("child"),
+                Effect.orDie,
               );
               for (const attributes of [
                 logs,

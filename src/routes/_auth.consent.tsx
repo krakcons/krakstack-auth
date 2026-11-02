@@ -62,7 +62,8 @@ function Consent() {
   const submit = useAtomSet(form.submit);
   const submitResult = useAtomValue(form.submit);
   useAtomSubscribe(form.submit, (result) => {
-    if (AsyncResult.isSuccess(result)) navigate({ href: result.value.url });
+    if (AsyncResult.isSuccess(result))
+      void navigate({ href: result.value.url });
   });
 
   return (

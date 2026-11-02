@@ -134,7 +134,7 @@ type User = {
 const AdminUsersFamilyKey = Schema.fromJsonString(
   Schema.Struct({
     query: AdminListQuery,
-    reloadKey: Schema.Number,
+    reloadKey: Schema.Finite,
   }),
 ).annotate({ identifier: "AdminUsersFamilyKey" });
 
@@ -147,10 +147,9 @@ const adminUsersFamilyKey = (
   reloadKey: number,
 ) => JSON.stringify({ query: adminUsersQuery(search, projectId), reloadKey });
 
-const usersAtom = Atom.family((baseUrl?: string | undefined) =>
+const usersAtom = Atom.family((baseUrl?: string) =>
   Atom.family((key: string) => {
-    const { query, reloadKey } =
-      Schema.decodeUnknownSync(AdminUsersFamilyKey)(key);
+    const { query, reloadKey } = Schema.decodeSync(AdminUsersFamilyKey)(key);
     return authClientApi(baseUrl).query("admin", "listUsers", {
       query,
       timeToLive: "1 minute",
@@ -212,7 +211,7 @@ export function AdminUsersTable({
       projectId,
       reloadKey,
       refreshKey: 0,
-      search: search ?? Schema.decodeUnknownSync(Query)({}),
+      search: search ?? Schema.decodeSync(Query)({}),
     }),
   );
   const setTableRequest = useAtomSet(tableAtoms.requestAtom);
@@ -323,7 +322,7 @@ export function AdminUsersTable({
         }}
         state={tableRequest.search}
         onStateChange={({ page, pageSize, globalFilter, sort, filters }) => {
-          const nextSearch = Schema.decodeUnknownSync(Query)({
+          const nextSearch = Schema.decodeSync(Query)({
             page,
             pageSize,
             globalFilter,
@@ -386,7 +385,7 @@ export function useAdminUsersTotal(search: QueryType) {
 
 const userColumns = (
   m: AdminUsersLabels,
-  baseUrl?: string | undefined,
+  baseUrl?: string,
 ): DataTableColDef<User>[] => [
   {
     field: "email",
@@ -539,6 +538,7 @@ function BanUserDialog({
   onBanned: () => void;
   onClose: () => void;
 }) {
+  const [error, setError] = useState("");
   const [banUserAtom] = useState(() =>
     authClientApi(baseUrl).runtime.fn((userId: string) =>
       Effect.flatMap(authHttpClient(baseUrl), (client) =>
@@ -556,7 +556,6 @@ function BanUserDialog({
       ),
     ),
   );
-  const [error, setError] = useState("");
   const banUser = useAtomSet(banUserAtom);
   const isPending = useAtomValue(banUserAtom).waiting;
 
@@ -608,6 +607,7 @@ function UnbanUserDialog({
   onUnbanned: () => void;
   onClose: () => void;
 }) {
+  const [error, setError] = useState("");
   const [unbanUserAtom] = useState(() =>
     authClientApi(baseUrl).runtime.fn((userId: string) =>
       Effect.flatMap(authHttpClient(baseUrl), (client) =>
@@ -625,7 +625,6 @@ function UnbanUserDialog({
       ),
     ),
   );
-  const [error, setError] = useState("");
   const unbanUser = useAtomSet(unbanUserAtom);
   const isPending = useAtomValue(unbanUserAtom).waiting;
 

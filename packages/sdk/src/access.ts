@@ -50,7 +50,10 @@ export const CurrentActor = Context.Service<CurrentActor>(
   "@krak-stack/auth/CurrentActor",
 );
 
-export class Forbidden extends Schema.TaggedError<Forbidden>()(
+export class Forbidden extends Schema.TaggedError<
+  Forbidden,
+  { readonly brand: unique symbol }
+>()(
   "Forbidden",
   {},
   {

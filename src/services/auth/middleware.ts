@@ -1,7 +1,10 @@
 import { Schema } from "effect";
 import { HttpApiError, HttpApiMiddleware } from "effect/http-api";
 
-export class ServiceApiKeyUnauthorized extends Schema.TaggedError<ServiceApiKeyUnauthorized>()(
+export class ServiceApiKeyUnauthorized extends Schema.TaggedError<
+  ServiceApiKeyUnauthorized,
+  { readonly brand: unique symbol }
+>()(
   "ServiceApiKeyUnauthorized",
   { message: Schema.String },
   { httpApiStatus: 401 },

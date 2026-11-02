@@ -1,10 +1,16 @@
+import * as Data from "effect/Data";
 import type {
   AuthApiKey as ApiKey,
   AuthInvitation,
   AuthMember,
   AuthOrganization,
 } from "../auth/schema.js";
-import { useAtomRefresh, useAtomSet, useAtomValue } from "@effect/atom-react";
+import {
+  useAtomRefresh,
+  useAtomSet,
+  useAtomSubscribe,
+  useAtomValue,
+} from "@effect/atom-react";
 import { FormBuilder, FormReact } from "@lucas-barake/effect-form-react";
 import { Effect, Option, Predicate, Schema } from "effect";
 import { AsyncResult, Atom } from "effect/reactivity";
@@ -133,7 +139,7 @@ import {
   ContactWebsitesField,
   type ContactAddressFieldMessages,
 } from "./contact-fields.js";
-import { useOpenedOnce } from "./hooks.js";
+import { useLatestAtom, useOpenedOnce } from "./hooks.js";
 import {
   ScrollableDialogBody,
   ScrollableDialogContent,
@@ -149,6 +155,13 @@ import { assetPath, assetUrl, cn } from "./utils.js";
 import type { ProjectAccessLabelCatalog } from "../access.js";
 import { AssociatedProjectsNotice } from "./associated-projects-notice.js";
 import { ExtraApiKeyPermissions } from "../extra/schema.js";
+
+class OrganizationActionError extends Data.TaggedError(
+  "OrganizationActionError",
+)<{
+  readonly message: string;
+  readonly cause?: unknown;
+}> {}
 
 type Locale = "en" | "fr";
 
@@ -596,7 +609,7 @@ type OrganizationSummary = {
   id: string;
   name: string;
   slug: string;
-  metadata?: unknown | undefined;
+  metadata?: unknown;
   userId?: string | null | undefined;
   parentId?: string | null | undefined;
 };
@@ -620,7 +633,7 @@ const normalizeInvitationRole = (role: string) => {
   return normalized === "support" ? "member" : normalized;
 };
 
-const userInvitationsAtom = Atom.family((baseUrl?: string | undefined) =>
+const userInvitationsAtom = Atom.family((baseUrl?: string) =>
   authClientApi(baseUrl)
     .query("auth", "organizationListUserInvitations", {
       query: {},
@@ -630,24 +643,23 @@ const userInvitationsAtom = Atom.family((baseUrl?: string | undefined) =>
     .pipe(refreshOnAuthChange),
 );
 
-const invitationOrganizationProfileAtom = Atom.family(
-  (baseUrl?: string | undefined) =>
-    Atom.family((organizationId: string) =>
-      Atom.family((locale: OrganizationLocale) =>
-        authClientApi(baseUrl).query(
-          "authExtra",
-          "getOrganizationPublicProfile",
-          {
-            query: { locale, organizationId },
-            timeToLive: "5 minutes",
-            serializationKey: `invitation-organization:${organizationId}:${locale}`,
-          },
-        ),
+const invitationOrganizationProfileAtom = Atom.family((baseUrl?: string) =>
+  Atom.family((organizationId: string) =>
+    Atom.family((locale: OrganizationLocale) =>
+      authClientApi(baseUrl).query(
+        "authExtra",
+        "getOrganizationPublicProfile",
+        {
+          query: { locale, organizationId },
+          timeToLive: "5 minutes",
+          serializationKey: `invitation-organization:${organizationId}:${locale}`,
+        },
       ),
     ),
+  ),
 );
 
-const organizationMembersAtom = Atom.family((baseUrl?: string | undefined) =>
+const organizationMembersAtom = Atom.family((baseUrl?: string) =>
   Atom.family((organizationId: string) =>
     authClientApi(baseUrl).query("auth", "organizationListMembers", {
       query: { organizationId },
@@ -658,16 +670,15 @@ const organizationMembersAtom = Atom.family((baseUrl?: string | undefined) =>
   ),
 );
 
-const organizationInvitationsAtom = Atom.family(
-  (baseUrl?: string | undefined) =>
-    Atom.family((organizationId: string) =>
-      authClientApi(baseUrl).query("auth", "organizationListInvitations", {
-        query: { organizationId },
-        timeToLive: "1 minute",
-        reactivityKeys: ["auth-organization-invitations", organizationId],
-        serializationKey: `organization-invitations:${organizationId}`,
-      }),
-    ),
+const organizationInvitationsAtom = Atom.family((baseUrl?: string) =>
+  Atom.family((organizationId: string) =>
+    authClientApi(baseUrl).query("auth", "organizationListInvitations", {
+      query: { organizationId },
+      timeToLive: "1 minute",
+      reactivityKeys: ["auth-organization-invitations", organizationId],
+      serializationKey: `organization-invitations:${organizationId}`,
+    }),
+  ),
 );
 
 const emptyOrganizationMembersAtom = Atom.make(
@@ -678,7 +689,7 @@ const emptyOrganizationInvitationsAtom = Atom.make(
   Effect.succeed(Array<OrganizationInvitationSummary>()),
 );
 
-const organizationApiKeysAtom = Atom.family((baseUrl?: string | undefined) =>
+const organizationApiKeysAtom = Atom.family((baseUrl?: string) =>
   Atom.family((organizationId: string) =>
     authClientApi(baseUrl).query("auth", "apiKeyList", {
       query: { configId: "organization", organizationId },
@@ -836,14 +847,14 @@ const decodeUploadedAsset = Schema.decodeUnknownEffect(ExtraUploadedAsset);
 const OrganizationMetadataRecord = Schema.Record(Schema.String, Schema.Json);
 
 const normalizeOrganizationMetadata = (metadata: OrganizationMetadata) =>
-  Schema.decodeUnknownEffect(OrganizationMetadataRecord)(metadata);
+  Schema.decodeEffect(OrganizationMetadataRecord)(metadata);
 
-const uploadImageAsset = (
+const uploadImageAsset = <E,>(
   file: File,
   m: ReturnType<typeof organizationMessageFns>,
   uploadImage: (input: {
     payload: FormData;
-  }) => Effect.Effect<typeof Schema.Unknown.Type, unknown>,
+  }) => Effect.Effect<typeof Schema.Unknown.Type, E>,
 ) => {
   const payload = new FormData();
   payload.append("file", file);
@@ -851,7 +862,12 @@ const uploadImageAsset = (
   return uploadImage({ payload }).pipe(
     Effect.flatMap(decodeUploadedAsset),
     Effect.map((uploaded) => assetPath(uploaded.url)),
-    Effect.mapError(() => new Error(m.organization_logo_upload_error())),
+    Effect.mapError(
+      () =>
+        new OrganizationActionError({
+          message: m.organization_logo_upload_error(),
+        }),
+    ),
   );
 };
 
@@ -2048,9 +2064,9 @@ function EditOrganizationSection({
         Effect.gen(function* () {
           const name = organizationNameFromForm(value, defaultLocale);
           if (!name)
-            return yield* Effect.fail(
-              new Error(m.organization_name_required()),
-            );
+            return yield* new OrganizationActionError({
+              message: m.organization_name_required(),
+            });
 
           const slug = value.slug.trim().toLowerCase();
           const client = yield* authHttpClient(baseUrl);
@@ -2075,10 +2091,15 @@ function EditOrganizationSection({
           yield* Effect.sync(notifyAuthChange);
           return updated;
         }).pipe(
-          Effect.mapError((cause) =>
-            cause instanceof Error
-              ? cause
-              : new Error(m.organization_update_error()),
+          Effect.mapError(
+            (cause) =>
+              new OrganizationActionError({
+                message:
+                  cause instanceof Error
+                    ? cause.message
+                    : m.organization_update_error(),
+                cause: cause,
+              }),
           ),
         ),
     }),
@@ -2234,9 +2255,9 @@ function CreateOrganizationSection({
         Effect.gen(function* () {
           const name = organizationNameFromForm(value, defaultLocale);
           if (!name)
-            return yield* Effect.fail(
-              new Error(m.organization_name_required()),
-            );
+            return yield* new OrganizationActionError({
+              message: m.organization_name_required(),
+            });
 
           const slug = (value.slug.trim() || slugify(name)).toLowerCase();
           const client = yield* authHttpClient(baseUrl);
@@ -2253,27 +2274,39 @@ function CreateOrganizationSection({
             .pipe(
               Effect.mapError(
                 (cause) =>
-                  new Error(
-                    isOrganizationSlugConflict(cause)
+                  new OrganizationActionError({
+                    message: isOrganizationSlugConflict(cause)
                       ? m.organization_create_slug_conflict()
                       : organizationFailureMessage(
                           cause,
                           m.organization_create_error(),
                         ),
-                  ),
+                  }),
               ),
             );
           yield* Effect.sync(notifyAuthChange);
           yield* Effect.tryPromise({
             try: () => onCreated(created),
-            catch: (cause) => cause,
+            catch: (cause) =>
+              new OrganizationActionError({
+                message:
+                  cause instanceof Error
+                    ? cause.message
+                    : m.organization_create_error(),
+                cause,
+              }),
           });
           return created;
         }).pipe(
-          Effect.mapError((cause) =>
-            cause instanceof Error
-              ? cause
-              : new Error(m.organization_create_error()),
+          Effect.mapError(
+            (cause) =>
+              new OrganizationActionError({
+                message:
+                  cause instanceof Error
+                    ? cause.message
+                    : m.organization_create_error(),
+                cause: cause,
+              }),
           ),
         ),
     }),
@@ -2497,8 +2530,6 @@ function OrganizationMembersManager({
     string | null
   >(null);
   const [leavingOrganization, setLeavingOrganization] = useState(false);
-  const [lastMembersData, setLastMembersData] =
-    useState<OrganizationMembersData | null>(null);
   const currentMembers = AsyncResult.match(membersResult, {
     onInitial: () => null,
     onFailure: () => null,
@@ -2509,6 +2540,11 @@ function OrganizationMembersManager({
     onFailure: () => null,
     onSuccess: ({ value }) => value,
   });
+  const [lastMembersData, setLastMembersData] = useState<{
+    members: typeof currentMembers;
+    invitations: typeof currentInvitations;
+    data: OrganizationMembersData;
+  } | null>(null);
   const currentMembersData =
     currentMembers && currentInvitations
       ? {
@@ -2519,7 +2555,7 @@ function OrganizationMembersManager({
         }
       : null;
   const membersData = currentMembersData ??
-    lastMembersData ?? {
+    lastMembersData?.data ?? {
       members: [],
       invitations: [],
     };
@@ -2549,16 +2585,17 @@ function OrganizationMembersManager({
     (membersResult._tag === "Initial" || invitationsResult._tag === "Initial");
   const canInviteMembers = canManageMembers;
   const canRemoveMembers = canManageMembers;
-  useEffect(() => {
-    if (!currentMembers || !currentInvitations) return;
-
+  if (
+    currentMembersData &&
+    (lastMembersData?.members !== currentMembers ||
+      lastMembersData?.invitations !== currentInvitations)
+  ) {
     setLastMembersData({
-      members: Array.from(currentMembers),
-      invitations: Array.from(currentInvitations).filter(
-        (invitation) => invitation.status === "pending",
-      ),
+      members: currentMembers,
+      invitations: currentInvitations,
+      data: currentMembersData,
     });
-  }, [currentInvitations, currentMembers]);
+  }
 
   const [inviteForm] = useState(() =>
     FormReact.make(inviteMemberFormBuilder, {
@@ -2579,10 +2616,15 @@ function OrganizationMembersManager({
             }),
           ),
           Effect.tap(() => Effect.sync(refreshInvitations)),
-          Effect.mapError((cause) =>
-            cause instanceof Error
-              ? cause
-              : new Error(m.organization_invite_error()),
+          Effect.mapError(
+            (cause) =>
+              new OrganizationActionError({
+                message:
+                  cause instanceof Error
+                    ? cause.message
+                    : m.organization_invite_error(),
+                cause: cause,
+              }),
           ),
         ),
     }),
@@ -2591,11 +2633,11 @@ function OrganizationMembersManager({
   const resetInvitation = useAtomSet(inviteForm.reset);
   const inviteResult = useAtomValue(inviteForm.submit);
 
-  useEffect(() => {
-    if (!AsyncResult.isSuccess(inviteResult)) return;
+  useAtomSubscribe(inviteForm.submit, (result) => {
+    if (!AsyncResult.isSuccess(result)) return;
     resetInvitation();
     setInviting(false);
-  }, [inviteResult, resetInvitation]);
+  });
 
   const updateRole = async (
     member: OrganizationMemberRow,
@@ -3085,10 +3127,8 @@ function OrganizationApiKeyManager({
   const [selectedPermissions, setSelectedPermissions] = useState<
     Record<string, boolean>
   >({});
-  const permissionOptionsRef = useRef(permissionOptions);
-  const selectedPermissionsRef = useRef(selectedPermissions);
-  permissionOptionsRef.current = permissionOptions;
-  selectedPermissionsRef.current = selectedPermissions;
+  const permissionOptionsAtom = useLatestAtom(permissionOptions);
+  const selectedPermissionsAtom = useLatestAtom(selectedPermissions);
   const keys = AsyncResult.match(keysResult, {
     onInitial: () => [],
     onFailure: () => [],
@@ -3104,7 +3144,7 @@ function OrganizationApiKeyManager({
     FormReact.make(apiKeyFormBuilder, {
       runtime: authClientApi(baseUrl).runtime,
       fields: { name: TextField, referrers: TextAreaField },
-      onSubmit: (_, { decoded: value }) =>
+      onSubmit: (_, { decoded: value, get }) =>
         Effect.gen(function* () {
           yield* Effect.sync(() => setCreatedKey(null));
           const client = yield* authHttpClient(baseUrl);
@@ -3114,8 +3154,8 @@ function OrganizationApiKeyManager({
               organizationId: organization.id,
               name: value.name.trim(),
               permissions: organizationApiKeySelectedPermissions(
-                permissionOptionsRef.current,
-                selectedPermissionsRef.current,
+                get(permissionOptionsAtom),
+                get(selectedPermissionsAtom),
               ),
               referrers: parseApiKeyReferrers(
                 value.referrers,
@@ -3131,10 +3171,15 @@ function OrganizationApiKeyManager({
           });
           return created;
         }).pipe(
-          Effect.mapError((cause) =>
-            cause instanceof Error
-              ? cause
-              : new Error(m.user_api_key_create_error()),
+          Effect.mapError(
+            (cause) =>
+              new OrganizationActionError({
+                message:
+                  cause instanceof Error
+                    ? cause.message
+                    : m.user_api_key_create_error(),
+                cause: cause,
+              }),
           ),
         ),
     }),
@@ -3378,7 +3423,7 @@ function OrganizationApiKeyEditForm({
         action,
       })),
   );
-  const currentPermissions = Schema.decodeUnknownOption(ExtraApiKeyPermissions)(
+  const currentPermissions = Schema.decodeOption(ExtraApiKeyPermissions)(
     keyData.permissions ?? {},
   );
   const currentGrant = Option.isSome(currentPermissions)
@@ -3390,10 +3435,8 @@ function OrganizationApiKeyEditForm({
       currentGrant[option.project]?.includes(option.action) ?? false,
     ]),
   );
-  const permissionOptionsRef = useRef(permissionOptions);
-  const permissionsRef = useRef(permissions);
-  permissionOptionsRef.current = permissionOptions;
-  permissionsRef.current = permissions;
+  const permissionOptionsAtom = useLatestAtom(permissionOptions);
+  const permissionsAtom = useLatestAtom(permissions);
   const [form] = useState(() =>
     FormReact.make(editApiKeyFormBuilder, {
       runtime: authClientApi(baseUrl).runtime,
@@ -3404,17 +3447,17 @@ function OrganizationApiKeyEditForm({
         permissions: ApiKeyPermissionsField,
       },
       mode: { validation: "onSubmit" },
-      onSubmit: (_, { decoded }) =>
+      onSubmit: (_, { decoded, get }) =>
         Effect.gen(function* () {
           const referrers = parseApiKeyReferrers(
             decoded.referrers,
             messages.referrersError,
           );
           const selectedGrant: Record<string, string[]> = {};
-          for (const project of Object.keys(permissionsRef.current)) {
+          for (const project of Object.keys(get(permissionsAtom))) {
             selectedGrant[project] = [];
           }
-          for (const option of permissionOptionsRef.current) {
+          for (const option of get(permissionOptionsAtom)) {
             if (!decoded.permissions[option.id]) continue;
             selectedGrant[option.project] = [
               ...(selectedGrant[option.project] ?? []),
@@ -3435,12 +3478,15 @@ function OrganizationApiKeyEditForm({
           yield* Effect.sync(onSaved);
           return updated;
         }).pipe(
-          Effect.mapError((cause) =>
-            cause instanceof Error
-              ? cause
-              : new Error(
-                  organizationFailureMessage(cause, messages.updateError),
-                ),
+          Effect.mapError(
+            (cause) =>
+              new OrganizationActionError({
+                message:
+                  cause instanceof Error
+                    ? cause.message
+                    : organizationFailureMessage(cause, messages.updateError),
+                cause: cause,
+              }),
           ),
         ),
     }),

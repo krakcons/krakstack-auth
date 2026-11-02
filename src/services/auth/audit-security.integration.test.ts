@@ -1,3 +1,4 @@
+import * as Layer from "effect/Layer";
 import { describe, expect, it } from "@effect/vitest";
 import { Events } from "@krak-stack/registry/events";
 import {
@@ -13,11 +14,7 @@ import { sqlTestLayer } from "@/services/database";
 import { createAuth } from "./config";
 
 const origin = "https://localhost:3001";
-const nativeRequest = (
-  path: string,
-  body: typeof Schema.Json.Type,
-  cookie = "",
-) =>
+const nativeRequest = (path: string, body: Schema.Json, cookie = "") =>
   new Request(`${origin}/api/auth${path}`, {
     method: "POST",
     headers: { origin, cookie, "content-type": "application/json" },
@@ -33,20 +30,21 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)(
         Effect.gen(function* () {
           const sql = yield* SqlClient.SqlClient;
           const events = yield* Events;
-          const tracked: Array<typeof TrackEvent.Type> = [];
+          const tracked: Array<TrackEvent> = [];
           const recording = {
             ...events,
-            track: (event: typeof TrackEvent.Type) => {
+            track: (event: TrackEvent) => {
               if (event.category === "audit") tracked.push(event);
               return events.track(event);
             },
           };
+          const runAudit = Effect.runPromiseWith(
+            yield* Effect.context<never>(),
+          );
           const auth = createAuth({
             allowedHosts: ["localhost:3001"],
             auditRun: (effect) =>
-              Effect.runPromise(
-                effect.pipe(Effect.provideService(Events, recording)),
-              ),
+              runAudit(effect.pipe(Effect.provideService(Events, recording))),
           });
           const email = `${crypto.randomUUID()}@private.example`;
           yield* Effect.gen(function* () {
@@ -108,7 +106,7 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)(
             });
             for (const event of tracked) {
               const rows =
-                yield* sql`SELECT user_id, payload_json::text AS payload FROM events WHERE payload_json::text LIKE ${`%${event.properties?.operationId}%`} AND event_name = ${event.name}`;
+                yield* sql`SELECT user_id, payload_json::text AS payload FROM events WHERE payload_json::text LIKE ${`%${yield* Schema.decodeUnknownEffect(Schema.String)(event.properties?.operationId)}%`} AND event_name = ${event.name}`;
               expect(rows).toHaveLength(1);
               expect(rows[0]?.userId).toBe(result.user.id);
               expect(rows[0]?.payload).not.toMatch(/PRIVATE-|private.example/);
@@ -127,11 +125,15 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)(
                 }
                 yield* sql`DELETE FROM verification WHERE identifier LIKE ${`%${email}%`}`;
                 for (const event of tracked)
-                  yield* sql`DELETE FROM events WHERE payload_json::text LIKE ${`%${event.properties?.operationId}%`}`;
+                  yield* sql`DELETE FROM events WHERE payload_json::text LIKE ${`%${yield* Schema.decodeUnknownEffect(Schema.String)(event.properties?.operationId)}%`}`;
               }).pipe(Effect.orDie),
             ),
           );
-        }).pipe(Effect.provide(testEventsLayer), Effect.provide(sqlTestLayer)),
+        }).pipe(
+          Effect.provide(
+            testEventsLayer.pipe(Layer.provideMerge(sqlTestLayer)),
+          ),
+        ),
     );
     it.effect(
       "audits token-only password resets under a system actor and takes subjects only from the verified reset callback",
@@ -139,20 +141,21 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)(
         Effect.gen(function* () {
           const sql = yield* SqlClient.SqlClient;
           const events = yield* Events;
-          const tracked: Array<typeof TrackEvent.Type> = [];
+          const tracked: Array<TrackEvent> = [];
           const recording = {
             ...events,
-            track: (event: typeof TrackEvent.Type) => {
+            track: (event: TrackEvent) => {
               if (event.category === "audit") tracked.push(event);
               return events.track(event);
             },
           };
+          const runAudit = Effect.runPromiseWith(
+            yield* Effect.context<never>(),
+          );
           const auth = createAuth({
             allowedHosts: ["localhost:3001"],
             auditRun: (effect) =>
-              Effect.runPromise(
-                effect.pipe(Effect.provideService(Events, recording)),
-              ),
+              runAudit(effect.pipe(Effect.provideService(Events, recording))),
           });
           const context = yield* Effect.promise(() => auth.$context);
           const id = crypto.randomUUID();
@@ -232,7 +235,7 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)(
             expect(tracked).toHaveLength(1);
             for (const event of tracked) {
               const rows =
-                yield* sql`SELECT user_id, organization_id, payload_json::text AS payload FROM events WHERE payload_json::text LIKE ${`%${event.properties?.operationId}%`} AND event_name = ${event.name}`;
+                yield* sql`SELECT user_id, organization_id, payload_json::text AS payload FROM events WHERE payload_json::text LIKE ${`%${yield* Schema.decodeUnknownEffect(Schema.String)(event.properties?.operationId)}%`} AND event_name = ${event.name}`;
               expect(rows).toHaveLength(1);
               expect(rows[0]?.userId).toBeNull();
               expect(rows[0]?.organizationId).toBe(
@@ -250,11 +253,15 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)(
                 yield* sql`DELETE FROM "user" WHERE id = ${id}`;
                 yield* sql`DELETE FROM verification WHERE value = ${id}`;
                 for (const event of tracked)
-                  yield* sql`DELETE FROM events WHERE payload_json::text LIKE ${`%${event.properties?.operationId}%`}`;
+                  yield* sql`DELETE FROM events WHERE payload_json::text LIKE ${`%${yield* Schema.decodeUnknownEffect(Schema.String)(event.properties?.operationId)}%`}`;
               }).pipe(Effect.orDie),
             ),
           );
-        }).pipe(Effect.provide(testEventsLayer), Effect.provide(sqlTestLayer)),
+        }).pipe(
+          Effect.provide(
+            testEventsLayer.pipe(Layer.provideMerge(sqlTestLayer)),
+          ),
+        ),
     );
 
     it.effect(
@@ -263,10 +270,10 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)(
         Effect.gen(function* () {
           const sql = yield* SqlClient.SqlClient;
           const events = yield* Events;
-          const tracked: Array<typeof TrackEvent.Type> = [];
+          const tracked: Array<TrackEvent> = [];
           const recording = {
             ...events,
-            track: (event: typeof TrackEvent.Type) => {
+            track: (event: TrackEvent) => {
               if (event.category === "audit") tracked.push(event);
               if (event.name === "auth.password.reset")
                 return Effect.fail(
@@ -277,12 +284,13 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)(
               return events.track(event);
             },
           };
+          const runAudit = Effect.runPromiseWith(
+            yield* Effect.context<never>(),
+          );
           const auth = createAuth({
             allowedHosts: ["localhost:3001"],
             auditRun: (effect) =>
-              Effect.runPromise(
-                effect.pipe(Effect.provideService(Events, recording)),
-              ),
+              runAudit(effect.pipe(Effect.provideService(Events, recording))),
           });
           const context = yield* Effect.promise(() => auth.$context);
           const id = crypto.randomUUID();
@@ -351,7 +359,7 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)(
               "password_reset",
             );
             const persisted =
-              yield* sql`SELECT event_name FROM events WHERE payload_json::text LIKE ${`%${tracked[0]?.properties?.operationId}%`}`;
+              yield* sql`SELECT event_name FROM events WHERE payload_json::text LIKE ${`%${yield* Schema.decodeUnknownEffect(Schema.String)(tracked[0]?.properties?.operationId)}%`}`;
             expect(persisted).toEqual([]);
           }).pipe(
             Effect.ensuring(
@@ -360,11 +368,15 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)(
                 yield* sql`DELETE FROM "user" WHERE id = ${id}`;
                 yield* sql`DELETE FROM verification WHERE value = ${id}`;
                 for (const event of tracked)
-                  yield* sql`DELETE FROM events WHERE payload_json::text LIKE ${`%${event.properties?.operationId}%`}`;
+                  yield* sql`DELETE FROM events WHERE payload_json::text LIKE ${`%${yield* Schema.decodeUnknownEffect(Schema.String)(event.properties?.operationId)}%`}`;
               }).pipe(Effect.orDie),
             ),
           );
-        }).pipe(Effect.provide(testEventsLayer), Effect.provide(sqlTestLayer)),
+        }).pipe(
+          Effect.provide(
+            testEventsLayer.pipe(Layer.provideMerge(sqlTestLayer)),
+          ),
+        ),
     );
 
     it.effect(
@@ -373,20 +385,21 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)(
         Effect.gen(function* () {
           const sql = yield* SqlClient.SqlClient;
           const events = yield* Events;
-          const tracked: Array<typeof TrackEvent.Type> = [];
+          const tracked: Array<TrackEvent> = [];
           const recording = {
             ...events,
-            track: (event: typeof TrackEvent.Type) => {
+            track: (event: TrackEvent) => {
               if (event.category === "audit") tracked.push(event);
               return events.track(event);
             },
           };
+          const runAudit = Effect.runPromiseWith(
+            yield* Effect.context<never>(),
+          );
           const auth = createAuth({
             allowedHosts: ["localhost:3001"],
             auditRun: (effect) =>
-              Effect.runPromise(
-                effect.pipe(Effect.provideService(Events, recording)),
-              ),
+              runAudit(effect.pipe(Effect.provideService(Events, recording))),
           });
           const context = yield* Effect.promise(() => auth.$context);
           const id = crypto.randomUUID();
@@ -541,7 +554,7 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)(
                 /PRIVATE-|private.example|private-provider.example|callback\/audit-test/,
               );
               const rows =
-                yield* sql`SELECT user_id, payload_json::text AS payload FROM events WHERE payload_json::text LIKE ${`%${event.properties?.operationId}%`} AND event_name = ${event.name}`;
+                yield* sql`SELECT user_id, payload_json::text AS payload FROM events WHERE payload_json::text LIKE ${`%${yield* Schema.decodeUnknownEffect(Schema.String)(event.properties?.operationId)}%`} AND event_name = ${event.name}`;
               expect(rows[0]?.userId).toBe(userId);
               expect(rows[0]?.payload).not.toMatch(
                 /PRIVATE-|private.example|private-provider.example/,
@@ -565,11 +578,15 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)(
                   yield* sql`DELETE FROM "user" WHERE id = ${user.id}`;
                 }
                 for (const event of tracked)
-                  yield* sql`DELETE FROM events WHERE payload_json::text LIKE ${`%${event.properties?.operationId}%`}`;
+                  yield* sql`DELETE FROM events WHERE payload_json::text LIKE ${`%${yield* Schema.decodeUnknownEffect(Schema.String)(event.properties?.operationId)}%`}`;
               }).pipe(Effect.orDie),
             ),
           );
-        }).pipe(Effect.provide(testEventsLayer), Effect.provide(sqlTestLayer)),
+        }).pipe(
+          Effect.provide(
+            testEventsLayer.pipe(Layer.provideMerge(sqlTestLayer)),
+          ),
+        ),
     );
 
     it.effect(
@@ -578,20 +595,21 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)(
         Effect.gen(function* () {
           const sql = yield* SqlClient.SqlClient;
           const events = yield* Events;
-          const tracked: Array<typeof TrackEvent.Type> = [];
+          const tracked: Array<TrackEvent> = [];
           const recording = {
             ...events,
-            track: (event: typeof TrackEvent.Type) => {
+            track: (event: TrackEvent) => {
               if (event.category === "audit") tracked.push(event);
               return events.track(event);
             },
           };
+          const runAudit = Effect.runPromiseWith(
+            yield* Effect.context<never>(),
+          );
           const auth = createAuth({
             allowedHosts: ["localhost:3001"],
             auditRun: (effect) =>
-              Effect.runPromise(
-                effect.pipe(Effect.provideService(Events, recording)),
-              ),
+              runAudit(effect.pipe(Effect.provideService(Events, recording))),
           });
           const context = yield* Effect.promise(() => auth.$context);
           const id = crypto.randomUUID();
@@ -703,7 +721,7 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)(
               yield* sql`SELECT id FROM session WHERE user_id = ${id}`,
             ).toHaveLength(1);
             const persisted =
-              yield* sql`SELECT user_id, payload_json::text AS payload FROM events WHERE payload_json::text LIKE ${`%${tracked[0]?.properties?.operationId}%`}`;
+              yield* sql`SELECT user_id, payload_json::text AS payload FROM events WHERE payload_json::text LIKE ${`%${yield* Schema.decodeUnknownEffect(Schema.String)(tracked[0]?.properties?.operationId)}%`}`;
             expect(persisted).toHaveLength(1);
             expect(persisted[0]?.userId).toBe(id);
             expect(persisted[0]?.payload).not.toMatch(
@@ -719,11 +737,15 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)(
                 yield* sql`DELETE FROM "user" WHERE id = ${id}`;
                 yield* sql`DELETE FROM verification WHERE value = ${id}`;
                 for (const event of tracked)
-                  yield* sql`DELETE FROM events WHERE payload_json::text LIKE ${`%${event.properties?.operationId}%`}`;
+                  yield* sql`DELETE FROM events WHERE payload_json::text LIKE ${`%${yield* Schema.decodeUnknownEffect(Schema.String)(event.properties?.operationId)}%`}`;
               }).pipe(Effect.orDie),
             ),
           );
-        }).pipe(Effect.provide(testEventsLayer), Effect.provide(sqlTestLayer)),
+        }).pipe(
+          Effect.provide(
+            testEventsLayer.pipe(Layer.provideMerge(sqlTestLayer)),
+          ),
+        ),
     );
   },
 );

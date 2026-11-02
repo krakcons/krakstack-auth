@@ -1,3 +1,4 @@
+import * as Data from "effect/Data";
 import { useAtomSet, useAtomSubscribe, useAtomValue } from "@effect/atom-react";
 import type { AdminApiKey } from "@krak-stack/auth/admin";
 import { FormBuilder, FormReact } from "@lucas-barake/effect-form-react";
@@ -43,6 +44,11 @@ import { ApiClient } from "@/lib/api-client";
 import { m } from "@/paraglide/messages";
 import { Query, QueryStandard } from "@krak-stack/registry/query";
 import { parseApiKeyReferrers } from "@/services/auth/api-key-referrers";
+
+class ApiKeyActionError extends Data.TaggedError("ApiKeyActionError")<{
+  readonly message: string;
+  readonly cause?: unknown;
+}> {}
 
 export const Route = createFileRoute("/admin/api-keys")({
   validateSearch: QueryStandard,
@@ -358,7 +364,9 @@ const optionalNumber = (value: string, label: string) => {
 
   const number = Number(trimmed);
   if (!Number.isFinite(number) || number <= 0) {
-    throw new Error(m.admin_api_key_number_error({ field: label }));
+    throw new ApiKeyActionError({
+      message: m.admin_api_key_number_error({ field: label }),
+    });
   }
 
   return number;
@@ -406,8 +414,13 @@ const makeApiKeyForm = (apiKey: ApiKeySummary | null) =>
           })
           .pipe(
             Effect.as(apiKey.id),
-            Effect.mapError((cause) =>
-              cause instanceof Error ? cause : new Error(String(cause)),
+            Effect.mapError(
+              (cause) =>
+                new ApiKeyActionError({
+                  message:
+                    cause instanceof Error ? cause.message : String(cause),
+                  cause: cause,
+                }),
             ),
           );
       }
@@ -424,8 +437,12 @@ const makeApiKeyForm = (apiKey: ApiKeySummary | null) =>
             })
             .pipe(Effect.as(created.key)),
         ),
-        Effect.mapError((cause) =>
-          cause instanceof Error ? cause : new Error(String(cause)),
+        Effect.mapError(
+          (cause) =>
+            new ApiKeyActionError({
+              message: cause instanceof Error ? cause.message : String(cause),
+              cause: cause,
+            }),
         ),
       );
     },

@@ -7,9 +7,10 @@ import { receiveAuthWebhook } from "./webhooks.js";
 // adapter isolates Auth's event-specific validation and handler routing.
 const receiver = WebhooksReceiver.of({
   receive: (input) =>
-    Schema.decodeUnknownEffect(Schema.fromJsonString(input.schema))(
-      input.body,
-    ).pipe(Effect.flatMap(input.handle), Effect.as({ duplicate: false })),
+    Schema.decodeEffect(Schema.fromJsonString(input.schema))(input.body).pipe(
+      Effect.flatMap(input.handle),
+      Effect.as({ duplicate: false }),
+    ),
   cleanup: () => Effect.void,
 });
 

@@ -135,85 +135,77 @@ const authErrorFields = <const Tag extends string>(tag: Tag) => ({
   ...AuthErrorBody.fields,
 });
 
-export class AuthBadRequest extends Schema.TaggedError<AuthBadRequest>()(
-  "AuthBadRequest",
-  authErrorFields("AuthBadRequest"),
-  {
-    identifier: "AuthBadRequest",
-    title: "Bad request",
-    httpApiStatus: 400,
-  },
-) {}
+export class AuthBadRequest extends Schema.TaggedError<
+  AuthBadRequest,
+  { readonly brand: unique symbol }
+>()("AuthBadRequest", authErrorFields("AuthBadRequest"), {
+  identifier: "AuthBadRequest",
+  title: "Bad request",
+  httpApiStatus: 400,
+}) {}
 
-export class AuthUnauthorized extends Schema.TaggedError<AuthUnauthorized>()(
-  "AuthUnauthorized",
-  authErrorFields("AuthUnauthorized"),
-  {
-    identifier: "AuthUnauthorized",
-    title: "Unauthorized",
-    httpApiStatus: 401,
-  },
-) {}
+export class AuthUnauthorized extends Schema.TaggedError<
+  AuthUnauthorized,
+  { readonly brand: unique symbol }
+>()("AuthUnauthorized", authErrorFields("AuthUnauthorized"), {
+  identifier: "AuthUnauthorized",
+  title: "Unauthorized",
+  httpApiStatus: 401,
+}) {}
 
-export class AuthForbidden extends Schema.TaggedError<AuthForbidden>()(
-  "AuthForbidden",
-  authErrorFields("AuthForbidden"),
-  {
-    identifier: "AuthForbidden",
-    title: "Forbidden",
-    httpApiStatus: 403,
-  },
-) {}
+export class AuthForbidden extends Schema.TaggedError<
+  AuthForbidden,
+  { readonly brand: unique symbol }
+>()("AuthForbidden", authErrorFields("AuthForbidden"), {
+  identifier: "AuthForbidden",
+  title: "Forbidden",
+  httpApiStatus: 403,
+}) {}
 
-export class AuthNotFound extends Schema.TaggedError<AuthNotFound>()(
-  "AuthNotFound",
-  authErrorFields("AuthNotFound"),
-  {
-    identifier: "AuthNotFound",
-    title: "Not found",
-    httpApiStatus: 404,
-  },
-) {}
+export class AuthNotFound extends Schema.TaggedError<
+  AuthNotFound,
+  { readonly brand: unique symbol }
+>()("AuthNotFound", authErrorFields("AuthNotFound"), {
+  identifier: "AuthNotFound",
+  title: "Not found",
+  httpApiStatus: 404,
+}) {}
 
-export class AuthConflict extends Schema.TaggedError<AuthConflict>()(
-  "AuthConflict",
-  authErrorFields("AuthConflict"),
-  {
-    identifier: "AuthConflict",
-    title: "Conflict",
-    httpApiStatus: 409,
-  },
-) {}
+export class AuthConflict extends Schema.TaggedError<
+  AuthConflict,
+  { readonly brand: unique symbol }
+>()("AuthConflict", authErrorFields("AuthConflict"), {
+  identifier: "AuthConflict",
+  title: "Conflict",
+  httpApiStatus: 409,
+}) {}
 
-export class AuthExpectationFailed extends Schema.TaggedError<AuthExpectationFailed>()(
-  "AuthExpectationFailed",
-  authErrorFields("AuthExpectationFailed"),
-  {
-    identifier: "AuthExpectationFailed",
-    title: "Expectation failed",
-    httpApiStatus: 417,
-  },
-) {}
+export class AuthExpectationFailed extends Schema.TaggedError<
+  AuthExpectationFailed,
+  { readonly brand: unique symbol }
+>()("AuthExpectationFailed", authErrorFields("AuthExpectationFailed"), {
+  identifier: "AuthExpectationFailed",
+  title: "Expectation failed",
+  httpApiStatus: 417,
+}) {}
 
-export class AuthTooManyRequests extends Schema.TaggedError<AuthTooManyRequests>()(
-  "AuthTooManyRequests",
-  authErrorFields("AuthTooManyRequests"),
-  {
-    identifier: "AuthTooManyRequests",
-    title: "Too many requests",
-    httpApiStatus: 429,
-  },
-) {}
+export class AuthTooManyRequests extends Schema.TaggedError<
+  AuthTooManyRequests,
+  { readonly brand: unique symbol }
+>()("AuthTooManyRequests", authErrorFields("AuthTooManyRequests"), {
+  identifier: "AuthTooManyRequests",
+  title: "Too many requests",
+  httpApiStatus: 429,
+}) {}
 
-export class AuthInternalServerError extends Schema.TaggedError<AuthInternalServerError>()(
-  "AuthInternalServerError",
-  authErrorFields("AuthInternalServerError"),
-  {
-    identifier: "AuthInternalServerError",
-    title: "Internal server error",
-    httpApiStatus: 500,
-  },
-) {}
+export class AuthInternalServerError extends Schema.TaggedError<
+  AuthInternalServerError,
+  { readonly brand: unique symbol }
+>()("AuthInternalServerError", authErrorFields("AuthInternalServerError"), {
+  identifier: "AuthInternalServerError",
+  title: "Internal server error",
+  httpApiStatus: 500,
+}) {}
 
 export const UpdateUserPayload = Schema.Struct({
   locale: Schema.optional(UserLocale),
@@ -270,7 +262,7 @@ export const SocialIdToken = Schema.Struct({
   nonce: Schema.optional(Schema.String),
   accessToken: Schema.optional(Schema.String),
   refreshToken: Schema.optional(Schema.String),
-  expiresAt: Schema.optional(Schema.Number),
+  expiresAt: Schema.optional(Schema.Finite),
   user: Schema.optional(
     Schema.Struct({
       name: Schema.optional(
@@ -532,7 +524,7 @@ export const FullAuthOrganization = Schema.Struct({
 export const GetFullOrganizationQuery = Schema.Struct({
   organizationId: Schema.optional(Schema.String),
   organizationSlug: Schema.optional(Schema.String),
-  membersLimit: Schema.optional(Schema.NumberFromString),
+  membersLimit: Schema.optional(Schema.FiniteFromString),
 }).annotate({
   identifier: "GetFullOrganizationQuery",
   title: "Get full organization query",
@@ -573,8 +565,8 @@ export const UpdateOrganizationPayload = Schema.Struct({
 });
 
 export const OrganizationListMembersQuery = Schema.Struct({
-  limit: Schema.optional(Schema.NumberFromString),
-  offset: Schema.optional(Schema.NumberFromString),
+  limit: Schema.optional(Schema.FiniteFromString),
+  offset: Schema.optional(Schema.FiniteFromString),
   sortBy: Schema.optional(Schema.String),
   sortDirection: Schema.optional(Schema.Literals(["asc", "desc"])),
   filterField: Schema.optional(Schema.String),
@@ -589,7 +581,7 @@ export const OrganizationListMembersQuery = Schema.Struct({
 
 export const OrganizationListMembersResponse = Schema.Struct({
   members: Schema.Array(AuthMember),
-  total: Schema.Number,
+  total: Schema.Finite,
 }).annotate({
   identifier: "OrganizationListMembersResponse",
   title: "List organization members response",
@@ -688,7 +680,7 @@ export const OrganizationImpersonateUserPayload = Schema.Struct({
   organizationId: Schema.NonEmptyString,
   actorUserId: Schema.NonEmptyString,
   targetUserId: Schema.NonEmptyString,
-  expiresInSeconds: Schema.optional(Schema.Number),
+  expiresInSeconds: Schema.optional(Schema.Finite),
 }).annotate({
   identifier: "OrganizationImpersonateUserPayload",
   title: "Organization impersonate user payload",
@@ -710,15 +702,15 @@ export const AuthApiKey = Schema.Struct({
   userId: Schema.optional(Schema.String),
   referenceId: Schema.String,
   configId: Schema.String,
-  refillInterval: Schema.NullOr(Schema.Number),
-  refillAmount: Schema.NullOr(Schema.Number),
+  refillInterval: Schema.NullOr(Schema.Finite),
+  refillAmount: Schema.NullOr(Schema.Finite),
   lastRefillAt: Schema.NullOr(Schema.DateFromString),
   enabled: Schema.Boolean,
   rateLimitEnabled: Schema.Boolean,
-  rateLimitTimeWindow: Schema.NullOr(Schema.Number),
-  rateLimitMax: Schema.NullOr(Schema.Number),
-  requestCount: Schema.Number,
-  remaining: Schema.NullOr(Schema.Number),
+  rateLimitTimeWindow: Schema.NullOr(Schema.Finite),
+  rateLimitMax: Schema.NullOr(Schema.Finite),
+  requestCount: Schema.Finite,
+  remaining: Schema.NullOr(Schema.Finite),
   lastRequest: Schema.NullOr(Schema.DateFromString),
   expiresAt: Schema.NullOr(Schema.DateFromString),
   createdAt: Schema.DateFromString,
@@ -731,17 +723,17 @@ export const AuthApiKey = Schema.Struct({
 export const ListApiKeysQuery = Schema.Struct({
   configId: Schema.optional(Schema.String),
   organizationId: Schema.optional(Schema.String),
-  limit: Schema.optional(Schema.NumberFromString),
-  offset: Schema.optional(Schema.NumberFromString),
+  limit: Schema.optional(Schema.FiniteFromString),
+  offset: Schema.optional(Schema.FiniteFromString),
   sortBy: Schema.optional(Schema.String),
   sortDirection: Schema.optional(Schema.Literals(["asc", "desc"])),
 }).annotate({ identifier: "ListApiKeysQuery", title: "List API keys query" });
 
 export const ListApiKeysResponse = Schema.Struct({
   apiKeys: Schema.Array(AuthApiKey),
-  total: Schema.Number,
-  limit: Schema.optional(Schema.NullOr(Schema.Number)),
-  offset: Schema.optional(Schema.NullOr(Schema.Number)),
+  total: Schema.Finite,
+  limit: Schema.optional(Schema.NullOr(Schema.Finite)),
+  offset: Schema.optional(Schema.NullOr(Schema.Finite)),
 }).annotate({
   identifier: "ListApiKeysResponse",
   title: "List API keys response",
@@ -770,7 +762,7 @@ export const AdminStopImpersonatingPayload = Schema.Struct({}).annotate({
 export const AdminBanUserPayload = Schema.Struct({
   userId: Schema.String,
   banReason: Schema.optional(Schema.String),
-  banExpiresIn: Schema.optional(Schema.Number),
+  banExpiresIn: Schema.optional(Schema.Finite),
 }).annotate({ identifier: "AdminBanUserPayload", title: "Ban user payload" });
 
 export const AdminUserResponse = Schema.Struct({ user: AuthUser }).annotate({

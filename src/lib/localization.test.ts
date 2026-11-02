@@ -42,9 +42,12 @@ describe("LocaleMiddleware", () => {
       Effect.provide(
         HttpApiMiddleware.layerClient(LocaleMiddleware, ({ next, request }) =>
           next(HttpClientRequest.setHeader(request, "accept-language", "fr")),
+        ).pipe(
+          Layer.provideMerge(
+            Layer.mergeAll(handlers, HttpServer.layerServices),
+          ),
         ),
       ),
-      Effect.provide(Layer.mergeAll(handlers, HttpServer.layerServices)),
     ),
   );
 });

@@ -134,7 +134,7 @@ const memberRoleLabel = (role: string, m: AdminOrganizationsMessages) =>
 const organizationDisplay = (
   organization: AdminOrganization,
   locale: KrakstackAuthLocale,
-  baseUrl?: string | undefined,
+  baseUrl?: string,
 ) => {
   const branding = organizationBranding(organization, locale);
 
@@ -147,7 +147,7 @@ const organizationDisplay = (
 const AdminOrganizationsFamilyKey = Schema.fromJsonString(
   Schema.Struct({
     query: AdminListQuery,
-    reloadKey: Schema.Number,
+    reloadKey: Schema.Finite,
   }),
 ).annotate({ identifier: "AdminOrganizationsFamilyKey" });
 
@@ -164,11 +164,11 @@ const adminOrganizationsFamilyKey = (
     reloadKey,
   });
 
-const organizationsAtom = Atom.family((baseUrl?: string | undefined) =>
+const organizationsAtom = Atom.family((baseUrl?: string) =>
   Atom.family((key: string) => {
-    const { query, reloadKey } = Schema.decodeUnknownSync(
-      AdminOrganizationsFamilyKey,
-    )(key);
+    const { query, reloadKey } = Schema.decodeSync(AdminOrganizationsFamilyKey)(
+      key,
+    );
     return authClientApi(baseUrl).query("admin", "listOrganizations", {
       query,
       timeToLive: "1 minute",
@@ -295,7 +295,7 @@ export function AdminOrganizationsTable({
       projectId,
       reloadKey,
       refreshKey: 0,
-      search: search ?? Schema.decodeUnknownSync(Query)({}),
+      search: search ?? Schema.decodeSync(Query)({}),
     }),
   );
   const setTableRequest = useAtomSet(tableAtoms.requestAtom);
@@ -383,7 +383,7 @@ export function AdminOrganizationsTable({
         }}
         state={tableRequest.search}
         onStateChange={({ page, pageSize, globalFilter, sort, filters }) => {
-          const nextSearch = Schema.decodeUnknownSync(Query)({
+          const nextSearch = Schema.decodeSync(Query)({
             page,
             pageSize,
             globalFilter,

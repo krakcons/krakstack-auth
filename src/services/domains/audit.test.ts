@@ -1,5 +1,6 @@
+import * as Layer from "effect/Layer";
 import { describe, expect, it } from "@effect/vitest";
-import { Effect, Layer } from "effect";
+import { Effect, Redacted, Schema } from "effect";
 import { HttpClient, HttpClientResponse } from "effect/http";
 import { SqlClient } from "effect/sql";
 import {
@@ -136,14 +137,20 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)(
             expect(yield* domains.get({ id: domain.id })).toBeNull();
             const audit =
               yield* sql`SELECT event_name, payload_json::text AS payload FROM events WHERE payload_json::text LIKE ${`%${domain.id}%`}`;
-            expect(audit.map((row) => row.eventName).sort()).toEqual(
+            expect(
+              audit
+                .map((row) =>
+                  Schema.decodeUnknownSync(Schema.String)(row.eventName),
+                )
+                .sort((a, b) => a.localeCompare(b)),
+            ).toEqual(
               [
                 "domain.created",
                 "domain.deleted",
                 "domain.deprovisioned",
                 "domain.provisioned",
                 "domain.status_changed",
-              ].sort(),
+              ].sort((a, b) => a.localeCompare(b)),
             );
             for (const event of audit)
               expect(event.payload).not.toMatch(
@@ -159,16 +166,19 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)(
             ),
           );
         }).pipe(
-          Effect.provide(Layer.effect(Domains, Domains.make)),
+          Effect.provideServiceEffect(Domains, Domains.make),
           Effect.provideService(HttpClient.HttpClient, http),
           Effect.provideService(
             Credentials,
             Effect.succeed(
-              apiTokenCredentials({ apiToken: "never-used-real-token" }),
+              apiTokenCredentials({
+                apiToken: Redacted.make("never-used-real-token"),
+              }),
             ),
           ),
-          Effect.provide(testEventsLayer),
-          Effect.provide(sqlTestLayer),
+          Effect.provide(
+            testEventsLayer.pipe(Layer.provideMerge(sqlTestLayer)),
+          ),
         );
       },
     );

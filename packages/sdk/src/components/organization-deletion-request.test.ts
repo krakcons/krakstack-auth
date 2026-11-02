@@ -1,4 +1,5 @@
 import { describe, expect, it } from "@effect/vitest";
+import { mockFetch } from "../../test/fetch.js";
 import { Effect } from "effect";
 import { FetchHttpClient } from "effect/http";
 import {
@@ -31,7 +32,7 @@ describe("Organization switcher deletion", () => {
     () =>
       Effect.gen(function* () {
         const requests: Request[] = [];
-        const capture: typeof fetch = async (input, init) => {
+        const capture: typeof fetch = mockFetch(async (input, init) => {
           requests.push(new Request(input, init));
           return Response.json({
             id: "confirmed-organization",
@@ -41,7 +42,7 @@ describe("Organization switcher deletion", () => {
             metadata: null,
             createdAt: "2026-11-01T00:00:00.000Z",
           });
-        };
+        });
         yield* requestOrganizationDeletion(
           "confirmed-organization",
           "https://auth.example.com",
@@ -63,8 +64,9 @@ describe("Organization switcher deletion", () => {
     "propagates deletion failure so the confirmation remains open",
     () =>
       Effect.gen(function* () {
-        const reject: typeof fetch = async () =>
-          Response.json({ message: "Forbidden" }, { status: 403 });
+        const reject: typeof fetch = mockFetch(async () =>
+          Response.json({ message: "Forbidden" }, { status: 403 }),
+        );
         const result = yield* requestOrganizationDeletion(
           "organization",
           "https://auth.example.com",

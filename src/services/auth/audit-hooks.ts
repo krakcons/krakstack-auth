@@ -81,7 +81,7 @@ type NativeAuditAnnotations = {
 };
 
 export const makeNativeAudit = (
-  run: (effect: Effect.Effect<void, unknown, Events>) => Promise<void>,
+  run: <E>(effect: Effect.Effect<void, E, Events>) => Promise<void>,
   projectId: string | null = null,
 ) => {
   const before = createAuthMiddleware(async (ctx) => {
@@ -180,7 +180,7 @@ export const makeNativeAudit = (
         properties.sessionIssued = true;
         properties.issuedSessionId = authoritative.session.id;
         properties.subjectUserId = authoritative.user.id;
-        const activitySession = Schema.decodeUnknownOption(
+        const activitySession = Schema.decodeOption(
           AuthenticationActivitySession,
         )(authoritative);
         if (

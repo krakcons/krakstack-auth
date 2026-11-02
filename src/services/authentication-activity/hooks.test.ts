@@ -1,3 +1,4 @@
+import * as Layer from "effect/Layer";
 import { describe, expect, it } from "@effect/vitest";
 import { Events } from "@krak-stack/registry/events";
 import { Effect, Schema } from "effect";
@@ -18,13 +19,14 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)(
           const email = `${crypto.randomUUID()}@example.test`;
           const projectId = `activity-${crypto.randomUUID()}`;
           const oauthProjectId = `oauth-activity-${crypto.randomUUID()}`;
+          const runAudit = Effect.runPromiseWith(
+            yield* Effect.context<never>(),
+          );
           const auth = createAuth({
             allowedHosts: ["localhost:3001"],
             projectId,
             auditRun: (effect) =>
-              Effect.runPromise(
-                effect.pipe(Effect.provideService(Events, events)),
-              ),
+              runAudit(effect.pipe(Effect.provideService(Events, events))),
           });
           let userId = "";
           yield* Effect.gen(function* () {
@@ -89,9 +91,7 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)(
             const sharedAuth = createAuth({
               allowedHosts: ["localhost:3001"],
               auditRun: (effect) =>
-                Effect.runPromise(
-                  effect.pipe(Effect.provideService(Events, events)),
-                ),
+                runAudit(effect.pipe(Effect.provideService(Events, events))),
             });
             const query = new URLSearchParams({
               client_id: oauthProjectId,
@@ -133,7 +133,11 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)(
               }).pipe(Effect.orDie),
             ),
           );
-        }).pipe(Effect.provide(testEventsLayer), Effect.provide(sqlTestLayer)),
+        }).pipe(
+          Effect.provide(
+            testEventsLayer.pipe(Layer.provideMerge(sqlTestLayer)),
+          ),
+        ),
     );
   },
 );

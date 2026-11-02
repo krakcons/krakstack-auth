@@ -42,7 +42,7 @@ const daysAgo = (days: number) => {
   date.setUTCDate(date.getUTCDate() - days);
   return date;
 };
-const paginationMeta = (query: typeof AdminListQuery.Type, total: number) => ({
+const paginationMeta = (query: AdminListQuery, total: number) => ({
   page: query.page,
   pageSize: query.pageSize,
   total,
@@ -67,7 +67,7 @@ const previewsByResource = (
 // Only identifiers from this whitelist enter literal ORDER BY fragments.
 const orderBy = (
   sql: SqlClient.SqlClient,
-  query: typeof AdminListQuery.Type,
+  query: AdminListQuery,
   kind: "user" | "organization",
 ) => {
   const columns: Readonly<Record<string, string>> =
@@ -100,9 +100,7 @@ const orderBy = (
 };
 
 const serviceApiKeyRow = (value: typeof ApiKeyRow.Type) =>
-  Schema.decodeUnknownEffect(ApiKeyPermissionsJson)(
-    value.permissions ?? "{}",
-  ).pipe(
+  Schema.decodeEffect(ApiKeyPermissionsJson)(value.permissions ?? "{}").pipe(
     Effect.mapError(internalServerError),
     Effect.map((permissions) => ({
       id: value.id,

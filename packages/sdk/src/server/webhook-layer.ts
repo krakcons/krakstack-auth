@@ -16,9 +16,7 @@ export const makeAuthWebhookLayer = <E, R>(
     Effect.gen(function* () {
       const receiver = yield* WebhooksReceiver;
       const services = yield* Effect.context<R>();
-      const projectId = yield* Schema.decodeUnknownEffect(
-        Schema.NonEmptyString,
-      )(
+      const projectId = yield* Schema.decodeEffect(Schema.NonEmptyString)(
         options.projectId ??
           (yield* Config.NonEmptyString("VITE_KRAKSTACK_AUTH_PROJECT_ID")),
       );
@@ -68,22 +66,19 @@ export const makeAuthWebhookLayer = <E, R>(
           HttpServerRequest.MaxBodySize,
           ByteSize.kibibytes(16),
         ),
-        Effect.catchTag("WebhookVerificationError", (error) =>
-          Effect.succeed(
-            HttpServerResponse.empty({
-              status: error.reason === "payload" ? 400 : 401,
-            }),
-          ),
-        ),
-        Effect.catchTag("WebhookReceiptConflict", () =>
-          Effect.succeed(HttpServerResponse.empty({ status: 409 })),
-        ),
-        Effect.catchTag("UnsupportedAuthWebhook", () =>
-          Effect.succeed(HttpServerResponse.empty({ status: 400 })),
-        ),
-        Effect.catch(() =>
-          Effect.succeed(HttpServerResponse.empty({ status: 500 })),
-        ),
+        Effect.catchTags({
+          WebhookVerificationError: (error) =>
+            Effect.succeed(
+              HttpServerResponse.empty({
+                status: error.reason === "payload" ? 400 : 401,
+              }),
+            ),
+          WebhookReceiptConflict: () =>
+            Effect.succeed(HttpServerResponse.empty({ status: 409 })),
+          UnsupportedAuthWebhook: () =>
+            Effect.succeed(HttpServerResponse.empty({ status: 400 })),
+        }),
+        Effect.orElseSucceed(() => HttpServerResponse.empty({ status: 500 })),
       );
       return HttpRouter.add("POST", "/api/webhooks/auth", handle);
     }),

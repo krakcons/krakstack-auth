@@ -57,7 +57,7 @@ export class AuthMiddleware extends HttpApiMiddleware.Service<
     );
 
   /** The same optional authentication and attribution for plain HttpRouter routes. */
-  static readonly routerLayer = (options: AuthRouterOptions = {}) =>
+  static readonly routerLayer = <E>(options: AuthRouterOptions<E> = {}) =>
     HttpRouter.middleware(
       Effect.gen(function* () {
         const config = options.authLayer
@@ -85,14 +85,14 @@ export class AuthMiddleware extends HttpApiMiddleware.Service<
     ).layer;
 }
 
-export type AuthenticationLiveOptions = AuthServiceLayerOptions & {
+export type AuthenticationLiveOptions<E = unknown> = AuthServiceLayerOptions & {
   readonly allowedOrganizationImpersonationRoutes?: readonly {
     readonly method: string;
     readonly path: string;
   }[];
   readonly authLayer?: Layer.Layer<
     AuthService,
-    unknown,
+    E,
     HttpServerRequest.HttpServerRequest
   >;
 };
@@ -111,17 +111,17 @@ export type AuthMiddlewareOptions<E, R> = AuthenticationLiveOptions & {
   ) => Effect.Effect<void, E, R>;
 };
 
-export type AuthRouterOptions = AuthenticationLiveOptions & {
+export type AuthRouterOptions<E = unknown> = AuthenticationLiveOptions<E> & {
   /** Resolve auth only for these exact URL pathnames. Defaults to every route in scope. */
   readonly paths?: readonly string[];
 };
 
-const isAuthServiceLayer = (
-  value: AuthenticationLiveOptions | Layer.Layer<AuthService, unknown>,
-): value is Layer.Layer<AuthService, unknown> => Layer.isLayer(value);
+const isAuthServiceLayer = <E>(
+  value: AuthenticationLiveOptions<E> | Layer.Layer<AuthService, E>,
+): value is Layer.Layer<AuthService, E> => Layer.isLayer(value);
 
-export const makeAuthenticationLive = (
-  options: AuthenticationLiveOptions | Layer.Layer<AuthService, unknown> = {},
+export const makeAuthenticationLive = <E>(
+  options: AuthenticationLiveOptions<E> | Layer.Layer<AuthService, E> = {},
 ) => {
   const legacyLayer = isAuthServiceLayer(options) ? options : undefined;
   const authOptions = isAuthServiceLayer(options) ? {} : options;
@@ -148,22 +148,26 @@ export const makeAuthenticationLive = (
   );
 };
 
-const authenticateRequest = Effect.fnUntraced(function* (
-  options: AuthenticationLiveOptions,
-  authLayer: AuthenticationLiveOptions["authLayer"],
+const authenticateRequest = Effect.fnUntraced(function* <E>(
+  options: AuthenticationLiveOptions<E>,
+  authLayer: AuthenticationLiveOptions<E>["authLayer"],
   apiKey?: string,
 ) {
   const request = yield* HttpServerRequest.HttpServerRequest;
+  const resolvedAuthLayer: Layer.Layer<
+    AuthService,
+    E | Layer.Error<ReturnType<typeof AuthService.layer>>,
+    HttpServerRequest.HttpServerRequest
+  > =
+    authLayer ??
+    AuthService.layer({
+      ...options,
+      headers: apiKey
+        ? { ...request.headers, "x-api-key": apiKey }
+        : request.headers,
+    });
   const auth = yield* AuthService.pipe(
-    Effect.provide(
-      authLayer ??
-        AuthService.layer({
-          ...options,
-          headers: apiKey
-            ? { ...request.headers, "x-api-key": apiKey }
-            : request.headers,
-        }),
-    ),
+    Effect.provide(resolvedAuthLayer),
     Effect.tapCause((cause) =>
       Effect.logError(
         "Authentication rejected: auth client initialization failed",

@@ -53,7 +53,7 @@ describe("userContactEmailDefaults", () => {
 describe("userMetadataFromForm", () => {
   it("accepts draft values that normalization can clean", () => {
     expect(
-      Schema.decodeUnknownSync(UserContactEmailsForm)([
+      Schema.decodeSync(UserContactEmailsForm)([
         {
           email: " ada@example.com ",
           translations: [{ locale: "en", label: " " }],
@@ -62,17 +62,17 @@ describe("userMetadataFromForm", () => {
       ]),
     ).toHaveLength(2);
     expect(
-      Schema.decodeUnknownSync(UserContactPhonesForm)([
+      Schema.decodeSync(UserContactPhonesForm)([
         { number: " ", extension: " ", translations: [] },
       ]),
     ).toHaveLength(1);
     expect(
-      Schema.decodeUnknownSync(UserContactWebsitesForm)([
+      Schema.decodeSync(UserContactWebsitesForm)([
         { url: " ", translations: [] },
       ]),
     ).toHaveLength(1);
     expect(
-      Schema.decodeUnknownSync(UserContactSocialsForm)([
+      Schema.decodeSync(UserContactSocialsForm)([
         { platform: "linkedin", url: " ", translations: [] },
       ]),
     ).toHaveLength(1);

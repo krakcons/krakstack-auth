@@ -1,5 +1,6 @@
 import { expect, it } from "@effect/vitest";
-import { Effect } from "effect";
+import { mockFetch } from "../../test/fetch.js";
+import { Effect, Fiber } from "effect";
 import { AtomRegistry } from "effect/reactivity";
 import { vi } from "vitest";
 
@@ -34,11 +35,11 @@ it.effect("waits for the signed-in session before continuing navigation", () =>
         updatedAt: now,
       },
     };
-    const capture: typeof fetch = async () => {
+    const capture: typeof fetch = mockFetch(async () => {
       if (!signedIn) return Response.json(null);
       started.resolve();
       return (await response.promise).clone();
-    };
+    });
     vi.stubGlobal("fetch", capture);
     try {
       const baseUrl = "https://login-refresh.example.test";
@@ -46,14 +47,13 @@ it.effect("waits for the signed-in session before continuing navigation", () =>
       registry.mount(session);
       expect(yield* AtomRegistry.getResult(registry, session)).toBeNull();
       signedIn = true;
-      const completion = Effect.runPromise(
-        refreshAuthSession(registry, baseUrl).pipe(
-          Effect.tap(() =>
-            Effect.sync(() => {
-              navigated = true;
-            }),
-          ),
+      const completion = yield* refreshAuthSession(registry, baseUrl).pipe(
+        Effect.tap(() =>
+          Effect.sync(() => {
+            navigated = true;
+          }),
         ),
+        Effect.forkChild,
       );
       yield* Effect.promise(() => started.promise);
       expect(navigated).toBe(false);
@@ -64,7 +64,7 @@ it.effect("waits for the signed-in session before continuing navigation", () =>
         }),
       ).toBeNull();
       response.resolve(Response.json(sessionResponse));
-      yield* Effect.promise(() => completion);
+      yield* Fiber.join(completion);
       expect(navigated).toBe(true);
       expect((yield* AtomRegistry.getResult(registry, session))?.user.id).toBe(
         "user",

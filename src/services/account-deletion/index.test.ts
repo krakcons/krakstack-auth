@@ -1,3 +1,4 @@
+import * as Data from "effect/Data";
 import { describe, expect, it } from "@effect/vitest";
 import { vi } from "vitest";
 import { Clock, Effect, Layer, ManagedRuntime, Schedule } from "effect";
@@ -15,6 +16,19 @@ import { ProjectWebhooks } from "@/services/webhooks";
 import { AccountDeletions } from "./index";
 import { deletionSubscriberLayer } from "./subscriber";
 import { deletionEvent } from "./schema";
+
+class AccountDeletionFixtureError extends Data.TaggedError(
+  "AccountDeletionFixtureError",
+)<{
+  readonly message: string;
+  readonly cause?: unknown;
+}> {}
+
+class AccountDeletionResponseError extends Data.TaggedError(
+  "AccountDeletionResponseError",
+)<{
+  readonly response: Response;
+}> {}
 
 const http = HttpClient.make((request) =>
   Effect.succeed(
@@ -149,18 +163,24 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)(
                   body: { email, password },
                   returnHeaders: true,
                 }),
-              catch: (error) => error,
+              catch: (cause) =>
+                cause instanceof Response
+                  ? new AccountDeletionResponseError({ response: cause })
+                  : new AccountDeletionFixtureError({
+                      message: "Unable to sign in the account deletion fixture",
+                      cause,
+                    }),
             }).pipe(
-              Effect.catch((error) =>
-                error instanceof Response
-                  ? Effect.promise(() => error.text()).pipe(
-                      Effect.flatMap((body) =>
-                        Effect.fail(
-                          new Error(`Native sign in ${error.status}: ${body}`),
-                        ),
-                      ),
-                    )
-                  : Effect.fail(error),
+              Effect.catchTag("AccountDeletionResponseError", ({ response }) =>
+                Effect.promise(() => response.text()).pipe(
+                  Effect.flatMap((body) =>
+                    Effect.fail(
+                      new AccountDeletionFixtureError({
+                        message: `Native sign in ${response.status}: ${body}`,
+                      }),
+                    ),
+                  ),
+                ),
               ),
             );
             const cookie = signIn.headers

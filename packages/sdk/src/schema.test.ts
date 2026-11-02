@@ -15,24 +15,22 @@ import {
 
 describe("organization contact schemas", () => {
   it("validates email and website formats", () => {
-    expect(() =>
-      Schema.decodeUnknownSync(EmailAddress)("not-an-email"),
-    ).toThrow();
-    expect(() => Schema.decodeUnknownSync(WebsiteUrl)("example.com")).toThrow();
-    expect(Schema.decodeUnknownSync(EmailAddress)("team@example.com")).toBe(
+    expect(() => Schema.decodeSync(EmailAddress)("not-an-email")).toThrow();
+    expect(() => Schema.decodeSync(WebsiteUrl)("example.com")).toThrow();
+    expect(Schema.decodeSync(EmailAddress)("team@example.com")).toBe(
       "team@example.com",
     );
   });
 
   it("requires at least one non-empty localized label", () => {
     expect(() =>
-      Schema.decodeUnknownSync(OrganizationEmail)({
+      Schema.decodeSync(OrganizationEmail)({
         email: "team@example.com",
         translations: [],
       }),
     ).toThrow();
     expect(() =>
-      Schema.decodeUnknownSync(OrganizationEmail)({
+      Schema.decodeSync(OrganizationEmail)({
         email: "team@example.com",
         translations: [{ locale: "en", label: "   " }],
       }),
@@ -40,7 +38,7 @@ describe("organization contact schemas", () => {
   });
 
   it("supports multiple addresses with localized labels", () => {
-    const metadata = Schema.decodeUnknownSync(OrganizationMetadata)({
+    const metadata = Schema.decodeSync(OrganizationMetadata)({
       translations: [{ locale: "en", name: "Example" }],
       addresses: [
         {
@@ -75,7 +73,7 @@ describe("organization contact schemas", () => {
   });
 
   it("decodes organization responses with legacy metadata collisions", () => {
-    const organization = Schema.decodeUnknownSync(Organization)({
+    const organization = Schema.decodeSync(Organization)({
       id: "org_1",
       name: "Example",
       slug: "example",
@@ -95,7 +93,7 @@ describe("organization contact schemas", () => {
 
 describe("user contact schemas", () => {
   it("supports email, phone, website, and social contact methods", () => {
-    const metadata = Schema.decodeUnknownSync(UserMetadata)({
+    const metadata = Schema.decodeSync(UserMetadata)({
       emails: [
         {
           email: "ada@example.com",
@@ -132,7 +130,7 @@ describe("user contact schemas", () => {
 
   it("rejects invalid contact values on writes", () => {
     expect(() =>
-      Schema.decodeUnknownSync(UserMetadata)({
+      Schema.decodeSync(UserMetadata)({
         emails: [
           {
             email: "not-an-email",
@@ -142,7 +140,7 @@ describe("user contact schemas", () => {
       }),
     ).toThrow();
     expect(() =>
-      Schema.decodeUnknownSync(UserMetadata)({
+      Schema.decodeSync(UserMetadata)({
         socials: [
           {
             platform: "linkedin",
@@ -189,18 +187,18 @@ describe("user contact schemas", () => {
 
     for (const [key, contact] of contacts) {
       expect(
-        Schema.decodeUnknownSync(UserMetadata)({
+        Schema.decodeSync(UserMetadata)({
           [key]: Array.from({ length: 8 }, () => contact),
         })[key],
       ).toHaveLength(8);
       expect(() =>
-        Schema.decodeUnknownSync(UserMetadata)({
+        Schema.decodeSync(UserMetadata)({
           [key]: Array.from({ length: 9 }, () => contact),
         }),
       ).toThrow();
     }
     expect(() =>
-      Schema.decodeUnknownSync(UserMetadata)({
+      Schema.decodeSync(UserMetadata)({
         emails: [
           {
             email: "ada@example.com",
@@ -226,7 +224,7 @@ describe("user contact schemas", () => {
       Schema.decodeUnknownSync(UserMetadata)(validLargeMetadata),
     ).not.toThrow();
     expect(() =>
-      Schema.decodeUnknownSync(UserMetadata)({
+      Schema.decodeSync(UserMetadata)({
         emails: [
           {
             email: "ada@example.com",
@@ -258,7 +256,7 @@ describe("user contact schemas", () => {
 
   it("rejects invalid phones and platforms", () => {
     expect(() =>
-      Schema.decodeUnknownSync(UserMetadata)({
+      Schema.decodeSync(UserMetadata)({
         phones: [
           {
             number: "call-me",
@@ -268,7 +266,7 @@ describe("user contact schemas", () => {
       }),
     ).toThrow();
     expect(() =>
-      Schema.decodeUnknownSync(UserMetadata)({
+      Schema.decodeSync(UserMetadata)({
         phones: [
           {
             number: "-------",
@@ -329,7 +327,7 @@ describe("user contact schemas", () => {
   });
 
   it("decodes metadata on trusted user records", () => {
-    const user = Schema.decodeUnknownSync(User)({
+    const user = Schema.decodeSync(User)({
       id: "user_1",
       name: "Ada Lovelace",
       email: "ada@example.com",

@@ -38,16 +38,19 @@ describe("Active user cache", () => {
         );
         expect(writes).toBe(3);
       }).pipe(
-        Effect.provide(config),
         Effect.provide(
-          Layer.mock(Events, {
-            track: () =>
-              Effect.gen(function* () {
-                writes++;
-                yield* Effect.yieldNow;
-                return { eventId: "test", inserted: true };
+          config.pipe(
+            Layer.provideMerge(
+              Layer.mock(Events, {
+                track: () =>
+                  Effect.gen(function* () {
+                    writes++;
+                    yield* Effect.yieldNow;
+                    return { eventId: "test", inserted: true };
+                  }),
               }),
-          }),
+            ),
+          ),
         ),
       );
     },
@@ -63,15 +66,18 @@ describe("Active user cache", () => {
       yield* track(session, "project-a");
       expect(writes).toBe(2);
     }).pipe(
-      Effect.provide(config),
       Effect.provide(
-        Layer.mock(Events, {
-          track: () =>
-            Effect.sync(() => {
-              writes++;
-              return { eventId: "test", inserted: true };
+        config.pipe(
+          Layer.provideMerge(
+            Layer.mock(Events, {
+              track: () =>
+                Effect.sync(() => {
+                  writes++;
+                  return { eventId: "test", inserted: true };
+                }),
             }),
-        }),
+          ),
+        ),
       ),
     );
   });
@@ -87,19 +93,22 @@ describe("Active user cache", () => {
       yield* track(session, "project-a");
       expect(writes).toBe(2);
     }).pipe(
-      Effect.provide(config),
       Effect.provide(
-        Layer.mock(Events, {
-          track: () =>
-            Effect.gen(function* () {
-              writes++;
-              if (writes === 1)
-                return yield* new EventsPersistenceError({
-                  operation: "persist",
-                });
-              return { eventId: "test", inserted: true };
+        config.pipe(
+          Layer.provideMerge(
+            Layer.mock(Events, {
+              track: () =>
+                Effect.gen(function* () {
+                  writes++;
+                  if (writes === 1)
+                    return yield* new EventsPersistenceError({
+                      operation: "persist",
+                    });
+                  return { eventId: "test", inserted: true };
+                }),
             }),
-        }),
+          ),
+        ),
       ),
     );
   });
@@ -113,15 +122,18 @@ describe("Active user cache", () => {
       yield* track(session, "project-a");
       expect(writes).toBe(3);
     }).pipe(
-      Effect.provide(config),
       Effect.provide(
-        Layer.mock(Events, {
-          track: () =>
-            Effect.sync(() => {
-              writes++;
-              return { eventId: "test", inserted: true };
+        config.pipe(
+          Layer.provideMerge(
+            Layer.mock(Events, {
+              track: () =>
+                Effect.sync(() => {
+                  writes++;
+                  return { eventId: "test", inserted: true };
+                }),
             }),
-        }),
+          ),
+        ),
       ),
     );
   });

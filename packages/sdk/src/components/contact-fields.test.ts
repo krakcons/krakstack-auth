@@ -25,7 +25,7 @@ const messages = {
 };
 
 const renderEmailsField = (count: number) => {
-  const email = Schema.decodeUnknownSync(ContactEmail)({
+  const email = Schema.decodeSync(ContactEmail)({
     email: "ada@example.com",
     translations: [{ locale: "en", label: "Work" }],
   });

@@ -214,17 +214,19 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)(
           expect(listed.status).toBe(200);
           const body = yield* Effect.promise(() => listed.json());
           expect(
-            Schema.decodeUnknownSync(Schema.Array(ProjectWebhookSummary))(
-              body,
-            ).some((row) => row.projectId === id),
+            (yield* Schema.decodeUnknownEffect(
+              Schema.Array(ProjectWebhookSummary),
+            )(body).pipe(Effect.orDie)).some((row) => row.projectId === id),
           ).toBe(true);
           expect(JSON.stringify(body)).not.toContain("secret-not-for-list");
           const deliveries = yield* read(paths[1]!);
           expect(deliveries.status).toBe(200);
           expect(
-            Schema.decodeUnknownSync(Schema.toCodecJson(WebhookDeliveries))(
-              yield* Effect.promise(() => deliveries.json()),
-            ).data,
+            (yield* Schema.decodeUnknownEffect(
+              Schema.toCodecJson(WebhookDeliveries),
+            )(yield* Effect.promise(() => deliveries.json())).pipe(
+              Effect.orDie,
+            )).data,
           ).toHaveLength(1);
           expect((yield* read(`${paths[1]}?pageSize=101`)).status).toBe(400);
           expect(

@@ -1,8 +1,10 @@
+import * as Data from "effect/Data";
 import type { AuthApiKey as ApiKey } from "../auth/schema.js";
 import { useAtomSet, useAtomValue } from "@effect/atom-react";
 import { FormBuilder, FormReact } from "@lucas-barake/effect-form-react";
 import { Effect, Schema } from "effect";
-import { useRef, useState } from "react";
+import { useState } from "react";
+import { useLatestAtom } from "./hooks.js";
 
 import type { ProjectAccessLabelCatalog } from "../access.js";
 
@@ -18,6 +20,11 @@ import { authClientApi, authHttpClient } from "./auth-client-api.js";
 import { ApiKeyPermissions } from "./api-key-permissions.js";
 import { apiKeyReferrers } from "./api-key-referrers.js";
 import { ExtraApiKeyPermissions } from "../extra/schema.js";
+
+class ApiKeyEditError extends Data.TaggedError("ApiKeyEditError")<{
+  readonly message: string;
+  readonly cause?: unknown;
+}> {}
 
 type ApiKeySummary = Omit<ApiKey, "key">;
 
@@ -101,7 +108,7 @@ export const ApiKeyEditForm = ({
         action,
       })),
   );
-  const currentPermissions = Schema.decodeUnknownOption(ExtraApiKeyPermissions)(
+  const currentPermissions = Schema.decodeOption(ExtraApiKeyPermissions)(
     keyData.permissions ?? {},
   );
   const currentGrant =
@@ -112,10 +119,8 @@ export const ApiKeyEditForm = ({
       currentGrant[option.project]?.includes(option.action) ?? false,
     ]),
   );
-  const permissionOptionsRef = useRef(permissionOptions);
-  const permissionsRef = useRef(permissions);
-  permissionOptionsRef.current = permissionOptions;
-  permissionsRef.current = permissions;
+  const permissionOptionsAtom = useLatestAtom(permissionOptions);
+  const permissionsAtom = useLatestAtom(permissions);
   const [form] = useState(() =>
     FormReact.make(editApiKeyFormBuilder, {
       runtime: authClientApi(baseUrl).runtime,
@@ -126,19 +131,23 @@ export const ApiKeyEditForm = ({
         permissions: ApiKeyPermissionsField,
       },
       mode: { validation: "onSubmit" },
-      onSubmit: (_, { decoded }) =>
+      onSubmit: (_, { decoded, get }) =>
         Effect.gen(function* () {
           const referrers = yield* Effect.try({
             try: () =>
               parseApiKeyReferrers(decoded.referrers, messages.referrersError),
             catch: (cause) =>
-              cause instanceof Error ? cause : new Error(messages.updateError),
+              new ApiKeyEditError({
+                message:
+                  cause instanceof Error ? cause.message : messages.updateError,
+                cause: cause,
+              }),
           });
           const selectedGrant: Record<string, string[]> = {};
-          for (const project of Object.keys(permissionsRef.current)) {
+          for (const project of Object.keys(get(permissionsAtom))) {
             selectedGrant[project] = [];
           }
-          for (const option of permissionOptionsRef.current) {
+          for (const option of get(permissionOptionsAtom)) {
             if (!decoded.permissions[option.id]) continue;
             selectedGrant[option.project] = [
               ...(selectedGrant[option.project] ?? []),
@@ -159,8 +168,13 @@ export const ApiKeyEditForm = ({
           yield* Effect.sync(onSaved);
           return updated;
         }).pipe(
-          Effect.mapError((cause) =>
-            cause instanceof Error ? cause : new Error(messages.updateError),
+          Effect.mapError(
+            (cause) =>
+              new ApiKeyEditError({
+                message:
+                  cause instanceof Error ? cause.message : messages.updateError,
+                cause: cause,
+              }),
           ),
         ),
     }),

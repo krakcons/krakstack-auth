@@ -83,7 +83,7 @@ const text = (value: string, params?: Record<string, string>) =>
 
 const noParentOrganization = "__none__";
 
-const organizationOptionsAtom = Atom.family((baseUrl?: string | undefined) =>
+const organizationOptionsAtom = Atom.family((baseUrl?: string) =>
   authClientApi(baseUrl).query("admin", "listOrganizations", {
     query: { page: 0, pageSize: 100 },
     timeToLive: "1 minute",
@@ -143,13 +143,13 @@ const makeOrganizationForm = ({
           slug: slugify(decoded.slug || decoded.name),
           logo: logo ?? undefined,
         };
-        const payload = Schema.decodeUnknownSync(
+        const payload = yield* Schema.decodeEffect(
           AdminCreateOrganizationPayload,
         )(
           decoded.parentId === noParentOrganization
             ? input
             : { ...input, parentId: decoded.parentId },
-        );
+        ).pipe(Effect.orDie);
         const saved = organization
           ? yield* http.admin.updateOrganization({
               params: { id: organization.id },

@@ -340,7 +340,7 @@ export class Domains extends Context.Service<Domains>()("Domains", {
 
     const list = Effect.fn("Domains.list")(function* () {
       const rows = yield* findAll(undefined);
-      const refreshed = yield* Effect.all(rows.map(refreshStatus), {
+      const refreshed = yield* Effect.forEach(rows, refreshStatus, {
         concurrency: 4,
       });
 

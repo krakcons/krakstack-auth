@@ -19,15 +19,15 @@ describe("AdminListQuery", () => {
       projectId: "project-a",
     });
     const http = Schema.toCodecStringTree(AdminUserListQuery);
-    expect(
-      Schema.decodeUnknownSync(http)(Schema.encodeSync(http)(query)),
-    ).toEqual(query);
+    expect(Schema.decodeSync(http)(Schema.encodeSync(http)(query))).toEqual(
+      query,
+    );
     const atom = Schema.fromJsonString(AdminListQuery);
+    expect(Schema.decodeSync(atom)(Schema.encodeSync(atom)(query))).toEqual(
+      query,
+    );
     expect(
-      Schema.decodeUnknownSync(atom)(Schema.encodeSync(atom)(query)),
-    ).toEqual(query);
-    expect(
-      Schema.decodeUnknownSync(AdminOrganizationListQuery)({
+      Schema.decodeSync(AdminOrganizationListQuery)({
         filters: [
           { id: "userId", kind: "values", values: ["standard", "personal"] },
         ],
@@ -55,12 +55,12 @@ describe("AdminListQuery", () => {
         Schema.decodeUnknownSync(AdminUserListQuery)({ filters: [filter] }),
       ).toThrow();
     expect(() =>
-      Schema.decodeUnknownSync(AdminOrganizationListQuery)({
+      Schema.decodeSync(AdminOrganizationListQuery)({
         filters: [{ id: "userId", kind: "values", values: ["unknown"] }],
       }),
     ).toThrow();
     expect(() =>
-      Schema.decodeUnknownSync(AdminOrganizationListQuery)({
+      Schema.decodeSync(AdminOrganizationListQuery)({
         filters: [
           { id: "email", kind: "text", operator: "equals", value: "a" },
         ],
@@ -69,17 +69,15 @@ describe("AdminListQuery", () => {
   });
   it("decodes numeric pagination strings and supplies Registry defaults", () => {
     expect(
-      Schema.decodeUnknownSync(AdminListQuery)({ page: "0", pageSize: "10" }),
+      Schema.decodeSync(AdminListQuery)({ page: "0", pageSize: "10" }),
     ).toEqual({ page: 0, pageSize: 10 });
-    expect(Schema.decodeUnknownSync(AdminListQuery)({})).toEqual({
+    expect(Schema.decodeSync(AdminListQuery)({})).toEqual({
       page: 0,
       pageSize: 20,
     });
+    expect(() => Schema.decodeSync(AdminListQuery)({ page: "-1" })).toThrow();
     expect(() =>
-      Schema.decodeUnknownSync(AdminListQuery)({ page: "-1" }),
-    ).toThrow();
-    expect(() =>
-      Schema.decodeUnknownSync(AdminListQuery)({ pageSize: "101" }),
+      Schema.decodeSync(AdminListQuery)({ pageSize: "101" }),
     ).toThrow();
   });
 
@@ -91,7 +89,7 @@ describe("AdminListQuery", () => {
       sort: "-name,createdAt",
       projectId: "project-1",
     };
-    const query = Schema.decodeUnknownSync(codec)(input);
+    const query = Schema.decodeSync(codec)(input);
     expect(query).toEqual({
       page: 2,
       pageSize: 25,
@@ -102,16 +100,16 @@ describe("AdminListQuery", () => {
       projectId: "project-1",
     });
     expect(Schema.encodeSync(codec)(query)).toEqual(input);
-    expect(Schema.decodeUnknownSync(codec)({ sort: "" }).sort).toEqual([]);
-    expect(() => Schema.decodeUnknownSync(codec)({ sort: "name,-" })).toThrow();
+    expect(Schema.decodeSync(codec)({ sort: "" }).sort).toEqual([]);
+    expect(() => Schema.decodeSync(codec)({ sort: "name,-" })).toThrow();
   });
 
   it("preserves structured sorting and project scope in JSON atom keys", () => {
     const codec = Schema.fromJsonString(
-      Schema.Struct({ query: AdminListQuery, reloadKey: Schema.Number }),
+      Schema.Struct({ query: AdminListQuery, reloadKey: Schema.Finite }),
     );
-    const request = Schema.decodeUnknownSync(
-      Schema.Struct({ query: AdminListQuery, reloadKey: Schema.Number }),
+    const request = Schema.decodeSync(
+      Schema.Struct({ query: AdminListQuery, reloadKey: Schema.Finite }),
     )({
       query: {
         page: 2,
@@ -121,8 +119,8 @@ describe("AdminListQuery", () => {
       },
       reloadKey: 1,
     });
-    expect(
-      Schema.decodeUnknownSync(codec)(Schema.encodeSync(codec)(request)),
-    ).toEqual(request);
+    expect(Schema.decodeSync(codec)(Schema.encodeSync(codec)(request))).toEqual(
+      request,
+    );
   });
 });

@@ -49,15 +49,14 @@ describe("AuthApiGroup", () => {
   });
 
   it("decodes auth dates from their JSON representation", () => {
-    const decoded =
-      Schema.decodeUnknownSync(AuthSessionResponse)(sessionResponse);
+    const decoded = Schema.decodeSync(AuthSessionResponse)(sessionResponse);
 
     expect(decoded.session.expiresAt).toBeInstanceOf(Date);
     expect(decoded.user.createdAt).toBeInstanceOf(Date);
   });
 
   it("decodes organization metadata returned as stored JSON text", () => {
-    const decoded = Schema.decodeUnknownSync(AuthOrganization)({
+    const decoded = Schema.decodeSync(AuthOrganization)({
       id: "organization_1",
       name: "KrakStack",
       slug: "krakstack",
@@ -69,7 +68,7 @@ describe("AuthApiGroup", () => {
   });
 
   it("decodes full organizations with projected member users", () => {
-    const decoded = Schema.decodeUnknownSync(FullAuthOrganization)({
+    const decoded = Schema.decodeSync(FullAuthOrganization)({
       id: "organization_1",
       name: "Krak",
       slug: "krak",
@@ -99,7 +98,7 @@ describe("AuthApiGroup", () => {
   });
 
   it("decodes redirecting email sign-in responses", () => {
-    const decoded = Schema.decodeUnknownSync(SignInEmailResponse)({
+    const decoded = Schema.decodeSync(SignInEmailResponse)({
       redirect: true,
       token: "token",
       url: "/dashboard",
@@ -111,7 +110,7 @@ describe("AuthApiGroup", () => {
   });
 
   it("decodes tokenless sign-in responses", () => {
-    const decoded = Schema.decodeUnknownSync(SignInResponse)({
+    const decoded = Schema.decodeSync(SignInResponse)({
       user: sessionResponse.user,
     });
 
@@ -119,7 +118,7 @@ describe("AuthApiGroup", () => {
   });
 
   it("decodes untagged authentication error bodies", () => {
-    const decoded = Schema.decodeUnknownSync(AuthUnauthorized)({
+    const decoded = Schema.decodeSync(AuthUnauthorized)({
       code: "UNAUTHORIZED",
       message: "Unauthorized",
     });
@@ -130,10 +129,10 @@ describe("AuthApiGroup", () => {
   });
 
   it("decodes untagged conflict and expectation failed errors", () => {
-    const conflict = Schema.decodeUnknownSync(AuthConflict)({
+    const conflict = Schema.decodeSync(AuthConflict)({
       message: "Failed to verify backup code. Please try again.",
     });
-    const expectationFailed = Schema.decodeUnknownSync(AuthExpectationFailed)({
+    const expectationFailed = Schema.decodeSync(AuthExpectationFailed)({
       code: "LINKING_FAILED",
       message: "Account not linked - unable to create account",
     });

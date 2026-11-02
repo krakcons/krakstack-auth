@@ -11,7 +11,7 @@ export type ApiKeySqlUpdate = {
   -readonly [K in keyof typeof ApiKeyRow.Type]?: (typeof ApiKeyRow.Type)[K];
 };
 
-export const CountRow = Schema.Struct({ count: Schema.Number }).annotate({
+export const CountRow = Schema.Struct({ count: Schema.Finite }).annotate({
   identifier: "AdminCountRow",
 });
 export const SignupRow = Schema.Struct({ createdAt: Schema.Date }).annotate({
@@ -20,8 +20,8 @@ export const SignupRow = Schema.Struct({ createdAt: Schema.Date }).annotate({
 export const ProjectConnectionRow = Schema.Struct({
   projectId: Schema.String,
   projectName: Schema.String,
-  users: Schema.Number,
-  organizations: Schema.Number,
+  users: Schema.Finite,
+  organizations: Schema.Finite,
 }).annotate({ identifier: "ProjectConnectionRow" });
 export const AdminUserRow = Schema.Struct({
   id: UserRow.fields.id,
@@ -38,7 +38,7 @@ export const AdminUserRow = Schema.Struct({
 }).annotate({ identifier: "AdminUserRow" });
 export const AdminOrganizationRow = Schema.Struct({
   ...OrganizationRow.fields,
-  memberCount: Schema.Number,
+  memberCount: Schema.Finite,
 }).annotate({ identifier: "AdminOrganizationRow" });
 export const OrganizationMemberRow = Schema.Struct({
   organizationId: Schema.String,
@@ -48,12 +48,12 @@ export const OrganizationMemberRow = Schema.Struct({
   role: Schema.String,
 }).annotate({ identifier: "OrganizationMemberPreviewRow" });
 export const DashboardTotalsRow = Schema.Struct({
-  totalUsers: Schema.Number,
-  totalOrganizations: Schema.Number,
-  totalProjects: Schema.Number,
-  totalDomains: Schema.Number,
-  totalApiKeys: Schema.Number,
-  totalOauthClients: Schema.Number,
+  totalUsers: Schema.Finite,
+  totalOrganizations: Schema.Finite,
+  totalProjects: Schema.Finite,
+  totalDomains: Schema.Finite,
+  totalApiKeys: Schema.Finite,
+  totalOauthClients: Schema.Finite,
 }).annotate({ identifier: "DashboardTotalsRow" });
 
 export const ApiKeyPermissionsJson = Schema.fromJsonString(

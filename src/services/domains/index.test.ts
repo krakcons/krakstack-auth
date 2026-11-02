@@ -86,12 +86,15 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)(
             ),
           );
         }).pipe(
-          Effect.provide(Projects.baseLayer),
-          Effect.provide(testEventsLayer),
-          Effect.provide(Domains.testLayer),
-          Effect.provide(sqlTestLayer),
           Effect.provide(
-            Layer.mergeAll(FetchHttpClient.layer, CredentialsFromEnv),
+            Projects.baseLayer.pipe(
+              Layer.provideMerge(testEventsLayer),
+              Layer.provideMerge(Domains.testLayer),
+              Layer.provideMerge(sqlTestLayer),
+              Layer.provideMerge(
+                Layer.mergeAll(FetchHttpClient.layer, CredentialsFromEnv),
+              ),
+            ),
           ),
         ),
     );

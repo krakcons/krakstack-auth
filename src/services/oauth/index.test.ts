@@ -1,11 +1,10 @@
+import * as Layer from "effect/Layer";
 import { describe, expect, it } from "@effect/vitest";
-import { Effect, Layer } from "effect";
+import { Effect, Schema } from "effect";
 import { SqlClient } from "effect/sql";
 import { vi } from "vitest";
 import { Events } from "@krak-stack/registry/events";
-import {
-  EventsPersistenceError,
-} from "@krak-stack/registry/events/schema";
+import { EventsPersistenceError } from "@krak-stack/registry/events/schema";
 import { BetterAuthRequest } from "@/services/auth/better-auth-request";
 import { testEventsLayer } from "@/services/audit/test-layer";
 import { sqlTestLayer } from "@/services/database";
@@ -76,12 +75,15 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)(
             expect(update).toHaveBeenCalledTimes(3);
           }).pipe(Effect.ensuring(Effect.sync(() => update.mockRestore())));
         }).pipe(
-          Effect.provide(Layer.effect(OAuthClients, OAuthClients.make)),
+          Effect.provideServiceEffect(OAuthClients, OAuthClients.make),
           Effect.provide(
-            BetterAuthRequest.make(new Request("https://auth.example.test")),
+            BetterAuthRequest.make(
+              new Request("https://auth.example.test"),
+            ).pipe(
+              Layer.provideMerge(testEventsLayer),
+              Layer.provideMerge(sqlTestLayer),
+            ),
           ),
-          Effect.provide(testEventsLayer),
-          Effect.provide(sqlTestLayer),
         ),
     );
 
@@ -118,8 +120,10 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)(
               ).toEqual([{ projectId: null }]);
               expect(
                 (yield* sql`SELECT event_name FROM events WHERE payload_json::text LIKE ${`%${id}%`}`)
-                  .map((row) => row.eventName)
-                  .sort(),
+                  .map((row) =>
+                    Schema.decodeUnknownSync(Schema.String)(row.eventName),
+                  )
+                  .sort((a, b) => a.localeCompare(b)),
               ).toEqual([]);
             }).pipe(
               Effect.ensuring(
@@ -152,12 +156,15 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)(
             ),
           );
         }).pipe(
-          Effect.provide(Layer.effect(OAuthClients, OAuthClients.make)),
+          Effect.provideServiceEffect(OAuthClients, OAuthClients.make),
           Effect.provide(
-            BetterAuthRequest.make(new Request("https://auth.example.test")),
+            BetterAuthRequest.make(
+              new Request("https://auth.example.test"),
+            ).pipe(
+              Layer.provideMerge(testEventsLayer),
+              Layer.provideMerge(sqlTestLayer),
+            ),
           ),
-          Effect.provide(testEventsLayer),
-          Effect.provide(sqlTestLayer),
         ),
     );
   },

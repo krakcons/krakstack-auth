@@ -274,7 +274,7 @@ export const decodeUserMetadata = (
   if (Option.isSome(socials))
     metadataValue = { ...metadataValue, socials: socials.value };
   return Option.getOrElse(
-    Schema.decodeUnknownOption(UserMetadata)(metadataValue),
+    Schema.decodeOption(UserMetadata)(metadataValue),
     () => ({}),
   );
 };

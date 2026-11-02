@@ -27,9 +27,7 @@ export const configureProjectWebhookSchema = (allowLoopback: boolean) =>
     url: Schema.String.check(
       Schema.makeFilter(
         (value) => {
-          const parsed = Schema.decodeUnknownOption(Schema.URLFromString)(
-            value,
-          );
+          const parsed = Schema.decodeOption(Schema.URLFromString)(value);
           return (
             Option.isSome(parsed) &&
             ((parsed.value.protocol === "https:" &&

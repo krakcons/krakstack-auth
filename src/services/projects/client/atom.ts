@@ -20,7 +20,7 @@ export const updateProjectAtom = Atom.optimisticFn(projectsAtom, {
     state,
     input: {
       params: { id: string };
-      payload: typeof UpdateProjectPayload.Type;
+      payload: UpdateProjectPayload;
     },
   ) =>
     AsyncResult.map(state, (projects) =>
@@ -34,7 +34,7 @@ export const updateProjectAtom = Atom.optimisticFn(projectsAtom, {
     (
       input: {
         params: { id: string };
-        payload: typeof UpdateProjectPayload.Type;
+        payload: UpdateProjectPayload;
       },
       get,
     ) =>

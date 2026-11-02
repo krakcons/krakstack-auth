@@ -1,3 +1,4 @@
+import * as Layer from "effect/Layer";
 import { describe, expect, it } from "@effect/vitest";
 import { Events } from "@krak-stack/registry/events";
 import { Clock, ConfigProvider, DateTime, Effect, References } from "effect";
@@ -111,21 +112,28 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)(
               ),
             ),
             Effect.provideService(Clock.Clock, {
-              ...clock,
+              currentTimeNanos: clock.currentTimeNanos,
+              currentTimeNanosUnsafe: () => clock.currentTimeNanosUnsafe(),
+              monotonicTimeNanos: clock.monotonicTimeNanos,
+              monotonicTimeNanosUnsafe: () => clock.monotonicTimeNanosUnsafe(),
+              sleep: (duration) => clock.sleep(duration),
               currentTimeMillis: Effect.sync(() => time),
               currentTimeMillisUnsafe: () => time,
             }),
           );
         }).pipe(
-          Effect.provide(testEventsLayer),
-          Effect.provide(sqlTestLayer),
           Effect.provide(
-            ConfigProvider.layer(
-              ConfigProvider.orElse(
-                ConfigProvider.fromUnknown({
-                  VITE_KRAKSTACK_AUTH_ORGANIZATION_ID: organizationId,
-                }),
-                ConfigProvider.fromEnv(),
+            testEventsLayer.pipe(
+              Layer.provideMerge(sqlTestLayer),
+              Layer.provideMerge(
+                ConfigProvider.layer(
+                  ConfigProvider.orElse(
+                    ConfigProvider.fromUnknown({
+                      VITE_KRAKSTACK_AUTH_ORGANIZATION_ID: organizationId,
+                    }),
+                    ConfigProvider.fromEnv(),
+                  ),
+                ),
               ),
             ),
           ),
@@ -188,15 +196,18 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)(
             ),
           );
         }).pipe(
-          Effect.provide(testEventsLayer),
-          Effect.provide(sqlTestLayer),
           Effect.provide(
-            ConfigProvider.layer(
-              ConfigProvider.orElse(
-                ConfigProvider.fromUnknown({
-                  VITE_KRAKSTACK_AUTH_ORGANIZATION_ID: organizationId,
-                }),
-                ConfigProvider.fromEnv(),
+            testEventsLayer.pipe(
+              Layer.provideMerge(sqlTestLayer),
+              Layer.provideMerge(
+                ConfigProvider.layer(
+                  ConfigProvider.orElse(
+                    ConfigProvider.fromUnknown({
+                      VITE_KRAKSTACK_AUTH_ORGANIZATION_ID: organizationId,
+                    }),
+                    ConfigProvider.fromEnv(),
+                  ),
+                ),
               ),
             ),
           ),

@@ -1,7 +1,7 @@
 {
   "extends": "../../tsconfig.json",
   "include": ["src/**/*.ts", "src/**/*.tsx"],
-  "exclude": ["src/**/*.test.ts", "src/**/*.test.tsx"],
+  "exclude": [],
   "compilerOptions": {
     "rootDir": "../..",
     "outDir": "dist",
@@ -16,6 +16,6 @@
       "@krak-stack/auth/schema": ["./src/schema.ts"]
     },
     "types": ["node", "vite/client"],
-    "lib": ["ES2022", "DOM", "DOM.Iterable"]
+    "lib": ["ES2024", "DOM", "DOM.Iterable"]
   }
 }

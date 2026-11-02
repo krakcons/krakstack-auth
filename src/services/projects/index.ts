@@ -43,14 +43,12 @@ const StoredProjectData = Schema.Struct({
 });
 
 export const decodeProjectData = (value: typeof Schema.Unknown.Type) => {
-  const stored = Schema.decodeUnknownSync(StoredProjectData)(
-    value ?? emptyData,
-  );
+  const stored = Schema.decodeSync(StoredProjectData)(value ?? emptyData);
 
   let data: ProjectData = {};
   if (stored.branding) data = { ...data, branding: stored.branding };
   if (stored.authOptions) data = { ...data, authOptions: stored.authOptions };
-  return Schema.decodeUnknownSync(ProjectData)(data);
+  return Schema.decodeSync(ProjectData)(data);
 };
 
 export const decodeProjectDataOrEmpty = (value: typeof Schema.Unknown.Type) => {

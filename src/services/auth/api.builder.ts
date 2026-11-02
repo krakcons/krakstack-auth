@@ -95,7 +95,7 @@ export const organizationPublicProfile = (
   if (
     translation?.contactEmail &&
     Option.isSome(
-      Schema.decodeUnknownOption(EmailAddress)(translation.contactEmail),
+      Schema.decodeOption(EmailAddress)(translation.contactEmail),
     ) &&
     !emails.some((email) => email.email === translation.contactEmail)
   ) {
@@ -204,12 +204,17 @@ export const authApiHandler = HttpApiBuilder.group(
   "authExtra",
   (handlers) =>
     handlers
-      .handle("getAccountDeletionPlan", ({ request }) => Effect.gen(function* () {
-        const session = yield* requireMutableUserSession(request);
-        if (session.session.impersonatedBy) return yield* new HttpApiError.Forbidden({});
-        const service = yield* AccountDeletions;
-        return yield* service.plan({ userId: session.user.id }).pipe(Effect.mapError(internalServerError));
-      }))
+      .handle("getAccountDeletionPlan", ({ request }) =>
+        Effect.gen(function* () {
+          const session = yield* requireMutableUserSession(request);
+          if (session.session.impersonatedBy)
+            return yield* new HttpApiError.Forbidden({});
+          const service = yield* AccountDeletions;
+          return yield* service
+            .plan({ userId: session.user.id })
+            .pipe(Effect.mapError(internalServerError));
+        }),
+      )
       .handle("getProjectPublicConfig", ({ query }) =>
         Effect.gen(function* () {
           const projects = yield* Projects;
@@ -381,7 +386,7 @@ export const authApiHandler = HttpApiBuilder.group(
               }),
             catch: authError("Could not read API key permissions"),
           });
-          const currentPermissions = yield* Schema.decodeUnknownEffect(
+          const currentPermissions = yield* Schema.decodeEffect(
             ExtraApiKeyPermissions,
           )(key.permissions ?? {}).pipe(
             Effect.mapError(authError("API key permissions are invalid")),
@@ -463,7 +468,9 @@ export const authApiHandler = HttpApiBuilder.group(
             error: result.error
               ? {
                   code: result.error.code,
-                  message: String(result.error.message ?? result.error.code),
+                  message: Schema.is(Schema.String)(result.error.message)
+                    ? result.error.message
+                    : result.error.code,
                 }
               : null,
             key: result.key

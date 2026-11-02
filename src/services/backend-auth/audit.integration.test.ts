@@ -2,7 +2,7 @@ import * as BunHttpPlatform from "@effect/platform-bun/BunHttpPlatform";
 import * as BunServices from "@effect/platform-bun/BunServices";
 import { describe, expect, it } from "@effect/vitest";
 import { Events } from "@krak-stack/registry/events";
-import { Effect, Layer, Schema } from "effect";
+import { Effect, Layer, Redacted, Schema } from "effect";
 import { Etag, FetchHttpClient, HttpRouter } from "effect/http";
 import {
   Credentials,
@@ -50,7 +50,9 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)(
                   Layer.succeed(
                     Credentials,
                     Effect.succeed(
-                      apiTokenCredentials({ apiToken: "unused-test-token" }),
+                      apiTokenCredentials({
+                        apiToken: Redacted.make("unused-test-token"),
+                      }),
                     ),
                   ),
                   Layer.succeed(Events, events),
@@ -71,7 +73,7 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)(
               method: string,
               path: string,
               credential?: string,
-              payload?: typeof Schema.Json.Type,
+              payload?: Schema.Json,
             ) => {
               const headers = new Headers({
                 "content-type": "application/json",
@@ -136,7 +138,11 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)(
               }).pipe(Effect.orDie),
             ),
           );
-        }).pipe(Effect.provide(testEventsLayer), Effect.provide(sqlTestLayer)),
+        }).pipe(
+          Effect.provide(
+            testEventsLayer.pipe(Layer.provideMerge(sqlTestLayer)),
+          ),
+        ),
     );
   },
 );

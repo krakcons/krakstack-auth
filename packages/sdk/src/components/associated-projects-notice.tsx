@@ -5,7 +5,7 @@ import { Badge } from "@/components/ui/badge";
 
 import { authClientApi } from "./auth-client-api.js";
 
-const associatedProjectsAtom = Atom.family((baseUrl?: string | undefined) =>
+const associatedProjectsAtom = Atom.family((baseUrl?: string) =>
   Atom.family((organizationId: string | null) =>
     authClientApi(baseUrl).query("authExtra", "listAssociatedProjects", {
       query: organizationId ? { organizationId } : {},

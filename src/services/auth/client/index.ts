@@ -50,11 +50,10 @@ export const sessionAtom = authSessionAtom(authOrigin);
 export const getAuthSession = (registry: AtomRegistry.AtomRegistry) =>
   AtomRegistry.getResult(registry, sessionAtom);
 
-export const ensureKrakOrganizationSelected = () =>
-  makeAuthClient.pipe(
-    Effect.flatMap((client) =>
-      client.auth.organizationSetActive({
-        payload: { organizationSlug: KRAK_ORGANIZATION_SLUG },
-      }),
-    ),
-  );
+export const ensureKrakOrganizationSelected = makeAuthClient.pipe(
+  Effect.flatMap((client) =>
+    client.auth.organizationSetActive({
+      payload: { organizationSlug: KRAK_ORGANIZATION_SLUG },
+    }),
+  ),
+);

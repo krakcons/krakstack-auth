@@ -1,8 +1,10 @@
+import * as Data from "effect/Data";
 import type { AuthApiKey as ApiKey } from "../auth/schema.js";
 import {
   RegistryContext,
   useAtomRefresh,
   useAtomSet,
+  useAtomSubscribe,
   useAtomValue,
 } from "@effect/atom-react";
 import { FormBuilder, FormReact } from "@lucas-barake/effect-form-react";
@@ -84,14 +86,18 @@ import {
   PasswordResetFeedback,
   usePasswordResetRequest,
 } from "./password-reset-flow.js";
-import { authSessionAtom, notifyAuthChange } from "./auth-atoms.js";
+import {
+  authSessionAtom,
+  notifyAuthChange,
+  refreshAuthSession,
+} from "./auth-atoms.js";
 import { useKrakstackAuth, type KrakstackAuthLocale } from "./auth-provider.js";
 import { parseApiKeyReferrers } from "./api-key.js";
 import { ApiKeyEditForm } from "./api-key-edit-form.js";
 import { ApiKeyPermissions } from "./api-key-permissions.js";
 import { ApiKeyRateLimit, apiKeyUsagePercent } from "./api-key-rate-limit.js";
 import { ApiKeyReferrers } from "./api-key-referrers.js";
-import { useOpenedOnce } from "./hooks.js";
+import { useLatestAtom, useOpenedOnce } from "./hooks.js";
 import { ExtraUploadedAsset } from "../extra/schema.js";
 import { assetPath, assetUrl } from "./utils.js";
 import { AdminOrganizationsTable } from "./admin-organizations.js";
@@ -125,21 +131,34 @@ import {
   UserMetadata,
 } from "../schema.js";
 
+class UserAccountActionError extends Data.TaggedError(
+  "UserAccountActionError",
+)<{
+  readonly message: string;
+  readonly cause?: unknown;
+}> {}
+
 const messages = {
   en: {
     user_delete_title: "Delete account",
-    user_delete_description: "Permanently delete your account and unshared personal organizations. This cannot be undone.",
+    user_delete_description:
+      "Permanently delete your account and unshared personal organizations. This cannot be undone.",
     user_delete_projects: "Connected projects",
     user_delete_organizations: "Organizations to resolve",
-    user_delete_retention: "Project cleanup is requested separately. Legal retention may apply.",
+    user_delete_retention:
+      "Project cleanup is requested separately. Legal retention may apply.",
     user_delete_missing: "Some projects need support to complete cleanup.",
-    user_delete_owner: "Transfer ownership or delete these in the organization switcher. Shared personal organizations need support.",
+    user_delete_owner:
+      "Transfer ownership or delete these in the organization switcher. Shared personal organizations need support.",
     user_delete_admin: "Remove your platform admin role before continuing.",
     user_delete_confirm: "Type DELETE to confirm",
     user_delete_password: "Current password (if required)",
-    user_delete_error: "Unable to delete your account. Check your password, or sign in again and retry.",
-    user_delete_load_error: "Loading requirements… Close and retry if this takes too long.",
-    user_delete_complete: "Your account is deleted. Project cleanup may still be pending; retained records are not necessarily erased.",
+    user_delete_error:
+      "Unable to delete your account. Check your password, or sign in again and retry.",
+    user_delete_load_error:
+      "Loading requirements… Close and retry if this takes too long.",
+    user_delete_complete:
+      "Your account is deleted. Project cleanup may still be pending; retained records are not necessarily erased.",
     user_delete_done: "Done",
     table_empty: "No results.",
     user_account_cancel: "Cancel",
@@ -312,18 +331,26 @@ const messages = {
   },
   fr: {
     user_delete_title: "Supprimer le compte",
-    user_delete_description: "Supprimez définitivement votre compte et vos organisations personnelles non partagées. Cette action est irréversible.",
+    user_delete_description:
+      "Supprimez définitivement votre compte et vos organisations personnelles non partagées. Cette action est irréversible.",
     user_delete_projects: "Projets liés",
     user_delete_organizations: "Organisations à régler",
-    user_delete_retention: "Le nettoyage des projets est demandé séparément. Une conservation légale peut s’appliquer.",
-    user_delete_missing: "Certains projets nécessitent l’assistance pour terminer le nettoyage.",
-    user_delete_owner: "Transférez la propriété ou supprimez ces organisations dans le sélecteur. Les organisations personnelles partagées nécessitent l’assistance.",
-    user_delete_admin: "Retirez votre rôle administrateur de plateforme avant de continuer.",
+    user_delete_retention:
+      "Le nettoyage des projets est demandé séparément. Une conservation légale peut s’appliquer.",
+    user_delete_missing:
+      "Certains projets nécessitent l’assistance pour terminer le nettoyage.",
+    user_delete_owner:
+      "Transférez la propriété ou supprimez ces organisations dans le sélecteur. Les organisations personnelles partagées nécessitent l’assistance.",
+    user_delete_admin:
+      "Retirez votre rôle administrateur de plateforme avant de continuer.",
     user_delete_confirm: "Saisissez DELETE pour confirmer",
     user_delete_password: "Mot de passe actuel (si nécessaire)",
-    user_delete_error: "Impossible de supprimer le compte. Vérifiez votre mot de passe ou reconnectez-vous, puis réessayez.",
-    user_delete_load_error: "Chargement des conditions… Fermez et réessayez si l’attente se prolonge.",
-    user_delete_complete: "Votre compte est supprimé. Le nettoyage des projets peut être en attente ; les données conservées ne sont pas nécessairement effacées.",
+    user_delete_error:
+      "Impossible de supprimer le compte. Vérifiez votre mot de passe ou reconnectez-vous, puis réessayez.",
+    user_delete_load_error:
+      "Chargement des conditions… Fermez et réessayez si l’attente se prolonge.",
+    user_delete_complete:
+      "Votre compte est supprimé. Le nettoyage des projets peut être en attente ; les données conservées ne sont pas nécessairement effacées.",
     user_delete_done: "Terminé",
     table_empty: "Aucun résultat.",
     user_account_cancel: "Annuler",
@@ -532,7 +559,10 @@ type UserButtonMessageFunction = (
   params?: Record<string, string | number>,
 ) => string;
 
-const interpolate = (value: string, params?: Record<string, string | number>) =>
+const interpolate = (
+  value: string,
+  params?: Record<string, string | number>,
+) =>
   params
     ? value.replace(/\{([^}]+)\}/g, (_, key: string) =>
         String(params[key] ?? `{${key}}`),
@@ -760,7 +790,12 @@ const uploadUserImageAsset = (
   return authHttpClient(baseUrl).pipe(
     Effect.flatMap((client) => client.authExtra.uploadUserImage({ payload })),
     Effect.flatMap(Schema.decodeUnknownEffect(ExtraUploadedAsset)),
-    Effect.mapError(() => new Error(m.user_profile_image_upload_error())),
+    Effect.mapError(
+      () =>
+        new UserAccountActionError({
+          message: m.user_profile_image_upload_error(),
+        }),
+    ),
   );
 };
 
@@ -1071,9 +1106,7 @@ export const UserButton = ({
               </DropdownMenuLabel>
               <AssociatedProjectsNotice
                 baseUrl={resolvedBaseUrl}
-                getSummary={(count) =>
-                  m.user_form_projects_summary({ count })
-                }
+                getSummary={(count) => m.user_form_projects_summary({ count })}
                 viewLabel={m.user_form_projects_view()}
               />
               {menuActions ? (
@@ -1107,7 +1140,17 @@ export const UserButton = ({
                   <DropdownMenuSeparator />
                 </>
               ) : null}
-              {deletionControlsEnabled && !isImpersonating && !isOrganizationImpersonating ? <DropdownMenuItem variant="destructive" onClick={() => setSettingsDialog("deleteAccount")}><Trash2 />{m.user_delete_title()}</DropdownMenuItem> : null}
+              {deletionControlsEnabled &&
+              !isImpersonating &&
+              !isOrganizationImpersonating ? (
+                <DropdownMenuItem
+                  variant="destructive"
+                  onClick={() => setSettingsDialog("deleteAccount")}
+                >
+                  <Trash2 />
+                  {m.user_delete_title()}
+                </DropdownMenuItem>
+              ) : null}
               {(isAdmin && canUseAdminSettings) || isImpersonating ? (
                 <>
                   {isAdmin && canUseAdminSettings ? (
@@ -1160,20 +1203,38 @@ export const UserButton = ({
           </DropdownMenuContent>
         </DropdownMenu>
       )}
-      {deletionControlsEnabled && settingsDialog === "deleteAccount" && !isImpersonating && !isOrganizationImpersonating ? <AccountDeletionDialog
-        baseUrl={resolvedBaseUrl}
-        userId={session.user.id}
-        onClose={() => setSettingsDialog(null)}
-        onDeleted={() => { notifyAuthChange(); void navigate({ href: signOutRedirect }); }}
-        labels={{
-          title: m.user_delete_title(), description: m.user_delete_description(), projects: m.user_delete_projects(),
-          organizations: m.user_delete_organizations(), retention: m.user_delete_retention(),
-          missing: m.user_delete_missing(), owner: m.user_delete_owner(), admin: m.user_delete_admin(),
-          confirm: m.user_delete_confirm(), password: m.user_delete_password(), error: m.user_delete_error(),
-          loadError: m.user_delete_load_error(), cancel: m.user_account_cancel(), submit: m.user_delete_title(),
-          done: m.user_delete_done(), complete: m.user_delete_complete(),
-        }}
-      /> : null}
+      {deletionControlsEnabled &&
+      settingsDialog === "deleteAccount" &&
+      !isImpersonating &&
+      !isOrganizationImpersonating ? (
+        <AccountDeletionDialog
+          baseUrl={resolvedBaseUrl}
+          userId={session.user.id}
+          onClose={() => setSettingsDialog(null)}
+          onDeleted={() => {
+            notifyAuthChange();
+            void navigate({ href: signOutRedirect });
+          }}
+          labels={{
+            title: m.user_delete_title(),
+            description: m.user_delete_description(),
+            projects: m.user_delete_projects(),
+            organizations: m.user_delete_organizations(),
+            retention: m.user_delete_retention(),
+            missing: m.user_delete_missing(),
+            owner: m.user_delete_owner(),
+            admin: m.user_delete_admin(),
+            confirm: m.user_delete_confirm(),
+            password: m.user_delete_password(),
+            error: m.user_delete_error(),
+            loadError: m.user_delete_load_error(),
+            cancel: m.user_account_cancel(),
+            submit: m.user_delete_title(),
+            done: m.user_delete_done(),
+            complete: m.user_delete_complete(),
+          }}
+        />
+      ) : null}
       <Dialog
         open={canManageUserSettings && settingsDialog === "account"}
         onOpenChange={(open) => {
@@ -1205,7 +1266,10 @@ export const UserButton = ({
                       ...values.emails,
                     ],
                   }),
-                catch: () => new Error(m.user_contact_validation_error()),
+                catch: () =>
+                  new UserAccountActionError({
+                    message: m.user_contact_validation_error(),
+                  }),
               });
               const imageFile = isFile(values.image) ? values.image : null;
               const image = imageFile
@@ -1379,7 +1443,9 @@ export const UserButton = ({
                 baseUrl={resolvedBaseUrl}
                 setup={totpSetup}
                 onVerified={async () => {
-                  await refreshSession();
+                  await Effect.runPromise(
+                    refreshAuthSession(registry, resolvedBaseUrl),
+                  );
                   setTotpSetup(null);
                   setManagingTwoFactor(false);
                 }}
@@ -1833,7 +1899,6 @@ function ChangePasswordForm({
 }) {
   const m = useUserButtonMessages();
   const [saved, setSaved] = useState(false);
-  let reset = () => {};
   const [form] = useState(() =>
     FormReact.make(changePasswordFormBuilder, {
       runtime: authClientApi(baseUrl).runtime,
@@ -1851,17 +1916,24 @@ function ChangePasswordForm({
             }),
           ),
           Effect.tap(() => Effect.sync(notifyAuthChange)),
-          Effect.tap(() => Effect.sync(() => reset())),
           Effect.tap(() => Effect.sync(() => setSaved(true))),
-          Effect.mapError((cause) =>
-            cause instanceof Error
-              ? cause
-              : new Error(m.user_account_password_change_error()),
+          Effect.mapError(
+            (cause) =>
+              new UserAccountActionError({
+                message:
+                  cause instanceof Error
+                    ? cause.message
+                    : m.user_account_password_change_error(),
+                cause: cause,
+              }),
           ),
         ),
     }),
   );
-  reset = useAtomSet(form.reset);
+  const reset = useAtomSet(form.reset);
+  useAtomSubscribe(form.submit, (result) => {
+    if (AsyncResult.isSuccess(result)) reset();
+  });
   const submit = useAtomSet(form.submit);
   const submitResult = useAtomValue(form.submit);
 
@@ -1925,10 +1997,15 @@ function SetPasswordForm({
           ),
           Effect.tap(() => Effect.sync(notifyAuthChange)),
           Effect.flatMap(() => Effect.tryPromise(() => onSaved())),
-          Effect.mapError((cause) =>
-            cause instanceof Error
-              ? cause
-              : new Error(m.user_account_password_set_error()),
+          Effect.mapError(
+            (cause) =>
+              new UserAccountActionError({
+                message:
+                  cause instanceof Error
+                    ? cause.message
+                    : m.user_account_password_set_error(),
+                cause: cause,
+              }),
           ),
         ),
     }),
@@ -1995,19 +2072,29 @@ function RevokeAccountForm({
               },
             })
             .pipe(
-              Effect.mapError((cause) =>
-                cause instanceof Error
-                  ? cause
-                  : new Error(m.user_account_revoke_error()),
+              Effect.mapError(
+                (cause) =>
+                  new UserAccountActionError({
+                    message:
+                      cause instanceof Error
+                        ? cause.message
+                        : m.user_account_revoke_error(),
+                    cause: cause,
+                  }),
               ),
             );
           yield* Effect.sync(notifyAuthChange);
           yield* Effect.tryPromise(onRevoked);
         }).pipe(
-          Effect.mapError((cause) =>
-            cause instanceof Error
-              ? cause
-              : new Error(m.user_account_password_verify_error()),
+          Effect.mapError(
+            (cause) =>
+              new UserAccountActionError({
+                message:
+                  cause instanceof Error
+                    ? cause.message
+                    : m.user_account_password_verify_error(),
+                cause: cause,
+              }),
           ),
         ),
     }),
@@ -2070,7 +2157,7 @@ const providerName = (
   return providerId;
 };
 
-const UserForm = ({
+const UserForm = <E,>({
   defaultValues,
   primaryEmail,
   error,
@@ -2079,7 +2166,7 @@ const UserForm = ({
   defaultValues: UserFormType;
   primaryEmail: string;
   error?: string | null;
-  onSubmit: (values: UserFormType) => Effect.Effect<void, unknown>;
+  onSubmit: (values: UserFormType) => Effect.Effect<void, E>;
 }) => {
   const auth = useKrakstackAuth();
   const m = useUserButtonMessages();
@@ -2098,10 +2185,15 @@ const UserForm = ({
       mode: { validation: "onSubmit" },
       onSubmit: (_, { decoded }) =>
         onSubmit({ ...decoded, image: decoded.image ?? null }).pipe(
-          Effect.mapError((cause) =>
-            cause instanceof Error
-              ? cause
-              : new Error(m.user_form_update_error()),
+          Effect.mapError(
+            (cause) =>
+              new UserAccountActionError({
+                message:
+                  cause instanceof Error
+                    ? cause.message
+                    : m.user_form_update_error(),
+                cause: cause,
+              }),
           ),
         ),
     }),
@@ -2253,7 +2345,7 @@ function AccountSecuritySettings({
   const m = useUserButtonMessages();
   const sessionAtom = authSessionAtom(baseUrl);
   const sessionResult = useAtomValue(sessionAtom);
-  const refreshSession = useAtomRefresh(sessionAtom);
+  const registry = useContext(RegistryContext);
   const session = AsyncResult.match(sessionResult, {
     onInitial: () => null,
     onFailure: () => null,
@@ -2286,7 +2378,7 @@ function AccountSecuritySettings({
           requirePassword={requirePassword}
           onDisabled={async () => {
             setMessage(m.user_two_factor_disabled_message());
-            await refreshSession();
+            await Effect.runPromise(refreshAuthSession(registry, baseUrl));
           }}
         />
       ) : (
@@ -2336,10 +2428,15 @@ function EnableTotpForm({
               }),
             ),
           ),
-          Effect.mapError((cause) =>
-            cause instanceof Error
-              ? cause
-              : new Error(m.user_two_factor_enable_error()),
+          Effect.mapError(
+            (cause) =>
+              new UserAccountActionError({
+                message:
+                  cause instanceof Error
+                    ? cause.message
+                    : m.user_two_factor_enable_error(),
+                cause: cause,
+              }),
           ),
         ),
     }),
@@ -2419,10 +2516,15 @@ function VerifyTotpSetup({
           ),
           Effect.tap(() => Effect.sync(notifyAuthChange)),
           Effect.flatMap(() => Effect.tryPromise(() => onVerified())),
-          Effect.mapError((cause) =>
-            cause instanceof Error
-              ? cause
-              : new Error(m.user_two_factor_verify_error()),
+          Effect.mapError(
+            (cause) =>
+              new UserAccountActionError({
+                message:
+                  cause instanceof Error
+                    ? cause.message
+                    : m.user_two_factor_verify_error(),
+                cause: cause,
+              }),
           ),
         ),
     }),
@@ -2503,10 +2605,15 @@ function DisableTotpForm({
           ),
           Effect.tap(() => Effect.sync(notifyAuthChange)),
           Effect.flatMap(() => Effect.tryPromise(() => onDisabled())),
-          Effect.mapError((cause) =>
-            cause instanceof Error
-              ? cause
-              : new Error(m.user_two_factor_disable_error()),
+          Effect.mapError(
+            (cause) =>
+              new UserAccountActionError({
+                message:
+                  cause instanceof Error
+                    ? cause.message
+                    : m.user_two_factor_disable_error(),
+                cause: cause,
+              }),
           ),
         ),
     }),
@@ -2596,16 +2703,14 @@ function ApiKeyManager({
     onSuccess: () => null,
   });
   const loading = keysResult._tag === "Initial";
-  const permissionOptionsRef = useRef(permissionOptions);
-  const selectedPermissionsRef = useRef(selectedPermissions);
-  permissionOptionsRef.current = permissionOptions;
-  selectedPermissionsRef.current = selectedPermissions;
+  const permissionOptionsAtom = useLatestAtom(permissionOptions);
+  const selectedPermissionsAtom = useLatestAtom(selectedPermissions);
   const [createForm] = useState(() =>
     FormReact.make(apiKeyFormBuilder, {
       runtime: authClientApi(baseUrl).runtime,
       fields: { name: TextField, referrers: TextAreaField },
       mode: { validation: "onSubmit" },
-      onSubmit: (_, { decoded }) =>
+      onSubmit: (_, { decoded, get }) =>
         Effect.gen(function* () {
           setCreatedKey(null);
           const referrers = yield* Effect.try({
@@ -2614,7 +2719,14 @@ function ApiKeyManager({
                 decoded.referrers,
                 m.user_api_key_referrers_error(),
               ),
-            catch: (cause) => cause,
+            catch: (cause) =>
+              new UserAccountActionError({
+                message:
+                  cause instanceof Error
+                    ? cause.message
+                    : m.user_api_key_create_error(),
+                cause,
+              }),
           });
           const client = yield* authHttpClient(baseUrl);
           return yield* client.authExtra.createApiKey({
@@ -2622,8 +2734,8 @@ function ApiKeyManager({
               configId: "user",
               name: decoded.name.trim(),
               permissions: getSelectedPermissionObject(
-                permissionOptionsRef.current,
-                selectedPermissionsRef.current,
+                get(permissionOptionsAtom),
+                get(selectedPermissionsAtom),
               ),
               referrers,
             },
@@ -2632,20 +2744,27 @@ function ApiKeyManager({
           Effect.tap((created) =>
             Effect.sync(() => {
               setCreatedKey(created.key);
-              resetCreateForm();
               setSelectedPermissions({});
               refreshKeys();
             }),
           ),
-          Effect.mapError((cause) =>
-            cause instanceof Error
-              ? cause
-              : new Error(m.user_api_key_create_error()),
+          Effect.mapError(
+            (cause) =>
+              new UserAccountActionError({
+                message:
+                  cause instanceof Error
+                    ? cause.message
+                    : m.user_api_key_create_error(),
+                cause: cause,
+              }),
           ),
         ),
     }),
   );
   const resetCreateForm = useAtomSet(createForm.reset);
+  useAtomSubscribe(createForm.submit, (result) => {
+    if (AsyncResult.isSuccess(result)) resetCreateForm();
+  });
   const submitCreateForm = useAtomSet(createForm.submit);
   const createSubmitResult = useAtomValue(createForm.submit);
 

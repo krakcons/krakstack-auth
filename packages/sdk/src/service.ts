@@ -119,15 +119,26 @@ const isAuthSessionRequest = (request: HttpClientRequest.HttpClientRequest) =>
 
 class SessionLookup extends Context.Service<
   SessionLookup,
-  { readonly getSession: () => Effect.Effect<GetSessionResponse, unknown> }
+  {
+    readonly getSession: Effect.Effect<
+      GetSessionResponse,
+      HttpApiError.ServiceUnavailable
+    >;
+  }
 >()("@krak-stack/auth/SessionLookup") {}
 
 const sessionCache = Effect.runSync(
-  Cache.makeWith<string, GetSessionResponse, unknown, SessionLookup, "lookup">(
+  Cache.makeWith<
+    string,
+    GetSessionResponse,
+    HttpApiError.ServiceUnavailable,
+    SessionLookup,
+    "lookup"
+  >(
     () =>
       Effect.gen(function* () {
         const lookup = yield* SessionLookup;
-        return yield* lookup.getSession();
+        return yield* lookup.getSession;
       }),
     {
       capacity: 500,
@@ -174,9 +185,10 @@ export class AuthService extends Context.Service<AuthService>()(
         > =>
           Cache.get(sessionCache, sessionCacheKey).pipe(
             Effect.provideService(SessionLookup, {
-              getSession: () => api.auth.getSession({ query: {} }),
+              getSession: api.auth
+                .getSession({ query: {} })
+                .pipe(Effect.mapError(serviceUnavailable)),
             }),
-            Effect.mapError(serviceUnavailable),
             Effect.map((authSession) =>
               authSession
                 ? ({
@@ -192,7 +204,7 @@ export class AuthService extends Context.Service<AuthService>()(
           verifiedKey: ExtraVerifiedApiKeyType,
         ): Effect.Effect<User | undefined, HttpApiError.ServiceUnavailable> => {
           if (verifiedKey.configId === "organization") {
-            return Effect.succeed(undefined);
+            return Effect.undefined;
           }
 
           return api.users
@@ -237,7 +249,7 @@ export class AuthService extends Context.Service<AuthService>()(
               .pipe(Effect.mapError(serviceUnavailable));
 
             if (!verified.valid || !verified.key) {
-              return yield* Effect.fail(unauthorized());
+              return yield* unauthorized();
             }
 
             const user = yield* userForApiKey(verified.key);
@@ -277,10 +289,9 @@ export class AuthService extends Context.Service<AuthService>()(
           HttpApiError.Unauthorized | HttpApiError.ServiceUnavailable
         > =>
           getSession().pipe(
-            Effect.flatMap((authSession) =>
-              authSession
-                ? Effect.succeed(authSession)
-                : Effect.fail(unauthorized()),
+            Effect.filterOrFail(
+              (authSession) => authSession !== null,
+              () => unauthorized(),
             ),
           );
 

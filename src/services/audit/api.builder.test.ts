@@ -170,7 +170,7 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)(
             const filteredBody = yield* Schema.decodeUnknownEffect(
               Schema.Struct({
                 data: Schema.Array(Schema.Struct({ eventName: Schema.String })),
-                meta: Schema.Struct({ total: Schema.Number }),
+                meta: Schema.Struct({ total: Schema.Finite }),
               }),
             )(yield* Effect.promise(() => filtered.json()));
             expect(filteredBody.data).toEqual([]);
@@ -186,7 +186,11 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)(
               }).pipe(Effect.orDie),
             ),
           );
-        }).pipe(Effect.provide(testEventsLayer), Effect.provide(sqlTestLayer)),
+        }).pipe(
+          Effect.provide(
+            testEventsLayer.pipe(Layer.provideMerge(sqlTestLayer)),
+          ),
+        ),
     );
   },
 );

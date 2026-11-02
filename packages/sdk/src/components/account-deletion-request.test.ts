@@ -1,4 +1,5 @@
 import { describe, expect, it } from "@effect/vitest";
+import { mockFetch } from "../../test/fetch.js";
 import { Effect } from "effect";
 import { FetchHttpClient } from "effect/http";
 import { requestAccountDeletion } from "./account-deletion-request.js";
@@ -9,10 +10,10 @@ describe("Account deletion request", () => {
     () =>
       Effect.gen(function* () {
         const requests: Request[] = [];
-        const capture: typeof fetch = async (input, init) => {
+        const capture: typeof fetch = mockFetch(async (input, init) => {
           requests.push(new Request(input, init));
           return Response.json({ success: true, message: "User deleted" });
-        };
+        });
 
         for (const password of ["", " password with spaces "]) {
           yield* requestAccountDeletion(

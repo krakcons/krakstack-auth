@@ -6,9 +6,7 @@ import { AdminListRequest } from "./schema";
 
 describe("AdminListRequest", () => {
   it("keeps numeric pagination defaults and structured sorting at the SQL boundary", () => {
-    const query = Schema.decodeUnknownSync(
-      Schema.toCodecStringTree(AdminListQuery),
-    )({
+    const query = Schema.decodeSync(Schema.toCodecStringTree(AdminListQuery))({
       sort: "-name",
       projectId: "project-1",
     });

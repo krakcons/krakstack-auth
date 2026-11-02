@@ -1,11 +1,10 @@
+import * as Layer from "effect/Layer";
 import { describe, expect, it } from "@effect/vitest";
 import { Effect } from "effect";
 import { SqlClient } from "effect/sql";
 import { vi } from "vitest";
 import { Events } from "@krak-stack/registry/events";
-import {
-  EventsPersistenceError,
-} from "@krak-stack/registry/events/schema";
+import { EventsPersistenceError } from "@krak-stack/registry/events/schema";
 import { testEventsLayer } from "@/services/audit/test-layer";
 import { BetterAuthRequest } from "@/services/auth/better-auth-request";
 import { sqlTestLayer } from "@/services/database";
@@ -113,12 +112,15 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)("organization auditing", () => {
           ),
         );
       }).pipe(
-        Effect.provide(Organizations.layer),
         Effect.provide(
-          BetterAuthRequest.make(new Request("https://auth.example.test")),
+          Organizations.layer.pipe(
+            Layer.provideMerge(
+              BetterAuthRequest.make(new Request("https://auth.example.test")),
+            ),
+            Layer.provideMerge(testEventsLayer),
+            Layer.provideMerge(sqlTestLayer),
+          ),
         ),
-        Effect.provide(testEventsLayer),
-        Effect.provide(sqlTestLayer),
       ),
   );
 
@@ -178,9 +180,12 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)("organization auditing", () => {
           ),
         );
       }).pipe(
-        Effect.provide(Organizations.layer),
-        Effect.provide(testEventsLayer),
-        Effect.provide(sqlTestLayer),
+        Effect.provide(
+          Organizations.layer.pipe(
+            Layer.provideMerge(testEventsLayer),
+            Layer.provideMerge(sqlTestLayer),
+          ),
+        ),
       );
     },
   );
@@ -223,12 +228,15 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)("organization auditing", () => {
           ),
         );
       }).pipe(
-        Effect.provide(Organizations.layer),
         Effect.provide(
-          BetterAuthRequest.make(new Request("https://auth.example.test")),
+          Organizations.layer.pipe(
+            Layer.provideMerge(
+              BetterAuthRequest.make(new Request("https://auth.example.test")),
+            ),
+            Layer.provideMerge(testEventsLayer),
+            Layer.provideMerge(sqlTestLayer),
+          ),
         ),
-        Effect.provide(testEventsLayer),
-        Effect.provide(sqlTestLayer),
       ),
   );
 });

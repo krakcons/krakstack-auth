@@ -1,4 +1,5 @@
 import { describe, expect, it } from "@effect/vitest";
+import { mockFetch } from "../../test/fetch.js";
 import { Effect } from "effect";
 import { FetchHttpClient } from "effect/http";
 
@@ -8,11 +9,12 @@ import { AuthTooManyRequests } from "../auth/schema.js";
 describe("auth email request locale", () => {
   it.effect("preserves typed authentication failures", () =>
     Effect.gen(function* () {
-      const respondWithRateLimit: typeof fetch = async () =>
+      const respondWithRateLimit: typeof fetch = mockFetch(async () =>
         Response.json(
           { code: "TOO_MANY_REQUESTS", message: "Too many requests" },
           { status: 429 },
-        );
+        ),
+      );
       const client = yield* authHttpClient("https://auth.example.com");
 
       const error = yield* client.auth
@@ -34,10 +36,10 @@ describe("auth email request locale", () => {
   it.effect("sends JSON bodies for empty Better Auth actions", () =>
     Effect.gen(function* () {
       const requests: Request[] = [];
-      const capture: typeof fetch = async (input, init) => {
+      const capture: typeof fetch = mockFetch(async (input, init) => {
         requests.push(new Request(input, init));
         return Response.json({}, { status: 500 });
-      };
+      });
       const client = yield* authHttpClient("https://auth.example.com");
 
       yield* client.auth
@@ -74,12 +76,12 @@ describe("auth email request locale", () => {
       Effect.gen(function* () {
         let locale: "en" | "fr" = "en";
         const languages: Array<string | null> = [];
-        const capture: typeof fetch = async (input, init) => {
+        const capture: typeof fetch = mockFetch(async (input, init) => {
           languages.push(
             new Request(input, init).headers.get("accept-language"),
           );
           return Response.json({ success: true, status: true });
-        };
+        });
         const client = yield* authHttpClient(
           "https://auth.example.com",
           () => locale,
@@ -105,10 +107,10 @@ describe("auth email request locale", () => {
     () =>
       Effect.gen(function* () {
         const requests: Request[] = [];
-        const capture: typeof fetch = async (input, init) => {
+        const capture: typeof fetch = mockFetch(async (input, init) => {
           requests.push(new Request(input, init));
           return Response.json({ success: true });
-        };
+        });
 
         for (const locale of ["fr", "fr", "en"] as const) {
           const client = yield* authHttpClient(

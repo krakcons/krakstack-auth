@@ -15,12 +15,12 @@ import { migrate } from "@/db/migrate";
 // The existing schema uses timestamp without time zone and stores UTC.
 defaults.parseInputDatesAsUTC = true;
 
-const DatabasePoolSize = Schema.NumberFromString.check(
+const DatabasePoolSize = Schema.FiniteFromString.check(
   Schema.isBetween({ minimum: 1, maximum: 100 }),
 ).annotate({ identifier: "DatabasePoolSize" });
 
 const databasePoolSize = process.env.DATABASE_POOL_SIZE
-  ? Schema.decodeUnknownSync(DatabasePoolSize)(process.env.DATABASE_POOL_SIZE)
+  ? Schema.decodeSync(DatabasePoolSize)(process.env.DATABASE_POOL_SIZE)
   : 5;
 
 export const databasePool = new Pool({

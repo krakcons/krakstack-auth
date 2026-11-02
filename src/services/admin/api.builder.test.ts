@@ -1,7 +1,7 @@
 import * as BunHttpPlatform from "@effect/platform-bun/BunHttpPlatform";
 import * as BunServices from "@effect/platform-bun/BunServices";
 import { describe, expect, it } from "@effect/vitest";
-import { Effect, Layer } from "effect";
+import { Effect, Layer, Schema } from "effect";
 import { Etag, FetchHttpClient, HttpRouter } from "effect/http";
 import { CredentialsFromEnv } from "@distilled.cloud/cloudflare";
 import { HttpApiTest } from "effect/http-api";
@@ -181,7 +181,13 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)("Admin SQL handlers", () => {
         );
         const events =
           yield* sql`SELECT event_name, payload_json::text AS payload FROM events WHERE payload_json::text LIKE ${`%${id}%`} ORDER BY occurred_at`;
-        expect(events.map((event) => event.eventName).sort()).toEqual([
+        expect(
+          events
+            .map((event) =>
+              Schema.decodeUnknownSync(Schema.String)(event.eventName),
+            )
+            .sort((a, b) => a.localeCompare(b)),
+        ).toEqual([
           "api_key.deleted",
           "api_key.rate_limit_reset",
           "api_key.updated",
@@ -203,11 +209,14 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)("Admin SQL handlers", () => {
             yield* sql`DELETE FROM events WHERE payload_json::text LIKE ${`%${id}%`}`;
           }).pipe(Effect.orDie),
         ),
-        Effect.provide(handlerLayer),
-        Effect.provide(sqlTestLayer),
-        Effect.provide(BunHttpPlatform.layer),
-        Effect.provide(Etag.layer),
-        Effect.provide(BunServices.layer),
+        Effect.provide(
+          handlerLayer.pipe(
+            Layer.provideMerge(sqlTestLayer),
+            Layer.provideMerge(BunHttpPlatform.layer),
+            Layer.provideMerge(Etag.layer),
+            Layer.provideMerge(BunServices.layer),
+          ),
+        ),
         Effect.scoped,
       );
     },
@@ -257,7 +266,9 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)("Admin SQL handlers", () => {
             }).pipe(Effect.orDie),
           ),
         );
-      }).pipe(Effect.provide(testEventsLayer), Effect.provide(sqlTestLayer));
+      }).pipe(
+        Effect.provide(testEventsLayer.pipe(Layer.provideMerge(sqlTestLayer))),
+      );
     },
   );
 
@@ -277,6 +288,8 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)("Admin SQL handlers", () => {
       expect(
         yield* sql`SELECT event_id FROM events WHERE payload_json::text LIKE ${`%${id}%`}`,
       ).toEqual([]);
-    }).pipe(Effect.provide(testEventsLayer), Effect.provide(sqlTestLayer)),
+    }).pipe(
+      Effect.provide(testEventsLayer.pipe(Layer.provideMerge(sqlTestLayer))),
+    ),
   );
 });

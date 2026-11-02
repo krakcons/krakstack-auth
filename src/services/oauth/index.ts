@@ -200,19 +200,17 @@ export class OAuthClients extends Context.Service<OAuthClients>()(
           betterAuth.api.getOAuthClients({ headers: betterAuth.headers }),
         );
 
-        return yield* Effect.all(
-          (clients ?? []).map((client) =>
-            Effect.gen(function* () {
-              const decoded = decodeRawOAuthClient(client);
-              const clientId = decoded.client_id ?? decoded.clientId;
-              const [stored] = clientId ? yield* findClient(clientId) : [];
-              const summary = yield* clientProject({
-                projectId:
-                  stored?.projectId ?? decoded.project_id ?? decoded.projectId,
-              });
-              return adminRow(client, summary);
-            }),
-          ),
+        return yield* Effect.forEach(clients ?? [], (client) =>
+          Effect.gen(function* () {
+            const decoded = decodeRawOAuthClient(client);
+            const clientId = decoded.client_id ?? decoded.clientId;
+            const [stored] = clientId ? yield* findClient(clientId) : [];
+            const summary = yield* clientProject({
+              projectId:
+                stored?.projectId ?? decoded.project_id ?? decoded.projectId,
+            });
+            return adminRow(client, summary);
+          }),
         );
       });
 

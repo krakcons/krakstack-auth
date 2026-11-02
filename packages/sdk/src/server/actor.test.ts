@@ -109,8 +109,12 @@ const Access = defineProjectAccess({
 });
 
 const middlewareOptions = {
-  endpoint: HttpApiEndpoint.get("test", "/test"),
-  group: HttpApiGroup.make("test"),
+  endpoint: Schema.decodeUnknownSync(
+    Schema.declare(HttpApiEndpoint.isHttpApiEndpoint),
+  )(HttpApiEndpoint.get("test", "/test")),
+  group: Schema.decodeUnknownSync(Schema.declare(HttpApiGroup.isHttpApiGroup))(
+    HttpApiGroup.make("test"),
+  ),
 };
 
 const request = HttpServerRequest.fromWeb(new Request("http://localhost/test"));
@@ -210,15 +214,28 @@ const authServiceLayer = (authSession: AuthSession) =>
     ),
   );
 
-const withAuthentication = (
-  httpEffect: Parameters<AuthMiddleware["Service"]["apiKey"]>[0],
+const withAuthentication = <E>(
+  httpEffect: Effect.Effect<
+    HttpServerResponse.HttpServerResponse,
+    E,
+    AuthService | HttpRouter.Provided
+  >,
 ) =>
   Effect.gen(function* () {
     const middleware = yield* AuthMiddleware;
-    return yield* middleware.apiKey(httpEffect, {
-      ...middlewareOptions,
-      credential: Redacted.make(""),
-    });
+    return yield* middleware.apiKey(
+      httpEffect.pipe(
+        Effect.provideService(HttpServerRequest.HttpServerRequest, request),
+        Effect.provideService(HttpServerRequest.ParsedSearchParams, {}),
+        Effect.provideService(HttpRouter.RouteContext, routeContext),
+        Effect.scoped,
+        Effect.orDie,
+      ),
+      {
+        ...middlewareOptions,
+        credential: Redacted.make(""),
+      },
+    );
   });
 
 const runAnyActorMiddleware = (authSession: AuthSession) =>
@@ -248,8 +265,13 @@ const runAnyActorMiddleware = (authSession: AuthSession) =>
       middlewareOptions,
     ).pipe(withAuthentication);
   }).pipe(
-    Effect.provide(ActorRequired.layer(Access)),
-    Effect.provide(makeAuthenticationLive(authServiceLayer(authSession))),
+    Effect.provide(
+      ActorRequired.layer(Access).pipe(
+        Layer.provideMerge(
+          makeAuthenticationLive(authServiceLayer(authSession)),
+        ),
+      ),
+    ),
     provideRequestContext,
   );
 
@@ -285,8 +307,11 @@ describe("ActorRequired", () => {
           middlewareOptions,
         );
       }).pipe(
-        Effect.provide(ActorRequired.layer(Access)),
-        Effect.provide(authServiceLayer(userSession)),
+        Effect.provide(
+          ActorRequired.layer(Access).pipe(
+            Layer.provideMerge(authServiceLayer(userSession)),
+          ),
+        ),
         Effect.annotateLogs({ "request.id": "request-1" }),
         Effect.annotateSpans({ "request.id": "request-1" }),
         provideRequestContext,
@@ -344,9 +369,10 @@ describe("ActorRequired", () => {
           yield* middleware(
             Effect.gen(function* () {
               const logs = yield* References.CurrentLogAnnotations;
-              const current = yield* Effect.currentSpan;
+              const current = yield* Effect.currentSpan.pipe(Effect.orDie);
               const child = yield* Effect.currentSpan.pipe(
                 Effect.withSpan("authenticated-child"),
+                Effect.orDie,
               );
               for (const [key, value] of Object.entries(scenario.expected)) {
                 expect(logs[key]).toBe(value);
@@ -367,9 +393,12 @@ describe("ActorRequired", () => {
           expect(yield* References.CurrentLogAnnotations).toEqual(logsBefore);
           expect(yield* References.TracerSpanAnnotations).toEqual(spansBefore);
         }).pipe(
-          Effect.provide(ActorRequired.layer(Access)),
           Effect.provide(
-            makeAuthenticationLive(authServiceLayer(scenario.session)),
+            ActorRequired.layer(Access).pipe(
+              Layer.provideMerge(
+                makeAuthenticationLive(authServiceLayer(scenario.session)),
+              ),
+            ),
           ),
           Effect.annotateLogs(ambient),
           Effect.annotateSpans(ambient),
@@ -399,9 +428,12 @@ describe("ActorRequired", () => {
         ).pipe(withAuthentication);
         expect(yield* References.CurrentLogAnnotations).toEqual(before);
       }).pipe(
-        Effect.provide(ActorRequired.layer(Access)),
         Effect.provide(
-          makeAuthenticationLive(authServiceLayer(userKeySession)),
+          ActorRequired.layer(Access).pipe(
+            Layer.provideMerge(
+              makeAuthenticationLive(authServiceLayer(userKeySession)),
+            ),
+          ),
         ),
         Effect.annotateLogs({
           "app.actor.type": "system",
@@ -430,9 +462,10 @@ describe("ActorRequired", () => {
             Effect.gen(function* () {
               const annotations = yield* References.CurrentLogAnnotations;
               expect(annotations["user.roles"]).toEqual(scenario.roles);
-              const current = yield* Effect.currentSpan;
+              const current = yield* Effect.currentSpan.pipe(Effect.orDie);
               const child = yield* Effect.currentSpan.pipe(
                 Effect.withSpan("role-snapshot"),
+                Effect.orDie,
               );
               expect(current.attributes.get("user.roles")).toEqual(
                 scenario.roles,
@@ -453,9 +486,12 @@ describe("ActorRequired", () => {
             middlewareOptions,
           ).pipe(withAuthentication);
         }).pipe(
-          Effect.provide(ActorRequired.layer(Access)),
           Effect.provide(
-            makeAuthenticationLive(authServiceLayer(scenario.session)),
+            ActorRequired.layer(Access).pipe(
+              Layer.provideMerge(
+                makeAuthenticationLive(authServiceLayer(scenario.session)),
+              ),
+            ),
           ),
           Effect.annotateLogs({ "user.roles": ["owner"] }),
           provideRequestContext,
@@ -495,8 +531,13 @@ describe("ActorRequired", () => {
         middlewareOptions,
       ).pipe(withAuthentication);
     }).pipe(
-      Effect.provide(ActorRequired.layer(Access)),
-      Effect.provide(makeAuthenticationLive(authServiceLayer(userKeySession))),
+      Effect.provide(
+        ActorRequired.layer(Access).pipe(
+          Layer.provideMerge(
+            makeAuthenticationLive(authServiceLayer(userKeySession)),
+          ),
+        ),
+      ),
       provideRequestContext,
     ),
   );
@@ -531,9 +572,12 @@ describe("ActorRequired", () => {
         middlewareOptions,
       ).pipe(withAuthentication);
     }).pipe(
-      Effect.provide(ActorRequired.layer(Access)),
       Effect.provide(
-        makeAuthenticationLive(authServiceLayer(organizationKeySession)),
+        ActorRequired.layer(Access).pipe(
+          Layer.provideMerge(
+            makeAuthenticationLive(authServiceLayer(organizationKeySession)),
+          ),
+        ),
       ),
       provideRequestContext,
     ),
@@ -547,8 +591,11 @@ describe("ActorRequired", () => {
         middlewareOptions,
       );
     }).pipe(
-      Effect.provide(ActorRequired.layer(Access)),
-      Effect.provide(authServiceLayer(organizationKeySession)),
+      Effect.provide(
+        ActorRequired.layer(Access).pipe(
+          Layer.provideMerge(authServiceLayer(organizationKeySession)),
+        ),
+      ),
       provideRequestContext,
       Effect.flip,
       Effect.map((error) => {
@@ -568,8 +615,11 @@ describe("ActorRequired", () => {
         middlewareOptions,
       );
     }).pipe(
-      Effect.provide(ActorRequired.layer(Access)),
-      Effect.provide(authServiceLayer(userKeySession)),
+      Effect.provide(
+        ActorRequired.layer(Access).pipe(
+          Layer.provideMerge(authServiceLayer(userKeySession)),
+        ),
+      ),
       provideRequestContext,
       Effect.flip,
       Effect.map((error) => {

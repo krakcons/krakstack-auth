@@ -25,7 +25,7 @@
     "lint": "oxlint",
     "auth:generate": "bun x auth generate --config ./src/services/auth/config.ts --output ./tmp/auth-schema.sql",
     "shadcn:update": "for file in src/components/ui/*.tsx; do bunx shadcn@latest add -y -o $(basename \"$file\" .tsx); done",
-    "prepare": "effect-tsgo patch"
+    "prepare": "effect-tsgo patch --oxlint"
   },
   "dependencies": {
     "@aws-sdk/client-sesv2": "^3.1137.0",
@@ -34,7 +34,7 @@
     "@better-auth/core": "1.7.6",
     "@better-auth/oauth-provider": "1.7.6",
     "@distilled.cloud/aws": "1.0.0-rc.17",
-    "@distilled.cloud/cloudflare": "1.0.0-rc.13",
+    "@distilled.cloud/cloudflare": "1.0.0-rc.17",
     "@effect/atom-react": "4.1.0",
     "@effect/platform-browser": "4.1.0",
     "@effect/platform-bun": "4.1.0",
@@ -68,7 +68,7 @@
   },
   "devDependencies": {
     "@changesets/cli": "3.0.3",
-    "@effect/tsgo": "0.14.6",
+    "@effect/tsgo": "0.63.0",
     "@effect/vitest": "4.1.0",
     "@inlang/paraglide-js": "^2.25.4",
     "@oxlint/plugins": "1.79.0",
@@ -82,7 +82,8 @@
     "@typescript/native-preview": "latest",
     "@vitejs/plugin-react": "^6.1.1",
     "auth": "1.7.6",
-    "oxlint": "1.73.0",
+    "oxlint": "1.90.0",
+    "oxlint-tsgolint": "7.0.2005",
     "shadcn": "^4.21.0",
     "typescript": "7.0.2",
     "vite": "^8.3.0",

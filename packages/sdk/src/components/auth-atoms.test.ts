@@ -1,4 +1,5 @@
 import { describe, expect, it } from "@effect/vitest";
+import { mockFetch } from "../../test/fetch.js";
 import { Effect } from "effect";
 import { AsyncResult, Atom, AtomRegistry } from "effect/reactivity";
 import { vi } from "vitest";
@@ -43,7 +44,7 @@ describe("auth atom revalidation", () => {
             updatedAt: now,
           },
         };
-        const capture: typeof fetch = async (input, init) => {
+        const capture: typeof fetch = mockFetch(async (input, init) => {
           const request = new Request(input, init);
           if (new URL(request.url).pathname.endsWith("/update-user")) {
             expect(await request.json()).toEqual({ locale: "fr" });
@@ -51,7 +52,7 @@ describe("auth atom revalidation", () => {
             return response.promise;
           }
           return Response.json(sessionResponse);
-        };
+        });
         vi.stubGlobal("fetch", capture);
         try {
           const baseUrl = "https://locale-rollback.example.test";

@@ -17,20 +17,20 @@ export {
 } from "../schema.js";
 export { AuthWebhook, AuthWebhookData } from "../schema.js";
 
-export class AuthWebhookConfigurationError extends Schema.TaggedError<AuthWebhookConfigurationError>()(
-  "AuthWebhookConfigurationError",
-  {
-    message: Schema.String,
-  },
-) {}
-export class AuthWebhookCleanupError extends Schema.TaggedError<AuthWebhookCleanupError>()(
-  "AuthWebhookCleanupError",
-  {},
-) {}
-export class UnsupportedAuthWebhook extends Schema.TaggedError<UnsupportedAuthWebhook>()(
-  "UnsupportedAuthWebhook",
-  {},
-) {}
+export class AuthWebhookConfigurationError extends Schema.TaggedError<
+  AuthWebhookConfigurationError,
+  { readonly brand: unique symbol }
+>()("AuthWebhookConfigurationError", {
+  message: Schema.String,
+}) {}
+export class AuthWebhookCleanupError extends Schema.TaggedError<
+  AuthWebhookCleanupError,
+  { readonly brand: unique symbol }
+>()("AuthWebhookCleanupError", {}) {}
+export class UnsupportedAuthWebhook extends Schema.TaggedError<
+  UnsupportedAuthWebhook,
+  { readonly brand: unique symbol }
+>()("UnsupportedAuthWebhook", {}) {}
 
 /** Acknowledge only after the app's same-database cleanup has committed. */
 export const receiveAuthWebhook = Effect.fn("Auth.receiveAuthWebhook")(

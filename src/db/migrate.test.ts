@@ -1,3 +1,4 @@
+import * as Layer from "effect/Layer";
 import { describe, expect, it } from "@effect/vitest";
 import * as BunServices from "@effect/platform-bun/BunServices";
 import { PgClient, PgMigrator } from "@effect/sql-pg";
@@ -55,9 +56,8 @@ const withDatabase = <A, E, R>(program: Effect.Effect<A, E, R>) =>
       PgClient.layerConfig({
         url: Config.Redacted("TEST_DATABASE_URL"),
         maxConnections: Config.succeed(1),
-      }),
+      }).pipe(Layer.provideMerge(BunServices.layer)),
     ),
-    Effect.provide(BunServices.layer),
   );
 
 const noLedger = Effect.gen(function* () {
@@ -128,12 +128,15 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)(
               yield* migrated`SELECT locale FROM "user" WHERE id = 'automatic'`,
             ).toEqual([{ locale: "en" }]);
           }).pipe(
-            Effect.provide(sqlTestLayer),
             Effect.provide(
-              ConfigProvider.layer(
-                ConfigProvider.fromEnvRecord({
-                  TEST_DATABASE_URL: url.toString(),
-                }),
+              sqlTestLayer.pipe(
+                Layer.provideMerge(
+                  ConfigProvider.layer(
+                    ConfigProvider.fromEnvRecord({
+                      TEST_DATABASE_URL: url.toString(),
+                    }),
+                  ),
+                ),
               ),
             ),
           );
@@ -384,12 +387,10 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)(
                 "2_upgrade": sql`CREATE TABLE upgrade_probe (id text PRIMARY KEY)`,
                 "3_failure": Effect.gen(function* () {
                   yield* sql`ALTER TABLE upgrade_probe ADD COLUMN marker text`;
-                  return yield* Effect.fail(
-                    new PgMigrator.MigrationError({
-                      kind: "BadState",
-                      message: "test rollback",
-                    }),
-                  );
+                  return yield* new PgMigrator.MigrationError({
+                    kind: "BadState",
+                    message: "test rollback",
+                  });
                 }),
               }),
             });

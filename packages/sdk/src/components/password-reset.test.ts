@@ -1,4 +1,5 @@
 import { describe, expect, it } from "@effect/vitest";
+import { mockFetch } from "../../test/fetch.js";
 import { Effect } from "effect";
 import { FetchHttpClient } from "effect/http";
 import { defaultStringifySearch } from "@tanstack/react-router";
@@ -100,10 +101,10 @@ describe("password reset email requests", () => {
     () =>
       Effect.gen(function* () {
         const requests: Request[] = [];
-        const capture: typeof fetch = async (input, init) => {
+        const capture: typeof fetch = mockFetch(async (input, init) => {
           requests.push(new Request(input, init));
           return Response.json({ status: true, message: "Check your email" });
-        };
+        });
 
         yield* requestPasswordResetEmail({
           baseUrl: "https://auth.example.com",
@@ -133,14 +134,15 @@ describe("password reset email requests", () => {
     "preserves a failed send so callers do not show a success confirmation",
     () =>
       Effect.gen(function* () {
-        const reject: typeof fetch = async () =>
+        const reject: typeof fetch = mockFetch(async () =>
           Response.json(
             {
               code: "TOO_MANY_REQUESTS",
               message: "Too many requests",
             },
             { status: 429 },
-          );
+          ),
+        );
 
         const error = yield* requestPasswordResetEmail({
           baseUrl: "https://auth.example.com",

@@ -51,7 +51,7 @@ const MemberRow = Schema.Struct({
 const parseMetadata = (value: string | null) =>
   value
     ? Option.getOrElse(
-        Schema.decodeUnknownOption(Schema.fromJsonString(Schema.Json))(value),
+        Schema.decodeOption(Schema.fromJsonString(Schema.Json))(value),
         () => value,
       )
     : null;

@@ -1,3 +1,4 @@
+import * as Data from "effect/Data";
 import { useAtomSet, useAtomSubscribe, useAtomValue } from "@effect/atom-react";
 import { FormBuilder, FormReact } from "@lucas-barake/effect-form-react";
 import { Effect, Schema } from "effect";
@@ -51,6 +52,11 @@ import type {
   ServerDomain,
   ServerUpdateDomainPayload,
 } from "@krak-stack/auth/server";
+
+class DomainActionError extends Data.TaggedError("DomainActionError")<{
+  readonly message: string;
+  readonly cause?: unknown;
+}> {}
 
 const domainsAtom = Atom.family((reloadKey: number) =>
   AdminApiClient.query("admin", "listDomains", {
@@ -243,8 +249,13 @@ const makeDomainForm = (domain?: ServerDomain, projectId?: string) =>
               reactivityKeys: ["domains"],
             })
             .pipe(
-              Effect.mapError((cause) =>
-                cause instanceof Error ? cause : new Error(String(cause)),
+              Effect.mapError(
+                (cause) =>
+                  new DomainActionError({
+                    message:
+                      cause instanceof Error ? cause.message : String(cause),
+                    cause: cause,
+                  }),
               ),
             )
         : get
@@ -256,8 +267,13 @@ const makeDomainForm = (domain?: ServerDomain, projectId?: string) =>
               reactivityKeys: ["domains"],
             })
             .pipe(
-              Effect.mapError((cause) =>
-                cause instanceof Error ? cause : new Error(String(cause)),
+              Effect.mapError(
+                (cause) =>
+                  new DomainActionError({
+                    message:
+                      cause instanceof Error ? cause.message : String(cause),
+                    cause: cause,
+                  }),
               ),
             ),
   });

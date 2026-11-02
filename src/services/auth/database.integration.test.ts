@@ -19,10 +19,10 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)(
           const auth = createAuth({ allowedHosts: ["localhost:3001"] });
           const context = yield* Effect.promise(() => auth.$context);
           const now = new Date();
-          const metadata = Schema.decodeUnknownSync(UserMetadata)({
+          const metadata = yield* Schema.decodeEffect(UserMetadata)({
             emails: [],
             phones: [],
-          });
+          }).pipe(Effect.orDie);
           yield* Effect.promise(() =>
             context.adapter.create({
               model: "user",
@@ -105,7 +105,7 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)(
           expect(session?.session.impersonatedByOrganizationId).toBe(
             "organization-test",
           );
-          yield* sql`UPDATE "user" SET metadata = ${Schema.encodeSync(Schema.fromJsonString(Schema.Json))({ emails: [{ email: "legacy@example.com", label: "Work" }] })}::jsonb WHERE id = ${userId}`;
+          yield* sql`UPDATE "user" SET metadata = ${yield* Schema.encodeEffect(Schema.fromJsonString(Schema.Json))({ emails: [{ email: "legacy@example.com", label: "Work" }] }).pipe(Effect.orDie)}::jsonb WHERE id = ${userId}`;
           const createdSession = yield* Schema.decodeUnknownEffect(
             Schema.Struct({ activeOrganizationId: Schema.String }).annotate({
               identifier: "PersonalOrganizationSessionRow",

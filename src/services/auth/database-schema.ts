@@ -5,7 +5,7 @@ const StringArray = Schema.UndefinedOr(
   Schema.NullOr(Schema.Array(Schema.String)),
 ).annotate({ identifier: "PostgresStringArray" });
 const NumberArray = Schema.UndefinedOr(
-  Schema.NullOr(Schema.Array(Schema.Number)),
+  Schema.NullOr(Schema.Array(Schema.Finite)),
 ).annotate({ identifier: "PostgresNumberArray" });
 
 // Better Auth's native PostgreSQL adapter must keep the existing physical names.

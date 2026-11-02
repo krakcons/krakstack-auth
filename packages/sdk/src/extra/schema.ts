@@ -371,7 +371,10 @@ export const ExtraUploadedAsset = Schema.Struct({
   ],
 });
 
-export class ExtraBadRequest extends Schema.TaggedError<ExtraBadRequest>()(
+export class ExtraBadRequest extends Schema.TaggedError<
+  ExtraBadRequest,
+  { readonly brand: unique symbol }
+>()(
   "ExtraBadRequest",
   {
     message: Schema.String,

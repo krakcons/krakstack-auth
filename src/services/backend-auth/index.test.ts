@@ -1,3 +1,4 @@
+import * as Layer from "effect/Layer";
 import { describe, expect, it } from "@effect/vitest";
 import { Effect, Schema } from "effect";
 import { SqlClient } from "effect/sql";
@@ -15,7 +16,7 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)(
         const userId = `user-${crypto.randomUUID()}`;
         const organizationId = `organization-${crypto.randomUUID()}`;
         const memberId = `member-${crypto.randomUUID()}`;
-        const metadata = Schema.decodeUnknownSync(UserMetadata)({
+        const metadata = Schema.decodeSync(UserMetadata)({
           emails: [
             {
               email: "ada@example.com",
@@ -40,7 +41,7 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)(
 
           yield* sql`INSERT INTO "user" (id, name, email, email_verified, metadata)
             VALUES (${userId}, 'Ada Lovelace', ${`${userId}@example.com`}, true,
-              ${Schema.encodeSync(Schema.fromJsonString(UserMetadata))(metadata)}::jsonb)`;
+              ${yield* Schema.encodeEffect(Schema.fromJsonString(UserMetadata))(metadata).pipe(Effect.orDie)}::jsonb)`;
           yield* sql`INSERT INTO organization ${sql.insert({
             id: organizationId,
             name: "Example Organization",
@@ -88,7 +89,7 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)(
               phones: UserMetadata.fields.phones,
             }),
           );
-          yield* sql`UPDATE "user" SET metadata = ${Schema.encodeSync(persistedMetadataJson)(legacyMetadata)}::jsonb WHERE id = ${userId}`;
+          yield* sql`UPDATE "user" SET metadata = ${yield* Schema.encodeEffect(persistedMetadataJson)(legacyMetadata).pipe(Effect.orDie)}::jsonb WHERE id = ${userId}`;
           const normalized = { phones: metadata.phones };
           expect(
             (yield* backendAuth.getUser({ id: userId }))?.metadata,
@@ -113,8 +114,9 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)(
               yield* sql`DELETE FROM "user" WHERE id = ${userId}`;
             }).pipe(Effect.orDie),
           ),
-          Effect.provide(BackendAuth.layer),
-          Effect.provide(sqlTestLayer),
+          Effect.provide(
+            BackendAuth.layer.pipe(Layer.provideMerge(sqlTestLayer)),
+          ),
         );
       },
     );
