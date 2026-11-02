@@ -109,8 +109,10 @@ callback covers all personal data. Inventory invitations, logs, exports,
 processors, and backups before claiming complete erasure. Use
 `@krak-stack/registry` `0.1.61` or later and upgrade sender and receiver together.
 Account and organization deletion controls are temporarily hidden in production
-builds, including admin organization deletion. Development controls remain available;
-this UI rollout gate does not disable server endpoints or change authorization.
+builds, including admin organization deletion. Central Auth also rejects user
+deletion (including admin removal) and organization deletion on the server unless
+`NODE_ENV` is explicitly `development` or `test`. Missing configuration fails closed.
+Webhook receivers remain available independently of this deletion rollout gate.
 
 **Français :** `AuthMiddleware.layer({ onDeleteUser, onDeleteOrganization })` exige les deux fonctions de nettoyage et monte la route de
 réception automatiquement. Chaque projet doit fournir son nettoyage SQL et le
@@ -132,8 +134,10 @@ les anciennes signatures sont refusées. Aucun champ `version` n’est requis da
 Ce mécanisme ne garantit pas, à lui seul, la conformité ou l’effacement complet.
 Utilisez `@krak-stack/registry` `0.1.61` ou une version ultérieure et mettez à jour les deux côtés ensemble.
 Les commandes de suppression de compte et d’organisation, y compris dans l’administration,
-sont temporairement masquées en production. Elles restent disponibles en développement ;
-ce masquage ne désactive pas les points d’entrée serveur ni leurs contrôles d’autorisation.
+sont temporairement masquées en production. Le serveur central refuse également la
+suppression d’utilisateur (y compris par un administrateur) et d’organisation sauf si
+`NODE_ENV` vaut explicitement `development` ou `test`. Les récepteurs de webhooks
+restent disponibles indépendamment de cette restriction.
 
 `AuthMiddleware` also annotates request logs and spans with verified user,
 organization, and actor IDs using its existing session lookup. Missing sessions

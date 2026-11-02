@@ -1,4 +1,5 @@
 import { describe, expect, it } from "@effect/vitest";
+import { vi } from "vitest";
 import { Clock, Effect, Layer, ManagedRuntime, Schedule } from "effect";
 import { SqlClient } from "effect/sql";
 import { TestClock } from "effect/testing";
@@ -52,6 +53,9 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)(
           Effect.gen(function* () {
             const sql = yield* SqlClient.SqlClient;
             const clock = yield* TestClock.make();
+            // SQL mailbox IDs survive test runs; starting every runner at epoch
+            // zero reuses snowflake IDs and collides with persisted messages.
+            yield* clock.setTime(yield* Clock.currentTimeMillis);
             const runtime = ManagedRuntime.make(
               subscribed.pipe(Layer.provide(Layer.succeed(Clock.Clock, clock))),
             );
@@ -193,6 +197,21 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)(
                   },
                 ),
               );
+            vi.stubEnv("NODE_ENV", "production");
+            try {
+              const denied = yield* Effect.promise(() =>
+                removeOrganization(deletedOrgId),
+              );
+              expect(denied.status).toBe(403);
+              expect(yield* Effect.promise(() => denied.json())).toMatchObject({
+                code: "DELETION_DISABLED",
+              });
+              expect(
+                yield* sql`SELECT id FROM organization WHERE id = ${deletedOrgId}`,
+              ).toHaveLength(1);
+            } finally {
+              vi.unstubAllEnvs();
+            }
             expect(
               (yield* Effect.promise(() =>
                 removeOrganization(deletedOrgId, ""),

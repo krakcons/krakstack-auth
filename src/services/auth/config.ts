@@ -49,12 +49,14 @@ import {
 } from "./audit-hooks";
 import { nativeAuditRuntime } from "@/services/audit/layer.server";
 import { accountDeletionRuntime } from "@/services/account-deletion/runtime.server";
-import {
-  prepareNativeDeletion,
-  captureNativeDeletion,
-  nativeDeletionInput,
-} from "@/services/account-deletion/hooks";
+import { prepareNativeDeletion } from "@/services/account-deletion/hooks";
 import { AccountDeletions } from "@/services/account-deletion";
+import {
+  assertDeletionEnabled,
+  deletionEnabled,
+  onDeleteUser,
+  onDeleteOrganization,
+} from "./deletion";
 
 const isDev = process.env.NODE_ENV === "development";
 
@@ -429,7 +431,7 @@ export const createAuth = ({
     user: {
       fields: coreSqlFields.user,
       deleteUser: {
-        enabled: true,
+        enabled: deletionEnabled(),
         beforeDelete: (user) => deletionRun(prepareNativeDeletion(user.id)),
       },
       additionalFields: {
@@ -457,7 +459,11 @@ export const createAuth = ({
     databaseHooks: {
       user: {
         delete: {
-          before: (user) => deletionRun(captureNativeDeletion(user.id)),
+          before: (user) => {
+            // Also covers admin removal, which bypasses deleteUser.enabled.
+            assertDeletionEnabled();
+            return deletionRun(onDeleteUser({ userId: user.id }));
+          },
           after: async (user) => {
             markNativeAuthMutation({ userId: user.id, kind: "user_deleted" });
           },
@@ -660,20 +666,14 @@ export const createAuth = ({
               );
             },
             beforeDeleteOrganization: async ({ organization }) => {
+              assertDeletionEnabled();
               if (organization.userId) {
                 throw new APIError("FORBIDDEN", {
                   message: "Personal organizations cannot be deleted",
                 });
               }
               await deletionRun(
-                Effect.gen(function* () {
-                  const service = yield* AccountDeletions;
-                  const input = yield* nativeDeletionInput(organization.id);
-                  yield* service.captureOrganization({
-                    organizationId: organization.id,
-                    requestId: input.requestId,
-                  });
-                }),
+                onDeleteOrganization({ organizationId: organization.id }),
               );
             },
             afterDeleteOrganization: async ({ organization }) => {
