@@ -26,6 +26,7 @@ import {
 import { AdminListQuery, type AdminOrganization } from "../admin/schema.js";
 import { normalizeOrganizationRoles } from "../roles.js";
 import { AdminOrganizationForm } from "./admin-organization-form.js";
+import { ProjectCardList } from "./project-card-list.js";
 import { deletionControlsEnabled } from "./deletion-visibility.js";
 import { authClientApi, authHttpClient } from "./auth-client-api.js";
 import { type KrakstackAuthLocale, useKrakstackAuth } from "./auth-provider.js";
@@ -596,7 +597,7 @@ function DeleteOrganizationDialog({
 
   return (
     <AlertDialog open onOpenChange={(open) => !open && onClose()}>
-      <AlertDialogContent>
+      <AlertDialogContent className="max-h-[85vh] overflow-y-auto sm:max-w-xl">
         <AlertDialogHeader>
           <AlertDialogTitle>{m.organization_delete_title}</AlertDialogTitle>
           <AlertDialogDescription>
@@ -606,6 +607,17 @@ function DeleteOrganizationDialog({
             )}
           </AlertDialogDescription>
         </AlertDialogHeader>
+        {organization.projects?.length ? (
+          <section className="space-y-2">
+            <h3 className="text-muted-foreground text-xs font-medium">
+              {m.admin_column_projects}{" "}
+              <span className="ml-1 tabular-nums">
+                {organization.projects.length}
+              </span>
+            </h3>
+            <ProjectCardList projects={organization.projects} />
+          </section>
+        ) : null}
         {error ? (
           <ErrorMessage
             text={

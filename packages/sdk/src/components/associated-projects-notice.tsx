@@ -4,6 +4,7 @@ import { AsyncResult, Atom } from "effect/reactivity";
 import { Badge } from "@/components/ui/badge";
 
 import { authClientApi } from "./auth-client-api.js";
+import { ProjectCardList } from "./project-card-list.js";
 
 const associatedProjectsAtom = Atom.family((baseUrl?: string) =>
   Atom.family((organizationId: string | null) =>
@@ -20,11 +21,13 @@ const associatedProjectsAtom = Atom.family((baseUrl?: string) =>
 
 export const AssociatedProjectsNotice = ({
   baseUrl,
+  expanded = false,
   getSummary,
   organizationId = null,
   viewLabel,
 }: {
   baseUrl?: string | undefined;
+  expanded?: boolean;
   getSummary: (count: number) => string;
   organizationId?: string | null;
   viewLabel: string;
@@ -36,7 +39,18 @@ export const AssociatedProjectsNotice = ({
     onSuccess: ({ value }) => Array.from(value),
   });
 
-  if (projects.length <= 1) return null;
+  if (projects.length < (expanded ? 1 : 2)) return null;
+
+  if (expanded) {
+    return (
+      <section className="space-y-2">
+        <h3 className="text-muted-foreground text-xs font-medium">
+          {getSummary(projects.length)}
+        </h3>
+        <ProjectCardList projects={projects} />
+      </section>
+    );
+  }
 
   return (
     <div className="px-1 py-2">

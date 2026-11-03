@@ -1754,6 +1754,7 @@ const OrganizationDeletionDialog = ({
 }) => {
   const auth = useKrakstackAuth();
   const labels = adminOrganizationsMessages(auth?.locale ?? "en");
+  const m = useOrganizationMessages();
   // Cross-project deletion cannot be predicted or rolled back on the client.
   const [mutation] = useState(() =>
     authClientApi(baseUrl).runtime.fn(() =>
@@ -1776,7 +1777,7 @@ const OrganizationDeletionDialog = ({
         if (!open && !result.waiting) onClose();
       }}
     >
-      <AlertDialogContent>
+      <AlertDialogContent className="max-h-[85vh] overflow-y-auto sm:max-w-xl">
         <AlertDialogHeader>
           <AlertDialogTitle>
             {labels.organization_delete_title}
@@ -1788,6 +1789,13 @@ const OrganizationDeletionDialog = ({
             )}
           </AlertDialogDescription>
         </AlertDialogHeader>
+        <AssociatedProjectsNotice
+          baseUrl={baseUrl}
+          organizationId={organization.id}
+          expanded
+          getSummary={(count) => m.organization_projects_summary({ count })}
+          viewLabel={m.organization_projects_view()}
+        />
         {AsyncResult.isFailure(result) ? (
           <p role="alert">{labels.organization_delete_error}</p>
         ) : null}
