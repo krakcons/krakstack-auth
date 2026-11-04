@@ -1260,10 +1260,10 @@ export function OrganizationSwitcher({
       (member) => member.userId === session?.user.id,
     )?.role,
   );
-  const canManageApiKeys = activeMemberRoles.some(
+  const canManageApiKeys = activeMemberRoles.includes("owner");
+  const canUpdateOrganization = activeMemberRoles.some(
     (role) => role === "owner" || role === "admin",
   );
-  const canUpdateOrganization = canManageApiKeys;
   const canSwitchOrganizations = features?.organizationSwitching ?? true;
   const canCreateOrganization = features?.organizationCreation ?? true;
   const canViewOrganizationInvitations = features?.userInvitations ?? true;
@@ -1667,7 +1667,7 @@ export function OrganizationSwitcher({
           {activeOrganization ? (
             <OrganizationMembersManager
               baseUrl={baseUrl}
-              canManageMembers={canManageApiKeys}
+              canManageMembers={canUpdateOrganization}
               organization={activeOrganization}
               currentUserId={session.user.id}
               active={dialog === "members"}
