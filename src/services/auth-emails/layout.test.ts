@@ -12,6 +12,8 @@ import {
   emailTextStyle,
   resolveEmailTextStyle,
   resolveEmailRoleColor,
+  resolveEmailTextFormatting,
+  emailRoleIsBold,
 } from "./typography";
 
 const settings = {
@@ -61,6 +63,128 @@ const settings = {
 } satisfies AuthEmailSettings;
 
 describe("email layout boundaries", () => {
+  it("validates boolean formatting for every role and outer text/link, preserving false through JSON and resets", () => {
+    const json = Schema.fromJsonString(AuthEmailSettings);
+    for (const key of [
+      "bold",
+      "italic",
+      "underline",
+      "strikethrough",
+    ] as const) {
+      for (const value of [true, false]) {
+        const input = {
+          typography: Object.fromEntries(
+            Object.keys(emailSizeOptions).map((role) => [
+              role,
+              { [key]: value },
+            ]),
+          ),
+          layout: {
+            header: {
+              blocks: [
+                {
+                  ...settings.layout.header.blocks[0],
+                  style: { [key]: value },
+                },
+              ],
+            },
+            footer: {
+              blocks: [
+                {
+                  ...settings.layout.footer.blocks[0],
+                  style: { [key]: value },
+                },
+              ],
+            },
+          },
+        };
+        expect(Schema.decodeSync(json)(Schema.encodeSync(json)(input))).toEqual(
+          input,
+        );
+        expect(resetEmailTypography(input).typography).toBeUndefined();
+        expect(
+          resetEmailTypography(input).layout?.header?.blocks[0],
+        ).not.toHaveProperty("style");
+        expect(
+          resetEmailAppearance(input).layout?.footer?.blocks[0],
+        ).not.toHaveProperty("style");
+      }
+      for (const value of ["bold", "false", 1, null]) {
+        for (const role of Object.keys(emailSizeOptions))
+          expect(
+            Schema.is(AuthEmailSettings)({
+              typography: { [role]: { [key]: value } },
+            }),
+          ).toBe(false);
+        for (const block of [
+          settings.layout.header.blocks[0],
+          settings.layout.footer.blocks[0],
+        ])
+          expect(
+            Schema.is(AuthEmailSettings)({
+              layout: {
+                header: { blocks: [{ ...block, style: { [key]: value } }] },
+              },
+            }),
+          ).toBe(false);
+      }
+    }
+  });
+  it("resolves effective formatting without changing legacy rendering and combines decorations", () => {
+    expect(
+      resolveEmailTextFormatting(undefined, {
+        bold: emailRoleIsBold("heading"),
+      }),
+    ).toEqual({
+      bold: true,
+      italic: false,
+      underline: false,
+      strikethrough: false,
+    });
+    expect(
+      resolveEmailTextFormatting(
+        { bold: false, underline: false },
+        { bold: true, underline: true },
+      ),
+    ).toEqual({
+      bold: false,
+      italic: false,
+      underline: false,
+      strikethrough: false,
+    });
+    expect(emailTextStyle(undefined, "heading")).toEqual({});
+    expect(
+      emailTextStyle(
+        {
+          body: {
+            bold: true,
+            italic: true,
+            underline: true,
+            strikethrough: true,
+          },
+        },
+        "body",
+      ),
+    ).toEqual({
+      fontWeight: 700,
+      fontStyle: "italic",
+      textDecoration: "underline line-through",
+    });
+    expect(
+      emailTextStyle(
+        {
+          body: {
+            bold: true,
+            italic: true,
+            underline: true,
+            strikethrough: true,
+          },
+        },
+        "body",
+        { bold: false, italic: false, underline: false, strikethrough: false },
+      ),
+    ).toEqual({ fontWeight: 400, fontStyle: "normal", textDecoration: "none" });
+  });
   it("accepts only six-digit HEX text colors for each role and outer text/link block", () => {
     for (const role of Object.keys(emailSizeOptions)) {
       expect(

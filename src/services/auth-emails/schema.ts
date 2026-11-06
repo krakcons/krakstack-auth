@@ -42,13 +42,21 @@ export const emailSizeOptions = {
   projectName: [12, 14, 16, 18, 20],
 } as const;
 const fontSize = (sizes: ReadonlyArray<number>) => Schema.Literals(sizes);
+const textFormatting = {
+  bold: Schema.optional(Schema.Boolean),
+  italic: Schema.optional(Schema.Boolean),
+  underline: Schema.optional(Schema.Boolean),
+  strikethrough: Schema.optional(Schema.Boolean),
+};
 export const AuthEmailTextStyle = Schema.Struct({
+  ...textFormatting,
   font: Schema.optional(AuthEmailFont),
   size: Schema.optional(fontSize(emailSizeOptions.body)),
   color: Schema.optional(color),
 }).annotate({ identifier: "AuthEmailTextStyle" });
 const roleStyle = (identifier: string, sizes: ReadonlyArray<number>) =>
   Schema.Struct({
+    ...textFormatting,
     font: Schema.optional(AuthEmailFont),
     size: Schema.optional(fontSize(sizes)),
     alignment: Schema.optional(AuthEmailAlignment),

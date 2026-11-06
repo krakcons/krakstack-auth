@@ -55,6 +55,19 @@ export const emailDefaultTextSizes = {
   projectName: 12,
 } satisfies Record<EmailTextRole, number>;
 
+export const resolveEmailTextFormatting = (
+  style: AuthEmailTextStyle | undefined,
+  defaults: { bold?: boolean; underline?: boolean } = {},
+) => ({
+  bold: style?.bold ?? defaults.bold ?? false,
+  italic: style?.italic ?? false,
+  underline: style?.underline ?? defaults.underline ?? false,
+  strikethrough: style?.strikethrough ?? false,
+});
+
+export const emailRoleIsBold = (role: EmailTextRole) =>
+  role === "heading" || role === "code" || role === "projectName";
+
 export const resolveEmailTextStyle = (
   typography: AuthEmailTypography | undefined,
   role: EmailTextRole,
@@ -76,7 +89,24 @@ export const emailTextStyle = (
   const size = override?.size ?? typography?.[role]?.size;
   const alignment = typography?.[role]?.alignment;
   const color = override?.color ?? typography?.[role]?.color;
+  const formatting = { ...typography?.[role], ...override };
   const style: CSSProperties = {};
+  if (formatting.bold !== undefined)
+    style.fontWeight = formatting.bold ? 700 : 400;
+  if (formatting.italic !== undefined)
+    style.fontStyle = formatting.italic ? "italic" : "normal";
+  if (
+    formatting.underline !== undefined ||
+    formatting.strikethrough !== undefined
+  ) {
+    style.textDecoration =
+      [
+        formatting.underline ? "underline" : "",
+        formatting.strikethrough ? "line-through" : "",
+      ]
+        .filter(Boolean)
+        .join(" ") || "none";
+  }
   if (color) style.color = color;
   if (alignment) style.textAlign = alignment;
   if (font) style.fontFamily = emailFontStacks[font];

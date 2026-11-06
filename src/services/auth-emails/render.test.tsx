@@ -6,6 +6,130 @@ import { AuthEmailKind, AuthEmailSettings } from "./schema";
 
 describe("authentication email rendering", () => {
   it.effect(
+    "renders whole-element formatting for all email kinds and languages without altering protected actions or outer defaults",
+    () =>
+      Effect.gen(function* () {
+        const formatting = {
+          bold: true,
+          italic: true,
+          underline: true,
+          strikethrough: true,
+        };
+        const normal = {
+          bold: false,
+          italic: false,
+          underline: false,
+          strikethrough: false,
+        };
+        const settings = {
+          typography: {
+            heading: normal,
+            body: formatting,
+            help: formatting,
+            code: formatting,
+            button: formatting,
+            projectName: normal,
+          },
+          layout: {
+            header: {
+              blocks: [
+                {
+                  id: "styled",
+                  type: "text",
+                  text: { en: "Styled outer", fr: "Styled outer" },
+                  style: formatting,
+                },
+                {
+                  id: "normal",
+                  type: "text",
+                  text: { en: "Unstyled outer", fr: "Unstyled outer" },
+                },
+              ],
+            },
+            footer: {
+              blocks: [
+                {
+                  id: "link",
+                  type: "link",
+                  translations: {
+                    en: { label: "Styled link", url: "https://example.com" },
+                    fr: { label: "Styled link", url: "https://example.com/fr" },
+                  },
+                  style: { bold: true, italic: true, strikethrough: true },
+                },
+                {
+                  id: "plain-link",
+                  type: "link",
+                  translations: {
+                    en: { label: "Plain link", url: "mailto:help@example.com" },
+                    fr: { label: "Plain link", url: "mailto:aide@example.com" },
+                  },
+                  style: normal,
+                },
+              ],
+            },
+          },
+        } satisfies AuthEmailSettings;
+        for (const locale of ["en", "fr"] as const) {
+          for (const kind of AuthEmailKind.literals) {
+            const url = "https://example.com/reset?token=protected";
+            const action =
+              kind === "reset-password"
+                ? { kind, url }
+                : { kind, otp: "012345" };
+            const email = yield* renderAuthEmail({
+              appName: "Brand marker",
+              locale,
+              action,
+              settings,
+              notice: "Notice marker",
+            });
+            const plain = yield* renderAuthEmail({
+              appName: "Brand marker",
+              locale,
+              action,
+              settings: { layout: settings.layout },
+              notice: "Notice marker",
+            });
+            expect(email.text).toBe(plain.text);
+            expect(email.html).toMatch(
+              /<h1[^>]*font-weight:400[^>]*font-style:normal[^>]*text-decoration:none/,
+            );
+            for (const marker of [
+              "Styled outer",
+              "Styled link",
+              "Notice marker",
+              ...(kind === "reset-password" ? [] : ["012345"]),
+            ])
+              expect(email.html).toMatch(
+                new RegExp(
+                  `<(?:p|a)[^>]*font-weight:700[^>]*font-style:italic[^>]*text-decoration:underline line-through[^>]*>${marker}</(?:p|a)>`,
+                ),
+              );
+            expect(email.html).toMatch(
+              /<p(?![^>]*(?:font-weight|font-style|text-decoration))[^>]*>Unstyled outer<\/p>/,
+            );
+            expect(email.html).toMatch(
+              /<a[^>]*font-weight:400[^>]*text-decoration:none[^>]*>Plain link<\/a>/,
+            );
+            expect(email.html).toMatch(
+              /<p[^>]*font-weight:400[^>]*>Brand marker<\/p>/,
+            );
+            if (kind === "reset-password") {
+              expect(email.html).toContain(`href="${url}"`);
+              expect(email.html).toMatch(
+                /<a[^>]*font-weight:700[^>]*text-decoration:underline line-through/,
+              );
+              expect(email.text).toContain(url);
+            } else {
+              expect(email.text).toContain("012345");
+              expect(email.text).toContain(m.email_otp_expiry({}, { locale }));
+            }
+          }
+        }
+      }),
+  );
+  it.effect(
     "renders independent text colors while retaining legacy outer colors and protected actions",
     () =>
       Effect.gen(function* () {

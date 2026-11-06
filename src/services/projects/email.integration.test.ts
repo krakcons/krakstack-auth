@@ -57,9 +57,14 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)(
             },
             typography: {
               font: "serif",
-              heading: { alignment: "left", color: "#006F69" },
+              heading: {
+                alignment: "left",
+                color: "#006F69",
+                bold: false,
+                italic: true,
+              },
               body: { color: "#334455" },
-              code: { font: "mono", size: 24, color: "#223344" },
+              code: { font: "mono", size: 24, color: "#223344", bold: true },
               button: { alignment: "center", color: "#FFFFFF" },
               help: { color: "#556677" },
               projectName: { color: "#667788" },
@@ -71,7 +76,7 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)(
                     id: "greeting",
                     type: "text",
                     text: { en: "Header greeting", fr: "Salutation" },
-                    style: { color: "#778899" },
+                    style: { color: "#778899", bold: true, underline: true },
                   },
                 ],
               },
@@ -85,7 +90,11 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)(
                       fr: { label: "Aide", url: "mailto:aide@example.com" },
                     },
                     alignment: "center",
-                    style: { color: "#8899AA" },
+                    style: {
+                      color: "#8899AA",
+                      underline: false,
+                      strikethrough: true,
+                    },
                   },
                 ],
               },
@@ -256,6 +265,8 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)(
           }
           yield* sql`UPDATE session SET impersonated_by_organization_id = NULL WHERE user_id = ${id}`;
           const invalidSettings = [
+            '{"typography":{"heading":{"bold":"bold"}}}',
+            '{"layout":{"header":{"blocks":[{"id":"unsafe-format","type":"text","text":{"en":"Hello","fr":"Bonjour"},"style":{"italic":"italic"}}]}}}',
             '{"typography":{"heading":{"color":"#123456;color:red"}}}',
             '{"layout":{"footer":{"blocks":[{"id":"unsafe","type":"link","translations":{"en":{"label":"Help","url":"javascript:alert(1)"},"fr":{"label":"Aide","url":"https://example.com"}}}]}}}',
           ];

@@ -44,12 +44,16 @@ export const EmailSection = ({
   position: "header" | "footer";
 }) => {
   if (!logo && !sectionHasContent(section, locale)) return null;
-  // Outer blocks inherit font/size, not the Body message's local text color.
-  // Omit color entirely when unset so React Email retains the theme class.
+  // Outer blocks inherit font/size only, not Body formatting, alignment, or color.
   const blockTextStyle = (style: AuthEmailTextStyle | undefined) => {
-    const resolved = emailTextStyle(typography, "body", style);
-    if (!style?.color) delete resolved.color;
-    return resolved;
+    return emailTextStyle(
+      {
+        font: typography?.font,
+        body: { font: typography?.body?.font, size: typography?.body?.size },
+      },
+      "body",
+      style,
+    );
   };
   return (
     <Container
@@ -104,14 +108,21 @@ export const EmailSection = ({
                   style={{
                     fontSize: 16,
                     lineHeight: "1.5",
-                    ...blockTextStyle(block.style),
+                    ...blockTextStyle(
+                      block.style
+                        ? { font: block.style.font, size: block.style.size }
+                        : undefined,
+                    ),
                     textAlign: block.alignment ?? "left",
                   }}
                 >
                   <Link
                     href={translation.url}
                     className="text-primary underline"
-                    style={blockTextStyle(block.style)}
+                    style={blockTextStyle({
+                      ...block.style,
+                      underline: block.style?.underline ?? true,
+                    })}
                   >
                     {translation.label}
                   </Link>
