@@ -295,6 +295,7 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)(
               "auth.invitation.created",
               "auth.organization.created",
               "auth.session.signed_in",
+              "auth.user_active",
               "auth.user.updated",
             ]);
             for (const event of events) {
