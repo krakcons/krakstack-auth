@@ -30,6 +30,8 @@ export const renderAuthEmail = Effect.fn("AuthEmails.render")(
     const content = resolveAuthEmailContent({
       ...input,
       kind: input.action.kind,
+      code:
+        input.action.kind === "reset-password" ? undefined : input.action.otp,
     });
     const expiry =
       input.action.kind === "reset-password"
@@ -75,7 +77,9 @@ export const renderAuthEmail = Effect.fn("AuthEmails.render")(
       content.body,
       action,
       expiry,
-      content.footer,
+      input.settings?.appearance?.showFooting !== false
+        ? content.footer
+        : undefined,
       input.settings?.appearance?.showProjectName !== false
         ? input.appName
         : undefined,

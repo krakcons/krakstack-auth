@@ -114,6 +114,8 @@ export const emailTextStyle = (
     style.fontSize = size;
     style.lineHeight = role === "heading" || role === "code" ? "1.25" : "1.5";
   }
+  if (override?.lineHeight !== undefined)
+    style.lineHeight = override.lineHeight;
   return style;
 };
 

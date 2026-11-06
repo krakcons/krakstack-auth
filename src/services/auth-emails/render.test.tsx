@@ -2,9 +2,166 @@ import { describe, expect, it } from "@effect/vitest";
 import { Effect, Schema } from "effect";
 import { m } from "@/paraglide/messages";
 import { renderAuthEmail } from "./render";
-import { AuthEmailKind, AuthEmailSettings } from "./schema";
+import {
+  AuthEmailKind,
+  AuthEmailSettings,
+  type AuthEmailBlock,
+} from "./schema";
 
 describe("authentication email rendering", () => {
+  it.effect(
+    "hides only custom Footing text in both formats, retaining protected expiry, notices, actions, and outer Footer blocks",
+    () =>
+      Effect.gen(function* () {
+        for (const locale of ["en", "fr"] as const) {
+          for (const kind of AuthEmailKind.literals) {
+            const settings = {
+              appearance: { showFooting: false },
+              templates: {
+                [kind]: { [locale]: { footer: "Custom footing marker" } },
+              },
+              layout: {
+                footer: {
+                  blocks: [
+                    {
+                      id: "outer",
+                      type: "text",
+                      text: {
+                        en: "Outer footer marker",
+                        fr: "Outer footer marker",
+                      },
+                    },
+                  ],
+                },
+              },
+            } satisfies AuthEmailSettings;
+            const action =
+              kind === "reset-password"
+                ? { kind, url: "https://example.com/reset?token=protected" }
+                : { kind, otp: "012345" };
+            const input = {
+              appName: "Example",
+              locale,
+              action,
+              notice: "Protected notice marker",
+            };
+            const hidden = yield* renderAuthEmail({ ...input, settings });
+            const shown = yield* renderAuthEmail({
+              ...input,
+              settings: { ...settings, appearance: {} },
+            });
+            for (const output of [hidden.html, hidden.text]) {
+              expect(output).not.toContain("Custom footing marker");
+              expect(output).toContain("Outer footer marker");
+              expect(output).toContain("Protected notice marker");
+              expect(output).toContain(
+                kind === "reset-password"
+                  ? "https://example.com/reset?token=protected"
+                  : "012345",
+              );
+              if (kind !== "reset-password")
+                expect(output).toContain(m.email_otp_expiry({}, { locale }));
+            }
+            expect(shown.html).toContain("Custom footing marker");
+            expect(shown.text).toContain("Custom footing marker");
+          }
+        }
+      }),
+  );
+  it.effect(
+    "renders independent text and link spacing, including zero, without changing defaults or plain text",
+    () =>
+      Effect.gen(function* () {
+        for (const locale of ["en", "fr"] as const) {
+          const blocks = [
+            {
+              id: "sender",
+              type: "text",
+              text: { en: "Sender marker", fr: "Sender marker" },
+              style: { bold: true, lineHeight: 1 },
+              spacingTop: 0,
+              spacingBottom: 0,
+            },
+            {
+              id: "address",
+              type: "text",
+              text: { en: "Address marker", fr: "Address marker" },
+              spacingTop: 0,
+              spacingBottom: 8,
+            },
+            {
+              id: "link",
+              type: "link",
+              translations: {
+                en: { label: "Support marker", url: "https://example.com" },
+                fr: { label: "Support marker", url: "mailto:aide@example.com" },
+              },
+              spacingTop: 4,
+              spacingBottom: 0,
+            },
+            {
+              id: "default",
+              type: "text",
+              text: { en: "Default marker", fr: "Default marker" },
+            },
+          ] satisfies Array<AuthEmailBlock>;
+          for (const name of ["header", "footer"] as const) {
+            const input = {
+              appName: "Example",
+              locale,
+              action: { kind: "sign-in", otp: "012345" } as const,
+            };
+            const email = yield* renderAuthEmail({
+              ...input,
+              settings: {
+                typography: { body: { size: 18 } },
+                layout: { [name]: { blocks } },
+              },
+            });
+            const plain = yield* renderAuthEmail({
+              ...input,
+              settings: {
+                typography: { body: { size: 18 } },
+                layout: {
+                  [name]: {
+                    blocks: blocks.map((block) => ({
+                      ...block,
+                      spacingTop: 16,
+                      spacingBottom: 16,
+                    })),
+                  },
+                },
+              },
+            });
+            expect(email.text).toBe(plain.text);
+            for (const [marker, top, bottom] of [
+              ["Sender marker", 0, 0],
+              ["Address marker", 0, 8],
+              ["Default marker", 16, 16],
+            ] as const)
+              expect(email.html).toMatch(
+                new RegExp(
+                  `<p(?=[^>]*margin-top:${top === 0 ? "0(?:px)?" : `${top}px`}[;"])(?=[^>]*margin-bottom:${bottom === 0 ? "0(?:px)?" : `${bottom}px`}[;"])[^>]*>${marker}</p>`,
+                ),
+              );
+            expect(email.html).toMatch(
+              /<p(?=[^>]*margin-top:4px)(?=[^>]*margin-bottom:0(?:px)?[;"])[^>]*><a[^>]*>Support marker<\/a><\/p>/,
+            );
+            expect(email.html).toMatch(
+              /<p(?=[^>]*line-height:1[;"])[^>]*>Sender marker<\/p>/,
+            );
+            expect(email.html).toMatch(
+              /<p(?=[^>]*line-height:1[;"])[^>]*><a(?=[^>]*line-height:1[;"])[^>]*>Support marker<\/a><\/p>/,
+            );
+            expect(email.html).toMatch(
+              /<p(?=[^>]*line-height:1[;"])[^>]*>Default marker<\/p>/,
+            );
+            expect(email.text).toContain("012345");
+            expect(email.text).toContain(m.email_otp_expiry({}, { locale }));
+          }
+        }
+      }),
+  );
   it.effect(
     "renders whole-element formatting for all email kinds and languages without altering protected actions or outer defaults",
     () =>
@@ -478,8 +635,9 @@ describe("authentication email rendering", () => {
             for (const output of [email.html, email.text]) {
               expect(output).toContain(intro);
               expect(output).toContain(destination);
+              // The inbox preview can include the OTP before the visible header.
               expect(output.indexOf(intro)).toBeLessThan(
-                output.indexOf(kind === "reset-password" ? url : "012345"),
+                output.lastIndexOf(kind === "reset-password" ? url : "012345"),
               );
               expect(output).toContain(
                 kind === "reset-password"
@@ -657,6 +815,9 @@ describe("authentication email rendering", () => {
           ).toEqual(legacy);
           expect(legacy.html).toContain("background-color:rgb(18,52,86)");
           expect(legacy.text).toContain("012345");
+          expect(legacy.html).toContain(
+            `data-skip-in-text="true">${m.auth_email_otp_preview({ code: "012345" }, { locale })}`,
+          );
         }
       }),
   );
@@ -722,6 +883,9 @@ describe("authentication email rendering", () => {
             },
           });
           expect(email.subject).toBe("Code Example$&");
+          expect(email.html).toContain(
+            `data-skip-in-text="true">${m.auth_email_otp_preview({ code: "012345" }, { locale: "fr" })}`,
+          );
           for (const output of [email.html, email.text]) {
             expect(output).toContain("012345");
             expect(output).toContain(m.email_otp_expiry({}, { locale: "fr" }));

@@ -10,6 +10,11 @@ type EmailSections = {
   footer?: AuthEmailSection;
 };
 
+export const resetEmailLayout = (
+  settings: AuthEmailSettings,
+): AuthEmailSettings =>
+  Struct.omit(settings, ["appearance", "typography", "layout"]);
+
 const resetBlockTypography = (block: AuthEmailBlock): AuthEmailBlock => {
   switch (block.type) {
     case "text":
@@ -52,9 +57,20 @@ export const resetEmailAppearance = (
 ): AuthEmailSettings => {
   const resetBlock = (block: AuthEmailBlock): AuthEmailBlock =>
     block.type === "text"
-      ? Struct.omit(block, ["style", "alignment", "tone"])
+      ? Struct.omit(block, [
+          "style",
+          "alignment",
+          "tone",
+          "spacingTop",
+          "spacingBottom",
+        ])
       : block.type === "link"
-        ? Struct.omit(block, ["style", "alignment"])
+        ? Struct.omit(block, [
+            "style",
+            "alignment",
+            "spacingTop",
+            "spacingBottom",
+          ])
         : block.type === "spacer"
           ? { ...block, size: "medium" }
           : block;

@@ -162,7 +162,7 @@ export const BaseEmail = ({
                 {content.extra}
               </Text>
             ) : null}
-            {content.footer ? (
+            {content.footer && content.appearance?.showFooting !== false ? (
               <Text
                 style={{
                   whiteSpace: "pre-line",

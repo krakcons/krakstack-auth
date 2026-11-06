@@ -42,6 +42,7 @@ export const emailSizeOptions = {
   projectName: [12, 14, 16, 18, 20],
 } as const;
 const fontSize = (sizes: ReadonlyArray<number>) => Schema.Literals(sizes);
+export const emailLineHeightOptions = [1, 1.15, 1.25, 1.5, 1.75, 2] as const;
 const textFormatting = {
   bold: Schema.optional(Schema.Boolean),
   italic: Schema.optional(Schema.Boolean),
@@ -52,6 +53,7 @@ export const AuthEmailTextStyle = Schema.Struct({
   ...textFormatting,
   font: Schema.optional(AuthEmailFont),
   size: Schema.optional(fontSize(emailSizeOptions.body)),
+  lineHeight: Schema.optional(Schema.Literals(emailLineHeightOptions)),
   color: Schema.optional(color),
 }).annotate({ identifier: "AuthEmailTextStyle" });
 const roleStyle = (identifier: string, sizes: ReadonlyArray<number>) =>
@@ -109,9 +111,17 @@ const localizedLink = Schema.Struct({
 const blockFields = {
   id: Schema.String.check(Schema.isMinLength(1), Schema.isMaxLength(80)),
 };
+const blockSpacing = Schema.Int.check(
+  Schema.isBetween({ minimum: 0, maximum: 96 }),
+).annotate({ identifier: "AuthEmailBlockSpacing" });
+const textBlockSpacing = {
+  spacingTop: Schema.optional(blockSpacing),
+  spacingBottom: Schema.optional(blockSpacing),
+};
 export const AuthEmailBlock = Schema.Union([
   Schema.Struct({
     ...blockFields,
+    ...textBlockSpacing,
     type: Schema.Literal("text"),
     text: localizedText,
     alignment: Schema.optional(AuthEmailAlignment),
@@ -120,6 +130,7 @@ export const AuthEmailBlock = Schema.Union([
   }),
   Schema.Struct({
     ...blockFields,
+    ...textBlockSpacing,
     type: Schema.Literal("link"),
     translations: Schema.Struct({ en: localizedLink, fr: localizedLink }),
     alignment: Schema.optional(AuthEmailAlignment),
@@ -169,6 +180,7 @@ export const AuthEmailAppearance = Schema.Struct({
     Schema.Literals(["header", "card", "footer", "hidden"]),
   ),
   showProjectName: Schema.optional(Schema.Boolean),
+  showFooting: Schema.optional(Schema.Boolean),
   background: Schema.optional(color),
   foreground: Schema.optional(color),
   card: Schema.optional(color),

@@ -46,6 +46,7 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)(
             appearance: {
               logoPlacement: "header",
               showProjectName: false,
+              showFooting: false,
               alignment: "right",
               logoWidth: 120,
               logoAlignment: "right",
@@ -76,7 +77,14 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)(
                     id: "greeting",
                     type: "text",
                     text: { en: "Header greeting", fr: "Salutation" },
-                    style: { color: "#778899", bold: true, underline: true },
+                    style: {
+                      color: "#778899",
+                      bold: true,
+                      underline: true,
+                      lineHeight: 1,
+                    },
+                    spacingTop: 0,
+                    spacingBottom: 8,
                   },
                 ],
               },
@@ -90,10 +98,13 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)(
                       fr: { label: "Aide", url: "mailto:aide@example.com" },
                     },
                     alignment: "center",
+                    spacingTop: 4,
+                    spacingBottom: 0,
                     style: {
                       color: "#8899AA",
                       underline: false,
                       strikethrough: true,
+                      lineHeight: 1.25,
                     },
                   },
                 ],
@@ -265,6 +276,9 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)(
           }
           yield* sql`UPDATE session SET impersonated_by_organization_id = NULL WHERE user_id = ${id}`;
           const invalidSettings = [
+            '{"appearance":{"showFooting":"false"}}',
+            '{"layout":{"footer":{"blocks":[{"id":"unsafe-leading","type":"text","text":{"en":"Hello","fr":"Bonjour"},"style":{"lineHeight":0}}]}}}',
+            '{"layout":{"footer":{"blocks":[{"id":"unsafe-spacing","type":"text","text":{"en":"Hello","fr":"Bonjour"},"spacingTop":-1}]}}}',
             '{"typography":{"heading":{"bold":"bold"}}}',
             '{"layout":{"header":{"blocks":[{"id":"unsafe-format","type":"text","text":{"en":"Hello","fr":"Bonjour"},"style":{"italic":"italic"}}]}}}',
             '{"typography":{"heading":{"color":"#123456;color:red"}}}',

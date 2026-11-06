@@ -39,7 +39,10 @@ export const defaultAuthEmailContent = ({
               : m.email_otp_verification_subject({ appName }, options);
   return {
     subject,
-    preview: body,
+    preview:
+      kind === "reset-password"
+        ? body
+        : m.auth_email_otp_preview({ code: "{code}" }, options),
     title,
     body,
     footer: "",
@@ -51,14 +54,20 @@ export const resolveAuthEmailContent = (input: {
   kind: AuthEmailKind;
   locale: "en" | "fr";
   appName: string;
+  code?: string | undefined;
   settings?: AuthEmailSettings | undefined;
 }) => {
   const defaults = defaultAuthEmailContent(input);
   const custom = input.settings?.templates?.[input.kind]?.[input.locale];
   const resolve = (key: keyof typeof defaults) =>
     (custom?.[key]?.trim() || defaults[key]).replaceAll(
-      "{appName}",
-      () => input.appName,
+      /\{appName\}|\{code\}/g,
+      (token) =>
+        token === "{appName}"
+          ? input.appName
+          : key === "preview" && input.kind !== "reset-password"
+            ? (input.code ?? token)
+            : token,
     );
   return {
     subject: resolve("subject").replace(/[\r\n]/g, " "),

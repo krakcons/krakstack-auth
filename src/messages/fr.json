@@ -1,4 +1,5 @@
 {
+  "auth_email_otp_preview": "Utilisez le code de vérification {code} ci-dessous pour continuer.",
   "project_email_formatting": "Mise en forme du texte",
   "project_email_bold": "Gras",
   "project_email_italic": "Italique",

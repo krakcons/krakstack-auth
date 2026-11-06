@@ -52,7 +52,7 @@ export const EmailSection = ({
         body: { font: typography?.body?.font, size: typography?.body?.size },
       },
       "body",
-      style,
+      { ...style, lineHeight: style?.lineHeight ?? 1 },
     );
   };
   return (
@@ -91,8 +91,10 @@ export const EmailSection = ({
                   }
                   style={{
                     fontSize: 16,
-                    lineHeight: "1.5",
+                    lineHeight: 1,
                     whiteSpace: "pre-line",
+                    marginTop: block.spacingTop ?? 16,
+                    marginBottom: block.spacingBottom ?? 16,
                     ...blockTextStyle(block.style),
                     textAlign: block.alignment ?? "left",
                   }}
@@ -107,10 +109,16 @@ export const EmailSection = ({
                   key={block.id}
                   style={{
                     fontSize: 16,
-                    lineHeight: "1.5",
+                    lineHeight: 1,
+                    marginTop: block.spacingTop ?? 16,
+                    marginBottom: block.spacingBottom ?? 16,
                     ...blockTextStyle(
                       block.style
-                        ? { font: block.style.font, size: block.style.size }
+                        ? {
+                            font: block.style.font,
+                            size: block.style.size,
+                            lineHeight: block.style.lineHeight,
+                          }
                         : undefined,
                     ),
                     textAlign: block.alignment ?? "left",

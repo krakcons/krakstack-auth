@@ -5,9 +5,14 @@ import {
   AuthEmailLinkDestination,
   AuthEmailSettings,
   AuthEmailTestPayload,
+  emailLineHeightOptions,
   emailSizeOptions,
 } from "./schema";
-import { resetEmailAppearance, resetEmailTypography } from "./layout";
+import {
+  resetEmailAppearance,
+  resetEmailLayout,
+  resetEmailTypography,
+} from "./layout";
 import {
   emailTextStyle,
   resolveEmailTextStyle,
@@ -63,6 +68,102 @@ const settings = {
 } satisfies AuthEmailSettings;
 
 describe("email layout boundaries", () => {
+  it("bounds block line height and applies it independently of font size", () => {
+    for (const block of [
+      settings.layout.header.blocks[0],
+      settings.layout.footer.blocks[0],
+    ]) {
+      for (const lineHeight of emailLineHeightOptions) {
+        const input = {
+          layout: { footer: { blocks: [{ ...block, style: { lineHeight } }] } },
+        };
+        const json = Schema.fromJsonString(AuthEmailSettings);
+        expect(Schema.decodeSync(json)(Schema.encodeSync(json)(input))).toEqual(
+          input,
+        );
+        expect(
+          resetEmailTypography(input).layout?.footer?.blocks[0],
+        ).not.toHaveProperty("style");
+      }
+      for (const lineHeight of [0, 0.5, 3, "1", "normal", null, Number.NaN])
+        expect(
+          Schema.is(AuthEmailSettings)({
+            layout: {
+              header: { blocks: [{ ...block, style: { lineHeight } }] },
+            },
+          }),
+        ).toBe(false);
+    }
+    expect(emailTextStyle(undefined, "body", { lineHeight: 1 })).toEqual({
+      lineHeight: 1,
+    });
+    expect(
+      emailTextStyle({ body: { size: 18 } }, "body", {
+        size: 12,
+        lineHeight: 1.25,
+      }),
+    ).toMatchObject({ fontSize: 12, lineHeight: 1.25 });
+  });
+  it("restores the default layout without changing saved text or translations", () => {
+    const input = {
+      ...settings,
+      templates: {
+        "sign-in": {
+          en: {
+            subject: "Subject",
+            preview: "Preview {code}",
+            title: "Hello",
+            body: "Message",
+          },
+          fr: { title: "Bonjour" },
+        },
+      },
+    };
+    const reset = resetEmailLayout(input);
+    expect(reset).toEqual({ templates: input.templates });
+    const json = Schema.fromJsonString(AuthEmailSettings);
+    expect(Schema.decodeSync(json)(Schema.encodeSync(json)(reset))).toEqual(
+      reset,
+    );
+    expect(resetEmailLayout({})).toEqual({});
+    expect(input.layout.header.blocks).toHaveLength(1);
+    expect(input.appearance.logoWidth).toBe(120);
+  });
+  it("bounds independent text/link spacing and preserves it through JSON and typography resets only", () => {
+    for (const block of [
+      settings.layout.header.blocks[0],
+      settings.layout.footer.blocks[0],
+    ]) {
+      for (const spacingTop of [0, 8, 96]) {
+        const input = {
+          layout: {
+            footer: { blocks: [{ ...block, spacingTop, spacingBottom: 0 }] },
+          },
+        };
+        const json = Schema.fromJsonString(AuthEmailSettings);
+        expect(Schema.decodeSync(json)(Schema.encodeSync(json)(input))).toEqual(
+          input,
+        );
+        expect(
+          resetEmailTypography(input).layout?.footer?.blocks[0],
+        ).toMatchObject({ spacingTop, spacingBottom: 0 });
+        expect(
+          resetEmailAppearance(input).layout?.footer?.blocks[0],
+        ).not.toHaveProperty("spacingTop");
+        expect(
+          resetEmailAppearance(input).layout?.footer?.blocks[0],
+        ).not.toHaveProperty("spacingBottom");
+      }
+      for (const key of ["spacingTop", "spacingBottom"]) {
+        for (const value of [-1, 97, 1.5, "16", null, Number.NaN])
+          expect(
+            Schema.is(AuthEmailSettings)({
+              layout: { header: { blocks: [{ ...block, [key]: value }] } },
+            }),
+          ).toBe(false);
+      }
+    }
+  });
   it("validates boolean formatting for every role and outer text/link, preserving false through JSON and resets", () => {
     const json = Schema.fromJsonString(AuthEmailSettings);
     for (const key of [
