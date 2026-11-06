@@ -412,7 +412,6 @@ export const EmailSectionEditor = ({
     { value: "divider", label: m.project_email_block_divider() },
     { value: "spacer", label: m.project_email_block_spacer() },
   ];
-  const otherLocale = locale === "en" ? "fr" : "en";
   const section = settings.layout?.[name];
   const blocks = section?.blocks ?? [];
   const other = name === "header" ? "footer" : "header";
@@ -516,11 +515,6 @@ export const EmailSectionEditor = ({
           </DropdownMenu>
         </div>
       </div>
-      <p className="text-muted-foreground text-xs">
-        {name === "header"
-          ? m.project_email_header_hint()
-          : m.project_email_footer_hint()}
-      </p>
       {hasLogo ? (
         <p className="text-muted-foreground flex items-center gap-2 text-xs">
           <ImageIcon className="size-3" aria-hidden="true" />
@@ -531,12 +525,6 @@ export const EmailSectionEditor = ({
         const selected = activeBlock === block.id;
         const label =
           types.find((type) => type.value === block.type)?.label ?? "";
-        const summary =
-          block.type === "text"
-            ? block.text[locale]
-            : block.type === "link"
-              ? block.translations[locale].label
-              : "";
         const colorKey =
           block.type === "link"
             ? "primary"
@@ -559,13 +547,7 @@ export const EmailSectionEditor = ({
               onClick={() => onSelectBlock(selected ? null : block.id)}
             >
               <span className="text-muted-foreground text-xs">{index + 1}</span>
-              <span className="shrink-0 font-medium">{label}</span>
-              <span className="text-muted-foreground min-w-0 flex-1 truncate text-xs">
-                {summary ||
-                  (block.type === "text" || block.type === "link"
-                    ? m.project_email_empty_block()
-                    : "")}
-              </span>
+              <span className="min-w-0 flex-1 font-medium">{label}</span>
               {!Schema.is(AuthEmailPublishedBlock)(block) ? (
                 <TriangleAlertIcon
                   className="text-destructive size-4 shrink-0"
@@ -699,62 +681,46 @@ export const EmailSectionEditor = ({
                         }
                       />
                     </div>
-                    <div className="flex flex-wrap items-center justify-between gap-2">
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="sm"
-                        onClick={() =>
-                          replace(
-                            block.type === "text"
-                              ? {
-                                  ...block,
-                                  text: {
-                                    ...block.text,
-                                    [locale]: block.text[otherLocale],
-                                  },
-                                }
-                              : {
-                                  ...block,
-                                  translations: {
-                                    ...block.translations,
-                                    [locale]: {
-                                      ...block.translations[otherLocale],
+                    <div className="grid min-w-0 grid-cols-2 gap-2">
+                      {(
+                        [
+                          {
+                            key: "spacingTop",
+                            label: m.project_email_block_spacing_top(),
+                          },
+                          {
+                            key: "spacingBottom",
+                            label: m.project_email_block_spacing_bottom(),
+                          },
+                        ] as const
+                      ).map(({ key, label }) => (
+                        <Field key={key}>
+                          <FieldLabel htmlFor={`${baseId}-${block.id}-${key}`}>
+                            {label}
+                          </FieldLabel>
+                          <Input
+                            id={`${baseId}-${block.id}-${key}`}
+                            type="number"
+                            min={0}
+                            max={96}
+                            step={1}
+                            value={block[key] ?? ""}
+                            placeholder="16"
+                            onChange={(event) =>
+                              replace(
+                                event.target.value === ""
+                                  ? block.type === "text"
+                                    ? Struct.omit(block, [key])
+                                    : Struct.omit(block, [key])
+                                  : {
+                                      ...block,
+                                      [key]: event.target.valueAsNumber,
                                     },
-                                  },
-                                },
-                          )
-                        }
-                      >
-                        {m.project_email_copy_translation()}
-                      </Button>
-                      {block.type === "text" ? (
-                        <details className="min-w-40">
-                          <summary className="text-muted-foreground cursor-pointer text-xs">
-                            {m.project_email_tone()}
-                          </summary>
-                          <div className="mt-2">
-                            <EmailChoice
-                              label={m.project_email_tone()}
-                              value={block.tone ?? "normal"}
-                              options={[
-                                {
-                                  value: "normal",
-                                  label: m.project_email_tone_normal(),
-                                },
-                                {
-                                  value: "muted",
-                                  label: m.project_email_tone_muted(),
-                                },
-                              ]}
-                              onChange={(tone) => {
-                                if (tone === "normal" || tone === "muted")
-                                  replace({ ...block, tone });
-                              }}
-                            />
-                          </div>
-                        </details>
-                      ) : null}
+                              )
+                            }
+                          />
+                        </Field>
+                      ))}
                     </div>
                   </>
                 ) : null}
@@ -857,27 +823,6 @@ export const EmailSectionEditor = ({
           </div>
         );
       })}
-      {blocks.length || hasLogo ? (
-        <details className="border-t pt-3">
-          <summary className="text-muted-foreground cursor-pointer text-xs">
-            {m.project_email_section_spacing()}
-          </summary>
-          <div className="mt-3">
-            <EmailChoice
-              label={m.project_email_gap()}
-              value={section?.gap ?? "medium"}
-              options={gaps()}
-              onChange={(gap) => {
-                if (Schema.is(AuthEmailGap)(gap))
-                  onChange({
-                    ...settings,
-                    layout: { ...settings.layout, [name]: { blocks, gap } },
-                  });
-              }}
-            />
-          </div>
-        </details>
-      ) : null}
     </section>
   );
 };

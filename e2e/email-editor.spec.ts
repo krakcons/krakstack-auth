@@ -108,23 +108,22 @@ test("the labeled brand switch hides the automatic name in preview and after rel
 }) => {
   const api = await installEmailApi(page);
   await page.goto("/e2e/fixtures/email-editor.html?locale=en&settings=full");
-  await expandSection(page, "Project name");
+  const brand = page.getByRole("group", { name: "Brand Name", exact: true });
+  await expect(brand).not.toHaveAttribute("open");
   const preview = page.frameLocator('iframe[title="Live preview"]');
   const control = page.getByRole("switch", {
-    name: "Brand name below message",
+    name: "Brand Name",
     exact: true,
   });
   await expect(control).toBeChecked();
-  await expect(
-    page.getByText(
-      "Adds “Regression project” beneath the authentication content.",
-      { exact: false },
-    ),
-  ).toBeVisible();
+  await expect(control).toHaveAccessibleDescription(
+    /Adds “Regression project” beneath the authentication content\./,
+  );
   await expect(
     preview.getByText("Regression project", { exact: true }),
   ).toBeVisible();
-  await page.getByText("Brand name below message", { exact: true }).click();
+  await control.click();
+  await expect(brand).not.toHaveAttribute("open");
   await expect(control).not.toBeChecked();
   await expect(
     preview.getByText("Regression project", { exact: true }),
@@ -132,13 +131,14 @@ test("the labeled brand switch hides the automatic name in preview and after rel
   await page.getByRole("button", { name: "Save changes", exact: true }).click();
   await expect.poll(() => api.stored?.appearance?.showProjectName).toBe(false);
   await page.reload();
-  await expandSection(page, "Project name");
+  await expect(brand).not.toHaveAttribute("open");
   await expect(control).not.toBeChecked();
   await expect(
     preview.getByText("Regression project", { exact: true }),
   ).toHaveCount(0);
   await control.focus();
   await control.press("Space");
+  await expect(brand).not.toHaveAttribute("open");
   await expect(control).toBeChecked();
   await expect(
     preview.getByText("Regression project", { exact: true }),
@@ -325,7 +325,7 @@ for (const locale of ["en", "fr"] as const) {
           header: "En-tête",
           body: "Corps",
           footer: "Pied de page",
-          appearance: "Apparence du courriel",
+          appearance: "Détails du courriel",
           logoStyle: "Taille et espacement du logo",
           actions: "Actions de la section",
           clear: "Vider les blocs de la section",
@@ -339,6 +339,7 @@ for (const locale of ["en", "fr"] as const) {
           heading: "Titre",
           action: "Libellé du bouton",
           save: "Enregistrer",
+          discard: "Abandonner les modifications",
           preview: "Aperçu en direct",
           saved: "Réglages des courriels enregistrés.",
           saveError: "Impossible d’enregistrer les réglages des courriels.",
@@ -346,10 +347,7 @@ for (const locale of ["en", "fr"] as const) {
           picker: "Choisir une couleur : Couleur de fond",
           slider: "Saturation et luminosité",
           width: "Largeur du logo (px)",
-          menu: "Actions des réglages des courriels",
-          restoreAppearance: "Rétablir l’apparence",
-          restoreContent: "Rétablir cette traduction",
-          restoreAll: "Rétablir tous les courriels par défaut",
+          restoreLayout: "Rétablir la mise en page par défaut",
           sample: "M’envoyer un test",
           sampleSent: "Courriel de test soumis pour envoi.",
           sampleError:
@@ -360,18 +358,17 @@ for (const locale of ["en", "fr"] as const) {
           frenchField: "Texte du bloc (FR)",
           move: "Déplacer vers le pied de page",
           up: "Monter",
-          copy: "Copier depuis l’autre langue",
           font: "Police",
           mono: "Chasse fixe",
           size: "Taille de police",
-          brand: "Nom de marque sous le message",
+          brand: "Nom de marque",
           placement: "Position du logo",
         }
       : {
           header: "Header",
           body: "Body",
           footer: "Footer",
-          appearance: "Email appearance",
+          appearance: "Email details",
           logoStyle: "Logo size and spacing",
           actions: "Section actions",
           clear: "Clear section blocks",
@@ -385,6 +382,7 @@ for (const locale of ["en", "fr"] as const) {
           heading: "Heading",
           action: "Button label",
           save: "Save changes",
+          discard: "Discard changes",
           preview: "Live preview",
           saved: "Email settings saved.",
           saveError: "Unable to save email settings.",
@@ -392,10 +390,7 @@ for (const locale of ["en", "fr"] as const) {
           picker: "Choose color: Background color",
           slider: "Saturation and brightness",
           width: "Logo width (px)",
-          menu: "Email settings actions",
-          restoreAppearance: "Restore appearance",
-          restoreContent: "Restore this translation",
-          restoreAll: "Restore all email defaults",
+          restoreLayout: "Restore to default layout",
           sample: "Send test to me",
           sampleSent: "Test email submitted for delivery.",
           sampleError:
@@ -406,15 +401,413 @@ for (const locale of ["en", "fr"] as const) {
           frenchField: "Block text (FR)",
           move: "Move to footer",
           up: "Move up",
-          copy: "Copy from other language",
           font: "Font",
           mono: "Monospace",
           size: "Font size",
-          brand: "Brand name below message",
+          brand: "Brand Name",
           placement: "Logo placement",
         };
 
   test.describe(`${locale} email editor`, () => {
+    test("keeps expanded Brand Name and Footing editors editable when their visibility is off", async ({
+      page,
+    }) => {
+      const api = await installEmailApi(page);
+      await page.goto(`/e2e/fixtures/email-editor.html?locale=${locale}`);
+      const footingLabel =
+        locale === "fr" ? "Note de bas de message" : "Footing";
+      const italicLabel = locale === "fr" ? "Italique" : "Italic";
+      for (const label of [labels.brand, footingLabel]) {
+        const section = await expandSection(page, label);
+        const toggle = page.getByRole("switch", { name: label, exact: true });
+        const italic = section.getByRole("button", {
+          name: italicLabel,
+          exact: true,
+        });
+        await expect(italic).toBeVisible();
+        await toggle.click();
+        await expect(toggle).not.toBeChecked();
+        await expect(section).toHaveAttribute("open", "");
+        await expect(italic).toBeVisible();
+        await italic.click();
+        await expect(italic).toHaveAttribute("aria-pressed", "true");
+        if (label === footingLabel) {
+          const textbox = section.getByRole("textbox", {
+            name: label,
+            exact: true,
+          });
+          await expect(textbox).toBeEditable();
+          await textbox.fill("Edited while hidden");
+        }
+        await toggle.focus();
+        await toggle.press("Space");
+        await expect(toggle).toBeChecked();
+        await expect(section).toHaveAttribute("open", "");
+        await expect(italic).toHaveAttribute("aria-pressed", "true");
+      }
+      const save = page.getByRole("button", { name: labels.save, exact: true });
+      await save.click();
+      await expect(save).toBeDisabled();
+      expect(api.stored?.typography?.projectName?.italic).toBe(true);
+      expect(api.stored?.typography?.help?.italic).toBe(true);
+      expect(api.stored?.templates?.["email-verification"]?.en?.footer).toBe(
+        "Edited while hidden",
+      );
+    });
+
+    test("toggles Footing from its collapsed header without hiding protected notices or the outer Footer", async ({
+      page,
+    }) => {
+      const api = await installEmailApi(page);
+      api.stored = {
+        templates: {
+          "email-verification": {
+            en: { footer: "Custom footing marker" },
+            fr: { footer: "Note personnalisée" },
+          },
+        },
+        layout: {
+          footer: {
+            blocks: [
+              {
+                id: "outer",
+                type: "text",
+                text: { en: "Outer footer marker", fr: "Pied de page externe" },
+              },
+            ],
+          },
+        },
+      };
+      await page.goto(`/e2e/fixtures/email-editor.html?locale=${locale}`);
+      const label = locale === "fr" ? "Note de bas de message" : "Footing";
+      const section = page.getByRole("group", { name: label, exact: true });
+      const toggle = page.getByRole("switch", { name: label, exact: true });
+      const preview = page.frameLocator(`iframe[title="${labels.preview}"]`);
+      await expect(section).not.toHaveAttribute("open");
+      await expect(toggle).toBeChecked();
+      await expect(
+        preview.getByText("Custom footing marker", { exact: true }),
+      ).toBeVisible();
+      await toggle.click();
+      await expect(section).not.toHaveAttribute("open");
+      await expect(toggle).not.toBeChecked();
+      await expect(
+        preview.getByText("Custom footing marker", { exact: true }),
+      ).toHaveCount(0);
+      await expect(preview.getByText("000000", { exact: true })).toBeVisible();
+      await expect(preview.getByText(/expires in 5 minutes/i)).toBeVisible();
+      await expect(
+        preview.getByText("Outer footer marker", { exact: true }),
+      ).toBeVisible();
+      const save = page.getByRole("button", { name: labels.save, exact: true });
+      await save.click();
+      await expect(save).toBeDisabled();
+      expect(api.stored?.appearance?.showFooting).toBe(false);
+      expect(api.stored?.templates?.["email-verification"]?.en?.footer).toBe(
+        "Custom footing marker",
+      );
+      await page.reload();
+      await expect(section).not.toHaveAttribute("open");
+      await expect(toggle).not.toBeChecked();
+      await toggle.focus();
+      await toggle.press("Space");
+      await expect(section).not.toHaveAttribute("open");
+      await expect(toggle).toBeChecked();
+      await expect(
+        preview.getByText("Custom footing marker", { exact: true }),
+      ).toBeVisible();
+    });
+
+    test("keeps Subject and Preview text scoped by email type and language in shared Email details", async ({
+      page,
+    }) => {
+      const api = await installEmailApi(page);
+      await page.goto(`/e2e/fixtures/email-editor.html?locale=${locale}`);
+      const details = await expandSection(page, labels.appearance);
+      const subject = details.getByRole("textbox", {
+        name: locale === "fr" ? "Objet" : "Subject",
+        exact: true,
+      });
+      const preheader = details.getByRole("textbox", {
+        name: locale === "fr" ? "Texte d’aperçu" : "Preview text",
+        exact: true,
+      });
+      await expect(preheader).toHaveAttribute("placeholder", /\{code\}/);
+      const language = page.getByRole("combobox", {
+        name: labels.language,
+        exact: true,
+      });
+      const kind = page.getByRole("combobox", {
+        name: labels.kind,
+        exact: true,
+      });
+      await subject.fill("Verification subject EN");
+      await preheader.fill("Verification preview EN");
+      await details
+        .getByRole("textbox", { name: labels.background, exact: true })
+        .fill("#F6F6F6");
+      await page.getByRole("tab", { name: labels.footer, exact: true }).click();
+      await expect(subject).toHaveValue("Verification subject EN");
+      await language.click();
+      await page
+        .getByRole("option", { name: labels.french, exact: true })
+        .click();
+      await expect(subject).toHaveValue("");
+      await expect(preheader).toHaveValue("");
+      await subject.fill("Objet de vérification FR");
+      await preheader.fill("Aperçu de vérification FR");
+      await kind.click();
+      await page
+        .getByRole("option", { name: labels.reset, exact: true })
+        .click();
+      await expect(preheader).not.toHaveAttribute("placeholder", /\{code\}/);
+      await expect(subject).toHaveValue("");
+      await subject.fill("Objet de réinitialisation FR");
+      await kind.click();
+      await page
+        .getByRole("option", { name: labels.verification, exact: true })
+        .click();
+      await expect(subject).toHaveValue("Objet de vérification FR");
+      await language.click();
+      await page
+        .getByRole("option", { name: labels.english, exact: true })
+        .click();
+      await expect(preheader).toHaveValue("Verification preview EN");
+      await page.getByRole("tab", { name: labels.body, exact: true }).click();
+      const card = await expandSection(
+        page,
+        locale === "fr" ? "Apparence de la carte" : "Card appearance",
+      );
+      await card
+        .getByRole("textbox", {
+          name: locale === "fr" ? "Couleur de la carte" : "Card color",
+          exact: true,
+        })
+        .fill("#FEFEFE");
+      const save = page.getByRole("button", { name: labels.save, exact: true });
+      await save.click();
+      await expect(save).toBeDisabled();
+      expect(api.stored).toMatchObject({
+        appearance: { background: "#F6F6F6", card: "#FEFEFE" },
+        templates: {
+          "email-verification": {
+            en: {
+              subject: "Verification subject EN",
+              preview: "Verification preview EN",
+            },
+            fr: {
+              subject: "Objet de vérification FR",
+              preview: "Aperçu de vérification FR",
+            },
+          },
+          "reset-password": { fr: { subject: "Objet de réinitialisation FR" } },
+        },
+      });
+      await page.reload();
+      await expandSection(page, labels.appearance);
+      await expect(subject).toHaveValue("Verification subject EN");
+      await expect(preheader).toHaveValue("Verification preview EN");
+      await subject.fill("");
+      await preheader.fill("");
+      await save.click();
+      await expect(save).toBeDisabled();
+      expect(api.stored?.templates?.["email-verification"]?.en).toEqual({});
+      expect(api.stored?.templates?.["email-verification"]?.fr?.subject).toBe(
+        "Objet de vérification FR",
+      );
+    });
+
+    test("edits text colors and individual block spacing without translation copying", async ({
+      page,
+    }) => {
+      const api = await installEmailApi(page);
+      api.stored = {
+        layout: {
+          footer: {
+            blocks: [
+              {
+                id: "sender",
+                type: "text",
+                text: { en: "Sender marker", fr: "Expéditeur" },
+                tone: "muted",
+                style: { bold: true, color: "#123456" },
+                spacingTop: 16,
+                spacingBottom: 16,
+              },
+              {
+                id: "address",
+                type: "text",
+                text: { en: "Address marker", fr: "Adresse" },
+                spacingTop: 16,
+                spacingBottom: 16,
+              },
+              {
+                id: "support",
+                type: "link",
+                translations: {
+                  en: { label: "Support marker", url: "https://example.com" },
+                  fr: { label: "Aide", url: "mailto:aide@example.com" },
+                },
+              },
+            ],
+          },
+        },
+      };
+      await page.goto(`/e2e/fixtures/email-editor.html?locale=${locale}`);
+      await page.getByRole("tab", { name: labels.footer, exact: true }).click();
+      const names =
+        locale === "fr"
+          ? {
+              above: "Espace au-dessus du texte (px)",
+              below: "Espace sous le texte (px)",
+              textColor: "Couleur du texte",
+              address: "Modifier le bloc Texte 2",
+              link: "Modifier le bloc Lien 3",
+              copy: "Copier depuis l’autre langue",
+              lineHeight: "Interligne",
+            }
+          : {
+              above: "Space above text (px)",
+              below: "Space below text (px)",
+              textColor: "Text color",
+              address: "Edit Text block 2",
+              link: "Edit Link block 3",
+              copy: "Copy from other language",
+              lineHeight: "Line height",
+            };
+      const footer = page.getByRole("region", {
+        name: labels.footer,
+        exact: true,
+      });
+      await expect(
+        footer.getByRole("spinbutton", {
+          name:
+            locale === "fr"
+              ? "Espace entre les blocs (px)"
+              : "Space between blocks (px)",
+          exact: true,
+        }),
+      ).toHaveCount(0);
+      await footer
+        .getByRole("button", { name: labels.editText, exact: true })
+        .click();
+      await expect(
+        footer.getByRole("button", { name: names.copy, exact: true }),
+      ).toHaveCount(0);
+      const textColor = footer.getByRole("textbox", {
+        name: names.textColor,
+        exact: true,
+      });
+      await textColor.fill("");
+      const preview = page.frameLocator(`iframe[title="${labels.preview}"]`);
+      const sender = preview.getByText("Sender marker", { exact: true });
+      await expect(sender).toHaveCSS("color", "rgb(118, 125, 146)");
+      await expect(sender).toHaveCSS("font-weight", "700");
+      await expect(
+        footer.getByRole("combobox", { name: names.lineHeight, exact: true }),
+      ).toHaveCount(0);
+      await expect(sender).toHaveCSS("line-height", "16px");
+      await textColor.fill("#0A1F44");
+      await expect(sender).toHaveCSS("color", "rgb(10, 31, 68)");
+      await textColor.fill("");
+      const above = footer.getByRole("spinbutton", {
+        name: names.above,
+        exact: true,
+      });
+      const below = footer.getByRole("spinbutton", {
+        name: names.below,
+        exact: true,
+      });
+      await expect(above).toHaveAttribute("placeholder", "16");
+      await above.fill("0");
+      await below.fill("0");
+      await expect(sender).toHaveCSS("margin-top", "0px");
+      await expect(sender).toHaveCSS("margin-bottom", "0px");
+      await footer
+        .getByRole("button", { name: names.address, exact: true })
+        .click();
+      const address = preview.getByText("Address marker", { exact: true });
+      await expect(address).toHaveCSS("line-height", "16px");
+      await expect(address).toHaveCSS("margin-top", "16px");
+      await above.fill("0");
+      await below.fill("0");
+      await expect(address).toHaveCSS("margin-top", "0px");
+      await expect(address).toHaveCSS("margin-bottom", "0px");
+      const measuredGap = async () => {
+        const first = await sender.boundingBox();
+        const second = await address.boundingBox();
+        return first && second
+          ? Math.round(second.y - first.y - first.height)
+          : -1;
+      };
+      await expect.poll(measuredGap).toBe(0);
+      await above.fill("12");
+      await expect.poll(measuredGap).toBe(12);
+      await above.fill("0");
+      await expect.poll(measuredGap).toBe(0);
+      const save = page.getByRole("button", { name: labels.save, exact: true });
+      await below.fill("97");
+      await expect(save).toBeDisabled();
+      await expect(address).toHaveCSS("margin-bottom", "0px");
+      await below.fill("0");
+      await footer
+        .getByRole("button", { name: names.link, exact: true })
+        .click();
+      await expect(
+        preview.getByText("Support marker", { exact: true }),
+      ).toHaveCSS("line-height", "16px");
+      await expect(
+        footer.getByRole("button", { name: names.copy, exact: true }),
+      ).toHaveCount(0);
+      await above.fill("4");
+      await below.fill("0");
+      await save.click();
+      await expect(save).toBeDisabled();
+      expect(api.stored.layout?.footer).toMatchObject({
+        blocks: [
+          {
+            id: "sender",
+            spacingTop: 0,
+            spacingBottom: 0,
+            tone: "muted",
+            style: { bold: true },
+          },
+          {
+            id: "address",
+            spacingTop: 0,
+            spacingBottom: 0,
+          },
+          { id: "support", spacingTop: 4, spacingBottom: 0 },
+        ],
+      });
+      expect(api.stored.layout?.footer?.blocks[0]).toMatchObject({
+        text: { en: "Sender marker", fr: "Expéditeur" },
+      });
+      await page.reload();
+      await page.getByRole("tab", { name: labels.footer, exact: true }).click();
+      await footer
+        .getByRole("button", { name: labels.editText, exact: true })
+        .click();
+      await expect(
+        footer.getByRole("combobox", { name: names.lineHeight, exact: true }),
+      ).toHaveCount(0);
+      await expect(sender).toHaveCSS("line-height", "16px");
+      await footer
+        .getByRole("button", { name: names.link, exact: true })
+        .click();
+      await expect(above).toHaveValue("4");
+      await expect(below).toHaveValue("0");
+      await above.fill("");
+      await save.click();
+      await expect(save).toBeDisabled();
+      expect(api.stored.layout?.footer?.blocks[2]).not.toHaveProperty(
+        "spacingTop",
+      );
+      expect(api.stored.layout?.footer?.blocks[2]).toMatchObject({
+        spacingBottom: 0,
+      });
+    });
+
     test("starts Body sections collapsed and preserves whole-element formatting through collapse, save, reload, and reset", async ({
       page,
     }) => {
@@ -445,10 +838,10 @@ for (const locale of ["en", "fr"] as const) {
       const names =
         locale === "fr"
           ? {
-              details: "Détails du courriel",
+              details: "Apparence de la carte",
               code: "Code d’authentification",
               footing: "Note de bas de message",
-              brand: "Nom du projet",
+              brand: "Nom de marque",
               bold: "Gras",
               italic: "Italique",
               underline: "Souligné",
@@ -456,10 +849,10 @@ for (const locale of ["en", "fr"] as const) {
               reset: "Rétablir le style du texte",
             }
           : {
-              details: "Email details",
+              details: "Card appearance",
               code: "Authentication code",
               footing: "Footing",
-              brand: "Project name",
+              brand: "Brand Name",
               bold: "Bold",
               italic: "Italic",
               underline: "Underline",
@@ -644,7 +1037,7 @@ for (const locale of ["en", "fr"] as const) {
         name: labels.appearance,
         exact: true,
       });
-      await expect(appearance.getByRole("textbox")).toHaveCount(1);
+      await expect(appearance.getByRole("textbox")).toHaveCount(3);
       await expect(
         appearance.getByRole("textbox", {
           name: labels.background,
@@ -696,7 +1089,7 @@ for (const locale of ["en", "fr"] as const) {
           "#CC3300",
         ],
         [locale === "fr" ? "Note de bas de message" : "Footing", "#DD4400"],
-        [locale === "fr" ? "Nom du projet" : "Project name", "#EE5500"],
+        [locale === "fr" ? "Nom de marque" : "Brand Name", "#EE5500"],
       ]) {
         await expandSection(page, name);
         await page
@@ -831,10 +1224,6 @@ for (const locale of ["en", "fr"] as const) {
         name: labels.language,
         exact: true,
       });
-      await expandSection(
-        page,
-        locale === "fr" ? "Nom du projet" : "Project name",
-      );
       await page
         .getByRole("switch", { name: labels.brand, exact: true })
         .click();
@@ -909,8 +1298,8 @@ for (const locale of ["en", "fr"] as const) {
         .getByRole("option", { name: labels.english, exact: true })
         .click();
       await header
-        .getByRole("button", { name: labels.copy, exact: true })
-        .click();
+        .getByRole("textbox", { name: labels.textField, exact: true })
+        .fill("Sender address");
       await expect(
         header.getByRole("textbox", { name: labels.textField, exact: true }),
       ).toHaveValue("Sender address");
@@ -1117,12 +1506,24 @@ for (const locale of ["en", "fr"] as const) {
       await expect(save).toBeDisabled();
     });
 
-    test("retains failed saves and restores only the requested scope until saved", async ({
+    test("retains failed saves, confirms discard, and restores layout without replacing email text", async ({
       page,
     }) => {
       const api = await installEmailApi(page);
       api.stored = {
         appearance: { logoWidth: 200 },
+        typography: { body: { bold: true } },
+        layout: {
+          footer: {
+            blocks: [
+              {
+                id: "sender",
+                type: "text",
+                text: { en: "Sender marker", fr: "Expéditeur" },
+              },
+            ],
+          },
+        },
         templates: {
           "email-verification": {
             en: { title: "Saved English" },
@@ -1137,6 +1538,17 @@ for (const locale of ["en", "fr"] as const) {
       });
       const save = page.getByRole("button", { name: labels.save, exact: true });
       await expandSection(page, labels.heading);
+      const discard = page.getByRole("button", {
+        name: labels.discard,
+        exact: true,
+      });
+      await expect(discard).toBeDisabled();
+      await expandSection(page, labels.appearance);
+      const background = page.getByRole("textbox", {
+        name: labels.background,
+        exact: true,
+      });
+      await background.fill("#123456");
       await heading.fill("Retain this draft");
       api.failNextSave = true;
       await save.click();
@@ -1146,53 +1558,47 @@ for (const locale of ["en", "fr"] as const) {
       expect(api.stored.templates?.["email-verification"]?.en?.title).toBe(
         "Saved English",
       );
+      page.once("dialog", (dialog) => dialog.dismiss());
+      await discard.click();
+      await expect(heading).toHaveValue("Retain this draft");
+      page.once("dialog", (dialog) => dialog.accept());
+      await discard.click();
+      await expect(heading).toHaveValue("Saved English");
+      await expect(background).toHaveValue("");
+      await expect(save).toBeDisabled();
+      await expect(discard).toBeDisabled();
+      await expect(page.getByRole("alert")).toHaveCount(0);
+      expect(api.saves).toHaveLength(1);
+      await heading.fill("Retain this draft");
       await save.click();
       await expect(
         page.getByRole("status").filter({ hasText: labels.saved }),
       ).toBeVisible();
       await expect(save).toBeDisabled();
-      await page
-        .getByRole("button", { name: labels.menu, exact: true })
-        .click();
-      await page
-        .getByRole("menuitem", { name: labels.restoreAppearance, exact: true })
-        .click();
+      const restore = page.getByRole("button", {
+        name: labels.restoreLayout,
+        exact: true,
+      });
+      page.once("dialog", (dialog) => dialog.dismiss());
+      await restore.click();
+      await expect(save).toBeDisabled();
+      page.once("dialog", (dialog) => dialog.accept());
+      await restore.click();
       await expect(heading).toHaveValue("Retain this draft");
       expect(api.stored.appearance?.logoWidth).toBe(200);
+      expect(api.stored.layout?.footer?.blocks).toHaveLength(1);
+      await expect(save).toBeEnabled();
       await save.click();
       await expect(save).toBeDisabled();
-      expect(api.stored.appearance).toBeUndefined();
-      expect(api.stored.templates?.["email-verification"]?.fr?.title).toBe(
-        "Français conservé",
-      );
-      await page
-        .getByRole("button", { name: labels.menu, exact: true })
-        .click();
-      await page
-        .getByRole("menuitem", { name: labels.restoreContent, exact: true })
-        .click();
-      await expect(heading).toHaveValue("");
-      await save.click();
-      await expect
-        .poll(() => api.stored?.templates?.["email-verification"]?.en)
-        .toEqual({});
-      await expect(save).toBeDisabled();
-      expect(api.stored.templates?.["email-verification"]?.fr?.title).toBe(
-        "Français conservé",
-      );
-      await page
-        .getByRole("button", { name: labels.menu, exact: true })
-        .click();
-      page.once("dialog", (dialog) => dialog.accept());
-      await page
-        .getByRole("menuitem", { name: labels.restoreAll, exact: true })
-        .click();
-      expect(api.stored.templates?.["email-verification"]?.fr?.title).toBe(
-        "Français conservé",
-      );
-      await save.click();
-      await expect.poll(() => api.stored).toEqual({});
-      await expect(save).toBeDisabled();
+      expect(api.stored).toEqual({
+        templates: {
+          "email-verification": {
+            en: { title: "Retain this draft" },
+            fr: { title: "Français conservé" },
+          },
+        },
+      });
+      await expect(restore).toBeDisabled();
     });
 
     test("keeps the last valid preview for invalid colors and sends unsaved samples without persisting", async ({

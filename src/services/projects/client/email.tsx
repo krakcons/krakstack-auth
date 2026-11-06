@@ -3,17 +3,10 @@ import { AsyncResult } from "effect/reactivity";
 import { Schema, Struct } from "effect";
 import { useEffect, useMemo, useState } from "react";
 import { useBlocker } from "@tanstack/react-router";
-import { MoreHorizontalIcon, SendIcon } from "lucide-react";
+import { ChevronDownIcon, SendIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Field, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { m } from "@/paraglide/messages";
 import { assetUrl } from "@/lib/assets";
@@ -27,10 +20,7 @@ import {
   type AuthEmailPreviewPayload,
   type AuthEmailPreview,
 } from "@/services/auth-emails/schema";
-import {
-  resetEmailAppearance,
-  resetEmailTypography,
-} from "@/services/auth-emails/layout";
+import { resetEmailLayout } from "@/services/auth-emails/layout";
 import { emailDefaultColors } from "@/services/auth-emails/typography";
 import {
   EmailChoice,
@@ -177,9 +167,13 @@ const EmailPreview = ({
             srcDoc={preview.html}
             className="h-[480px] w-full rounded-lg border bg-white sm:h-[540px]"
           />
-          <details>
-            <summary className="text-muted-foreground cursor-pointer text-xs">
+          <details className="[&[open]>summary>svg]:rotate-180">
+            <summary className="text-muted-foreground flex cursor-pointer list-none items-center justify-between gap-3 text-xs [&::-webkit-details-marker]:hidden">
               {m.project_email_plain_text()}
+              <ChevronDownIcon
+                className="size-4 shrink-0 transition-transform"
+                aria-hidden="true"
+              />
             </summary>
             <pre className="mt-3 rounded-md border p-4 text-sm whitespace-pre-wrap">
               {preview.text}
@@ -271,6 +265,24 @@ export const ProjectEmailEditor = ({ project }: { project: Project }) => {
     });
   const id = (field: string) => `email-${project.id}-${field}`;
   const logo = assetUrl(project.logo, authBaseUrl);
+  const contentInput = (key: "subject" | "preview", label: string) => (
+    <Field>
+      <FieldLabel htmlFor={id(key)}>{label}</FieldLabel>
+      <Input
+        id={id(key)}
+        maxLength={200}
+        value={content[key] ?? ""}
+        placeholder={defaults[key]}
+        onChange={(event) =>
+          updateContent(
+            event.target.value
+              ? { ...content, [key]: event.target.value }
+              : Struct.omit(content, [key]),
+          )
+        }
+      />
+    </Field>
+  );
   const numberInput = ({
     key,
     label,
@@ -420,42 +432,51 @@ export const ProjectEmailEditor = ({ project }: { project: Project }) => {
           <div className="grid min-w-0 items-start gap-5 xl:grid-cols-[minmax(0,1fr)_minmax(0,1.2fr)]">
             <div className="min-w-0 space-y-4">
               <details
-                className="rounded-xl border p-4"
-                aria-label={m.project_email_email_appearance()}
+                className="rounded-xl border p-4 [&[open]>summary>svg]:rotate-180"
+                aria-label={m.project_email_email_details()}
               >
-                <summary className="cursor-pointer text-sm font-medium">
-                  {m.project_email_email_appearance()}
+                <summary className="flex cursor-pointer list-none items-center justify-between gap-3 text-sm font-medium [&::-webkit-details-marker]:hidden">
+                  {m.project_email_email_details()}
+                  <ChevronDownIcon
+                    className="size-4 shrink-0 transition-transform"
+                    aria-hidden="true"
+                  />
                 </summary>
                 <div className="space-y-4 pt-4">
-                  <p className="text-muted-foreground text-xs">
-                    {m.project_email_shared_help()}
-                  </p>
-                  <div className="grid gap-3 sm:grid-cols-2">
-                    {colorFields()
-                      .filter(({ key }) => key === "background")
-                      .map(colorInput)}
-                  </div>
-                  <details className="border-t pt-3">
-                    <summary className="cursor-pointer text-sm">
-                      {m.project_email_logo_style()}
-                    </summary>
-                    <div className="space-y-3 pt-3">
-                      <EmailLogoPlacement
-                        settings={settings}
-                        logo={logo ?? undefined}
-                        onChange={change}
-                      />
-                      <div className="grid gap-3 sm:grid-cols-2">
-                        {numberFields()
-                          .filter(({ key }) => key.startsWith("logo"))
-                          .map(numberInput)}
-                        {alignmentInput(
-                          "logoAlignment",
-                          m.project_email_logo_alignment(),
-                        )}
-                      </div>
+                  {contentInput("subject", m.project_email_subject())}
+                  {contentInput("preview", m.project_email_preheader())}
+                  <div className="space-y-4 border-t pt-4">
+                    <div className="grid gap-3 sm:grid-cols-2">
+                      {colorFields()
+                        .filter(({ key }) => key === "background")
+                        .map(colorInput)}
                     </div>
-                  </details>
+                    <details className="border-t pt-3 [&[open]>summary>svg]:rotate-180">
+                      <summary className="flex cursor-pointer list-none items-center justify-between gap-3 text-sm [&::-webkit-details-marker]:hidden">
+                        {m.project_email_logo_style()}
+                        <ChevronDownIcon
+                          className="size-4 shrink-0 transition-transform"
+                          aria-hidden="true"
+                        />
+                      </summary>
+                      <div className="space-y-3 pt-3">
+                        <EmailLogoPlacement
+                          settings={settings}
+                          logo={logo ?? undefined}
+                          onChange={change}
+                        />
+                        <div className="grid gap-3 sm:grid-cols-2">
+                          {numberFields()
+                            .filter(({ key }) => key.startsWith("logo"))
+                            .map(numberInput)}
+                          {alignmentInput(
+                            "logoAlignment",
+                            m.project_email_logo_alignment(),
+                          )}
+                        </div>
+                      </div>
+                    </details>
+                  </div>
                 </div>
               </details>
               <Tabs
@@ -522,10 +543,7 @@ export const ProjectEmailEditor = ({ project }: { project: Project }) => {
                   />
                 </TabsContent>
                 {(["header", "footer"] as const).map((name) => (
-                  <TabsContent key={name} value={name} className="space-y-3">
-                    <p className="text-muted-foreground text-xs">
-                      {m.project_email_section_scope()}
-                    </p>
+                  <TabsContent key={name} value={name}>
                     <EmailSectionEditor
                       name={name}
                       settings={settings}
@@ -560,7 +578,7 @@ export const ProjectEmailEditor = ({ project }: { project: Project }) => {
                 : m.project_email_invalid()}
             </p>
           ) : null}
-          {AsyncResult.isFailure(saveResult) ? (
+          {AsyncResult.isFailure(saveResult) && dirty ? (
             <p role="alert" className="text-destructive text-sm">
               {m.project_email_error()}
             </p>
@@ -573,52 +591,39 @@ export const ProjectEmailEditor = ({ project }: { project: Project }) => {
                   ? m.project_email_saved()
                   : m.project_email_up_to_date()}
             </p>
-            <div className="flex items-center gap-2">
-              <DropdownMenu>
-                <DropdownMenuTrigger
-                  render={
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="icon"
-                      disabled={saveResult.waiting}
-                      aria-label={m.project_email_more_actions()}
-                    />
+            <div className="flex flex-wrap items-center gap-2">
+              <Button
+                type="button"
+                variant="destructive"
+                className="h-auto min-h-9 whitespace-normal"
+                disabled={
+                  saveResult.waiting ||
+                  (!settings.appearance &&
+                    !settings.typography &&
+                    !settings.layout)
+                }
+                onClick={() => {
+                  if (window.confirm(m.project_email_confirm_layout_reset())) {
+                    change(resetEmailLayout(settings));
+                    setActiveBlock(null);
                   }
-                >
-                  <MoreHorizontalIcon aria-hidden="true" />
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="end" className="w-auto min-w-56">
-                  <DropdownMenuItem
-                    disabled={saveResult.waiting}
-                    onClick={() => updateContent({})}
-                  >
-                    {m.project_email_restore_content()}
-                  </DropdownMenuItem>
-                  <DropdownMenuItem
-                    disabled={saveResult.waiting}
-                    onClick={() => change(resetEmailAppearance(settings))}
-                  >
-                    {m.project_email_restore_appearance()}
-                  </DropdownMenuItem>
-                  <DropdownMenuItem
-                    disabled={saveResult.waiting}
-                    onClick={() => change(resetEmailTypography(settings))}
-                  >
-                    {m.project_email_restore_typography()}
-                  </DropdownMenuItem>
-                  <DropdownMenuSeparator />
-                  <DropdownMenuItem
-                    disabled={saveResult.waiting}
-                    onClick={() => {
-                      if (window.confirm(m.project_email_confirm_reset()))
-                        change({});
-                    }}
-                  >
-                    {m.project_email_restore_all()}
-                  </DropdownMenuItem>
-                </DropdownMenuContent>
-              </DropdownMenu>
+                }}
+              >
+                {m.project_email_restore_layout()}
+              </Button>
+              <Button
+                type="button"
+                variant="destructive"
+                disabled={!dirty || saveResult.waiting}
+                onClick={() => {
+                  if (window.confirm(m.project_email_confirm_discard())) {
+                    change(savedSettings);
+                    setActiveBlock(null);
+                  }
+                }}
+              >
+                {m.project_email_discard()}
+              </Button>
               <Button
                 type="submit"
                 disabled={!valid || !dirty || saveResult.waiting}
