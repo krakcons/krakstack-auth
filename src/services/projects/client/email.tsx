@@ -2,17 +2,11 @@ import { useAtomSet, useAtomSubscribe, useAtomValue } from "@effect/atom-react";
 import { AsyncResult } from "effect/reactivity";
 import { Schema, Struct } from "effect";
 import { useEffect, useMemo, useState } from "react";
-import {
-  ChevronDownIcon,
-  ImageIcon,
-  MoreHorizontalIcon,
-  SendIcon,
-} from "lucide-react";
+import { useBlocker } from "@tanstack/react-router";
+import { MoreHorizontalIcon, SendIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { ColorPicker } from "@/components/ui/color-picker";
 import { Field, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
-import { Textarea } from "@/components/ui/textarea";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -21,24 +15,30 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import { m } from "@/paraglide/messages";
-import { getLocale } from "@/paraglide/runtime";
 import { assetUrl } from "@/lib/assets";
 import { authBaseUrl } from "@/services/auth/client";
 import { defaultAuthEmailContent } from "@/services/auth-emails/content";
 import {
   AuthEmailKind,
   AuthEmailSettings,
+  AuthEmailDraftSettings,
   type AuthEmailContent,
   type AuthEmailPreviewPayload,
+  type AuthEmailPreview,
 } from "@/services/auth-emails/schema";
+import {
+  resetEmailAppearance,
+  resetEmailTypography,
+} from "@/services/auth-emails/layout";
+import { emailDefaultColors } from "@/services/auth-emails/typography";
+import {
+  EmailChoice,
+  EmailColorField,
+  EmailLogoPlacement,
+  EmailSectionEditor,
+} from "./email-layout";
+import { EmailBodyEditor } from "./email-body";
 import type { Project } from "../schema";
 import {
   projectEmailPreviewAtom,
@@ -56,29 +56,10 @@ const emailKinds = () =>
     { value: "reset-password", label: m.project_email_password_link() },
   ] satisfies Array<{ value: AuthEmailKind; label: string }>;
 
-const contentFields = () =>
-  [
-    { key: "subject", label: m.project_email_subject(), multiline: false },
-    { key: "preview", label: m.project_email_preheader(), multiline: false },
-    { key: "title", label: m.project_email_heading(), multiline: false },
-    { key: "body", label: m.project_email_body(), multiline: true },
-    { key: "footer", label: m.project_email_footer(), multiline: true },
-    { key: "action", label: m.project_email_action(), multiline: false },
-  ] satisfies Array<{
-    key: keyof AuthEmailContent;
-    label: string;
-    multiline: boolean;
-  }>;
-
 const colorFields = () =>
   [
     { key: "background", label: m.project_email_background() },
-    { key: "foreground", label: m.project_email_foreground() },
     { key: "card", label: m.project_email_card() },
-    { key: "primary", label: m.project_email_primary() },
-    { key: "primaryForeground", label: m.project_email_primary_foreground() },
-    { key: "muted", label: m.project_email_muted() },
-    { key: "mutedForeground", label: m.project_email_muted_foreground() },
     { key: "border", label: m.project_email_border() },
   ] satisfies Array<{
     key: keyof NonNullable<AuthEmailSettings["appearance"]>;
@@ -144,7 +125,9 @@ const EmailPreview = ({
   payload: AuthEmailPreviewPayload;
   valid: boolean;
 }) => {
-  const [draft, setDraft] = useState(payload);
+  const [draft, setDraft] = useState(
+    valid ? payload : { ...payload, settings: {} },
+  );
   useEffect(() => {
     if (!valid) return;
     const timer = setTimeout(() => setDraft(payload), 400);
@@ -155,7 +138,11 @@ const EmailPreview = ({
     [projectId, draft],
   );
   const result = useAtomValue(projectEmailPreviewAtom(input));
-  const preview = AsyncResult.getOrElse(result, () => null);
+  const [lastPreview, setLastPreview] = useState<AuthEmailPreview | null>(null);
+  const currentPreview = AsyncResult.getOrElse(result, () => null);
+  if (currentPreview && currentPreview !== lastPreview)
+    setLastPreview(currentPreview);
+  const preview = currentPreview ?? lastPreview;
   return (
     <section
       className="bg-muted/25 flex flex-col gap-3 rounded-xl border p-4"
@@ -204,7 +191,7 @@ const EmailPreview = ({
   );
 };
 
-const sameEmailSettings = Schema.toEquivalence(AuthEmailSettings);
+const sameEmailSettings = Schema.toEquivalence(AuthEmailDraftSettings);
 
 export const ProjectEmailEditor = ({ project }: { project: Project }) => {
   const [settings, setSettings] = useState<AuthEmailSettings>(
@@ -212,11 +199,13 @@ export const ProjectEmailEditor = ({ project }: { project: Project }) => {
   );
   const [kind, setKind] = useState<AuthEmailKind>("email-verification");
   const [locale, setLocale] = useState<"en" | "fr">("en");
+  const [section, setSection] = useState<"header" | "body" | "footer">("body");
   const [saved, setSaved] = useState(false);
   const [savedSettings, setSavedSettings] = useState<AuthEmailSettings>(
     () => project.data.email ?? {},
   );
   const [tested, setTested] = useState(false);
+  const [activeBlock, setActiveBlock] = useState<string | null>(null);
   const save = useAtomSet(updateProjectEmailAtom);
   const saveResult = useAtomValue(updateProjectEmailAtom);
   const test = useAtomSet(testProjectEmailAtom);
@@ -240,7 +229,28 @@ export const ProjectEmailEditor = ({ project }: { project: Project }) => {
     setTested(false);
   };
   const valid = Schema.is(AuthEmailSettings)(settings);
+  const previewValid = Schema.is(AuthEmailDraftSettings)(settings);
+  const selectedMissing = [
+    settings.layout?.header,
+    settings.layout?.footer,
+  ].some((section) =>
+    section?.blocks.some((block) =>
+      block.type === "text"
+        ? !block.text[locale].trim()
+        : block.type === "link"
+          ? !block.translations[locale].label.trim() ||
+            !block.translations[locale].url
+          : false,
+    ),
+  );
   const dirty = !sameEmailSettings(settings, savedSettings);
+  useBlocker({
+    shouldBlockFn: ({ current, next }) =>
+      dirty &&
+      current.pathname !== next.pathname &&
+      !window.confirm(m.project_email_confirm_leave()),
+    enableBeforeUnload: dirty,
+  });
   const defaults = defaultAuthEmailContent({
     kind,
     locale,
@@ -294,39 +304,43 @@ export const ProjectEmailEditor = ({ project }: { project: Project }) => {
     key: "alignment" | "logoAlignment",
     label: string,
   ) => (
-    <Field>
-      <FieldLabel htmlFor={id(key)}>{label}</FieldLabel>
-      <Select
-        value={
-          settings.appearance?.[key] ??
-          (key === "logoAlignment"
-            ? settings.appearance?.alignment
-            : undefined) ??
-          "left"
-        }
-        items={[
-          { value: "left", label: m.project_email_left() },
-          { value: "center", label: m.project_email_center() },
-          { value: "right", label: m.project_email_right() },
-        ]}
-        onValueChange={(value) => {
-          if (value === "left" || value === "center" || value === "right")
-            change({
-              ...settings,
-              appearance: { ...settings.appearance, [key]: value },
-            });
-        }}
-      >
-        <SelectTrigger id={id(key)} className="w-full">
-          <SelectValue />
-        </SelectTrigger>
-        <SelectContent>
-          <SelectItem value="left">{m.project_email_left()}</SelectItem>
-          <SelectItem value="center">{m.project_email_center()}</SelectItem>
-          <SelectItem value="right">{m.project_email_right()}</SelectItem>
-        </SelectContent>
-      </Select>
-    </Field>
+    <EmailChoice
+      label={label}
+      value={
+        settings.appearance?.[key] ?? settings.appearance?.alignment ?? "left"
+      }
+      options={[
+        { value: "left", label: m.project_email_left() },
+        { value: "center", label: m.project_email_center() },
+        { value: "right", label: m.project_email_right() },
+      ]}
+      onChange={(value) => {
+        if (value === "left" || value === "center" || value === "right")
+          change({
+            ...settings,
+            appearance: { ...settings.appearance, [key]: value },
+          });
+      }}
+    />
+  );
+  const colorInput = ({
+    key,
+    label,
+  }: ReturnType<typeof colorFields>[number]) => (
+    <EmailColorField
+      key={key}
+      label={label}
+      value={settings.appearance?.[key]}
+      fallback={emailDefaultColors[key]}
+      onChange={(value) =>
+        change({
+          ...settings,
+          appearance: value
+            ? { ...settings.appearance, [key]: value }
+            : Struct.omit(settings.appearance ?? {}, [key]),
+        })
+      }
+    />
   );
   return (
     <section className="flex flex-col gap-5" id="emails">
@@ -349,60 +363,31 @@ export const ProjectEmailEditor = ({ project }: { project: Project }) => {
           className="flex min-w-0 flex-col gap-5"
         >
           <div className="bg-muted/25 grid items-end gap-3 rounded-xl border p-4 sm:grid-cols-[minmax(0,1fr)_minmax(0,0.65fr)_auto]">
-            <Field>
-              <FieldLabel htmlFor={id("kind")}>
-                {m.project_email_kind()}
-              </FieldLabel>
-              <Select
-                value={kind}
-                items={emailKinds()}
-                onValueChange={(value) => {
-                  if (Schema.is(AuthEmailKind)(value)) {
-                    setKind(value);
-                    setTested(false);
-                  }
-                }}
-              >
-                <SelectTrigger id={id("kind")} className="w-full">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {emailKinds().map((item) => (
-                    <SelectItem key={item.value} value={item.value}>
-                      {item.label}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </Field>
-            <Field>
-              <FieldLabel htmlFor={id("locale")}>
-                {m.project_email_language()}
-              </FieldLabel>
-              <Select
-                value={locale}
-                items={[
-                  { value: "en", label: m.project_email_english() },
-                  { value: "fr", label: m.project_email_french() },
-                ]}
-                onValueChange={(value) => {
-                  if (value === "en" || value === "fr") {
-                    setLocale(value);
-                    setTested(false);
-                  }
-                }}
-              >
-                <SelectTrigger id={id("locale")} className="w-full">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="en">
-                    {m.project_email_english()}
-                  </SelectItem>
-                  <SelectItem value="fr">{m.project_email_french()}</SelectItem>
-                </SelectContent>
-              </Select>
-            </Field>
+            <EmailChoice
+              label={m.project_email_kind()}
+              value={kind}
+              options={emailKinds()}
+              onChange={(value) => {
+                if (Schema.is(AuthEmailKind)(value)) {
+                  setKind(value);
+                  setTested(false);
+                }
+              }}
+            />
+            <EmailChoice
+              label={m.project_email_language()}
+              value={locale}
+              options={[
+                { value: "en", label: m.project_email_english() },
+                { value: "fr", label: m.project_email_french() },
+              ]}
+              onChange={(value) => {
+                if (value === "en" || value === "fr") {
+                  setLocale(value);
+                  setTested(false);
+                }
+              }}
+            />
             <Button
               type="button"
               variant="outline"
@@ -433,223 +418,142 @@ export const ProjectEmailEditor = ({ project }: { project: Project }) => {
             </p>
           ) : null}
           <div className="grid min-w-0 items-start gap-5 xl:grid-cols-[minmax(0,1fr)_minmax(0,1.2fr)]">
-            <Tabs defaultValue="content" className="min-w-0 gap-4">
-              <TabsList
-                className="w-full"
-                aria-label={m.project_email_edit_sections()}
-              >
-                <TabsTrigger value="content" type="button">
-                  {m.project_email_content()}
-                </TabsTrigger>
-                <TabsTrigger value="appearance" type="button">
-                  {m.project_email_appearance()}
-                </TabsTrigger>
-              </TabsList>
-              <TabsContent
-                value="content"
+            <div className="min-w-0 space-y-4">
+              <details
                 className="space-y-4 rounded-xl border p-4"
+                aria-label={m.project_email_email_appearance()}
               >
-                <p className="text-muted-foreground text-sm">
-                  {m.project_email_content_help({ appName: "{appName}" })}
+                <summary className="cursor-pointer text-sm font-medium">
+                  {m.project_email_email_appearance()}
+                </summary>
+                <p className="text-muted-foreground text-xs">
+                  {m.project_email_shared_help()}
                 </p>
-                {contentFields()
-                  .filter(
-                    ({ key }) => key !== "action" || kind === "reset-password",
-                  )
-                  .map(({ key, label, multiline }) => (
-                    <Field key={`${kind}-${locale}-${key}`}>
-                      <FieldLabel htmlFor={id(key)}>{label}</FieldLabel>
-                      {multiline ? (
-                        <Textarea
-                          id={id(key)}
-                          rows={key === "body" ? 5 : 3}
-                          maxLength={4000}
-                          value={content[key] ?? ""}
-                          placeholder={defaults[key]}
-                          onChange={(event) =>
-                            updateContent({
-                              ...content,
-                              [key]: event.target.value || undefined,
-                            })
-                          }
-                        />
-                      ) : (
-                        <Input
-                          id={id(key)}
-                          maxLength={200}
-                          value={content[key] ?? ""}
-                          placeholder={defaults[key]}
-                          onChange={(event) =>
-                            updateContent({
-                              ...content,
-                              [key]: event.target.value || undefined,
-                            })
-                          }
-                        />
-                      )}
-                    </Field>
-                  ))}
-              </TabsContent>
-              <TabsContent value="appearance" className="space-y-4">
-                <p className="bg-muted/50 rounded-lg px-3 py-2 text-sm font-medium">
-                  {m.project_email_appearance_scope()}
-                </p>
-                <section
-                  className="space-y-4 rounded-xl border p-4"
-                  aria-labelledby={id("logo-heading")}
-                >
-                  <div className="flex items-center gap-3">
-                    <div className="bg-muted/25 flex size-12 shrink-0 items-center justify-center rounded-lg border p-2">
-                      {logo ? (
-                        <img
-                          src={logo}
-                          alt=""
-                          className="max-h-full max-w-full object-contain"
-                        />
-                      ) : (
-                        <ImageIcon
-                          className="text-muted-foreground size-5"
-                          aria-hidden="true"
-                        />
-                      )}
-                    </div>
-                    <div className="min-w-0 flex-1">
-                      <h4
-                        id={id("logo-heading")}
-                        className="text-sm font-medium"
-                      >
-                        {m.project_email_logo()}
-                      </h4>
-                      <a
-                        href="#project-details"
-                        className="text-muted-foreground hover:text-foreground text-xs underline underline-offset-4"
-                      >
-                        {m.project_email_manage_logo()}
-                      </a>
-                    </div>
-                  </div>
-                  <div className="grid gap-4 sm:grid-cols-2">
+                <EmailLogoPlacement
+                  settings={settings}
+                  logo={logo ?? undefined}
+                  onChange={change}
+                />
+                <details className="space-y-3 border-t pt-3">
+                  <summary className="cursor-pointer text-sm">
+                    {m.project_email_logo_style()}
+                  </summary>
+                  <div className="grid gap-3 sm:grid-cols-2">
                     {numberFields()
-                      .filter(({ key }) => key === "logoWidth")
+                      .filter(({ key }) => key.startsWith("logo"))
                       .map(numberInput)}
                     {alignmentInput(
                       "logoAlignment",
                       m.project_email_logo_alignment(),
                     )}
                   </div>
-                  <details className="group/advanced border-t pt-3">
-                    <summary className="text-muted-foreground flex cursor-pointer list-none items-center justify-between text-sm [&::-webkit-details-marker]:hidden">
-                      {m.project_email_advanced()}
-                      <ChevronDownIcon
-                        aria-hidden="true"
-                        className="size-4 transition-transform group-open/advanced:rotate-180"
-                      />
-                    </summary>
-                    <div className="mt-4 grid gap-4 sm:grid-cols-2">
-                      {numberFields()
-                        .filter(
-                          ({ key }) =>
-                            key === "logoSpacingTop" ||
-                            key === "logoSpacingBottom",
-                        )
-                        .map(numberInput)}
-                    </div>
-                  </details>
-                </section>
-                <details className="group/colors rounded-xl border p-4">
-                  <summary className="flex cursor-pointer list-none items-center justify-between text-sm font-medium [&::-webkit-details-marker]:hidden">
-                    {m.project_email_colors()}
-                    <ChevronDownIcon
-                      aria-hidden="true"
-                      className="size-4 transition-transform group-open/colors:rotate-180"
-                    />
-                  </summary>
-                  <p className="text-muted-foreground mt-2 text-xs">
-                    {m.project_email_appearance_help()}
-                  </p>
-                  <div className="mt-4 grid gap-4 sm:grid-cols-2">
-                    {colorFields().map(({ key, label }) => (
-                      <Field key={key}>
-                        <FieldLabel htmlFor={id(key)}>{label}</FieldLabel>
-                        <div className="flex gap-2">
-                          <ColorPicker
-                            hidden
-                            className="w-9 shrink-0 justify-center"
-                            locale={getLocale()}
-                            messages={{
-                              [getLocale()]: {
-                                open: m.project_email_choose_color({
-                                  field: label,
-                                }),
-                              },
-                            }}
-                            value={settings.appearance?.[key] || "#FFFFFF"}
-                            disabled={saveResult.waiting}
-                            onValueChange={(value) =>
-                              change({
-                                ...settings,
-                                appearance: {
-                                  ...settings.appearance,
-                                  [key]: value,
-                                },
-                              })
-                            }
-                          />
-                          <Input
-                            id={id(key)}
-                            className="min-w-0 font-mono"
-                            value={settings.appearance?.[key] ?? ""}
-                            placeholder="#RRGGBB"
-                            maxLength={7}
-                            onChange={(event) =>
-                              change({
-                                ...settings,
-                                appearance: event.target.value
-                                  ? {
-                                      ...settings.appearance,
-                                      [key]: event.target.value,
-                                    }
-                                  : Struct.omit(settings.appearance ?? {}, [
-                                      key,
-                                    ]),
-                              })
-                            }
-                          />
+                </details>
+                <div className="grid gap-3 sm:grid-cols-2">
+                  {colorFields()
+                    .filter(({ key }) => key === "background")
+                    .map(colorInput)}
+                </div>
+              </details>
+              <Tabs
+                value={section}
+                onValueChange={(value) => {
+                  if (
+                    value === "header" ||
+                    value === "body" ||
+                    value === "footer"
+                  )
+                    setSection(value);
+                }}
+                className="min-w-0 gap-4"
+              >
+                <TabsList
+                  className="w-full"
+                  aria-label={m.project_email_edit_sections()}
+                >
+                  <TabsTrigger value="header" type="button">
+                    {m.project_email_section_header()}
+                  </TabsTrigger>
+                  <TabsTrigger value="body" type="button">
+                    {m.project_email_section_body()}
+                  </TabsTrigger>
+                  <TabsTrigger value="footer" type="button">
+                    {m.project_email_section_footer()}
+                  </TabsTrigger>
+                </TabsList>
+                <TabsContent value="body">
+                  <EmailBodyEditor
+                    key={`${kind}-${locale}`}
+                    settings={settings}
+                    content={content}
+                    defaults={defaults}
+                    kind={kind}
+                    locale={locale}
+                    brandName={project.name}
+                    onChange={change}
+                    onContentChange={updateContent}
+                    cardAppearance={
+                      <>
+                        <p className="text-muted-foreground text-xs">
+                          {m.project_email_appearance_scope()}
+                        </p>
+                        <div className="grid gap-3 sm:grid-cols-2">
+                          {colorFields()
+                            .filter(({ key }) => key !== "background")
+                            .map(colorInput)}
                         </div>
-                      </Field>
-                    ))}
-                  </div>
-                </details>
-                <details className="group/layout rounded-xl border p-4">
-                  <summary className="flex cursor-pointer list-none items-center justify-between text-sm font-medium [&::-webkit-details-marker]:hidden">
-                    {m.project_email_layout()}
-                    <ChevronDownIcon
-                      aria-hidden="true"
-                      className="size-4 transition-transform group-open/layout:rotate-180"
+                        <div className="grid gap-3 sm:grid-cols-2">
+                          {alignmentInput(
+                            "alignment",
+                            m.project_email_alignment(),
+                          )}
+                          {numberFields()
+                            .filter(
+                              ({ key }) =>
+                                key === "padding" || key === "radius",
+                            )
+                            .map(numberInput)}
+                        </div>
+                      </>
+                    }
+                  />
+                </TabsContent>
+                {(["header", "footer"] as const).map((name) => (
+                  <TabsContent key={name} value={name} className="space-y-3">
+                    <p className="text-muted-foreground text-xs">
+                      {m.project_email_section_scope()}
+                    </p>
+                    <EmailSectionEditor
+                      name={name}
+                      settings={settings}
+                      locale={locale}
+                      logo={logo ?? undefined}
+                      activeBlock={activeBlock}
+                      onSelectBlock={setActiveBlock}
+                      onMove={setSection}
+                      onChange={change}
                     />
-                  </summary>
-                  <div className="mt-4 grid gap-4 sm:grid-cols-2">
-                    {alignmentInput("alignment", m.project_email_alignment())}
-                    {numberFields()
-                      .filter(
-                        ({ key }) => key === "padding" || key === "radius",
-                      )
-                      .map(numberInput)}
-                  </div>
-                </details>
-              </TabsContent>
-            </Tabs>
+                  </TabsContent>
+                ))}
+              </Tabs>
+            </div>
             <div className="min-w-0 xl:sticky xl:top-6 xl:max-h-[calc(100dvh-3rem)] xl:overflow-y-auto">
               <EmailPreview
                 projectId={project.id}
                 payload={payload}
-                valid={valid}
+                valid={previewValid}
               />
+              {selectedMissing ? (
+                <p role="status" className="mt-2 text-sm">
+                  {m.project_email_selected_missing()}
+                </p>
+              ) : null}
             </div>
           </div>
           {!valid ? (
             <p role="alert" className="text-destructive text-sm">
-              {m.project_email_invalid()}
+              {previewValid
+                ? m.project_email_missing_translation()
+                : m.project_email_invalid()}
             </p>
           ) : null}
           {AsyncResult.isFailure(saveResult) ? (
@@ -689,16 +593,23 @@ export const ProjectEmailEditor = ({ project }: { project: Project }) => {
                   </DropdownMenuItem>
                   <DropdownMenuItem
                     disabled={saveResult.waiting}
-                    onClick={() =>
-                      change(Struct.omit(settings, ["appearance"]))
-                    }
+                    onClick={() => change(resetEmailAppearance(settings))}
                   >
                     {m.project_email_restore_appearance()}
+                  </DropdownMenuItem>
+                  <DropdownMenuItem
+                    disabled={saveResult.waiting}
+                    onClick={() => change(resetEmailTypography(settings))}
+                  >
+                    {m.project_email_restore_typography()}
                   </DropdownMenuItem>
                   <DropdownMenuSeparator />
                   <DropdownMenuItem
                     disabled={saveResult.waiting}
-                    onClick={() => change({})}
+                    onClick={() => {
+                      if (window.confirm(m.project_email_confirm_reset()))
+                        change({});
+                    }}
                   >
                     {m.project_email_restore_all()}
                   </DropdownMenuItem>

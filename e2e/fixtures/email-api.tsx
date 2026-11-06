@@ -1,9 +1,10 @@
 import type { Page } from "@playwright/test";
-import { Schema } from "effect";
-import { renderToStaticMarkup } from "react-dom/server";
+import { Effect, Schema } from "effect";
+import { renderAuthEmail } from "../../src/services/auth-emails/render";
 import {
   AuthEmailPreviewPayload,
   AuthEmailSettings,
+  AuthEmailTestPayload,
 } from "../../src/services/auth-emails/schema";
 import type { Project } from "../../src/services/projects/schema";
 
@@ -63,7 +64,7 @@ export const installEmailApi = async (page: Page) => {
       return route.fulfill({ json: project() });
     }
     if (path === `${emailPath}/test` && request.method() === "POST") {
-      const payload = Schema.decodeUnknownSync(AuthEmailPreviewPayload)(
+      const payload = Schema.decodeUnknownSync(AuthEmailTestPayload)(
         request.postDataJSON(),
       );
       state.samples.push(payload);
@@ -80,30 +81,23 @@ export const installEmailApi = async (page: Page) => {
       const payload = Schema.decodeUnknownSync(AuthEmailPreviewPayload)(
         request.postDataJSON(),
       );
-      const content =
-        payload.settings.templates?.[payload.kind]?.[payload.locale];
-      const heading = content?.title ?? `${payload.kind}-${payload.locale}`;
-      // Renderer behavior is covered in Vitest; this adapter supplies deterministic
-      // preview data while exercising the editor's real HTTP atoms and cache.
-      const html = renderToStaticMarkup(
-        <html lang={payload.locale}>
-          <body
-            style={{
-              backgroundColor:
-                payload.settings.appearance?.background ?? "#ffffff",
-            }}
-          >
-            <h1>{heading}</h1>
-            <p>{content?.body ?? "Sample content"}</p>
-          </body>
-        </html>,
+      // Use the real renderer with inert authentication values; never deliver email.
+      const preview = await Effect.runPromise(
+        renderAuthEmail({
+          appName: project().name,
+          locale: payload.locale,
+          settings: payload.settings,
+          action:
+            payload.kind === "reset-password"
+              ? {
+                  kind: payload.kind,
+                  url: "https://example.invalid/reset-password",
+                }
+              : { kind: payload.kind, otp: "000000" },
+        }),
       );
       return route.fulfill({
-        json: {
-          subject: content?.subject ?? "Sample subject",
-          html,
-          text: heading,
-        },
+        json: preview,
       });
     }
     return route.abort("blockedbyclient");
