@@ -4,6 +4,7 @@ import { m } from "@/paraglide/messages";
 
 import { BaseEmail } from "./BaseEmail";
 import type { EmailTheme } from "./Tailwind";
+import type { AuthEmailAppearance } from "@/services/auth-emails/schema";
 
 export const OTPEmail = ({
   appName = m.app_name(),
@@ -13,6 +14,11 @@ export const OTPEmail = ({
   extra = m.email_otp_expiry(),
   logo = "/favicon.ico",
   theme,
+  appearance,
+  preview,
+  footer,
+  locale,
+  notice,
 }: {
   readonly appName?: string | undefined;
   readonly code?: string | undefined;
@@ -21,9 +27,14 @@ export const OTPEmail = ({
   readonly extra?: string | undefined;
   readonly logo?: string | null | undefined;
   readonly theme?: EmailTheme | undefined;
+  readonly appearance?: AuthEmailAppearance | undefined;
+  readonly preview?: string | undefined;
+  readonly footer?: string | undefined;
+  readonly locale?: "en" | "fr" | undefined;
+  readonly notice?: string | undefined;
 }) => (
   <BaseEmail
-    preview={description}
+    preview={preview ?? description}
     content={{
       appName,
       logo,
@@ -31,6 +42,10 @@ export const OTPEmail = ({
       description,
       extra,
       theme,
+      appearance,
+      footer,
+      locale,
+      notice,
       action: (
         <Container className="bg-muted mx-0 rounded-lg px-4 py-1">
           <Text className="text-foreground text-3xl font-bold tracking-widest">

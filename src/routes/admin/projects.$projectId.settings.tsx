@@ -5,6 +5,7 @@ import { projectsAtom } from "@/services/projects/client/atom";
 import { ProjectForm } from "@/services/projects/client/form";
 import { ProjectWebhook } from "@/services/projects/client/webhook";
 import { Separator } from "@/components/ui/separator";
+import { ProjectEmailEditor } from "@/services/projects/client/email";
 
 export const Route = createFileRoute("/admin/projects/$projectId/settings")({
   component: ProjectSettings,
@@ -17,10 +18,14 @@ function ProjectSettings() {
     (item) => item.id === projectId,
   );
   return project ? (
-    <div className="flex max-w-3xl flex-col gap-6">
-      <ProjectForm key={projectId} project={project} inline />
+    <div className="flex w-full max-w-7xl min-w-0 flex-col gap-6">
+      <div id="project-details" className="max-w-3xl scroll-mt-6">
+        <ProjectForm key={projectId} project={project} inline />
+      </div>
       <Separator />
-      <section id="webhooks" className="scroll-mt-6">
+      <ProjectEmailEditor key={`email-${projectId}`} project={project} />
+      <Separator />
+      <section id="webhooks" className="max-w-3xl scroll-mt-6">
         <ProjectWebhook key={projectId} projectId={projectId} />
       </section>
     </div>

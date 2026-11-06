@@ -14,6 +14,7 @@ import { Events } from "@krak-stack/registry/events";
 import { testEventsLayer } from "@/services/audit/test-layer";
 import { sanitizeThemeCss } from "@/services/oauth/theme";
 import { organizationBranding } from "@/services/organizations/branding";
+import { AuthEmailSettings } from "@/services/auth-emails/schema";
 
 import {
   ProjectData,
@@ -38,6 +39,7 @@ const authOptions = (data: ProjectData) => ({
 });
 
 const StoredProjectData = Schema.Struct({
+  email: Schema.optional(Schema.Unknown),
   branding: ProjectData.fields.branding,
   authOptions: ProjectData.fields.authOptions,
 });
@@ -48,6 +50,8 @@ export const decodeProjectData = (value: typeof Schema.Unknown.Type) => {
   let data: ProjectData = {};
   if (stored.branding) data = { ...data, branding: stored.branding };
   if (stored.authOptions) data = { ...data, authOptions: stored.authOptions };
+  const email = Schema.decodeUnknownOption(AuthEmailSettings)(stored.email);
+  if (Option.isSome(email)) data = { ...data, email: email.value };
   return Schema.decodeSync(ProjectData)(data);
 };
 
@@ -283,15 +287,19 @@ export class Projects extends Context.Service<Projects>()("Projects", {
           Request: UpdateProjectRequest,
           Result: ProjectRow,
           execute: ({ id, payload }) => {
-            const updates: ProjectSqlUpdate = {
-              data: Schema.encodeSync(ProjectDataJson)(
-                decodeProjectData(payload.data),
-              ),
+            const { email: _email, ...generalData } = decodeProjectData(
+              payload.data,
+            );
+            const updates: Omit<ProjectSqlUpdate, "data"> = {
               updatedAt: new Date(),
             };
             if (payload.name !== undefined) updates.name = payload.name.trim();
             if (payload.logo !== undefined) updates.logo = payload.logo;
-            return sql`UPDATE project SET ${sql.update(updates)} WHERE id = ${id} RETURNING *`;
+            // General settings must not overwrite email settings from a stale form.
+            return sql`UPDATE project SET ${sql.update(updates)}, data =
+              ${Schema.encodeSync(ProjectDataJson)(generalData)}::jsonb ||
+              CASE WHEN data ? 'email' THEN jsonb_build_object('email', data->'email') ELSE '{}'::jsonb END
+              WHERE id = ${id} RETURNING *`;
           },
         })({ id, payload }),
       );
@@ -302,6 +310,33 @@ export class Projects extends Context.Service<Projects>()("Projects", {
           target: { id: value.id, name: value.id, type: "project" },
         });
       return value ? row(value) : null;
+    }, sql.withTransaction);
+
+    const updateEmail = Effect.fn("Projects.updateEmail")(function* ({
+      id,
+      settings,
+    }: {
+      id: string;
+      settings: AuthEmailSettings;
+    }) {
+      const rows = yield* SqlSchema.findAll({
+        Request: Schema.Struct({
+          id: Schema.String,
+          settings: AuthEmailSettings,
+        }).annotate({ identifier: "UpdateProjectEmailRequest" }),
+        Result: ProjectRow,
+        execute: ({ id, settings }) => sql`UPDATE project
+          SET data = jsonb_set(COALESCE(data, '{}'::jsonb), '{email}', ${Schema.encodeSync(Schema.fromJsonString(AuthEmailSettings))(settings)}::jsonb), updated_at = now()
+          WHERE id = ${id} RETURNING *`,
+      })({ id, settings });
+      const value = rows[0];
+      if (!value) return null;
+      yield* events.track({
+        name: "project.email.updated",
+        category: "audit",
+        target: { id, name: id, type: "project" },
+      });
+      return row(value);
     }, sql.withTransaction);
 
     const _delete = Effect.fn("Projects.delete")(function* ({
@@ -333,6 +368,7 @@ export class Projects extends Context.Service<Projects>()("Projects", {
       getPublicConfig,
       create,
       update,
+      updateEmail,
       delete: _delete,
     };
   }),

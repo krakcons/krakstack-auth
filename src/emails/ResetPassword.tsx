@@ -4,6 +4,7 @@ import { m } from "@/paraglide/messages";
 
 import { BaseEmail } from "./BaseEmail";
 import type { EmailTheme } from "./Tailwind";
+import type { AuthEmailAppearance } from "@/services/auth-emails/schema";
 
 export const ResetPasswordEmail = ({
   appName = m.app_name(),
@@ -14,6 +15,11 @@ export const ResetPasswordEmail = ({
   extra,
   logo = "/favicon.ico",
   theme,
+  appearance,
+  preview,
+  footer,
+  locale,
+  notice,
 }: {
   readonly appName?: string | undefined;
   readonly url?: string | undefined;
@@ -23,9 +29,14 @@ export const ResetPasswordEmail = ({
   readonly extra?: string | undefined;
   readonly logo?: string | null | undefined;
   readonly theme?: EmailTheme | undefined;
+  readonly appearance?: AuthEmailAppearance | undefined;
+  readonly preview?: string | undefined;
+  readonly footer?: string | undefined;
+  readonly locale?: "en" | "fr" | undefined;
+  readonly notice?: string | undefined;
 }) => (
   <BaseEmail
-    preview={description}
+    preview={preview ?? description}
     content={{
       appName,
       logo,
@@ -33,8 +44,12 @@ export const ResetPasswordEmail = ({
       description,
       extra,
       theme,
+      appearance,
+      footer,
+      locale,
+      notice,
       action: (
-        <Container className="flex items-center justify-start">
+        <Container>
           <Button
             className="bg-primary text-primary-foreground rounded-md px-4 py-3 align-middle font-medium"
             href={url}

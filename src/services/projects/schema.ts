@@ -1,7 +1,9 @@
 import { Schema } from "effect";
 import { DailyActiveUsersByDay } from "@krak-stack/auth/admin";
+import { AuthEmailSettings } from "@/services/auth-emails/schema";
 
 export const ProjectData = Schema.Struct({
+  email: Schema.optional(AuthEmailSettings),
   branding: Schema.optional(
     Schema.Struct({
       themeCss: Schema.optional(Schema.String),
@@ -148,7 +150,8 @@ export const UpdateProjectPayload = Schema.Struct({
 }).annotate({
   identifier: "UpdateProjectPayload",
   title: "Update project payload",
-  description: "Payload used by administrators to update project settings.",
+  description:
+    "Payload used by administrators to update general project settings. Existing email settings are preserved; use the dedicated email settings endpoint to change them.",
 });
 
 export const ProjectDataStandard = Schema.toStandardSchemaV1(ProjectData);

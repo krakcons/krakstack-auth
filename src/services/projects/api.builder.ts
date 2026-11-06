@@ -1,9 +1,16 @@
 import { Cause, Effect, Option, Schema } from "effect";
 import { HttpApiBuilder, HttpApiError } from "effect/http-api";
+import { HttpServerRequest } from "effect/http";
 
 import { AdminApi, FrontendApi } from "@/api";
 import { Projects } from "@/services/projects";
 import { uploadImageFromMultipart } from "@/services/s3/upload";
+import { BetterAuthRequest } from "@/services/auth/better-auth-request";
+import {
+  previewProjectAuthEmail,
+  sendProjectAuthEmailTest,
+} from "@/services/auth/email.server";
+import { notificationLayer } from "@/services/auth/notification.server";
 
 const FailureWithCause = Schema.Struct({ cause: Schema.Unknown });
 
@@ -47,6 +54,68 @@ export const adminProjectsApiHandler = HttpApiBuilder.group(
   "projects",
   (handlers) =>
     handlers
+      .handle("updateProjectEmail", ({ params, payload }) =>
+        Effect.gen(function* () {
+          const projects = yield* Projects;
+          const project = yield* projects
+            .updateEmail({ id: params.id, settings: payload })
+            .pipe(Effect.mapError(internalServerError));
+          if (!project) return yield* new HttpApiError.NotFound({});
+          return project;
+        }),
+      )
+      .handle("previewProjectEmail", ({ params, payload }) =>
+        Effect.gen(function* () {
+          const projects = yield* Projects;
+          const project = yield* projects
+            .get({ id: params.id })
+            .pipe(Effect.mapError(internalServerError));
+          if (!project) return yield* new HttpApiError.NotFound({});
+          const request = yield* HttpServerRequest.HttpServerRequest;
+          const webRequest = yield* HttpServerRequest.toWeb(request).pipe(
+            Effect.mapError(internalServerError),
+          );
+          return yield* previewProjectAuthEmail({
+            project,
+            payload,
+            origin: new URL(webRequest.url).origin,
+          }).pipe(Effect.mapError(internalServerError));
+        }),
+      )
+      .handle("testProjectEmail", ({ params, payload }) =>
+        Effect.gen(function* () {
+          const projects = yield* Projects;
+          const project = yield* projects
+            .get({ id: params.id })
+            .pipe(Effect.mapError(internalServerError));
+          if (!project) return yield* new HttpApiError.NotFound({});
+          const request = yield* HttpServerRequest.HttpServerRequest;
+          const client = yield* BetterAuthRequest.pipe(
+            Effect.provide(BetterAuthRequest.make(request)),
+            Effect.mapError(internalServerError),
+          );
+          const session = yield* Effect.tryPromise({
+            try: () => client.api.getSession({ headers: client.headers }),
+            catch: internalServerError,
+          });
+          if (!session) return yield* new HttpApiError.Unauthorized({});
+          if (!session.user.emailVerified)
+            return yield* new HttpApiError.Forbidden({});
+          const email = yield* previewProjectAuthEmail({
+            project,
+            payload,
+            origin: new URL(client.request.url).origin,
+          }).pipe(Effect.mapError(internalServerError));
+          yield* sendProjectAuthEmailTest({
+            to: session.user.email,
+            email,
+            locale: payload.locale,
+          }).pipe(
+            Effect.provide(notificationLayer),
+            Effect.mapError(internalServerError),
+          );
+        }),
+      )
       .handle("projectStats", ({ params, query }) =>
         Effect.gen(function* () {
           const projects = yield* Projects;

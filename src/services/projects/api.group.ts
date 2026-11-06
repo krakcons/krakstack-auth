@@ -12,6 +12,11 @@ import {
   UploadedAsset,
 } from "@/services/s3/schema";
 import { AdminAuthMiddleware } from "@/services/auth/middleware";
+import {
+  AuthEmailSettings,
+  AuthEmailPreviewPayload,
+  AuthEmailPreview,
+} from "@/services/auth-emails/schema";
 
 import {
   CreateProjectPayload,
@@ -46,6 +51,49 @@ export const PublicProjectsApiGroup = HttpApiGroup.make("publicProjects")
   );
 
 export const AdminProjectsApiGroup = HttpApiGroup.make("projects")
+  .add(
+    HttpApiEndpoint.patch("updateProjectEmail", "/admin/projects/:id/email", {
+      params: ProjectIdParams,
+      payload: AuthEmailSettings,
+      success: Project,
+      error: [
+        HttpApiError.Unauthorized,
+        HttpApiError.Forbidden,
+        HttpApiError.NotFound,
+        HttpApiError.InternalServerError,
+      ],
+    }),
+  )
+  .add(
+    HttpApiEndpoint.post(
+      "previewProjectEmail",
+      "/admin/projects/:id/email/preview",
+      {
+        params: ProjectIdParams,
+        payload: AuthEmailPreviewPayload,
+        success: AuthEmailPreview,
+        error: [
+          HttpApiError.Unauthorized,
+          HttpApiError.Forbidden,
+          HttpApiError.NotFound,
+          HttpApiError.InternalServerError,
+        ],
+      },
+    ),
+  )
+  .add(
+    HttpApiEndpoint.post("testProjectEmail", "/admin/projects/:id/email/test", {
+      params: ProjectIdParams,
+      payload: AuthEmailPreviewPayload,
+      success: Schema.Void,
+      error: [
+        HttpApiError.Unauthorized,
+        HttpApiError.Forbidden,
+        HttpApiError.NotFound,
+        HttpApiError.InternalServerError,
+      ],
+    }),
+  )
   .add(
     HttpApiEndpoint.get("projectStats", "/admin/projects/:id/stats", {
       params: ProjectIdParams,

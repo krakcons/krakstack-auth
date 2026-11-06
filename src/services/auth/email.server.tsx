@@ -3,15 +3,12 @@ import * as AwsRegion from "@distilled.cloud/aws/Region";
 import * as Sesv2 from "@distilled.cloud/aws/sesv2";
 import { NotificationService } from "@krak-stack/registry/service-notification";
 import type { SesEmailNotification } from "@krak-stack/registry/notification-channel-email-ses/schema";
-import { render } from "@react-email/components";
 import { Effect, Layer, Option, Redacted, Schema } from "effect";
 import * as FetchHttpClient from "effect/http/FetchHttpClient";
 import { mkdir, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { resolve } from "node:path";
 
-import { OTPEmail } from "@/emails/OTP";
-import { ResetPasswordEmail } from "@/emails/ResetPassword";
 import type { EmailTheme } from "@/emails/Tailwind";
 import { assetUrl } from "@/lib/assets";
 import { runWithDatabase } from "@/services/database";
@@ -22,11 +19,17 @@ import { m } from "@/paraglide/messages";
 import { notificationLayer } from "@/services/auth/notification.server";
 import { resolveRecipientLocale } from "@/services/auth/locale.server";
 import { organizationBranding } from "@/services/organizations/branding";
+import {
+  AuthEmailSettings,
+  type AuthEmailPreviewPayload,
+} from "@/services/auth-emails/schema";
+import { renderAuthEmail } from "@/services/auth-emails/render";
+import type { Project } from "@/services/projects/schema";
 
-const fallbackAppName = process.env.AUTH_EMAIL_NAME ?? "Krakstack Auth";
+const fallbackAppName = process.env.AUTH_EMAIL_NAME?.trim() || "Krakstack Auth";
 const fallbackFrom =
-  process.env.AUTH_EMAIL_FROM ??
-  process.env.NOTIFICATION_EMAIL_FROM ??
+  process.env.AUTH_EMAIL_FROM?.trim() ||
+  process.env.NOTIFICATION_EMAIL_FROM?.trim() ||
   `${fallbackAppName} <no-reply@krakstack.local>`;
 const projectContextCookie = "krakstack-auth.project_context";
 const localOtpDirectory =
@@ -80,6 +83,15 @@ const projectThemeCss = (data: typeof Schema.Unknown.Type) =>
     Schema.decodeUnknownOption(ProjectTheme)(data),
     (project) => project.branding.themeCss,
   ).pipe(Option.getOrUndefined);
+
+const ProjectEmail = Schema.Struct({ email: AuthEmailSettings }).annotate({
+  identifier: "ProjectEmail",
+});
+const projectEmailSettings = (data: typeof Schema.Unknown.Type) =>
+  Schema.decodeUnknownOption(ProjectEmail)(data).pipe(
+    Option.map((value) => value.email),
+    Option.getOrUndefined,
+  );
 
 const emailThemeFromCss = (css: string | undefined) => {
   if (!css?.trim()) return undefined;
@@ -196,6 +208,7 @@ const resolveEmailIdentity = async (
     from: fallbackFrom,
     logo: undefined,
     theme: undefined,
+    settings: undefined,
   };
   if (!request) return fallback;
 
@@ -225,6 +238,7 @@ const resolveEmailIdentity = async (
       from: fallbackFrom,
       logo: assetUrl(contextProject?.logo, origin) || undefined,
       theme: emailThemeFromCss(projectThemeCss(contextProject?.data)),
+      settings: projectEmailSettings(contextProject?.data),
     };
   }
 
@@ -246,6 +260,7 @@ const resolveEmailIdentity = async (
       from: fallbackFrom,
       logo: assetUrl(contextProject?.logo, origin) || undefined,
       theme: emailThemeFromCss(projectThemeCss(contextProject?.data)),
+      settings: projectEmailSettings(contextProject?.data),
     };
   }
 
@@ -298,6 +313,7 @@ const resolveEmailIdentity = async (
     from: verified ? fromAddress(appName, senderDomain) : fallbackFrom,
     logo,
     theme,
+    settings: projectEmailSettings(project?.data),
   };
 };
 
@@ -320,26 +336,16 @@ export const sendResetPasswordEmail = async ({
     resolveRecipientLocale({ email: to, request }),
   );
   const identity = await resolveEmailIdentity(request, locale);
-  const text = m.email_reset_password_text({ url }, { locale });
   await sendAuthEmail({
     from: identity.from,
     to,
-    subject: m.email_reset_password_subject(
-      { appName: identity.appName },
-      { locale },
-    ),
-    text,
-    html: await render(
-      <ResetPasswordEmail
-        appName={identity.appName}
-        logo={identity.logo ?? null}
-        theme={identity.theme}
-        url={url}
-        title={m.reset_password_title({}, { locale })}
-        description={m.email_reset_password_description({}, { locale })}
-        action={m.reset_password_submit({}, { locale })}
-      />,
-    ),
+    ...(await Effect.runPromise(
+      renderAuthEmail({
+        ...identity,
+        locale,
+        action: { kind: "reset-password", url },
+      }),
+    )),
   });
 };
 
@@ -356,26 +362,16 @@ export const sendTwoFactorOtpEmail = async ({
     resolveRecipientLocale({ email: to, request }),
   );
   const identity = await resolveEmailIdentity(request, locale);
-  const text = m.email_two_factor_otp_text({ otp }, { locale });
   await sendAuthEmail({
     from: identity.from,
     to,
-    subject: m.email_two_factor_otp_subject(
-      { appName: identity.appName },
-      { locale },
-    ),
-    text,
-    html: await render(
-      <OTPEmail
-        appName={identity.appName}
-        logo={identity.logo ?? null}
-        theme={identity.theme}
-        code={otp}
-        title={m.verify_email_title({}, { locale })}
-        description={m.email_otp_verification_description({}, { locale })}
-        extra={m.email_otp_expiry({}, { locale })}
-      />,
-    ),
+    ...(await Effect.runPromise(
+      renderAuthEmail({
+        ...identity,
+        locale,
+        action: { kind: "two-factor", otp },
+      }),
+    )),
   });
 };
 
@@ -396,41 +392,59 @@ export const sendEmailVerificationOtpEmail = async ({
     resolveRecipientLocale({ email: to, request }),
   );
   const identity = await resolveEmailIdentity(request, locale);
-  const isPasswordReset = type === "forget-password";
-  const subject = isPasswordReset
-    ? m.email_otp_reset_password_subject(
-        { appName: identity.appName },
-        { locale },
-      )
-    : m.email_otp_verification_subject(
-        { appName: identity.appName },
-        { locale },
-      );
-  const text = m.email_otp_verification_text({ otp }, { locale });
-
   await sendAuthEmail({
     from: identity.from,
     to,
-    subject,
-    text,
-    html: await render(
-      <OTPEmail
-        appName={identity.appName}
-        logo={identity.logo ?? null}
-        theme={identity.theme}
-        code={otp}
-        title={
-          isPasswordReset
-            ? m.reset_password_title({}, { locale })
-            : m.verify_email_title({}, { locale })
-        }
-        description={
-          isPasswordReset
-            ? m.email_reset_password_description({}, { locale })
-            : m.email_otp_verification_description({}, { locale })
-        }
-        extra={m.email_otp_expiry({}, { locale })}
-      />,
-    ),
+    ...(await Effect.runPromise(
+      renderAuthEmail({ ...identity, locale, action: { kind: type, otp } }),
+    )),
   });
 };
+
+export const previewProjectAuthEmail = ({
+  project,
+  payload,
+  origin,
+}: {
+  project: Project;
+  payload: AuthEmailPreviewPayload;
+  origin: string;
+}) =>
+  renderAuthEmail({
+    appName: project.name,
+    logo: assetUrl(project.logo, origin),
+    theme: emailThemeFromCss(project.data.branding?.themeCss),
+    settings: payload.settings,
+    locale: payload.locale,
+    notice: m.auth_email_test_notice({}, { locale: payload.locale }),
+    // Samples never create or persist authentication credentials.
+    action:
+      payload.kind === "reset-password"
+        ? {
+            kind: "reset-password",
+            url: "https://example.invalid/reset-password",
+          }
+        : { kind: payload.kind, otp: "000000" },
+  });
+
+export const sendProjectAuthEmailTest = Effect.fn("AuthEmails.sendTest")(
+  function* ({
+    to,
+    email,
+    locale,
+  }: {
+    to: string;
+    email: { subject: string; html: string; text: string };
+    locale: "en" | "fr";
+  }) {
+    const notifications = yield* NotificationService;
+    yield* notifications.send({
+      email: {
+        ...email,
+        from: fallbackFrom,
+        to,
+        subject: `${m.auth_email_test_prefix({}, { locale })} ${email.subject}`,
+      },
+    });
+  },
+);
