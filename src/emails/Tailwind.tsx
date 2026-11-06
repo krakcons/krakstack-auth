@@ -1,17 +1,5 @@
 import { Tailwind as EmailTailwind } from "@react-email/components";
-
-const defaultColors = {
-  primary: "#0A1F44",
-  primaryForeground: "#FFFFFF",
-  background: "#FFFFFF",
-  foreground: "#0A1F44",
-  card: "#FFFFFF",
-  muted: "#F1F5F9",
-  mutedForeground: "#767D92",
-  border: "#E9F2FA",
-  secondary: "#F1F5F9",
-  secondaryForeground: "#1C2A47",
-};
+import { emailDefaultColors as defaultColors } from "@/services/auth-emails/typography";
 
 export type EmailTheme = Partial<typeof defaultColors>;
 

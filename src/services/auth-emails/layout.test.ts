@@ -1,0 +1,396 @@
+import { describe, expect, it } from "@effect/vitest";
+import { Schema } from "effect";
+import {
+  AuthEmailDraftSettings,
+  AuthEmailLinkDestination,
+  AuthEmailSettings,
+  AuthEmailTestPayload,
+  emailSizeOptions,
+} from "./schema";
+import { resetEmailAppearance, resetEmailTypography } from "./layout";
+import {
+  emailTextStyle,
+  resolveEmailTextStyle,
+  resolveEmailRoleColor,
+} from "./typography";
+
+const settings = {
+  appearance: {
+    logoPlacement: "footer",
+    showProjectName: false,
+    logoWidth: 120,
+  },
+  typography: {
+    font: "poppins",
+    body: { size: 18, color: "#112233" },
+    help: { font: "serif", size: 14 },
+    heading: { color: "#223344", alignment: "right" },
+  },
+  layout: {
+    header: {
+      gap: "large",
+      blocks: [
+        {
+          id: "intro",
+          type: "text",
+          text: { en: "Hello", fr: "Bonjour" },
+          alignment: "center",
+          tone: "muted",
+          style: { font: "mono", size: 20, color: "#334455" },
+        },
+      ],
+    },
+    footer: {
+      gap: "small",
+      blocks: [
+        {
+          id: "contact",
+          type: "link",
+          translations: {
+            en: { label: "Support", url: "mailto:help@example.com" },
+            fr: { label: "Aide", url: "https://example.com/fr/aide" },
+          },
+          style: { size: 12, color: "#445566" },
+        },
+        { id: "gap", type: "spacer", size: "large" },
+        { id: "line", type: "divider" },
+      ],
+    },
+  },
+  templates: { "sign-in": { en: { title: "Keep this" } } },
+} satisfies AuthEmailSettings;
+
+describe("email layout boundaries", () => {
+  it("accepts only six-digit HEX text colors for each role and outer text/link block", () => {
+    for (const role of Object.keys(emailSizeOptions)) {
+      expect(
+        Schema.is(AuthEmailSettings)({
+          typography: { [role]: { color: "#12aBcF" } },
+        }),
+      ).toBe(true);
+      for (const color of [
+        "red",
+        "#123",
+        "#12345678",
+        "#12345G",
+        "#123456;color:red",
+        "var(--color)",
+      ]) {
+        expect(
+          Schema.is(AuthEmailSettings)({ typography: { [role]: { color } } }),
+        ).toBe(false);
+        for (const block of [
+          settings.layout.header.blocks[0],
+          settings.layout.footer.blocks[0],
+        ]) {
+          expect(
+            Schema.is(AuthEmailSettings)({
+              layout: { header: { blocks: [{ ...block, style: { color } }] } },
+            }),
+          ).toBe(false);
+        }
+      }
+    }
+    expect(
+      Schema.is(AuthEmailSettings)({
+        layout: {
+          header: {
+            blocks: [
+              {
+                ...settings.layout.header.blocks[0],
+                style: { color: "#12aBcF" },
+              },
+              {
+                ...settings.layout.footer.blocks[0],
+                style: { color: "#aBc123" },
+              },
+            ],
+          },
+        },
+      }),
+    ).toBe(true);
+  });
+
+  it("resolves local text colors over retained legacy colors without materializing overrides", () => {
+    const legacy = {
+      appearance: {
+        foreground: "#112233",
+        mutedForeground: "#445566",
+        primaryForeground: "#FFFFFF",
+      },
+    };
+    expect(resolveEmailRoleColor({}, "heading")).toBe("#0A1F44");
+    expect(resolveEmailRoleColor(legacy, "heading")).toBe("#112233");
+    expect(resolveEmailRoleColor(legacy, "help")).toBe("#112233");
+    expect(resolveEmailRoleColor(legacy, "projectName")).toBe("#445566");
+    expect(resolveEmailRoleColor(legacy, "button")).toBe("#FFFFFF");
+    const typography = { body: { color: "#778899" } };
+    expect(resolveEmailRoleColor({ ...legacy, typography }, "body")).toBe(
+      "#778899",
+    );
+    expect(emailTextStyle(typography, "body")).toEqual({ color: "#778899" });
+    expect(emailTextStyle(typography, "body", { color: "#AABBCC" })).toEqual({
+      color: "#AABBCC",
+    });
+    expect(legacy).not.toHaveProperty("typography");
+  });
+  it("validates per-element alignment without changing legacy shared font settings", () => {
+    const aligned = {
+      typography: {
+        font: "mono",
+        heading: { alignment: "right" },
+        body: { alignment: "center" },
+        button: { alignment: "left" },
+      },
+    };
+    expect(Schema.is(AuthEmailSettings)(aligned)).toBe(true);
+    expect(
+      Schema.is(AuthEmailSettings)({
+        typography: { body: { alignment: "justify" } },
+      }),
+    ).toBe(false);
+    expect(
+      Schema.is(AuthEmailSettings)({
+        typography: { button: { alignment: "bottom" } },
+      }),
+    ).toBe(false);
+  });
+  it("resolves the displayed font and size without materializing settings", () => {
+    expect(resolveEmailTextStyle(undefined, "heading")).toEqual({
+      font: "sans",
+      size: 32,
+    });
+    expect(resolveEmailTextStyle(undefined, "body")).toEqual({
+      font: "sans",
+      size: 16,
+    });
+    expect(resolveEmailTextStyle(undefined, "code")).toEqual({
+      font: "sans",
+      size: 30,
+    });
+    expect(resolveEmailTextStyle(undefined, "button")).toEqual({
+      font: "sans",
+      size: 16,
+    });
+    expect(resolveEmailTextStyle(undefined, "help")).toEqual({
+      font: "sans",
+      size: 14,
+    });
+    expect(resolveEmailTextStyle(undefined, "projectName")).toEqual({
+      font: "sans",
+      size: 12,
+    });
+    expect(resolveEmailTextStyle(settings.typography, "body")).toEqual({
+      font: "poppins",
+      size: 18,
+    });
+    expect(
+      resolveEmailTextStyle(settings.typography, "body", { size: 12 }),
+    ).toEqual({ font: "poppins", size: 12 });
+    expect(
+      resolveEmailTextStyle(settings.typography, "body", { font: "mono" }),
+    ).toEqual({ font: "mono", size: 18 });
+    expect(resolveEmailTextStyle(settings.typography, "body", {})).toEqual({
+      font: "poppins",
+      size: 18,
+    });
+    expect(settings.typography.body).toEqual({ size: 18, color: "#112233" });
+  });
+  it("omits missing sections during resets so HTTP JSON never turns them into null", () => {
+    for (const reset of [resetEmailTypography, resetEmailAppearance]) {
+      expect(reset({})).not.toHaveProperty("layout");
+      const headerOnly = reset({ layout: { header: { blocks: [] } } });
+      expect(headerOnly.layout).not.toHaveProperty("footer");
+      const footerOnly = reset({ layout: { footer: { blocks: [] } } });
+      expect(footerOnly.layout).not.toHaveProperty("header");
+      expect(Schema.is(AuthEmailSettings)(headerOnly)).toBe(true);
+      expect(Schema.is(AuthEmailSettings)(footerOnly)).toBe(true);
+    }
+  });
+  it("round-trips colored settings and scoped resets through the HTTP JSON codec without null fields", () => {
+    const json = Schema.fromJsonString(AuthEmailSettings);
+    const decode = Schema.decodeUnknownSync(json);
+    const encode = Schema.encodeSync(json);
+    for (const input of [
+      settings,
+      resetEmailTypography(settings),
+      resetEmailAppearance(settings),
+      {},
+      resetEmailTypography({ layout: { header: { blocks: [] } } }),
+    ]) {
+      expect(decode(encode(input))).toEqual(input);
+      expect(encode(input)).not.toContain(":null");
+    }
+    const reset = resetEmailTypography(settings);
+    expect(reset.layout?.footer?.blocks[0]).not.toHaveProperty("style");
+    expect(settings.typography.heading).toEqual({
+      color: "#223344",
+      alignment: "right",
+    });
+    expect(settings.layout.header.blocks[0].style.color).toBe("#334455");
+  });
+  it("permits incomplete translations only in previews, never publication or test delivery", () => {
+    const draft = {
+      layout: {
+        header: {
+          blocks: [
+            { id: "text", type: "text", text: { en: "Hello", fr: " " } },
+          ],
+        },
+      },
+    };
+    expect(Schema.is(AuthEmailDraftSettings)(draft)).toBe(true);
+    expect(Schema.is(AuthEmailSettings)(draft)).toBe(false);
+    expect(
+      Schema.is(AuthEmailTestPayload)({
+        kind: "sign-in",
+        locale: "en",
+        settings: draft,
+      }),
+    ).toBe(false);
+    const emptyLink = {
+      layout: {
+        footer: {
+          blocks: [
+            {
+              id: "link",
+              type: "link",
+              translations: {
+                en: { label: "Help", url: "https://example.com" },
+                fr: { label: "Aide", url: "" },
+              },
+            },
+          ],
+        },
+      },
+    };
+    expect(Schema.is(AuthEmailDraftSettings)(emptyLink)).toBe(true);
+    expect(Schema.is(AuthEmailSettings)(emptyLink)).toBe(false);
+    expect(Schema.is(AuthEmailSettings)(settings)).toBe(true);
+  });
+
+  it("allows only explicit HTTPS websites and email addresses", () => {
+    for (const url of [
+      "https://example.com/help?locale=fr#contact",
+      "https://support.other-domain.com",
+      "mailto:support@example.com",
+    ]) {
+      expect(Schema.is(AuthEmailLinkDestination)(url)).toBe(true);
+    }
+    for (const url of [
+      "http://example.com",
+      "/help",
+      "//example.com",
+      "javascript:alert(1)",
+      "data:text/html,test",
+      "tel:+15555555",
+      "https:example.com",
+      "https://user:pass@example.com",
+      "https://example.com/\n",
+      "mailto:bad",
+      "mailto:a@example.com?bcc=b@example.com",
+      "mailto:a@example.com%0d%0aBcc:x@example.com",
+      "https://example.com/{token}",
+      "https://example.com/\\evil",
+    ]) {
+      expect(Schema.is(AuthEmailLinkDestination)(url)).toBe(false);
+    }
+  });
+
+  it("bounds block counts, text, identities, placement, and typography", () => {
+    const text = settings.layout.header.blocks[0];
+    for (const invalid of [
+      {
+        layout: {
+          header: {
+            blocks: Array.from({ length: 9 }, (_, index) => ({
+              ...text,
+              id: String(index),
+            })),
+          },
+        },
+      },
+      { layout: { header: { blocks: [text, text] } } },
+      { layout: { header: { blocks: [text] }, footer: { blocks: [text] } } },
+      {
+        layout: {
+          header: {
+            blocks: [
+              { ...text, text: { en: "x".repeat(4001), fr: "Bonjour" } },
+            ],
+          },
+        },
+      },
+      { appearance: { logoPlacement: "sidebar" } },
+      { typography: { font: "uploaded-font" } },
+      { typography: { code: { size: 12 } } },
+      { typography: { heading: { size: 9999 } } },
+      { typography: { button: { size: 12 } } },
+    ])
+      expect(Schema.is(AuthEmailSettings)(invalid)).toBe(false);
+    for (const [role, sizes] of Object.entries(emailSizeOptions)) {
+      for (const size of sizes)
+        expect(
+          Schema.is(AuthEmailSettings)({ typography: { [role]: { size } } }),
+        ).toBe(true);
+    }
+  });
+
+  it("inherits typography by block, role, then shared font without replacing legacy defaults", () => {
+    expect(emailTextStyle(undefined, "body")).toEqual({});
+    expect(emailTextStyle(settings.typography, "body")).toMatchObject({
+      fontFamily: "Poppins, Arial, Helvetica, sans-serif",
+      fontSize: 18,
+      lineHeight: "1.5",
+    });
+    expect(emailTextStyle(settings.typography, "help")).toMatchObject({
+      fontFamily: "Georgia, 'Times New Roman', serif",
+      fontSize: 14,
+    });
+    expect(
+      emailTextStyle(settings.typography, "body", { font: "mono", size: 12 }),
+    ).toMatchObject({
+      fontFamily: "'Courier New', Courier, monospace",
+      fontSize: 12,
+    });
+  });
+
+  it("resets typography without losing translations, order, appearance, or gaps", () => {
+    const reset = resetEmailTypography(settings);
+    expect(reset.typography).toBeUndefined();
+    expect(reset.appearance).toEqual(settings.appearance);
+    expect(reset.layout?.header?.blocks[0]).toEqual({
+      ...settings.layout.header.blocks[0],
+      style: undefined,
+    });
+    expect(reset.layout?.header?.gap).toBe("large");
+    expect(reset.layout?.footer?.blocks.map((block) => block.id)).toEqual([
+      "contact",
+      "gap",
+      "line",
+    ]);
+    expect(reset.templates).toEqual(settings.templates);
+    expect(settings.layout.header.blocks[0].style.font).toBe("mono");
+  });
+
+  it("resets appearance while preserving bilingual content and block order", () => {
+    const reset = resetEmailAppearance(settings);
+    expect(reset.appearance).toBeUndefined();
+    expect(reset.typography).toBeUndefined();
+    expect(reset.layout?.header).toEqual({
+      blocks: [
+        { id: "intro", type: "text", text: { en: "Hello", fr: "Bonjour" } },
+      ],
+    });
+    expect(reset.layout?.footer?.blocks[0]).toMatchObject({
+      id: "contact",
+      translations: settings.layout.footer.blocks[0].translations,
+    });
+    expect(reset.layout?.footer?.blocks[1]).toEqual({
+      id: "gap",
+      type: "spacer",
+      size: "medium",
+    });
+    expect(reset.templates).toEqual(settings.templates);
+  });
+});

@@ -3,6 +3,7 @@ import { describe, expect, it } from "@effect/vitest";
 import { DateTime, Effect } from "effect";
 import { SqlClient } from "effect/sql";
 import { sqlTestLayer } from "@/services/database";
+import type { AuthEmailSettings } from "@/services/auth-emails/schema";
 
 import { Projects } from ".";
 
@@ -62,13 +63,42 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)(
           yield* Effect.gen(function* () {
             const email = {
               appearance: { background: "#123456" },
+              typography: {
+                font: "mono",
+                heading: { alignment: "right", color: "#006F69" },
+              },
+              layout: {
+                header: {
+                  blocks: [
+                    {
+                      id: "greeting",
+                      type: "text",
+                      text: { en: "Hello", fr: "Bonjour" },
+                      style: { color: "#112233" },
+                    },
+                  ],
+                },
+                footer: {
+                  blocks: [
+                    {
+                      id: "support",
+                      type: "link",
+                      translations: {
+                        en: { label: "Help", url: "https://example.com/help" },
+                        fr: { label: "Aide", url: "mailto:aide@example.com" },
+                      },
+                      style: { color: "#445566" },
+                    },
+                  ],
+                },
+              },
               templates: {
                 "sign-in": {
                   en: { title: "Welcome" },
                   fr: { title: "Bienvenue" },
                 },
               },
-            };
+            } satisfies AuthEmailSettings;
             const updated = yield* projects.updateEmail({
               id: project.id,
               settings: email,

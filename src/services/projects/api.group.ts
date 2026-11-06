@@ -16,6 +16,7 @@ import {
   AuthEmailSettings,
   AuthEmailPreviewPayload,
   AuthEmailPreview,
+  AuthEmailTestPayload,
 } from "@/services/auth-emails/schema";
 
 import {
@@ -84,7 +85,7 @@ export const AdminProjectsApiGroup = HttpApiGroup.make("projects")
   .add(
     HttpApiEndpoint.post("testProjectEmail", "/admin/projects/:id/email/test", {
       params: ProjectIdParams,
-      payload: AuthEmailPreviewPayload,
+      payload: AuthEmailTestPayload,
       success: Schema.Void,
       error: [
         HttpApiError.Unauthorized,

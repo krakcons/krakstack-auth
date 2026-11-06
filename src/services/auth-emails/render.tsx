@@ -6,6 +6,7 @@ import type { EmailTheme } from "@/emails/Tailwind";
 import { m } from "@/paraglide/messages";
 import { resolveAuthEmailContent } from "./content";
 import type { AuthEmailKind, AuthEmailSettings } from "./schema";
+import { sectionPlainText } from "@/emails/EmailSection";
 
 export class AuthEmailRenderError extends Schema.TaggedError<
   AuthEmailRenderError,
@@ -46,6 +47,8 @@ export const renderAuthEmail = Effect.fn("AuthEmails.render")(
       footer: content.footer,
       extra: expiry,
       notice: input.notice,
+      layout: input.settings?.layout,
+      typography: input.settings?.typography,
     };
     const element =
       input.action.kind === "reset-password" ? (
@@ -66,13 +69,17 @@ export const renderAuthEmail = Effect.fn("AuthEmails.render")(
         ? `${content.action}: ${input.action.url}`
         : input.action.otp;
     const text = [
+      sectionPlainText(input.settings?.layout?.header, input.locale),
       input.notice,
       content.title,
       content.body,
       action,
       expiry,
       content.footer,
-      input.appName,
+      input.settings?.appearance?.showProjectName !== false
+        ? input.appName
+        : undefined,
+      sectionPlainText(input.settings?.layout?.footer, input.locale),
     ]
       .filter(Boolean)
       .join("\n\n");

@@ -4,7 +4,11 @@ import { m } from "@/paraglide/messages";
 
 import { BaseEmail } from "./BaseEmail";
 import type { EmailTheme } from "./Tailwind";
-import type { AuthEmailAppearance } from "@/services/auth-emails/schema";
+import type {
+  AuthEmailAppearance,
+  AuthEmailSettings,
+} from "@/services/auth-emails/schema";
+import { emailTextStyle } from "@/services/auth-emails/typography";
 
 export const OTPEmail = ({
   appName = m.app_name(),
@@ -19,6 +23,8 @@ export const OTPEmail = ({
   footer,
   locale,
   notice,
+  layout,
+  typography,
 }: {
   readonly appName?: string | undefined;
   readonly code?: string | undefined;
@@ -32,6 +38,8 @@ export const OTPEmail = ({
   readonly footer?: string | undefined;
   readonly locale?: "en" | "fr" | undefined;
   readonly notice?: string | undefined;
+  readonly layout?: AuthEmailSettings["layout"] | undefined;
+  readonly typography?: AuthEmailSettings["typography"] | undefined;
 }) => (
   <BaseEmail
     preview={preview ?? description}
@@ -46,9 +54,14 @@ export const OTPEmail = ({
       footer,
       locale,
       notice,
+      layout,
+      typography,
       action: (
         <Container className="bg-muted mx-0 rounded-lg px-4 py-1">
-          <Text className="text-foreground text-3xl font-bold tracking-widest">
+          <Text
+            className="text-foreground text-3xl font-bold tracking-widest"
+            style={emailTextStyle(typography, "code")}
+          >
             {code}
           </Text>
         </Container>

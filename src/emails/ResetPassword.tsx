@@ -4,7 +4,11 @@ import { m } from "@/paraglide/messages";
 
 import { BaseEmail } from "./BaseEmail";
 import type { EmailTheme } from "./Tailwind";
-import type { AuthEmailAppearance } from "@/services/auth-emails/schema";
+import type {
+  AuthEmailAppearance,
+  AuthEmailSettings,
+} from "@/services/auth-emails/schema";
+import { emailTextStyle } from "@/services/auth-emails/typography";
 
 export const ResetPasswordEmail = ({
   appName = m.app_name(),
@@ -20,6 +24,8 @@ export const ResetPasswordEmail = ({
   footer,
   locale,
   notice,
+  layout,
+  typography,
 }: {
   readonly appName?: string | undefined;
   readonly url?: string | undefined;
@@ -34,6 +40,8 @@ export const ResetPasswordEmail = ({
   readonly footer?: string | undefined;
   readonly locale?: "en" | "fr" | undefined;
   readonly notice?: string | undefined;
+  readonly layout?: AuthEmailSettings["layout"] | undefined;
+  readonly typography?: AuthEmailSettings["typography"] | undefined;
 }) => (
   <BaseEmail
     preview={preview ?? description}
@@ -48,11 +56,14 @@ export const ResetPasswordEmail = ({
       footer,
       locale,
       notice,
+      layout,
+      typography,
       action: (
-        <Container>
+        <Container style={{ textAlign: typography?.button?.alignment }}>
           <Button
             className="bg-primary text-primary-foreground rounded-md px-4 py-3 align-middle font-medium"
             href={url}
+            style={emailTextStyle(typography, "button")}
           >
             {action}
           </Button>

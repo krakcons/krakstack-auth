@@ -44,11 +44,51 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)(
           ).origin;
           const settings = {
             appearance: {
+              logoPlacement: "header",
+              showProjectName: false,
               alignment: "right",
               logoWidth: 120,
               logoAlignment: "right",
               logoSpacingTop: 16,
               logoSpacingBottom: 24,
+              foreground: "#112233",
+              mutedForeground: "#445566",
+              primaryForeground: "#FFFFFF",
+            },
+            typography: {
+              font: "serif",
+              heading: { alignment: "left", color: "#006F69" },
+              body: { color: "#334455" },
+              code: { font: "mono", size: 24, color: "#223344" },
+              button: { alignment: "center", color: "#FFFFFF" },
+              help: { color: "#556677" },
+              projectName: { color: "#667788" },
+            },
+            layout: {
+              header: {
+                blocks: [
+                  {
+                    id: "greeting",
+                    type: "text",
+                    text: { en: "Header greeting", fr: "Salutation" },
+                    style: { color: "#778899" },
+                  },
+                ],
+              },
+              footer: {
+                blocks: [
+                  {
+                    id: "support",
+                    type: "link",
+                    translations: {
+                      en: { label: "Help", url: "https://example.com/help" },
+                      fr: { label: "Aide", url: "mailto:aide@example.com" },
+                    },
+                    alignment: "center",
+                    style: { color: "#8899AA" },
+                  },
+                ],
+              },
             },
             templates: {
               "sign-in": {
@@ -215,6 +255,52 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)(
             ).toBe(403);
           }
           yield* sql`UPDATE session SET impersonated_by_organization_id = NULL WHERE user_id = ${id}`;
+          const invalidSettings = [
+            '{"typography":{"heading":{"color":"#123456;color:red"}}}',
+            '{"layout":{"footer":{"blocks":[{"id":"unsafe","type":"link","translations":{"en":{"label":"Help","url":"javascript:alert(1)"},"fr":{"label":"Aide","url":"https://example.com"}}}]}}}',
+          ];
+          for (const invalid of invalidSettings) {
+            for (const suffix of ["/preview", "/test", ""]) {
+              const response = yield* request(
+                suffix,
+                true,
+                suffix ? "POST" : "PATCH",
+                suffix
+                  ? `{"kind":"sign-in","locale":"en","settings":${invalid}}`
+                  : invalid,
+              );
+              expect(response.status).toBe(400);
+            }
+          }
+          expect((yield* projects.get({ id }))?.data.email).toEqual(settings);
+          const incompleteSettings = {
+            layout: {
+              header: {
+                blocks: [
+                  {
+                    id: "draft",
+                    type: "text",
+                    text: { en: "Draft header", fr: "" },
+                  },
+                ],
+              },
+            },
+          } satisfies AuthEmailSettings;
+          const incompleteBody = yield* Schema.encodeEffect(
+            Schema.fromJsonString(AuthEmailPreviewPayload),
+          )({ kind: "sign-in", locale: "en", settings: incompleteSettings });
+          expect(
+            (yield* request("/preview", true, "POST", incompleteBody)).status,
+          ).toBe(200);
+          expect(
+            (yield* request("/test", true, "POST", incompleteBody)).status,
+          ).toBe(400);
+          const incompleteSettingsBody = yield* Schema.encodeEffect(
+            Schema.fromJsonString(AuthEmailPreviewPayload.fields.settings),
+          )(incompleteSettings);
+          expect(
+            (yield* request("", true, "PATCH", incompleteSettingsBody)).status,
+          ).toBe(400);
           for (const suffix of ["/preview", "/test", ""]) {
             expect(
               (yield* request(
@@ -261,6 +347,16 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)(
           expect(preview.text).toContain("000000");
           expect(preview.text).toContain("Custom sign-in");
           expect(preview.html).toContain("Custom sign-in");
+          expect(preview.html).toMatch(
+            /<h1(?=[^>]*text-align:left)(?=[^>]*color:#006F69)[^>]*>/,
+          );
+          expect(preview.html).toMatch(
+            /<p[^>]*color:#778899[^>]*>Header greeting<\/p>/,
+          );
+          expect(preview.html).toMatch(/<a[^>]*color:#8899AA[^>]*>Help<\/a>/);
+          expect(preview.text).toContain("Header greeting");
+          expect(preview.text).toContain("Help: https://example.com/help");
+          expect(preview.text).not.toContain("Email project");
           // Preview must use the current saved logo, including replacement and removal.
           for (const logo of [
             `logos/projects/${id}-first.svg`,
@@ -299,6 +395,20 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)(
           yield* sql`UPDATE "user" SET email_verified = true WHERE id = ${id}`;
           expect((yield* request("/test")).status).toBe(200);
           expect((yield* request("/test")).status).toBe(200);
+          // Draft previews and test delivery must never publish their settings.
+          const draftBody = yield* Schema.encodeEffect(
+            Schema.fromJsonString(AuthEmailPreviewPayload),
+          )({
+            ...payload,
+            settings: { typography: { heading: { color: "#AABBCC" } } },
+          });
+          expect(
+            (yield* request("/preview", true, "POST", draftBody)).status,
+          ).toBe(200);
+          expect(
+            (yield* request("/test", true, "POST", draftBody)).status,
+          ).toBe(200);
+          expect((yield* projects.get({ id }))?.data.email).toEqual(settings);
           const settingsBody = yield* Schema.encodeEffect(
             Schema.fromJsonString(AuthEmailSettings),
           )(settings);
