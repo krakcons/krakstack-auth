@@ -1,4 +1,9 @@
 {
+  "project_email_formatting": "Mise en forme du texte",
+  "project_email_bold": "Gras",
+  "project_email_italic": "Italique",
+  "project_email_underline": "Souligné",
+  "project_email_strikethrough": "Barré",
   "project_email_font_compatibility": "À propos des polices",
   "project_email_section_actions": "Actions de la section",
   "project_email_section_header": "En-tête",
@@ -6,7 +11,7 @@
   "project_email_section_footer": "Pied de page",
   "project_email_email_details": "Détails du courriel",
   "project_email_message": "Message",
-  "project_email_help_text": "Texte d’aide",
+  "project_email_help_text": "Note de bas de message",
   "project_email_email_appearance": "Apparence du courriel",
   "project_email_shared_help": "Réglages communs à toutes les sections, tous les types de courriels et toutes les langues.",
   "project_email_content_scope": "Le contenu dépend du type de courriel et de la langue. La typographie s’applique à tous les courriels d’authentification.",

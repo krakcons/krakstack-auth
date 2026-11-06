@@ -4,13 +4,17 @@ import {
   ArrowDownIcon,
   ArrowUpIcon,
   ArrowRightLeftIcon,
+  BoldIcon,
   ChevronDownIcon,
   ImageIcon,
+  ItalicIcon,
   MoreHorizontalIcon,
   PlusIcon,
   RotateCcwIcon,
+  StrikethroughIcon,
   Trash2Icon,
   TriangleAlertIcon,
+  UnderlineIcon,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { ColorPicker } from "@/components/ui/color-picker";
@@ -48,6 +52,8 @@ import {
   resolveEmailTextStyle,
   resolveEmailRoleColor,
   emailDefaultColors,
+  emailRoleIsBold,
+  resolveEmailTextFormatting,
   type EmailTextRole,
 } from "@/services/auth-emails/typography";
 
@@ -175,57 +181,94 @@ const TextStyleEditor = ({
   style,
   inherited,
   sizes,
-  resetDisabled,
+  formattingDefaults,
   onChange,
 }: {
   style: AuthEmailTextStyle | undefined;
   inherited: ReturnType<typeof resolveEmailTextStyle>;
   sizes: ReadonlyArray<number>;
-  resetDisabled?: boolean;
+  formattingDefaults?: { bold?: boolean; underline?: boolean };
   onChange: (style: AuthEmailTextStyle) => void;
 }) => (
-  <div className="flex items-end gap-2">
-    <div className="grid min-w-0 flex-1 grid-cols-2 gap-2">
-      <EmailChoice
-        label={m.project_email_font()}
-        value={style?.font ?? inherited.font}
-        options={fonts()}
-        onChange={(font) => {
-          if (Schema.is(AuthEmailFont)(font)) onChange({ ...style, font });
-        }}
-      />
-      <EmailChoice
-        label={m.project_email_font_size()}
-        value={String(style?.size ?? inherited.size)}
-        options={[...new Set([inherited.size, ...sizes])]
-          .sort((a, b) => a - b)
-          .map((size) => ({ value: String(size), label: `${size} px` }))}
-        onChange={(value) => {
-          const size = sizes.find((size) => String(size) === value);
-          onChange(
-            size === undefined
-              ? Struct.omit(style ?? {}, ["size"])
-              : { ...style, size },
-          );
-        }}
-      />
+  <div className="space-y-2">
+    <div className="flex items-end gap-2">
+      <div className="grid min-w-0 flex-1 grid-cols-2 gap-2">
+        <EmailChoice
+          label={m.project_email_font()}
+          value={style?.font ?? inherited.font}
+          options={fonts()}
+          onChange={(font) => {
+            if (Schema.is(AuthEmailFont)(font)) onChange({ ...style, font });
+          }}
+        />
+        <EmailChoice
+          label={m.project_email_font_size()}
+          value={String(style?.size ?? inherited.size)}
+          options={[...new Set([inherited.size, ...sizes])]
+            .sort((a, b) => a - b)
+            .map((size) => ({ value: String(size), label: `${size} px` }))}
+          onChange={(value) => {
+            const size = sizes.find((size) => String(size) === value);
+            onChange(
+              size === undefined
+                ? Struct.omit(style ?? {}, ["size"])
+                : { ...style, size },
+            );
+          }}
+        />
+      </div>
+      <Button
+        type="button"
+        variant="ghost"
+        size="icon"
+        aria-label={m.project_email_reset_text_style()}
+        title={m.project_email_reset_text_style()}
+        disabled={!style || Object.keys(style).length === 0}
+        onClick={() => onChange({})}
+      >
+        <RotateCcwIcon aria-hidden="true" />
+      </Button>
     </div>
-    <Button
-      type="button"
-      variant="ghost"
-      size="icon"
-      aria-label={m.project_email_reset_text_style()}
-      title={m.project_email_reset_text_style()}
-      disabled={
-        resetDisabled ??
-        (style?.font === undefined &&
-          style?.size === undefined &&
-          style?.color === undefined)
-      }
-      onClick={() => onChange({})}
+    <div
+      className="flex flex-wrap gap-1"
+      role="group"
+      aria-label={m.project_email_formatting()}
     >
-      <RotateCcwIcon aria-hidden="true" />
-    </Button>
+      {(
+        [
+          { key: "bold", label: m.project_email_bold(), icon: BoldIcon },
+          { key: "italic", label: m.project_email_italic(), icon: ItalicIcon },
+          {
+            key: "underline",
+            label: m.project_email_underline(),
+            icon: UnderlineIcon,
+          },
+          {
+            key: "strikethrough",
+            label: m.project_email_strikethrough(),
+            icon: StrikethroughIcon,
+          },
+        ] as const
+      ).map(({ key, label, icon: Icon }) => {
+        const pressed = resolveEmailTextFormatting(style, formattingDefaults)[
+          key
+        ];
+        return (
+          <Button
+            key={key}
+            type="button"
+            variant={pressed ? "secondary" : "ghost"}
+            size="icon-sm"
+            aria-label={label}
+            title={label}
+            aria-pressed={pressed}
+            onClick={() => onChange({ ...style, [key]: !pressed })}
+          >
+            <Icon aria-hidden="true" />
+          </Button>
+        );
+      })}
+    </div>
   </div>
 );
 
@@ -247,9 +290,7 @@ export const EmailRoleStyleEditor = ({
         style={style}
         inherited={resolveEmailTextStyle(settings.typography, role)}
         sizes={emailSizeOptions[role]}
-        resetDisabled={
-          !style?.font && !style?.size && !style?.alignment && !style?.color
-        }
+        formattingDefaults={{ bold: emailRoleIsBold(role) }}
         onChange={(style) =>
           onChange({
             ...settings,
@@ -287,21 +328,9 @@ export const EmailRoleStyleEditor = ({
           }
         />
       </div>
-      <FontCompatibility />
     </div>
   );
 };
-
-const FontCompatibility = () => (
-  <details>
-    <summary className="text-muted-foreground cursor-pointer text-xs">
-      {m.project_email_font_compatibility()}
-    </summary>
-    <p className="text-muted-foreground mt-2 text-xs">
-      {m.project_email_typography_help()}
-    </p>
-  </details>
-);
 
 export const EmailLogoPlacement = ({
   settings,
@@ -643,6 +672,7 @@ export const EmailSectionEditor = ({
                         "body",
                       )}
                       sizes={emailSizeOptions.body}
+                      formattingDefaults={{ underline: block.type === "link" }}
                       onChange={(style) => replace({ ...block, style })}
                     />
                     <div className="grid min-w-0 grid-cols-2 gap-2">
@@ -669,7 +699,6 @@ export const EmailSectionEditor = ({
                         }
                       />
                     </div>
-                    <FontCompatibility />
                     <div className="flex flex-wrap items-center justify-between gap-2">
                       <Button
                         type="button"

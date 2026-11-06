@@ -420,38 +420,42 @@ export const ProjectEmailEditor = ({ project }: { project: Project }) => {
           <div className="grid min-w-0 items-start gap-5 xl:grid-cols-[minmax(0,1fr)_minmax(0,1.2fr)]">
             <div className="min-w-0 space-y-4">
               <details
-                className="space-y-4 rounded-xl border p-4"
+                className="rounded-xl border p-4"
                 aria-label={m.project_email_email_appearance()}
               >
                 <summary className="cursor-pointer text-sm font-medium">
                   {m.project_email_email_appearance()}
                 </summary>
-                <p className="text-muted-foreground text-xs">
-                  {m.project_email_shared_help()}
-                </p>
-                <EmailLogoPlacement
-                  settings={settings}
-                  logo={logo ?? undefined}
-                  onChange={change}
-                />
-                <details className="space-y-3 border-t pt-3">
-                  <summary className="cursor-pointer text-sm">
-                    {m.project_email_logo_style()}
-                  </summary>
+                <div className="space-y-4 pt-4">
+                  <p className="text-muted-foreground text-xs">
+                    {m.project_email_shared_help()}
+                  </p>
                   <div className="grid gap-3 sm:grid-cols-2">
-                    {numberFields()
-                      .filter(({ key }) => key.startsWith("logo"))
-                      .map(numberInput)}
-                    {alignmentInput(
-                      "logoAlignment",
-                      m.project_email_logo_alignment(),
-                    )}
+                    {colorFields()
+                      .filter(({ key }) => key === "background")
+                      .map(colorInput)}
                   </div>
-                </details>
-                <div className="grid gap-3 sm:grid-cols-2">
-                  {colorFields()
-                    .filter(({ key }) => key === "background")
-                    .map(colorInput)}
+                  <details className="border-t pt-3">
+                    <summary className="cursor-pointer text-sm">
+                      {m.project_email_logo_style()}
+                    </summary>
+                    <div className="space-y-3 pt-3">
+                      <EmailLogoPlacement
+                        settings={settings}
+                        logo={logo ?? undefined}
+                        onChange={change}
+                      />
+                      <div className="grid gap-3 sm:grid-cols-2">
+                        {numberFields()
+                          .filter(({ key }) => key.startsWith("logo"))
+                          .map(numberInput)}
+                        {alignmentInput(
+                          "logoAlignment",
+                          m.project_email_logo_alignment(),
+                        )}
+                      </div>
+                    </div>
+                  </details>
                 </div>
               </details>
               <Tabs

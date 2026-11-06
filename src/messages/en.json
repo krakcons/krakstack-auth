@@ -1,4 +1,9 @@
 {
+  "project_email_formatting": "Text formatting",
+  "project_email_bold": "Bold",
+  "project_email_italic": "Italic",
+  "project_email_underline": "Underline",
+  "project_email_strikethrough": "Strikethrough",
   "project_email_font_compatibility": "About fonts",
   "project_email_section_actions": "Section actions",
   "project_email_section_header": "Header",
@@ -6,7 +11,7 @@
   "project_email_section_footer": "Footer",
   "project_email_email_details": "Email details",
   "project_email_message": "Message",
-  "project_email_help_text": "Help text",
+  "project_email_help_text": "Footing",
   "project_email_email_appearance": "Email appearance",
   "project_email_shared_help": "Shared across all sections, email types, and languages.",
   "project_email_content_scope": "Content is specific to this email type and language. Typography applies to every authentication email.",
