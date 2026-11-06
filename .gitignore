@@ -13,3 +13,5 @@ __unconfig*
 todos.json
 *.tsbuildinfo
 /tmp/
+/test-results/
+/playwright-report/

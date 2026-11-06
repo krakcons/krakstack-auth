@@ -1,0 +1,322 @@
+import * as BunHttpPlatform from "@effect/platform-bun/BunHttpPlatform";
+import * as BunServices from "@effect/platform-bun/BunServices";
+import { describe, expect, it } from "@effect/vitest";
+import { ConfigProvider, Effect, Layer, Schema } from "effect";
+import { Etag, HttpRouter } from "effect/http";
+import { HttpApi, HttpApiBuilder } from "effect/http-api";
+import { SqlClient } from "effect/sql";
+import { S3Service, S3ServiceConfig } from "@krak-stack/registry/service-s3";
+import { AdminApi } from "@/api";
+import { createAuth } from "@/services/auth/config";
+import { adminAuthMiddlewareLayer } from "@/services/auth/middleware.server";
+import {
+  AuthEmailPreview,
+  AuthEmailPreviewPayload,
+  AuthEmailSettings,
+} from "@/services/auth-emails/schema";
+import { sqlTestLayer } from "@/services/database";
+import { Projects } from ".";
+import { adminProjectsApiHandler } from "./api.builder";
+import { ProjectDataJson, UpdateProjectPayload } from "./schema";
+
+const SendOtp = Schema.Struct({
+  email: Schema.String,
+  type: Schema.Literal("sign-in"),
+}).annotate({ identifier: "EmailTestSendOtp" });
+const VerificationValue = Schema.Struct({ value: Schema.String }).annotate({
+  identifier: "EmailTestVerificationValue",
+});
+
+describe.skipIf(!process.env.TEST_DATABASE_URL)(
+  "project email HTTP integration",
+  () => {
+    it.effect(
+      "keeps customized OTPs usable and protects preview, save, and sample delivery",
+      () =>
+        Effect.gen(function* () {
+          const sql = yield* SqlClient.SqlClient;
+          const projects = yield* Projects;
+          const id = crypto.randomUUID();
+          const legacyProjectId = `${id}-legacy`;
+          const email = `${id}@example.test`;
+          const base = new URL(
+            process.env.BETTER_AUTH_URL ?? "http://localhost:3000",
+          ).origin;
+          const settings = {
+            appearance: {
+              alignment: "right",
+              logoWidth: 120,
+              logoAlignment: "right",
+              logoSpacingTop: 16,
+              logoSpacingBottom: 24,
+            },
+            templates: {
+              "sign-in": {
+                en: { title: "Custom sign-in", body: "Enter your code" },
+              },
+            },
+          } satisfies AuthEmailSettings;
+          const auth = createAuth({
+            allowedHosts: [new URL(base).host],
+            auditRun: async () => {},
+          });
+          const config = Layer.succeed(
+            ConfigProvider.ConfigProvider,
+            ConfigProvider.orElse(
+              ConfigProvider.fromUnknown({
+                VITE_KRAKSTACK_AUTH_ORGANIZATION_ID: id,
+              }),
+              yield* ConfigProvider.ConfigProvider,
+            ),
+          );
+          const unusedUploads = Layer.effect(S3Service, S3Service.make).pipe(
+            Layer.provide(
+              Layer.succeed(S3ServiceConfig, {
+                options: {
+                  bucket: "unused",
+                  endpoint: "https://example.invalid",
+                  accessKeyId: "unused",
+                  secretAccessKey: "unused",
+                },
+              }),
+            ),
+          );
+          const web = HttpRouter.toWebHandler(
+            HttpApiBuilder.layer(
+              HttpApi.make("AdminApi").add(AdminApi.groups.projects),
+            ).pipe(
+              Layer.provide(adminProjectsApiHandler),
+              Layer.provide(adminAuthMiddlewareLayer),
+              HttpRouter.provideRequest(
+                Layer.mergeAll(
+                  Layer.succeed(Projects, projects),
+                  Layer.succeed(SqlClient.SqlClient, sql),
+                  config,
+                  unusedUploads,
+                ),
+              ),
+              Layer.provide(BunHttpPlatform.layer),
+              Layer.provide(Etag.layer),
+              Layer.provide(BunServices.layer),
+            ),
+          );
+          yield* Effect.addFinalizer(() => Effect.promise(() => web.dispose()));
+          yield* Effect.addFinalizer(() =>
+            Effect.gen(function* () {
+              yield* sql`DELETE FROM verification WHERE identifier LIKE ${`%${email}%`}`;
+              yield* sql`DELETE FROM organization WHERE user_id = ${id}`;
+              yield* sql`DELETE FROM "user" WHERE id = ${id}`;
+              yield* sql`DELETE FROM project WHERE id IN (${id}, ${legacyProjectId})`;
+            }).pipe(Effect.orDie),
+          );
+          const projectData = yield* Schema.encodeEffect(ProjectDataJson)({
+            email: settings,
+          });
+          yield* sql`INSERT INTO project (id, name, data) VALUES (${id}, 'Email project', ${projectData}::jsonb)`;
+          yield* sql`INSERT INTO project (id, name, data) VALUES (${legacyProjectId}, 'Existing project', '{"branding":{"themeCss":":root { --primary: #123456; }"}}'::jsonb)`;
+          yield* sql`INSERT INTO "user" (id, name, email, email_verified, role) VALUES (${id}, 'Email editor', ${email}, true, 'user')`;
+          const otpBody = yield* Schema.encodeEffect(
+            Schema.fromJsonString(SendOtp),
+          )({ email, type: "sign-in" });
+          const sent = yield* Effect.promise(() =>
+            auth.handler(
+              new Request(`${base}/api/auth/email-otp/send-verification-otp`, {
+                method: "POST",
+                headers: {
+                  "content-type": "application/json",
+                  cookie: `krakstack-auth.project_context=${id}`,
+                },
+                body: otpBody,
+              }),
+            ),
+          );
+          expect(sent.status).toBe(200);
+          const retrieved = yield* Effect.promise(() =>
+            auth.api.getVerificationOTP({ query: { email, type: "sign-in" } }),
+          );
+          const otp = retrieved.otp;
+          if (!otp) return yield* Effect.die("OTP was not persisted");
+          const stored =
+            yield* sql`SELECT value FROM verification WHERE identifier = ${`sign-in-otp-${email}`}`.pipe(
+              Effect.flatMap(
+                Schema.decodeUnknownEffect(Schema.Array(VerificationValue)),
+              ),
+            );
+          expect(stored).toHaveLength(1);
+          expect(stored[0]?.value).not.toBe(`${otp}:0`);
+          const signedIn = yield* Effect.promise(() =>
+            auth.api.signInEmailOTP({
+              body: { email, otp },
+              returnHeaders: true,
+            }),
+          );
+          expect(signedIn.response.user.id).toBe(id);
+          yield* Effect.promise(() =>
+            expect(
+              auth.api.signInEmailOTP({ body: { email, otp } }),
+            ).rejects.toThrow(),
+          );
+          const cookie = signedIn.headers
+            .getSetCookie()
+            .filter((value) => value.split("=")[0]?.endsWith("session_token"))
+            .map((value) => value.split(";")[0])
+            .join("; ");
+          const payload = {
+            kind: "sign-in",
+            locale: "en",
+            settings,
+          } satisfies AuthEmailPreviewPayload;
+          const body = yield* Schema.encodeEffect(
+            Schema.fromJsonString(AuthEmailPreviewPayload),
+          )(payload);
+          const request = (
+            suffix: string,
+            authenticated = true,
+            method: "POST" | "PATCH" = "POST",
+            content = body,
+            projectId: string = id,
+          ) =>
+            Effect.promise(() => {
+              const headers = new Headers({
+                "content-type": "application/json",
+              });
+              if (authenticated) headers.set("cookie", cookie);
+              return web.handler(
+                new Request(
+                  `${base}/api/auth/admin/projects/${projectId}/email${suffix}`,
+                  { method, headers, body: content },
+                ),
+              );
+            });
+          for (const suffix of ["/preview", "/test", ""]) {
+            const method = suffix ? "POST" : "PATCH";
+            const content = suffix
+              ? body
+              : yield* Schema.encodeEffect(
+                  Schema.fromJsonString(AuthEmailSettings),
+                )(settings);
+            expect(
+              (yield* request(suffix, false, method, content)).status,
+            ).toBe(401);
+            expect((yield* request(suffix, true, method, content)).status).toBe(
+              403,
+            );
+          }
+          yield* sql`UPDATE "user" SET role = 'admin' WHERE id = ${id}`;
+          yield* sql`UPDATE session SET impersonated_by_organization_id = ${id} WHERE user_id = ${id}`;
+          for (const suffix of ["/preview", "/test", ""]) {
+            expect(
+              (yield* request(
+                suffix,
+                true,
+                suffix ? "POST" : "PATCH",
+                suffix ? body : "{}",
+              )).status,
+            ).toBe(403);
+          }
+          yield* sql`UPDATE session SET impersonated_by_organization_id = NULL WHERE user_id = ${id}`;
+          for (const suffix of ["/preview", "/test", ""]) {
+            expect(
+              (yield* request(
+                suffix,
+                true,
+                suffix ? "POST" : "PATCH",
+                suffix ? body : "{}",
+                `${id}-missing`,
+              )).status,
+            ).toBe(404);
+            const invalid = suffix
+              ? '{"kind":"sign-in","locale":"en","settings":{"appearance":{"background":"not-a-color"}}}'
+              : '{"appearance":{"logoWidth":0}}';
+            expect(
+              (yield* request(suffix, true, suffix ? "POST" : "PATCH", invalid))
+                .status,
+            ).toBe(400);
+          }
+          const legacyBody = yield* Schema.encodeEffect(
+            Schema.fromJsonString(AuthEmailPreviewPayload),
+          )({ kind: "sign-in", locale: "fr", settings: {} });
+          const legacyResponse = yield* request(
+            "/preview",
+            true,
+            "POST",
+            legacyBody,
+            legacyProjectId,
+          );
+          expect(legacyResponse.status).toBe(200);
+          const legacyPreview = yield* Schema.decodeUnknownEffect(
+            AuthEmailPreview,
+          )(yield* Effect.promise(() => legacyResponse.json()));
+          expect(legacyPreview.text).toContain("000000");
+          expect(legacyPreview.text).toContain("Existing project");
+          expect(legacyPreview.html).not.toContain("Custom sign-in");
+          expect((yield* projects.get({ id: legacyProjectId }))?.data).toEqual({
+            branding: { themeCss: ":root { --primary: #123456; }" },
+          });
+          const previewResponse = yield* request("/preview");
+          expect(previewResponse.status).toBe(200);
+          const preview = yield* Schema.decodeUnknownEffect(AuthEmailPreview)(
+            yield* Effect.promise(() => previewResponse.json()),
+          );
+          expect(preview.text).toContain("000000");
+          expect(preview.text).toContain("Custom sign-in");
+          expect(preview.html).toContain("Custom sign-in");
+          // Preview must use the current saved logo, including replacement and removal.
+          for (const logo of [
+            `logos/projects/${id}-first.svg`,
+            `logos/projects/${id}-second.svg`,
+            null,
+          ]) {
+            const updateBody = yield* Schema.encodeEffect(
+              Schema.fromJsonString(UpdateProjectPayload),
+            )({ logo, data: {} });
+            const updated = yield* Effect.promise(() =>
+              web.handler(
+                new Request(`${base}/api/auth/admin/projects/${id}`, {
+                  method: "PATCH",
+                  headers: { "content-type": "application/json", cookie },
+                  body: updateBody,
+                }),
+              ),
+            );
+            expect(updated.status).toBe(200);
+            const refreshed = yield* request("/preview");
+            expect(refreshed.status).toBe(200);
+            const email = yield* Schema.decodeUnknownEffect(AuthEmailPreview)(
+              yield* Effect.promise(() => refreshed.json()),
+            );
+            if (logo) {
+              expect(email.html).toContain(
+                `src="${base}/api/auth/assets/${logo}"`,
+              );
+            } else {
+              expect(email.html).not.toContain("/api/auth/assets/logos/");
+            }
+            expect((yield* projects.get({ id }))?.data.email).toEqual(settings);
+          }
+          yield* sql`UPDATE "user" SET email_verified = false WHERE id = ${id}`;
+          expect((yield* request("/test")).status).toBe(403);
+          yield* sql`UPDATE "user" SET email_verified = true WHERE id = ${id}`;
+          expect((yield* request("/test")).status).toBe(200);
+          expect((yield* request("/test")).status).toBe(200);
+          const settingsBody = yield* Schema.encodeEffect(
+            Schema.fromJsonString(AuthEmailSettings),
+          )(settings);
+          expect((yield* request("", true, "PATCH", settingsBody)).status).toBe(
+            200,
+          );
+          expect((yield* projects.get({ id }))?.data.email).toEqual(settings);
+          expect((yield* request("", true, "PATCH", "{}")).status).toBe(200);
+          expect((yield* projects.get({ id }))?.data.email).toEqual({});
+          const remaining =
+            yield* sql`SELECT value FROM verification WHERE identifier LIKE ${`%${email}%`}`;
+          expect(remaining).toHaveLength(0);
+        }).pipe(
+          Effect.scoped,
+          Effect.provide(
+            Projects.testLayer.pipe(Layer.provideMerge(sqlTestLayer)),
+          ),
+        ),
+    );
+  },
+);

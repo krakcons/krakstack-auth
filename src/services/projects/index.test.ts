@@ -10,6 +10,108 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)(
   "Projects SQL persistence",
   () => {
     it.effect(
+      "updates only the selected project's email settings without backfilling other projects",
+      () =>
+        Effect.gen(function* () {
+          const projects = yield* Projects;
+          const first = yield* projects.create({
+            payload: { name: `email-owner-${crypto.randomUUID()}`, data: {} },
+          });
+          yield* Effect.addFinalizer(() =>
+            projects.delete({ id: first.id }).pipe(Effect.orDie),
+          );
+          const other = yield* projects.create({
+            payload: {
+              name: `email-other-${crypto.randomUUID()}`,
+              data: { authOptions: { emailOtp: true } },
+            },
+          });
+          yield* Effect.addFinalizer(() =>
+            projects.delete({ id: other.id }).pipe(Effect.orDie),
+          );
+          yield* projects.updateEmail({
+            id: first.id,
+            settings: { appearance: { logoWidth: 180 } },
+          });
+          expect((yield* projects.get({ id: first.id }))?.data.email).toEqual({
+            appearance: { logoWidth: 180 },
+          });
+          expect((yield* projects.get({ id: other.id }))?.data).toEqual(
+            other.data,
+          );
+          expect(
+            (yield* projects.get({ id: other.id }))?.data.email,
+          ).toBeUndefined();
+        }).pipe(Effect.scoped, Effect.provide(Projects.testLayer)),
+    );
+
+    it.effect(
+      "preserves email and general settings independently, including stale writes",
+      () =>
+        Effect.gen(function* () {
+          const projects = yield* Projects;
+          const project = yield* projects.create({
+            payload: {
+              name: `email-${crypto.randomUUID()}`,
+              data: {
+                branding: { themeCss: ":root { --primary: #123456; }" },
+                authOptions: { emailOtp: true },
+              },
+            },
+          });
+          yield* Effect.gen(function* () {
+            const email = {
+              appearance: { background: "#123456" },
+              templates: {
+                "sign-in": {
+                  en: { title: "Welcome" },
+                  fr: { title: "Bienvenue" },
+                },
+              },
+            };
+            const updated = yield* projects.updateEmail({
+              id: project.id,
+              settings: email,
+            });
+            expect(updated?.data).toEqual({ ...project.data, email });
+            expect(
+              (yield* projects.get({ id: project.id }))?.data.email,
+            ).toEqual(email);
+            const general = yield* projects.update({
+              id: project.id,
+              payload: {
+                name: "Renamed",
+                data: { authOptions: { emailOtp: false }, email: {} },
+              },
+            });
+            expect(general?.data).toEqual({
+              authOptions: { emailOtp: false },
+              email,
+            });
+            const reset = yield* projects.updateEmail({
+              id: project.id,
+              settings: {},
+            });
+            expect(reset?.data).toEqual({
+              authOptions: { emailOtp: false },
+              email: {},
+            });
+            expect(reset?.name).toBe("Renamed");
+            expect(
+              yield* projects.updateEmail({
+                id: `${project.id}-missing`,
+                settings: {},
+              }),
+            ).toBeNull();
+          }).pipe(
+            Effect.ensuring(
+              projects.delete({ id: project.id }).pipe(Effect.orDie),
+            ),
+          );
+        }).pipe(Effect.provide(Projects.testLayer)),
+    );
+
+    it.effect(
       "scopes project stats without inferring activity from session timestamps",
       () =>
         Effect.gen(function* () {

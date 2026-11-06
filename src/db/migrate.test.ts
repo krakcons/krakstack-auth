@@ -122,7 +122,11 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)(
             const migrated = yield* SqlClient.SqlClient;
             expect(
               yield* migrated`SELECT migration_id FROM effect_sql_migrations ORDER BY migration_id`,
-            ).toEqual([{ migrationId: 1 }, { migrationId: 2 }]);
+            ).toEqual([
+              { migrationId: 1 },
+              { migrationId: 2 },
+              { migrationId: 3 },
+            ]);
             yield* migrated`INSERT INTO "user" (id, name, email) VALUES ('automatic', 'Automatic', 'automatic@example.test')`;
             expect(
               yield* migrated`SELECT locale FROM "user" WHERE id = 'automatic'`,
@@ -152,6 +156,7 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)(
             expect(yield* migrate).toEqual([
               [1, "legacy"],
               [2, "user_locale"],
+              [3, "account_deletion"],
             ]);
             yield* sql`INSERT INTO "user" (id, name, email) VALUES ('locale-default', 'Default', 'default@example.test')`;
             expect(
@@ -207,6 +212,8 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)(
             yield* sql`INSERT INTO session (id, token, user_id, expires_at, updated_at, active_organization_id) VALUES ('s', 'preserved-session-token', 'u', now() + interval '1 day', now(), 'org')`;
             yield* sql`INSERT INTO apikey (id, reference_id, key, created_at, updated_at, permissions, metadata) VALUES ('k', 'u', 'preserved-key', now(), now(), '{"project":["auth:proxy"]}', '{"allowedOrigins":["https://example.test"]}')`;
             yield* sql`INSERT INTO oauth_client (id, client_id, redirect_uris, scopes, metadata) VALUES ('c', 'client', ARRAY['https://example.test/callback'], ARRAY['openid','profile'], '{"camelCase":"keep"}'::jsonb)`;
+            yield* sql`INSERT INTO project (id, name, logo, data) VALUES ('legacy-project', 'Existing project', 'logos/existing.svg', '{"branding":{"themeCss":":root { --primary: #123456; }"},"authOptions":{"emailOtp":true}}'::jsonb)`;
+            yield* sql`INSERT INTO project_organization (id, project_id, organization_id) VALUES ('legacy-project-org', 'legacy-project', 'org')`;
             const before = yield* applicationSnapshot;
             const history =
               yield* sql`SELECT * FROM drizzle.__drizzle_migrations`;
@@ -218,10 +225,31 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)(
             expect(
               yield* sql`SELECT * FROM drizzle.__drizzle_migrations`,
             ).toEqual(history);
-            expect(yield* migrate).toEqual([[2, "user_locale"]]);
+            expect(yield* migrate).toEqual([
+              [2, "user_locale"],
+              [3, "account_deletion"],
+            ]);
             expect(
               yield* sql`SELECT locale FROM "user" WHERE id = 'u'`,
             ).toEqual([{ locale: "en" }]);
+            expect(
+              yield* sql`SELECT name, logo, data FROM project WHERE id = 'legacy-project'`,
+            ).toEqual([
+              {
+                name: "Existing project",
+                logo: "logos/existing.svg",
+                data: {
+                  branding: { themeCss: ":root { --primary: #123456; }" },
+                  authOptions: { emailOtp: true },
+                },
+              },
+            ]);
+            expect(
+              yield* sql`SELECT organization_id, user_id, role FROM member WHERE id = 'm'`,
+            ).toEqual([{ organizationId: "org", userId: "u", role: "owner" }]);
+            expect(
+              yield* sql`SELECT organization_id, project_id FROM project_organization WHERE id = 'legacy-project-org'`,
+            ).toEqual([{ organizationId: "org", projectId: "legacy-project" }]);
             expect(yield* migrate).toEqual([]);
           }),
         ),
@@ -351,7 +379,7 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)(
           });
           expect(
             results.map((rows) => rows.length).sort((a, b) => a - b),
-          ).toEqual([0, 2]);
+          ).toEqual([0, 3]);
         }),
       ),
     );
@@ -361,7 +389,10 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)(
           yield* installExisting;
           const results = yield* Effect.all([adopt, adopt], { concurrency: 2 });
           expect(results.filter(Boolean)).toHaveLength(1);
-          expect(yield* migrate).toEqual([[2, "user_locale"]]);
+          expect(yield* migrate).toEqual([
+            [2, "user_locale"],
+            [3, "account_deletion"],
+          ]);
         }),
       ),
     );
