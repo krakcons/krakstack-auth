@@ -9,11 +9,13 @@ import {
 } from "effect";
 import { PgClient } from "@effect/sql-pg";
 import { SqlClient } from "effect/sql";
-import { defaults, Pool } from "pg";
+import { defaults, Pool, types } from "pg";
 import { migrate } from "@/db/migrate";
+import { parseUtcTimestamp } from "./database-timestamps";
 
 // The existing schema uses timestamp without time zone and stores UTC.
 defaults.parseInputDatesAsUTC = true;
+types.setTypeParser(types.builtins.TIMESTAMP, parseUtcTimestamp);
 
 const DatabasePoolSize = Schema.FiniteFromString.check(
   Schema.isBetween({ minimum: 1, maximum: 100 }),
