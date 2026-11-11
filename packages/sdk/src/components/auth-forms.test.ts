@@ -24,6 +24,11 @@ import { resetPasswordAndSignOut } from "./password-reset.js";
 import { getOAuthAuthorizationQuery } from "../oauth/authorization.js";
 
 describe("signed OAuth sign-in continuation", () => {
+  const canonicalQuery = (query: string) => {
+    const params = new URLSearchParams(query);
+    params.sort();
+    return params.toString();
+  };
   it("preserves repeated signed fields through email steps and method changes", () => {
     const signed = new URLSearchParams({
       client_id: "agent",
@@ -40,14 +45,16 @@ describe("signed OAuth sign-in continuation", () => {
         authMethodSearch(search, method, "user@example.com"),
       );
       const restored = new URLSearchParams(getOAuthAuthorizationQuery(search)!);
-      expect([...restored].sort()).toEqual([...signed].sort());
+      expect(canonicalQuery(restored.toString())).toBe(
+        canonicalQuery(signed.toString()),
+      );
       for (const target of [
         getRedirectTarget(search),
         getSocialRedirectTarget(search, "/", "https://example.com"),
       ]) {
         expect(
-          [...new URL(target, "https://example.com").searchParams].sort(),
-        ).toEqual([...signed].sort());
+          canonicalQuery(new URL(target, "https://example.com").search),
+        ).toBe(canonicalQuery(signed.toString()));
       }
     }
   });
