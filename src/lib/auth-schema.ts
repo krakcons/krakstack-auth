@@ -6,6 +6,7 @@ export const AuthUser = Schema.Struct({
   name: Schema.String,
   email: Schema.String,
   emailVerified: Schema.Boolean,
+  locale: Schema.optional(Schema.Literals(["en", "fr"])),
   image: Schema.NullOr(Schema.String),
   metadata: Schema.NullOr(UserMetadata),
   role: Schema.NullOr(Schema.String),

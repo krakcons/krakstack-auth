@@ -58,6 +58,8 @@ export {
   ServerOrganizationsResponse,
   ServerUpdateDomainPayload,
   ServerUsersResponse,
+  ServerEmailsQuery,
+  ServerUsersByEmailsResponse,
 } from "./schema.js";
 export type {
   Member,

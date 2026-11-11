@@ -2,6 +2,15 @@ import { Schema } from "effect";
 
 import { Member, Organization, User } from "../schema.js";
 
+export const ServerEmailsQuery = Schema.Struct({
+  emails: Schema.NonEmptyString,
+}).annotate({ identifier: "ServerEmailsQuery" });
+
+export const ServerUsersByEmailsResponse = Schema.Struct({
+  data: Schema.Array(User),
+  missingEmails: Schema.Array(Schema.String),
+}).annotate({ identifier: "ServerUsersByEmailsResponse" });
+
 export const AuthProxyOrigin = Schema.Struct({
   apiKey: Schema.RedactedFromValue(Schema.NonEmptyString),
   host: Schema.String.check(

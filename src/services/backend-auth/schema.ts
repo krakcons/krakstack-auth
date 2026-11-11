@@ -2,6 +2,15 @@ import { Schema } from "effect";
 
 import { AuthMember, AuthOrganization, AuthUser } from "@/lib/auth-schema";
 
+export const BackendAuthEmailsQuery = Schema.Struct({
+  emails: Schema.NonEmptyString,
+}).annotate({ identifier: "BackendAuthEmailsQuery" });
+
+export const BackendAuthUsersByEmailsResponse = Schema.Struct({
+  data: Schema.Array(AuthUser),
+  missingEmails: Schema.Array(Schema.String),
+}).annotate({ identifier: "BackendAuthUsersByEmailsResponse" });
+
 export const BackendAuthIdsQuery = Schema.Struct({
   ids: Schema.NonEmptyString,
 }).annotate({

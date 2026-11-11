@@ -18,10 +18,26 @@ import {
   ServerOrganizationsQuery,
   ServerOrganizationsResponse,
   ServerUserIdParams,
+  ServerEmailsQuery,
+  ServerUsersByEmailsResponse,
   ServerUsersResponse,
 } from "./schema.js";
 
 export const ServerUsersApiGroup = HttpApiGroup.make("users")
+  .add(
+    HttpApiEndpoint.get("listUsersByEmails", "/users/by-email", {
+      query: ServerEmailsQuery.fields,
+      success: ServerUsersByEmailsResponse,
+      error: [HttpApiError.Unauthorized, HttpApiError.InternalServerError],
+    }).annotateMerge(
+      OpenApi.annotations({
+        title: "List users by emails",
+        summary: "List users by emails",
+        description:
+          "Returns trusted users, including locale, for comma-separated primary emails, plus missing emails. Matching is case-insensitive, trims whitespace, and deduplicates emails in request order. Requires a service API key.",
+      }),
+    ),
+  )
   .add(
     HttpApiEndpoint.get("listUsersByIds", "/users", {
       query: ServerIdsQuery.fields,

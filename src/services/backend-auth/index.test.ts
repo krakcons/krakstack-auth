@@ -10,6 +10,38 @@ import { BackendAuth } from ".";
 describe.skipIf(!process.env.TEST_DATABASE_URL)(
   "BackendAuth user contact metadata",
   () => {
+    it.effect("returns email batches in normalized request order", () => {
+      const firstId = crypto.randomUUID();
+      const secondId = crypto.randomUUID();
+      const firstEmail = `${firstId}@example.com`;
+      const secondEmail = `${secondId}@example.com`;
+      return Effect.gen(function* () {
+        const sql = yield* SqlClient.SqlClient;
+        const backendAuth = yield* BackendAuth;
+        yield* sql`INSERT INTO "user" (id, name, email, email_verified, locale) VALUES
+          (${firstId}, 'First', ${firstEmail}, true, 'en'),
+          (${secondId}, 'Second', ${secondEmail.toUpperCase()}, true, 'fr')`;
+        const result = yield* backendAuth.listUsersByEmails({
+          emails: [secondEmail, firstEmail, secondEmail.toUpperCase()],
+        });
+        expect(result.data.map(({ id, locale }) => ({ id, locale }))).toEqual([
+          { id: secondId, locale: "fr" },
+          { id: firstId, locale: "en" },
+        ]);
+        expect(result.missingEmails).toEqual([]);
+      }).pipe(
+        Effect.ensuring(
+          Effect.gen(function* () {
+            const sql = yield* SqlClient.SqlClient;
+            yield* sql`DELETE FROM "user" WHERE ${sql.in("id", [firstId, secondId])}`;
+          }).pipe(Effect.orDie),
+        ),
+        Effect.provide(
+          BackendAuth.layer.pipe(Layer.provideMerge(sqlTestLayer)),
+        ),
+      );
+    });
+
     it.effect(
       "projects metadata through trusted user and member queries",
       () => {
@@ -39,8 +71,8 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)(
           const backendAuth = yield* BackendAuth;
           const createdAt = new Date();
 
-          yield* sql`INSERT INTO "user" (id, name, email, email_verified, metadata)
-            VALUES (${userId}, 'Ada Lovelace', ${`${userId}@example.com`}, true,
+          yield* sql`INSERT INTO "user" (id, name, email, email_verified, locale, metadata)
+            VALUES (${userId}, 'Ada Lovelace', ${`${userId}@example.com`}, true, 'fr',
               ${yield* Schema.encodeEffect(Schema.fromJsonString(UserMetadata))(metadata).pipe(Effect.orDie)}::jsonb)`;
           yield* sql`INSERT INTO organization ${sql.insert({
             id: organizationId,
@@ -58,6 +90,25 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)(
           })}`;
 
           const singleUser = yield* backendAuth.getUser({ id: userId });
+          const emailUsers = yield* backendAuth.listUsersByEmails({
+            emails: [
+              ` ${userId.toUpperCase()}@EXAMPLE.COM `,
+              `missing-${userId}@example.com`,
+              `${userId}@example.com`,
+              " ",
+            ],
+          });
+          expect(emailUsers.data).toHaveLength(1);
+          expect(emailUsers.data[0]?.id).toBe(userId);
+          expect(emailUsers.data[0]?.locale).toBe("fr");
+          expect(emailUsers.data[0]?.metadata).toEqual(metadata);
+          expect(emailUsers.missingEmails).toEqual([
+            `missing-${userId}@example.com`,
+          ]);
+          expect(yield* backendAuth.listUsersByEmails({ emails: [] })).toEqual({
+            data: [],
+            missingEmails: [],
+          });
           const users = yield* backendAuth.listUsersByIds({
             ids: [userId, "missing-user"],
           });
@@ -70,6 +121,10 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)(
           });
 
           expect(singleUser?.metadata).toEqual(metadata);
+          expect(singleUser?.locale).toBe("fr");
+          expect(users.data[0]?.locale).toBe("fr");
+          expect(activeMember?.user.locale).toBe("fr");
+          expect(members[0]?.user.locale).toBe("fr");
           expect(users.data[0]?.metadata).toEqual(metadata);
           expect(users.missingIds).toEqual(["missing-user"]);
           expect(activeMember?.user.metadata).toEqual(metadata);

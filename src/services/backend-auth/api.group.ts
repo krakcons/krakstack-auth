@@ -27,10 +27,26 @@ import {
   BackendAuthOrganizationsQuery,
   BackendAuthOrganizationsResponse,
   BackendAuthUserIdParams,
+  BackendAuthEmailsQuery,
+  BackendAuthUsersByEmailsResponse,
   BackendAuthUsersResponse,
 } from "./schema";
 
 export const BackendAuthUsersApiGroup = HttpApiGroup.make("backendUsers")
+  .add(
+    HttpApiEndpoint.get("listUsersByEmails", "/users/by-email", {
+      query: BackendAuthEmailsQuery,
+      success: BackendAuthUsersByEmailsResponse,
+      error: [HttpApiError.Unauthorized, HttpApiError.InternalServerError],
+    }).annotateMerge(
+      OpenApi.annotations({
+        title: "List users by emails",
+        summary: "List users by emails",
+        description:
+          "Returns trusted users, including locale, for comma-separated primary emails, plus missing emails. Matching is case-insensitive, trims whitespace, and deduplicates emails in request order. Requires a service API key.",
+      }),
+    ),
+  )
   .add(
     HttpApiEndpoint.get("listUsersByIds", "/users", {
       query: BackendAuthIdsQuery,

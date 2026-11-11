@@ -18,6 +18,7 @@ import { Domains } from "@/services/domains";
 import { BackendAuth } from ".";
 import { BackendAuthApi } from "./api.group";
 import { backendAuthApiHandler } from "./api.builder";
+import { BackendAuthUsersByEmailsResponse } from "./schema";
 
 describe.skipIf(!process.env.TEST_DATABASE_URL)(
   "backend domain audit attribution",
@@ -99,6 +100,26 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)(
               rootHostname: "example.test",
               managed: false,
             };
+            const emailQuery = new URLSearchParams({
+              emails: ` ${id.toUpperCase()}@EXAMPLE.TEST , missing-${id}@example.test`,
+            });
+            const lookupPath = `/users/by-email?${emailQuery}`;
+            expect((yield* send("GET", lookupPath)).status).toBe(401);
+            expect((yield* send("GET", lookupPath, "invalid")).status).toBe(
+              401,
+            );
+            const lookup = yield* send("GET", lookupPath, key.key);
+            expect(lookup.status).toBe(200);
+            const users = yield* Schema.decodeUnknownEffect(
+              Schema.toCodecJson(BackendAuthUsersByEmailsResponse),
+            )(yield* Effect.promise(() => lookup.json()));
+            expect(
+              users.data.map(({ id, locale }) => ({ id, locale })),
+            ).toEqual([{ id, locale: "en" }]);
+            expect(users.missingEmails).toEqual([`missing-${id}@example.test`]);
+            expect(
+              (yield* send("GET", "/users/by-email", key.key)).status,
+            ).toBe(400);
             expect(
               (yield* send("POST", "/domains", undefined, payload)).status,
             ).toBe(401);

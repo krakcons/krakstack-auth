@@ -76,8 +76,7 @@ const makeAuth = (
 const expectSessionError = (
   handler: Parameters<typeof HttpClient.make>[0],
   ErrorClass:
-    | typeof HttpApiError.Unauthorized
-    | typeof HttpApiError.ServiceUnavailable,
+    typeof HttpApiError.Unauthorized | typeof HttpApiError.ServiceUnavailable,
   headers?: Record<string, string>,
 ) =>
   Effect.gen(function* () {
@@ -86,6 +85,45 @@ const expectSessionError = (
 
     expect(error).toBeInstanceOf(ErrorClass);
   });
+
+describe("AuthService batch email lookup", () => {
+  it.effect("uses service credentials and decodes the recipient locale", () =>
+    Effect.gen(function* () {
+      const email = "learner+french@example.com";
+      const auth = yield* makeAuth((request, url) => {
+        expect(url.pathname).toBe("/api/users/by-email");
+        expect(url.searchParams.get("emails")).toBe(
+          `${email},missing@example.com`,
+        );
+        expect(request.headers.authorization).toBe("Bearer service-secret");
+        return Effect.succeed(
+          response(request, 200, {
+            data: [{ ...user, email, locale: "fr" }],
+            missingEmails: ["missing@example.com"],
+          }),
+        );
+      });
+      const recipients = yield* auth.users.listUsersByEmails({
+        query: { emails: `${email},missing@example.com` },
+      });
+      expect(recipients.data[0]?.email).toBe(email);
+      expect(recipients.data[0]?.locale).toBe("fr");
+      expect(recipients.missingEmails).toEqual(["missing@example.com"]);
+    }),
+  );
+
+  it.effect("preserves authentication failures", () =>
+    Effect.gen(function* () {
+      const auth = yield* makeAuth((request) =>
+        Effect.succeed(response(request, 401, { _tag: "Unauthorized" })),
+      );
+      const error = yield* auth.users
+        .listUsersByEmails({ query: { emails: "missing@example.com" } })
+        .pipe(Effect.flip);
+      expect(error).toBeInstanceOf(HttpApiError.Unauthorized);
+    }),
+  );
+});
 
 describe("AuthService session lookup failures", () => {
   it.effect("keeps an invalid verified API key Unauthorized", () =>

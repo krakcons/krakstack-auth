@@ -12,6 +12,7 @@ const BackendUserRow = Schema.Struct({
   name: UserRow.fields.name,
   email: UserRow.fields.email,
   emailVerified: UserRow.fields.emailVerified,
+  locale: Schema.optional(Schema.Literals(["en", "fr"])),
   image: UserRow.fields.image,
   metadata: UserRow.fields.metadata,
   role: UserRow.fields.role,
@@ -40,6 +41,7 @@ const MemberRow = Schema.Struct({
   name: Schema.String,
   email: Schema.String,
   emailVerified: Schema.Boolean,
+  locale: Schema.optional(Schema.Literals(["en", "fr"])),
   image: Schema.NullOr(Schema.String),
   metadata: UserRow.fields.metadata,
   userRole: Schema.NullOr(Schema.String),
@@ -72,6 +74,7 @@ const memberRecord = (record: typeof MemberRow.Type) => ({
     name: record.name,
     email: record.email,
     emailVerified: record.emailVerified,
+    locale: record.locale,
     image: record.image,
     metadata: record.metadata,
     role: record.userRole,
@@ -111,6 +114,12 @@ export class BackendAuth extends Context.Service<BackendAuth>()("BackendAuth", {
       Result: BackendUserRow,
       execute: (ids) => sql`SELECT * FROM "user" WHERE ${sql.in("id", ids)}`,
     });
+    const usersByEmails = SqlSchema.findAll({
+      Request: Schema.Array(Schema.String),
+      Result: BackendUserRow,
+      execute: (emails) =>
+        sql`SELECT * FROM "user" WHERE lower(email) IN ${sql.in(emails)}`,
+    });
     const organizationById = SqlSchema.findOneOption({
       Request: Schema.String,
       Result: BackendOrganizationRow,
@@ -141,7 +150,7 @@ export class BackendAuth extends Context.Service<BackendAuth>()("BackendAuth", {
         ORDER BY updated_at DESC, created_at DESC LIMIT 1`,
     });
     const memberColumns = sql`m.id, m.organization_id, m.user_id, m.role, m.created_at,
-      u.id AS user_id_field, u.name, u.email, u.email_verified, u.image, u.metadata,
+      u.id AS user_id_field, u.name, u.email, u.email_verified, u.locale, u.image, u.metadata,
       u.role AS user_role, u.banned, u.created_at AS user_created_at, u.updated_at AS user_updated_at`;
     const activeMember = SqlSchema.findOneOption({
       Request: BackendAuthMemberParams,
@@ -175,6 +184,28 @@ export class BackendAuth extends Context.Service<BackendAuth>()("BackendAuth", {
     }) {
       return Option.getOrUndefined(yield* userById(id));
     });
+    const listUsersByEmails = Effect.fn("BackendAuth.listUsersByEmails")(
+      function* ({ emails }: { emails: ReadonlyArray<string> }) {
+        const normalizedEmails = uniqueIds(
+          emails.map((email) => email.toLowerCase()),
+        );
+        const records = normalizedEmails.length
+          ? yield* usersByEmails(normalizedEmails)
+          : [];
+        const byEmail = new Map(
+          records.map((record) => [record.email.toLowerCase(), record]),
+        );
+        return {
+          data: normalizedEmails.flatMap((email) => {
+            const record = byEmail.get(email);
+            return record ? [record] : [];
+          }),
+          missingEmails: normalizedEmails.filter(
+            (email) => !byEmail.has(email),
+          ),
+        };
+      },
+    );
     const listOrganizationsByIds = Effect.fn(
       "BackendAuth.listOrganizationsByIds",
     )(function* ({ ids }: { ids: ReadonlyArray<string> }) {
@@ -226,6 +257,7 @@ export class BackendAuth extends Context.Service<BackendAuth>()("BackendAuth", {
     return {
       listUsersByIds,
       getUser,
+      listUsersByEmails,
       listOrganizationsByIds,
       listOrganizationsByUserId,
       getOrganization,

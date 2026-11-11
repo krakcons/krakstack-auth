@@ -49,6 +49,14 @@ const backendAuthUsersApiHandler = HttpApiBuilder.group(
   "backendUsers",
   (handlers) =>
     handlers
+      .handle("listUsersByEmails", ({ query }) =>
+        Effect.gen(function* () {
+          const backendAuth = yield* BackendAuth;
+          return yield* backendAuth
+            .listUsersByEmails({ emails: parseIds(query.emails) })
+            .pipe(Effect.mapError(internalServerError));
+        }),
+      )
       .handle("listUsersByIds", ({ query }) =>
         Effect.gen(function* () {
           const backendAuth = yield* BackendAuth;
