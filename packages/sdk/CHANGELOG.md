@@ -1,8 +1,8 @@
 # @krak-stack/auth
 
-## 0.4.0
+## 0.3.1
 
-### Minor Changes
+### Patch Changes
 
 - 782d4f6: Add `AuthService.users.listUsersByEmails` for trusted batch lookup by primary email. Return users with their saved locale and a list of missing emails. Match emails case-insensitively, trim whitespace, and deduplicate results in request order.
 
