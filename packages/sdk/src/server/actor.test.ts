@@ -214,6 +214,42 @@ const authServiceLayer = (authSession: AuthSession) =>
     ),
   );
 
+describe("delegated OAuth permissions", () => {
+  it.effect(
+    "does not elevate a member's role when an agent has write scope",
+    () =>
+      Effect.gen(function* () {
+        const middleware = yield* ActorRequired();
+        yield* middleware(
+          Effect.gen(function* () {
+            const actor = yield* CurrentActor;
+            expect(actor.actor.type).toBe("user");
+            expect(actor.permissions.has("test:records:read")).toBe(true);
+            expect(actor.permissions.has("test:records:update")).toBe(false);
+            return HttpServerResponse.empty();
+          }),
+          middlewareOptions,
+        );
+      }).pipe(
+        Effect.provide(
+          ActorRequired.layer(Access).pipe(
+            Layer.provideMerge(
+              authServiceLayer({
+                ...userSession,
+                authMethod: {
+                  type: "oauth",
+                  clientId: "agent",
+                  scopes: ["mcp:read", "mcp:write"],
+                },
+              }),
+            ),
+          ),
+        ),
+        provideRequestContext,
+      ),
+  );
+});
+
 const withAuthentication = <E>(
   httpEffect: Effect.Effect<
     HttpServerResponse.HttpServerResponse,

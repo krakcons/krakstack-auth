@@ -1,126 +1,38 @@
-import { useAtomSet, useAtomSubscribe, useAtomValue } from "@effect/atom-react";
-import { FormBuilder, FormReact } from "@lucas-barake/effect-form-react";
-import { createFileRoute, useNavigate } from "@tanstack/react-router";
-import { Option, Schema } from "effect";
-import { AsyncResult, Atom } from "effect/reactivity";
-import { useMemo } from "react";
+import { OAuthConsent } from "@krak-stack/auth/components";
+import { createFileRoute } from "@tanstack/react-router";
 
 import { m } from "@/paraglide/messages";
-import { AuthApiClient } from "@/services/auth/client";
-import { SubmitError } from "@krak-stack/registry/effect-form";
-import { Button } from "@/components/ui/button";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardFooter,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
-import { useAuthBrandingConfig } from "@/services/auth/client/branding";
 
 export const Route = createFileRoute("/_auth/consent")({
-  validateSearch: (search) => ({
-    clientId: Option.getOrElse(
-      Schema.decodeUnknownOption(Schema.String)(search.client_id),
-      () => m.consent_connected_application(),
-    ),
-    scope: Option.getOrElse(
-      Schema.decodeUnknownOption(Schema.String)(search.scope),
-      () => "openid profile email",
-    ),
-  }),
-  component: Consent,
+  component: () => (
+    <OAuthConsent
+      messages={{
+        title: m.consent_title(),
+        description: m.consent_description,
+        requestedScopes: m.consent_requested_scopes(),
+        permissions: {
+          "mcp:read": {
+            title: m.consent_permission_read(),
+            description: m.consent_permission_read_description(),
+          },
+          "mcp:write": {
+            title: m.consent_permission_write(),
+            description: m.consent_permission_write_description(),
+          },
+          offline_access: {
+            title: m.consent_permission_offline(),
+            description: m.consent_permission_offline_description(),
+          },
+          openid: { title: m.consent_permission_identity() },
+          profile: { title: m.consent_permission_profile() },
+          email: { title: m.consent_permission_email() },
+        },
+        allow: m.consent_authorize(),
+        deny: m.consent_deny(),
+        error: m.consent_error(),
+        invalidRequest: m.consent_invalid_request(),
+        notice: m.consent_trust_notice(),
+      }}
+    />
+  ),
 });
-
-const consentFormBuilder = FormBuilder.empty;
-const consentMutation = AuthApiClient.mutation("auth", "oauthConsent");
-const oauthClientAtom = Atom.family((clientId: string) =>
-  AuthApiClient.query("auth", "oauthPublicClient", {
-    query: { client_id: clientId },
-    timeToLive: "5 minutes",
-  }),
-);
-
-const makeConsentForm = (scope: string) =>
-  FormReact.make(consentFormBuilder, {
-    fields: {},
-    onSubmit: (accept: boolean, { get }) =>
-      get.setResult(consentMutation, {
-        payload: { accept, scope },
-      }),
-  });
-
-function Consent() {
-  const navigate = useNavigate();
-  const { clientId, scope } = Route.useSearch();
-  const scopes = scope.split(" ").filter(Boolean);
-  const projectConfig = useAuthBrandingConfig();
-  const fallbackClientName = useOAuthClientName(clientId);
-  const clientName = projectConfig?.name ?? fallbackClientName;
-  const form = useMemo(() => makeConsentForm(scope), [scope]);
-  const submit = useAtomSet(form.submit);
-  const submitResult = useAtomValue(form.submit);
-  useAtomSubscribe(form.submit, (result) => {
-    if (AsyncResult.isSuccess(result))
-      void navigate({ href: result.value.url });
-  });
-
-  return (
-    <Card className="w-full max-w-lg">
-      <CardHeader>
-        <CardTitle className="text-3xl">{m.consent_title()}</CardTitle>
-        <CardDescription>
-          {m.consent_description({ clientName })}
-        </CardDescription>
-      </CardHeader>
-      <form.Initialize defaultValues={{}}>
-        <CardContent className="space-y-4">
-          <div className="rounded-md border p-4">
-            <p className="text-sm font-medium">
-              {m.consent_requested_scopes()}
-            </p>
-            <div className="mt-3 flex flex-wrap gap-2">
-              {scopes.map((item) => (
-                <span
-                  className="rounded-md border px-3 py-1 text-sm"
-                  key={item}
-                >
-                  {item}
-                </span>
-              ))}
-            </div>
-          </div>
-          <SubmitError result={submitResult} />
-        </CardContent>
-        <CardFooter className="gap-3">
-          <Button
-            disabled={submitResult.waiting}
-            onClick={() => submit(true)}
-            type="button"
-          >
-            {m.consent_authorize()}
-          </Button>
-          <Button
-            disabled={submitResult.waiting}
-            onClick={() => submit(false)}
-            type="button"
-            variant="outline"
-          >
-            {m.consent_deny()}
-          </Button>
-        </CardFooter>
-      </form.Initialize>
-    </Card>
-  );
-}
-
-const useOAuthClientName = (clientId: string) => {
-  const result = useAtomValue(oauthClientAtom(clientId));
-
-  return AsyncResult.match(result, {
-    onInitial: () => clientId,
-    onFailure: () => clientId,
-    onSuccess: ({ value }) => value.client_name || value.client_id,
-  });
-};

@@ -12,6 +12,9 @@ export {
   authSessionAtom,
 } from "./auth-atoms.js";
 export { OrganizationSwitcher } from "./organization-switcher.js";
+export { OAuthConsent } from "./oauth-consent.js";
+export { getOAuthAuthorizationQuery } from "../oauth/authorization.js";
+export type { OAuthConsentMessages } from "./oauth-consent.js";
 export { MemberRequired } from "./member-required.js";
 export { HasPermission, useHasPermission } from "./has-permission.js";
 export { ProjectAccessMatrix } from "./project-access-matrix.js";

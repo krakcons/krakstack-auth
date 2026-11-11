@@ -235,10 +235,12 @@ export class OAuthClients extends Context.Service<OAuthClients>()(
                   scope: scopesFromString(payload.scope).join(" "),
                   client_name: payload.name || undefined,
                   logo_uri: payload.icon ?? undefined,
-                  token_endpoint_auth_method: "client_secret_basic",
+                  token_endpoint_auth_method: payload.publicClient
+                    ? "none"
+                    : "client_secret_basic",
                   grant_types: ["authorization_code", "refresh_token"],
                   response_types: ["code"],
-                  application_type: "web",
+                  application_type: payload.nativeClient ? "native" : "web",
                   require_pkce: true,
                   metadata: {},
                 },
@@ -248,6 +250,18 @@ export class OAuthClients extends Context.Service<OAuthClients>()(
 
           const decoded = decodeRawOAuthClient(client);
           const clientId = decoded.client_id ?? decoded.clientId;
+          if (clientId) {
+            yield* Effect.forEach(payload.resources ?? [], (identifier) =>
+              Effect.tryPromise({
+                try: () =>
+                  betterAuth.api.adminLinkClientResource({
+                    headers: betterAuth.headers,
+                    params: { identifier, client_id: clientId },
+                  }),
+                catch: () => new HttpApiError.InternalServerError({}),
+              }),
+            );
+          }
           if (clientId && payload.projectId !== undefined) {
             yield* assignProject({
               clientId,

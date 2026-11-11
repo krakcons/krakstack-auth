@@ -16,6 +16,7 @@ import { AuthClientConfig, type ClientConfig } from "./config.js";
 import { ExtraVerifiedApiKey } from "./extra/schema.js";
 import type { GetSessionResponse } from "./auth/api.group.js";
 import type { Session, User } from "./schema.js";
+import type { OAuthResourceOptions } from "./oauth/schema.js";
 
 type ExtraVerifiedApiKeyType = typeof ExtraVerifiedApiKey.Type;
 
@@ -25,6 +26,11 @@ export type AuthSession = {
   readonly isSuperAdminImpersonation: false;
   readonly authMethod:
     | { readonly type: "cookie" }
+    | {
+        readonly type: "oauth";
+        readonly clientId: string;
+        readonly scopes: readonly string[];
+      }
     | {
         readonly type: "apiKey";
         readonly apiKey: ExtraVerifiedApiKeyType;
@@ -43,6 +49,7 @@ export type AuthSessionWithUserAndOrganization = AuthSessionWithUser &
   AuthSessionWithOrganization;
 
 export type AuthServiceLayerOptions = Partial<ClientConfig> & {
+  readonly oauth?: OAuthResourceOptions;
   readonly headers?: Record<string, string>;
   readonly apiKeyConfigId?: "user" | "organization" | "service";
 };
@@ -173,6 +180,7 @@ export class AuthService extends Context.Service<AuthService>()(
         });
         const sessionCacheKey = getSessionCacheKey(headers);
         const apiKey = headerValue(headers, "x-api-key")?.trim();
+        const authorization = headerValue(headers, "authorization");
         const organizationId = headerValue(
           headers,
           "x-organization-id",
@@ -279,14 +287,70 @@ export class AuthService extends Context.Service<AuthService>()(
             } satisfies AuthSession;
           });
 
+        const getOAuthSession = () =>
+          Effect.gen(function* () {
+            // An explicit Authorization header must never downgrade to cookies
+            // or an API key, even if OAuth is not configured for this service.
+            const match = authorization?.match(/^Bearer ([^\s]+)$/i);
+            if (!options.oauth || !match?.[1]) return yield* unauthorized();
+            const { verifyOAuthAccessToken } = yield* Effect.promise(
+              () => import("./oauth/verify.js"),
+            );
+            const claims = yield* verifyOAuthAccessToken(
+              match[1],
+              options.oauth,
+            ).pipe(Effect.provideService(HttpClient.HttpClient, http));
+            const user = yield* api.users
+              .getUser({ params: { id: claims.sub } })
+              .pipe(Effect.mapError(serviceUnavailable));
+            if (user.banned) return yield* unauthorized();
+            // Consent binds the organization. A caller header or a later browser
+            // organization switch must not change the grant's tenant.
+            yield* api.organizations
+              .getActiveMember({
+                params: {
+                  organizationId: claims.organization_id,
+                  userId: user.id,
+                },
+              })
+              .pipe(Effect.mapError(() => new HttpApiError.Forbidden({})));
+            return {
+              session: {
+                id: `oauth:${claims.azp}:${claims.sub}`,
+                token: "",
+                userId: user.id,
+                activeOrganizationId: claims.organization_id,
+                createdAt: new Date(claims.iat * 1000),
+                updatedAt: new Date(claims.iat * 1000),
+                expiresAt: new Date(claims.exp * 1000),
+              },
+              user,
+              isSuperAdminImpersonation: false as const,
+              authMethod: {
+                type: "oauth" as const,
+                clientId: claims.azp,
+                scopes: claims.scope.split(/\s+/).filter(Boolean),
+              },
+            } satisfies AuthSession;
+          });
+
         const getSession = (): Effect.Effect<
           AuthSession | null,
-          HttpApiError.Unauthorized | HttpApiError.ServiceUnavailable
-        > => (apiKey ? getApiKeySession(apiKey) : getCookieSession());
+          | HttpApiError.Unauthorized
+          | HttpApiError.Forbidden
+          | HttpApiError.ServiceUnavailable
+        > =>
+          authorization !== undefined
+            ? getOAuthSession()
+            : apiKey
+              ? getApiKeySession(apiKey)
+              : getCookieSession();
 
         const requireSession = (): Effect.Effect<
           AuthSession,
-          HttpApiError.Unauthorized | HttpApiError.ServiceUnavailable
+          | HttpApiError.Unauthorized
+          | HttpApiError.Forbidden
+          | HttpApiError.ServiceUnavailable
         > =>
           getSession().pipe(
             Effect.filterOrFail(
@@ -297,7 +361,9 @@ export class AuthService extends Context.Service<AuthService>()(
 
         const requireUser = (): Effect.Effect<
           AuthSessionWithUser,
-          HttpApiError.Unauthorized | HttpApiError.ServiceUnavailable
+          | HttpApiError.Unauthorized
+          | HttpApiError.Forbidden
+          | HttpApiError.ServiceUnavailable
         > =>
           requireSession().pipe(
             Effect.flatMap((authSession) =>
@@ -309,12 +375,16 @@ export class AuthService extends Context.Service<AuthService>()(
 
         const requireOrganization = (): Effect.Effect<
           AuthSessionWithOrganization,
-          HttpApiError.Unauthorized | HttpApiError.ServiceUnavailable
+          | HttpApiError.Unauthorized
+          | HttpApiError.Forbidden
+          | HttpApiError.ServiceUnavailable
         > => requireSession().pipe(Effect.flatMap(withRequiredOrganization));
 
         const requireUserOrganization = (): Effect.Effect<
           AuthSessionWithUserAndOrganization,
-          HttpApiError.Unauthorized | HttpApiError.ServiceUnavailable
+          | HttpApiError.Unauthorized
+          | HttpApiError.Forbidden
+          | HttpApiError.ServiceUnavailable
         > => requireUser().pipe(Effect.flatMap(withRequiredOrganization));
 
         const getActiveMemberRole = (input: {

@@ -1,4 +1,6 @@
 export { AuthService } from "../service.js";
+export type { OAuthResourceOptions } from "../oauth/schema.js";
+export { McpAuth } from "./mcp.js";
 export {
   AccountDeletionData,
   AccountDeletionWebhook,

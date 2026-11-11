@@ -38,6 +38,8 @@ import {
   sendTwoFactorOtpEmail,
 } from "@/services/auth/email.server";
 import { organizationImpersonation } from "@/services/auth/plugins/organization-impersonation";
+import { mcpRegistration } from "@/services/auth/plugins/mcp-registration";
+import { resolveProjectMcp } from "@/services/project-mcp/runtime";
 import { mergeOrganizationMetadata } from "@/services/auth/organization-metadata";
 import { organizationAuthRoles } from "@/services/auth/organization-access";
 import { databasePool, runWithDatabase } from "@/services/database";
@@ -110,6 +112,26 @@ export const validateUserLocaleWrite = (locale: typeof Schema.Unknown.Type) =>
 const UserNameWrite = Schema.Trim.check(Schema.isNonEmpty()).annotate({
   identifier: "UserNameWrite",
 });
+
+const OAuthGrantSession = Schema.Struct({
+  activeOrganizationId: Schema.optional(Schema.NullOr(Schema.NonEmptyString)),
+  impersonatedBy: Schema.optional(Schema.NullOr(Schema.NonEmptyString)),
+  impersonatedByOrganizationId: Schema.optional(
+    Schema.NullOr(Schema.NonEmptyString),
+  ),
+}).annotate({ identifier: "OAuthGrantSession" });
+
+const oauthAdminPrivileges = ({ user }: { user?: unknown }) => {
+  const decoded = Schema.decodeUnknownOption(
+    Schema.Struct({ role: Schema.String }).annotate({
+      identifier: "OAuthAdminRole",
+    }),
+  )(user);
+  return (
+    Option.isSome(decoded) &&
+    decoded.value.role.split(",").some((role) => role.trim() === "admin")
+  );
+};
 
 export const validateUserNameWrite = (name: typeof Schema.Unknown.Type) =>
   Schema.decodeUnknownEffect(UserNameWrite)(name).pipe(
@@ -277,12 +299,18 @@ export const createAuth = ({
   allowedHosts,
   cookieDomain,
   projectId = null,
+  mcpResource,
+  mcpDynamicClientRegistration = Boolean(mcpResource),
+  mcpScopes = ["mcp:read"],
   auditRun = (effect) => nativeAuditRuntime.runPromise(effect),
   deletionRun = (effect) => accountDeletionRuntime.runPromise(effect),
 }: {
   allowedHosts: readonly string[];
   cookieDomain?: string | undefined;
   projectId?: string | null;
+  mcpResource?: string;
+  mcpDynamicClientRegistration?: boolean;
+  mcpScopes?: readonly ("mcp:read" | "mcp:write")[];
   auditRun?: Parameters<typeof makeNativeAudit>[0];
   deletionRun?: <E>(
     effect: Effect.Effect<void, E, AccountDeletions>,
@@ -345,25 +373,99 @@ export const createAuth = ({
   const oauthOptions: Parameters<typeof oauthProvider>[0] = {
     loginPage: "/sign-in",
     consentPage: "/consent",
-    allowDynamicClientRegistration: false,
+    allowDynamicClientRegistration:
+      Boolean(mcpResource) && mcpDynamicClientRegistration,
+    allowUnauthenticatedClientRegistration:
+      Boolean(mcpResource) && mcpDynamicClientRegistration,
+    clientRegistrationDefaultResources: mcpResource ? [mcpResource] : [],
+    clientRegistrationAllowedResources: [],
+    clientRegistrationDefaultScopes: [...mcpScopes, "offline_access"],
+    clientRegistrationAllowedScopes: ["openid", "profile", "email"],
+    clientRegistrationRequirePKCE: true,
     clientReference: ({ session }) =>
       Option.getOrUndefined(
         Schema.decodeUnknownOption(Schema.String)(
           session?.activeOrganizationId,
         ),
       ),
-    clientPrivileges: async ({ user }) => {
-      const UserRole = Schema.Struct({ role: Schema.String });
-      const decoded = Schema.decodeUnknownOption(UserRole)(user);
-      if (Option.isNone(decoded)) return false;
-
-      return decoded.value.role
-        .split(",")
-        .some((item) => item.trim() === "admin");
+    clientPrivileges: oauthAdminPrivileges,
+    resourcePrivileges: oauthAdminPrivileges,
+    postLogin: {
+      page: "/consent",
+      shouldRedirect: () => false,
+      consentReferenceId: async ({ session, user, scopes }) => {
+        if (
+          !scopes.some((scope) => scope === "mcp:read" || scope === "mcp:write")
+        )
+          return undefined;
+        if (!mcpResource)
+          throw new APIError("FORBIDDEN", {
+            message: "MCP is not enabled for this project host",
+          });
+        const grantSession =
+          Schema.decodeUnknownSync(OAuthGrantSession)(session);
+        const organizationId = grantSession.activeOrganizationId;
+        if (
+          !organizationId ||
+          grantSession.impersonatedBy ||
+          grantSession.impersonatedByOrganizationId
+        ) {
+          throw new APIError("FORBIDDEN", {
+            message:
+              "An organization member session is required for MCP authorization",
+          });
+        }
+        const members = await runWithDatabase(
+          Effect.gen(function* () {
+            const sql = yield* SqlClient.SqlClient;
+            return yield* SqlSchema.findAll({
+              Request: Schema.Struct({
+                organizationId: Schema.String,
+                userId: Schema.String,
+              }),
+              Result: IdRow,
+              execute: ({ organizationId, userId }) =>
+                sql`SELECT id FROM member WHERE organization_id = ${organizationId} AND user_id = ${userId} LIMIT 1`,
+            })({ organizationId, userId: user.id });
+          }),
+        );
+        if (!members.length)
+          throw new APIError("FORBIDDEN", {
+            message:
+              "Organization membership is required for MCP authorization",
+          });
+        return organizationId;
+      },
     },
-    scopes: ["openid", "profile", "email", "offline_access"],
+    scopes: [
+      "openid",
+      "profile",
+      "email",
+      "offline_access",
+      "mcp:read",
+      "mcp:write",
+    ],
+    customAccessTokenClaims: ({ referenceId, scopes, resources }) => {
+      if (
+        scopes.some((scope) => scope === "mcp:read" || scope === "mcp:write") &&
+        (!mcpResource ||
+          resources?.length !== 1 ||
+          resources[0] !== mcpResource)
+      ) {
+        throw new APIError("FORBIDDEN", {
+          message: "MCP resource does not belong to this project host",
+        });
+      }
+      return referenceId ? { organization_id: referenceId } : {};
+    },
   };
-  if (validAudiences) oauthOptions.resources = validAudiences;
+  if (validAudiences || mcpResource)
+    oauthOptions.resources = Array.from(
+      new Set([
+        ...(validAudiences ?? []),
+        ...(mcpResource ? [mcpResource] : []),
+      ]),
+    );
   const socialProviderOptions =
     googleClientId && googleClientSecret
       ? {
@@ -378,6 +480,8 @@ export const createAuth = ({
 
   const nativeAudit = makeNativeAudit(auditRun, projectId);
   const auth = betterAuth({
+    rateLimit: { customRules: { "/oauth2/register": { window: 60, max: 10 } } },
+    disabledPaths: ["/token"],
     appName: "Krakstack Auth",
     // BA diagnostics can interpolate emails and attach OAuth state/provider
     // errors. Keep diagnostic severity, not their untrusted text or arguments.
@@ -621,7 +725,7 @@ export const createAuth = ({
       withSqlNames(openAPI()),
       withSqlNames(admin()),
       withSqlNames(anonymous()),
-      withSqlNames(jwt()),
+      withSqlNames(jwt({ disableSettingJwtHeader: true })),
       withSqlNames(
         emailOTP({
           overrideDefaultEmailVerification: true,
@@ -794,6 +898,7 @@ export const createAuth = ({
           },
         ]),
       ),
+      ...(mcpResource ? [mcpRegistration()] : []),
       withSqlNames(oauthProvider(oauthOptions)),
       nativeAudit.plugin,
     ],
@@ -821,12 +926,34 @@ export const authForRequest = async (request: Request) => {
   );
   const cookieDomain = context?.cookieDomain;
   const projectId = context?.projectId ?? null;
-  const cacheKey = `${host}|${cookieDomain ?? ""}|${allowedHosts.join(",")}|${projectId ?? ""}`;
+  const mcp =
+    projectId && host
+      ? await runWithDatabase(
+          resolveProjectMcp({
+            projectId,
+            host,
+            protocol: isDev ? "http" : "https",
+          }),
+        )
+      : null;
+  const cacheKey = `${host}|${cookieDomain ?? ""}|${allowedHosts.join(",")}|${projectId ?? ""}|${JSON.stringify(mcp)}`;
 
   const cached = authByRequestScope.get(cacheKey);
   if (cached) return cached;
 
-  const next = createAuth({ allowedHosts, cookieDomain, projectId });
+  // Policy is persisted and re-read on each request, including across server
+  // instances. Evict old snapshots for this host rather than accumulating edits.
+  for (const key of authByRequestScope.keys()) {
+    if (key.startsWith(`${host}|`)) authByRequestScope.delete(key);
+  }
+  const next = createAuth({
+    allowedHosts,
+    cookieDomain,
+    projectId,
+    mcpResource: mcp?.url,
+    mcpDynamicClientRegistration: mcp?.dynamicClientRegistration ?? false,
+    mcpScopes: mcp?.scopes,
+  });
   authByRequestScope.set(cacheKey, next);
   return next;
 };

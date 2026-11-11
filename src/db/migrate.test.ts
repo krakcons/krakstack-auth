@@ -126,6 +126,7 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)(
               { migrationId: 1 },
               { migrationId: 2 },
               { migrationId: 3 },
+              { migrationId: 4 },
             ]);
             yield* migrated`INSERT INTO "user" (id, name, email) VALUES ('automatic', 'Automatic', 'automatic@example.test')`;
             expect(
@@ -157,6 +158,7 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)(
               [1, "legacy"],
               [2, "user_locale"],
               [3, "account_deletion"],
+              [4, "project_mcp"],
             ]);
             yield* sql`INSERT INTO "user" (id, name, email) VALUES ('locale-default', 'Default', 'default@example.test')`;
             expect(
@@ -228,6 +230,7 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)(
             expect(yield* migrate).toEqual([
               [2, "user_locale"],
               [3, "account_deletion"],
+              [4, "project_mcp"],
             ]);
             expect(
               yield* sql`SELECT locale FROM "user" WHERE id = 'u'`,
@@ -379,7 +382,7 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)(
           });
           expect(
             results.map((rows) => rows.length).sort((a, b) => a - b),
-          ).toEqual([0, 3]);
+          ).toEqual([0, 4]);
         }),
       ),
     );
@@ -392,6 +395,7 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)(
           expect(yield* migrate).toEqual([
             [2, "user_locale"],
             [3, "account_deletion"],
+            [4, "project_mcp"],
           ]);
         }),
       ),

@@ -75,6 +75,7 @@
     "prepack": "bun run build"
   },
   "dependencies": {
+    "@better-auth/core": "1.7.6",
     "@effect/atom-react": "^4.1.0",
     "@lucas-barake/effect-form-react": "1.1.0",
     "react-qr-code": "^2.2.0"

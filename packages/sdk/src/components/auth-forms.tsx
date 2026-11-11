@@ -6,6 +6,7 @@ import {
 } from "@effect/atom-react";
 import { FormBuilder, FormReact } from "@lucas-barake/effect-form-react";
 import {
+  defaultParseSearch,
   Link,
   useNavigate,
   useRouter,
@@ -67,6 +68,7 @@ import {
 } from "./password-reset-flow.js";
 import { type KrakstackAuthLocale, useKrakstackAuth } from "./auth-provider.js";
 import { cn } from "./utils.js";
+import { getOAuthAuthorizationQuery } from "../oauth/authorization.js";
 import {
   ExtraProjectPublicConfig as ExtraProjectPublicConfigSchema,
   type ExtraProjectPublicConfig,
@@ -410,7 +412,7 @@ const authLinkClassName = cn(
   "h-auto align-baseline",
 );
 
-const authMethodSearch = (
+export const authMethodSearch = (
   searchString: string,
   method: "password" | "emailOtp",
   email?: string,
@@ -419,7 +421,7 @@ const authMethodSearch = (
   search.set("method", method);
   if (email?.trim()) search.set("email", email.trim());
   else if (email !== undefined) search.delete("email");
-  return Object.fromEntries(search);
+  return defaultParseSearch(search.toString());
 };
 
 type AuthMethod = "password" | "emailOtp";
@@ -1705,19 +1707,14 @@ export const getSocialSignInDestinations = (
 };
 
 const getOAuthAuthorizeTarget = (searchString: string) => {
-  if (!searchString) return null;
-
-  const search = new URLSearchParams(searchString);
-  if (!search.has("sig")) return null;
-
-  return `/api/auth/oauth2/authorize${searchString}`;
+  const query = getOAuthAuthorizationQuery(searchString);
+  return query ? `/api/auth/oauth2/authorize?${query}` : null;
 };
 
 const getOAuthAuthorizeTargetWithoutPromptLogin = (searchString: string) => {
-  if (!searchString) return null;
-
-  const search = new URLSearchParams(searchString);
-  if (!search.has("sig")) return null;
+  const query = getOAuthAuthorizationQuery(searchString);
+  if (!query) return null;
+  const search = new URLSearchParams(query);
 
   const prompts = search
     .get("prompt")
@@ -1734,18 +1731,7 @@ const getOAuthAuthorizeTargetWithoutPromptLogin = (searchString: string) => {
   return `/api/auth/oauth2/authorize${nextSearchString ? `?${nextSearchString}` : ""}`;
 };
 
-const getOAuthQuery = (searchString: string) => {
-  if (!searchString) return null;
-  const search = new URLSearchParams(searchString);
-  if (!search.has("sig")) return null;
-
-  const signedSearch = new URLSearchParams();
-  for (const [key, value] of search.entries()) {
-    signedSearch.append(key, value);
-    if (key === "sig") break;
-  }
-  return signedSearch.toString();
-};
+const getOAuthQuery = getOAuthAuthorizationQuery;
 
 const getAuthRedirectParam = (searchString: string) => {
   const search = new URLSearchParams(searchString);

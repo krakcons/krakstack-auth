@@ -180,6 +180,17 @@ const authenticateRequest = Effect.fnUntraced(function* <E>(
     .getSession()
     .pipe(Effect.catchTag("Unauthorized", () => Effect.succeed(null)));
   if (
+    session?.authMethod.type === "oauth" &&
+    (!(options.oauth?.allowedMethods ?? ["GET", "HEAD"]).includes(
+      request.method,
+    ) ||
+      (!["GET", "HEAD"].includes(request.method) &&
+        !session.authMethod.scopes.includes(
+          options.oauth?.writeScope ?? "mcp:write",
+        )))
+  )
+    return yield* new HttpApiError.Forbidden({});
+  if (
     session?.session.impersonatedByOrganizationId &&
     !isAllowedRoute(
       options.allowedOrganizationImpersonationRoutes ?? [],
@@ -196,7 +207,7 @@ const sessionAnnotations = (session: AuthSession | null) => {
   if (!session) return attributes;
   if (
     session.user &&
-    (session.authMethod.type === "cookie" ||
+    (session.authMethod.type !== "apiKey" ||
       session.authMethod.apiKey.configId === "user")
   ) {
     attributes["user.id"] = session.user.id;
@@ -206,10 +217,14 @@ const sessionAnnotations = (session: AuthSession | null) => {
   if (session.session.activeOrganizationId) {
     attributes["organization.id"] = session.session.activeOrganizationId;
   }
-  if (session.authMethod.type === "cookie" && session.user) {
+  if (session.authMethod.type !== "apiKey" && session.user) {
     attributes["app.actor.type"] = "user";
     attributes["app.actor.id"] = session.user.id;
-    attributes["app.auth.method"] = "session";
+    attributes["app.auth.method"] =
+      session.authMethod.type === "oauth" ? "oauth" : "session";
+    if (session.authMethod.type === "oauth") {
+      attributes["app.auth.client.id"] = session.authMethod.clientId;
+    }
     if (session.session.impersonatedBy) {
       attributes["app.auth.impersonator.id"] = session.session.impersonatedBy;
     }

@@ -344,6 +344,9 @@ export class Projects extends Context.Service<Projects>()("Projects", {
     }: {
       id: string;
     }) {
+      yield* sql`UPDATE oauth_resource SET disabled = true, policy_version = policy_version + 1, updated_at = now()
+        WHERE identifier IN (SELECT url FROM project_mcp WHERE project_id = ${id})`;
+      yield* sql`DELETE FROM oauth_client_resource WHERE resource_id IN (SELECT url FROM project_mcp WHERE project_id = ${id})`;
       const value = Option.getOrNull(
         yield* SqlSchema.findOneOption({
           Request: Schema.String,

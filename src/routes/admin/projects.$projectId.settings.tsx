@@ -6,6 +6,7 @@ import { ProjectForm } from "@/services/projects/client/form";
 import { ProjectWebhook } from "@/services/projects/client/webhook";
 import { Separator } from "@/components/ui/separator";
 import { ProjectEmailEditor } from "@/services/projects/client/email";
+import { ProjectMcpSettings } from "@/services/project-mcp/client/form";
 
 export const Route = createFileRoute("/admin/projects/$projectId/settings")({
   component: ProjectSettings,
@@ -27,6 +28,10 @@ function ProjectSettings() {
       <Separator />
       <section id="webhooks" className="max-w-3xl scroll-mt-6">
         <ProjectWebhook key={projectId} projectId={projectId} />
+      </section>
+      <Separator />
+      <section id="mcp" className="max-w-3xl scroll-mt-6">
+        <ProjectMcpSettings key={projectId} projectId={projectId} />
       </section>
     </div>
   ) : null;

@@ -86,6 +86,7 @@
     "@typescript/native-preview": "latest",
     "@vitejs/plugin-react": "^6.1.1",
     "auth": "1.7.6",
+    "jose": "^6",
     "oxlint": "1.90.0",
     "oxlint-tsgolint": "7.0.2005",
     "shadcn": "^4.21.0",

@@ -8,10 +8,12 @@ import {
   createRootRoute,
   createRoute,
   createRouter,
+  defaultStringifySearch,
   retainSearchParams,
 } from "@tanstack/react-router";
 
 import {
+  authMethodSearch,
   getRedirectTarget,
   getSocialRedirectTarget,
   getSocialSignInDestinations,
@@ -19,6 +21,37 @@ import {
   resolveInitialAuthMethod,
 } from "./auth-forms.js";
 import { resetPasswordAndSignOut } from "./password-reset.js";
+import { getOAuthAuthorizationQuery } from "../oauth/authorization.js";
+
+describe("signed OAuth sign-in continuation", () => {
+  it("preserves repeated signed fields through email steps and method changes", () => {
+    const signed = new URLSearchParams({
+      client_id: "agent",
+      state: "opaque",
+      sig: "signature",
+    });
+    for (const name of ["client_id", "state", "resource", "ba_param"])
+      signed.append("ba_param", name);
+    signed.append("resource", "https://example.com/mcp");
+    signed.append("resource", "https://example.com/other");
+    let search = `?${signed}`;
+    for (const method of ["password", "emailOtp", "password"] as const) {
+      search = defaultStringifySearch(
+        authMethodSearch(search, method, "user@example.com"),
+      );
+      const restored = new URLSearchParams(getOAuthAuthorizationQuery(search)!);
+      expect([...restored].sort()).toEqual([...signed].sort());
+      for (const target of [
+        getRedirectTarget(search),
+        getSocialRedirectTarget(search, "/", "https://example.com"),
+      ]) {
+        expect(
+          [...new URL(target, "https://example.com").searchParams].sort(),
+        ).toEqual([...signed].sort());
+      }
+    }
+  });
+});
 
 describe("password reset session cleanup", () => {
   it.effect("clears browser session cookies after resetting the password", () =>

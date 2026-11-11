@@ -263,7 +263,9 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)(
                 }),
               ),
             );
-            expect(token.status).toBe(200);
+            // OAuth provider mode must not mint session JWTs with the same
+            // signing key used by resource-bound access tokens.
+            expect(token.status).toBe(404);
             // Default BA setup only hands back a secret/challenge; the factor
             // is not enabled until it is verified. Do not audit an enable yet.
             expect(

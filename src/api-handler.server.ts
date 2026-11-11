@@ -57,6 +57,8 @@ import { HttpApiOtlp } from "@krak-stack/registry/opentelemetry/api";
 import { Events } from "@krak-stack/registry/events";
 import { Organizations } from "@/services/organizations";
 import { Projects } from "@/services/projects";
+import { ProjectMcpService } from "@/services/project-mcp";
+import { projectMcpHandler } from "@/services/project-mcp/api.builder";
 import { AccountDeletions } from "@/services/account-deletion";
 import { accountDeletionEventsLayer } from "@/services/account-deletion/subscriber";
 import { accountDeletionRuntime } from "@/services/account-deletion/runtime.server";
@@ -329,6 +331,7 @@ const apiLayer = Layer.mergeAll(
     Layer.provide(adminOAuthClientsApiHandler),
     Layer.provide(adminProjectsApiHandler),
     Layer.provide(projectWebhooksHandler),
+    Layer.provide(projectMcpHandler),
     Layer.provide(adminAuthMiddlewareLayer),
   ),
   HttpApiBuilder.layer(FrontendApi).pipe(
@@ -352,6 +355,7 @@ const apiLayer = Layer.mergeAll(
 ).pipe(Layer.provide(platformLayer));
 
 const appServicesLayer = Layer.mergeAll(
+  ProjectMcpService.layer,
   OAuthClients.layer,
   BackendAuth.layer,
   Domains.layer,
@@ -398,7 +402,8 @@ export const apiHandler = corsMiddleware((request) =>
   apiWebHandler.handler(request),
 );
 
-export const initializeApi = () => accountDeletionRuntime.runPromise(Effect.void);
+export const initializeApi = () =>
+  accountDeletionRuntime.runPromise(Effect.void);
 export const disposeApi = async () => {
   await apiWebHandler.dispose();
   await accountDeletionRuntime.dispose();

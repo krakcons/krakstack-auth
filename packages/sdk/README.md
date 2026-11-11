@@ -69,7 +69,8 @@ import { Layer } from "effect";
 
 const authentication = AuthMiddleware.layer({
   onDeleteUser: ({ userId }) => eraseLocalUserData(userId),
-  onDeleteOrganization: ({ organizationId }) => eraseLocalOrganizationData(organizationId),
+  onDeleteOrganization: ({ organizationId }) =>
+    eraseLocalOrganizationData(organizationId),
   // Optional: handle other Auth events. Validate event-specific data here.
   onWebhook: (webhook) => handleOtherAuthEvent(webhook),
 }).pipe(Layer.provide(databaseLayer));
@@ -166,6 +167,97 @@ persistence is needed. `paths` limits auth lookup to the listed URL pathnames;
 without it, the middleware covers every route it is provided to. The router
 adapter uses the same auth configuration and organization-impersonation policy
 as `AuthMiddleware.layer()`. It does not grant permissions or provide `CurrentActor`.
+
+## MCP OAuth
+
+Keep the OAuth provider and its database in KrakStack Auth. Consumer projects
+provide resource discovery and verify resource-bound access tokens:
+
+```ts
+import { AuthMiddleware, McpAuth } from "@krak-stack/auth/server";
+
+const oauth = {
+  issuer: "https://learning.example.com/api/auth",
+  resource: "https://learning.example.com/api/mcp",
+  jwksUrl: "https://learning.example.com/api/auth/jwks",
+  requiredScopes: ["mcp:read"],
+  scopesSupported: ["mcp:read", "mcp:write", "offline_access"],
+  challengeScopes: ["mcp:read", "mcp:write", "offline_access"],
+};
+
+// Add this beside the existing MCP routes.
+const metadata = McpAuth.metadataLayer(oauth);
+// Provide this middleware to the MCP transport layer.
+const mcpAuthentication = McpAuth.middleware(oauth).layer;
+// Add `oauth` to the existing AuthMiddleware.layer({ ... }) configuration.
+```
+
+Expose `/.well-known/$` to the HTTP router too. `McpAuth.discoveryRequest(request,
+oauth)` accepts supported resource-metadata paths and rewrites the RFC 8414
+authorization-server metadata path to the existing `/api/auth/*` proxy. It
+returns `undefined` for unrelated paths. This helper assumes the consumer hosts
+the issuer through its authenticated auth proxy; an independently hosted issuer
+serves its own authorization metadata.
+
+Use `OAuthConsent` from `@krak-stack/auth/components` in a thin `/consent` route.
+Pass translated `messages` (`title`, `description({ clientName })`,
+`requestedScopes`, `allow`, `deny`, `error`, `invalidRequest`). It reads the
+provider's signed query, identifies the requesting client, submits the decision,
+and navigates to the provider-validated callback. Do not put consent under a
+guest-only layout. Guest-only sign-in guards should preserve authorization
+requests identified by `getOAuthAuthorizationQuery(location.searchStr)`.
+Provide the optional `messages.permissions` map to show translated permission
+titles/descriptions instead of OAuth scope codes. Unknown scopes remain visible.
+Keep app branding and locale switching in the shared auth-page layout.
+
+Deployment prerequisites:
+
+- Register the consumer host as an active project domain and authorize its
+  existing service key to proxy that project.
+- In **Project → Settings → MCP**, enter the exact endpoint URL and enable it.
+  Choose **Read and write** under **Access** to allow `mcp:write`, or **Read only**
+  to restrict delegation. This persists the resource and automatically enables
+  PKCE-protected client registration. No MCP
+  environment variable or auth restart is required. The endpoint's host must
+  belong to an active domain of this project.
+- Alternatively, pre-register each agent's OAuth client with its exact callback, PKCE enabled,
+  `mcp:read offline_access` scopes, and a link to the resource. The admin client
+  creation payload accepts `resources`, `publicClient`, and `nativeClient`.
+  Public clients use no client secret; native clients support loopback callbacks.
+- Configure that client ID in the MCP client when using pre-registration.
+  The provider advertises anonymous DCR on the configured endpoint's host only.
+  New clients are linked only to that MCP resource and require PKCE. Scopes
+  restrict delegated access; they never elevate the authenticated user's role
+  or permissions. Clients must still obtain user
+  consent. Loopback HTTP callbacks without an explicit application type are
+  classified as native; HTTPS callbacks keep the provider's web-client policy.
+  Registration is rate-limited per auth instance; enforce shared ingress limits
+  for multi-instance deployments. Other auth hosts keep DCR disabled.
+- Deploy the provider changes before connecting clients. The provider disables
+  session-JWT issuance at `/token` and binds MCP grants to the user's active
+  organization at consent. Existing identity-only tokens are not MCP tokens.
+
+Bearer tokens take precedence over cookies and API keys and never downgrade on
+failure. Verification checks the signature, issuer, audience, expiry, access-token
+type, authorized client, scopes, and consented organization. The SDK rechecks
+membership and user bans and ignores caller-supplied organization overrides.
+`ActorRequired` continues to enforce ordinary tenant roles and domain policies.
+OAuth API requests default to GET/HEAD only; explicitly configure `allowedMethods`
+before exposing mutations. Non-GET/HEAD requests additionally require `mcp:write`
+(override with `writeScope` for a different scope vocabulary), and normal user
+authorization still applies. Project settings do not automatically expose new
+tools or API methods in consumer applications. MCP transport POSTs
+are authenticated separately and do not grant write access to the API.
+
+Disabling or changing the endpoint disables its previous OAuth resource and
+removes client/resource links. Clients must reconnect. Auth re-reads policy and
+domain ownership on each request, so cached instances cannot keep advertising a
+disabled configuration. Apply database migration 4 before deploying this feature.
+
+This integration currently accepts bearer JWT access tokens, not opaque or
+DPoP-bound tokens. JWT verification is local: revoking a grant does not immediately
+invalidate an already-issued JWT before expiry. Keep access-token lifetimes short;
+refresh and grant revocation remain provider-owned.
 
 ## React Components
 

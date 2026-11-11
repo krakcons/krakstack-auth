@@ -62,6 +62,7 @@
         "@typescript/native-preview": "latest",
         "@vitejs/plugin-react": "^6.1.1",
         "auth": "1.7.6",
+        "jose": "^6",
         "oxlint": "1.90.0",
         "oxlint-tsgolint": "7.0.2005",
         "shadcn": "^4.21.0",
@@ -74,6 +75,7 @@
       "name": "@krak-stack/auth",
       "version": "0.2.32",
       "dependencies": {
+        "@better-auth/core": "1.7.6",
         "@effect/atom-react": "^4.1.0",
         "@lucas-barake/effect-form-react": "1.1.0",
         "react-qr-code": "^2.2.0",

@@ -99,6 +99,9 @@ export const OAuthClientCreated = Schema.Struct({
 });
 
 export const CreateOAuthClientPayload = Schema.Struct({
+  resources: Schema.optional(Schema.Array(Schema.NonEmptyString)),
+  publicClient: Schema.optional(Schema.Boolean),
+  nativeClient: Schema.optional(Schema.Boolean),
   name: Schema.optional(Schema.String),
   icon: Schema.optional(Schema.NullOr(Schema.String)),
   projectId: Schema.optional(Schema.NullOr(Schema.String)),

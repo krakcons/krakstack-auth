@@ -245,6 +245,91 @@ const organizationApiKeyAuthClientLayer = Layer.effect(
   })),
 ).pipe(Layer.provide(baseAuthServiceLayer));
 
+describe("OAuth API method restrictions", () => {
+  const session = {
+    ...authSession,
+    authMethod: { type: "oauth", clientId: "agent", scopes: ["mcp:read"] },
+  } satisfies AuthSession;
+  const oauthLayer = Layer.effect(
+    AuthService,
+    Effect.map(AuthService, (service) => ({
+      ...service,
+      getSession: () => Effect.succeed<AuthSession>(session),
+    })),
+  ).pipe(Layer.provide(baseAuthServiceLayer));
+  for (const scopes of [["mcp:read"], ["mcp:read", "mcp:write"]]) {
+    it.effect(
+      `requires delegated write scope even when POST is exposed (${scopes.join(" ")})`,
+      () =>
+        Effect.gen(function* () {
+          const authLayer = Layer.effect(
+            AuthService,
+            Effect.map(AuthService, (service) => ({
+              ...service,
+              getSession: () =>
+                Effect.succeed<AuthSession>({
+                  ...session,
+                  authMethod: { type: "oauth", clientId: "agent", scopes },
+                }),
+            })),
+          ).pipe(Layer.provide(baseAuthServiceLayer));
+          const middleware = yield* AuthMiddleware.pipe(
+            Effect.provide(
+              makeAuthenticationLive({
+                authLayer,
+                oauth: {
+                  issuer: "https://auth.test/api/auth",
+                  resource: "https://app.test/api/mcp",
+                  jwksUrl: "https://auth.test/api/auth/jwks",
+                  requiredScopes: ["mcp:read"],
+                  allowedMethods: ["GET", "POST"],
+                },
+              }),
+            ),
+          );
+          const effect = middleware.apiKey(
+            Effect.succeed(HttpServerResponse.empty()),
+            { ...middlewareOptions, credential: Redacted.make("") },
+          );
+          const result = yield* provideRequestContextWith(
+            postRequest,
+            effect,
+          ).pipe(Effect.result);
+          expect(result._tag).toBe(
+            scopes.includes("mcp:write") ? "Success" : "Failure",
+          );
+          if (result._tag === "Failure")
+            expect(result.failure).toBeInstanceOf(HttpApiError.Forbidden);
+        }),
+    );
+  }
+  for (const method of ["GET", "POST", "PATCH", "DELETE"]) {
+    it.effect(`${method} respects read-only OAuth access`, () =>
+      Effect.gen(function* () {
+        const middleware = yield* AuthMiddleware.pipe(
+          Effect.provide(makeAuthenticationLive({ authLayer: oauthLayer })),
+        );
+        const effect = middleware.apiKey(
+          Effect.succeed(HttpServerResponse.empty()),
+          {
+            ...middlewareOptions,
+            credential: Redacted.make(""),
+          },
+        );
+        const result = yield* provideRequestContextWith(
+          HttpServerRequest.fromWeb(
+            new Request("http://localhost/test", { method }),
+          ),
+          effect,
+        ).pipe(Effect.result);
+        expect(result._tag).toBe(method === "GET" ? "Success" : "Failure");
+        if (result._tag === "Failure")
+          expect(result.failure).toBeInstanceOf(HttpApiError.Forbidden);
+      }),
+    );
+  }
+});
+
 describe("AuthMiddleware.routerLayer", () => {
   const run = <E>(authLayer: Layer.Layer<AuthService, E>, path = "/test") =>
     Effect.gen(function* () {
