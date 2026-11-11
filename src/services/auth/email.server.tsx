@@ -1,8 +1,7 @@
 import * as AwsCredentials from "@distilled.cloud/aws/Credentials";
 import * as AwsRegion from "@distilled.cloud/aws/Region";
 import * as Sesv2 from "@distilled.cloud/aws/sesv2";
-import { NotificationService } from "@krak-stack/registry/service-notification";
-import type { SesEmailNotification } from "@krak-stack/registry/notification-channel-email-ses/schema";
+import type { EmailPayloadV1 } from "@krak-stack/notifications/transport/email";
 import { Effect, Layer, Option, Redacted, Schema } from "effect";
 import * as FetchHttpClient from "effect/http/FetchHttpClient";
 import { mkdir, writeFile } from "node:fs/promises";
@@ -16,7 +15,10 @@ import { SqlClient, SqlSchema } from "effect/sql";
 import { DomainRow, OrganizationRow, ProjectRow } from "@/db/schema";
 import { hostFromRequest } from "@/services/domains";
 import { m } from "@/paraglide/messages";
-import { notificationLayer } from "@/services/auth/notification.server";
+import {
+  notificationLayer,
+  sendNotificationEmail,
+} from "@/services/auth/notification.server";
 import { resolveRecipientLocale } from "@/services/auth/locale.server";
 import { organizationBranding } from "@/services/organizations/branding";
 import {
@@ -25,12 +27,25 @@ import {
 } from "@/services/auth-emails/schema";
 import { renderAuthEmail } from "@/services/auth-emails/render";
 import type { Project } from "@/services/projects/schema";
+import { brandingEmailSender } from "@/services/auth/email-sender";
 
 const fallbackAppName = process.env.AUTH_EMAIL_NAME?.trim() || "Krakstack Auth";
 const fallbackFrom =
   process.env.AUTH_EMAIL_FROM?.trim() ||
   process.env.NOTIFICATION_EMAIL_FROM?.trim() ||
   `${fallbackAppName} <no-reply@krakstack.local>`;
+// Accept existing mailbox-style environment settings while the transport owns
+// quoting and encoding the display name. Use plain Unicode names, not MIME words.
+const fallbackMailbox = fallbackFrom.match(/^\s*(.*?)\s*<([^<>]+)>\s*$/);
+const fallbackAddress = fallbackMailbox?.[2]?.trim();
+const fallbackDisplayName = fallbackMailbox?.[1]
+  ?.trim()
+  .replace(/^"(.*)"$/, "$1")
+  .replace(/\\(["\\])/g, "$1");
+const fallbackSender = {
+  from: fallbackAddress ?? fallbackFrom,
+  fromName: fallbackDisplayName || undefined,
+};
 const projectContextCookie = "krakstack-auth.project_context";
 const localOtpDirectory =
   process.env.NODE_ENV === "production"
@@ -130,12 +145,6 @@ const SesLive = Layer.mergeAll(
   ),
 );
 
-const sanitizeDisplayName = (value: string) =>
-  value.replace(/[\r\n"<>]/g, "").trim() || fallbackAppName;
-
-const fromAddress = (name: string, domain: string) =>
-  `${sanitizeDisplayName(name)} <noreply@${domain}>`;
-
 const isUsableEmailDomain = (domain: string) =>
   domain.includes(".") && !domain.includes(":") && domain !== "localhost";
 
@@ -205,7 +214,7 @@ const resolveEmailIdentity = async (
 ) => {
   const fallback = {
     appName: fallbackAppName,
-    from: fallbackFrom,
+    ...fallbackSender,
     logo: undefined,
     theme: undefined,
     settings: undefined,
@@ -235,7 +244,7 @@ const resolveEmailIdentity = async (
   if (!host) {
     return {
       appName: contextProject?.name ?? fallbackAppName,
-      from: fallbackFrom,
+      ...fallbackSender,
       logo: assetUrl(contextProject?.logo, origin) || undefined,
       theme: emailThemeFromCss(projectThemeCss(contextProject?.data)),
       settings: projectEmailSettings(contextProject?.data),
@@ -257,7 +266,7 @@ const resolveEmailIdentity = async (
   if (!domain) {
     return {
       appName: contextProject?.name ?? fallbackAppName,
-      from: fallbackFrom,
+      ...fallbackSender,
       logo: assetUrl(contextProject?.logo, origin) || undefined,
       theme: emailThemeFromCss(projectThemeCss(contextProject?.data)),
       settings: projectEmailSettings(contextProject?.data),
@@ -310,18 +319,24 @@ const resolveEmailIdentity = async (
 
   return {
     appName,
-    from: verified ? fromAddress(appName, senderDomain) : fallbackFrom,
+    ...(verified
+      ? brandingEmailSender({
+          name: appName,
+          domain: senderDomain,
+          fallbackName: fallbackAppName,
+        })
+      : fallbackSender),
     logo,
     theme,
     settings: projectEmailSettings(project?.data),
   };
 };
 
-const sendAuthEmail = (email: SesEmailNotification) =>
-  Effect.gen(function* () {
-    const notifications = yield* NotificationService;
-    yield* notifications.send({ email });
-  }).pipe(Effect.provide(notificationLayer), Effect.runPromise);
+const sendAuthEmail = (email: EmailPayloadV1 & { readonly to: string }) =>
+  sendNotificationEmail(email).pipe(
+    Effect.provide(notificationLayer),
+    Effect.runPromise,
+  );
 
 export const sendResetPasswordEmail = async ({
   request,
@@ -338,6 +353,7 @@ export const sendResetPasswordEmail = async ({
   const identity = await resolveEmailIdentity(request, locale);
   await sendAuthEmail({
     from: identity.from,
+    fromName: identity.fromName,
     to,
     ...(await Effect.runPromise(
       renderAuthEmail({
@@ -364,6 +380,7 @@ export const sendTwoFactorOtpEmail = async ({
   const identity = await resolveEmailIdentity(request, locale);
   await sendAuthEmail({
     from: identity.from,
+    fromName: identity.fromName,
     to,
     ...(await Effect.runPromise(
       renderAuthEmail({
@@ -394,6 +411,7 @@ export const sendEmailVerificationOtpEmail = async ({
   const identity = await resolveEmailIdentity(request, locale);
   await sendAuthEmail({
     from: identity.from,
+    fromName: identity.fromName,
     to,
     ...(await Effect.runPromise(
       renderAuthEmail({ ...identity, locale, action: { kind: type, otp } }),
@@ -437,14 +455,11 @@ export const sendProjectAuthEmailTest = Effect.fn("AuthEmails.sendTest")(
     email: { subject: string; html: string; text: string };
     locale: "en" | "fr";
   }) {
-    const notifications = yield* NotificationService;
-    yield* notifications.send({
-      email: {
-        ...email,
-        from: fallbackFrom,
-        to,
-        subject: `${m.auth_email_test_prefix({}, { locale })} ${email.subject}`,
-      },
+    yield* sendNotificationEmail({
+      ...email,
+      ...fallbackSender,
+      to,
+      subject: `${m.auth_email_test_prefix({}, { locale })} ${email.subject}`,
     });
   },
 );

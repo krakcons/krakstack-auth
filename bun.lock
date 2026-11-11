@@ -17,6 +17,7 @@
         "@effect/platform-bun": "4.1.0",
         "@effect/sql-pg": "4.1.0",
         "@krak-stack/auth": "workspace:*",
+        "@krak-stack/notifications": "0.4.0",
         "@krak-stack/registry": "0.1.61",
         "@lucas-barake/effect-form-react": "1.1.0",
         "@opentelemetry/api": "^1.9.1",
@@ -367,6 +368,8 @@
     "@jridgewell/trace-mapping": ["@jridgewell/trace-mapping@0.3.31", "", { "dependencies": { "@jridgewell/resolve-uri": "^3.1.0", "@jridgewell/sourcemap-codec": "^1.4.14" } }, "sha512-zzNR+SdQSDJzc8joaeP8QQoCQr8NuYx2dIIytl1QeBEZHJ9uW6hebsrYgbz8hJwUQao3TWCMtmfV8Nu1twOLAw=="],
 
     "@krak-stack/auth": ["@krak-stack/auth@workspace:packages/sdk"],
+
+    "@krak-stack/notifications": ["@krak-stack/notifications@0.4.0", "", { "dependencies": { "@effect/platform-node-shared": "4.1.0" }, "peerDependencies": { "@aws-sdk/client-sesv2": "^3.1068.0", "@effect/platform-node": "^4.1.0", "@effect/sql-pg": "^4.1.0", "@krak-stack/registry": "^0.8.1", "effect": "^4.1.0", "nodemailer": "^9.0.6" }, "optionalPeers": ["@aws-sdk/client-sesv2", "@effect/platform-node", "@krak-stack/registry", "nodemailer"] }, "sha512-NJ+tGsHpBaMMVvneZp2MUrDo3zTSbGe6HtRYXW0slX4OjIMwHDeQCaYDebx9nRvqUllEeZMd09WyKp5N5/SoJQ=="],
 
     "@krak-stack/registry": ["@krak-stack/registry@0.1.61", "", { "dependencies": { "@oxlint/plugins": "1.78.0", "bowser": "^2.14.1", "web-vitals": "^5.1.0" }, "peerDependencies": { "@aws-sdk/client-sesv2": "^3.1068.0", "@base-ui/react": "^1.5.0", "@effect/atom-react": "^4.1.0", "@effect/platform-browser": "^4.1.0", "@effect/sql-pg": "^4.1.0", "@iconify/react": "^6.0.2", "@inlang/paraglide-js": "^2.19.0", "@lucas-barake/effect-form": "1.1.0", "@lucas-barake/effect-form-react": "1.1.0", "@tanstack/highlight": "^0.0.10", "@tanstack/react-form": "^1.33.0", "@tanstack/react-router": "^1.170.15", "@tanstack/react-virtual": "^3.14.5", "@xberg-io/xberg": "1.0.14", "class-variance-authority": "^0.7.1", "cmdk": "^1.1.1", "cn": "^0.3.0", "drizzle-orm": "^1.0.0-rc.4-5d5b77c", "effect": "^4.1.0", "lucide-react": "^1.18.0", "react": "^19.2.0", "react-dom": "^19.2.0" }, "optionalPeers": ["@aws-sdk/client-sesv2", "@effect/atom-react", "@effect/platform-browser", "@effect/sql-pg", "@iconify/react", "@lucas-barake/effect-form", "@lucas-barake/effect-form-react", "@tanstack/highlight", "@tanstack/react-form", "@tanstack/react-router", "@tanstack/react-virtual", "@xberg-io/xberg", "cmdk", "drizzle-orm"] }, "sha512-a7HZUp9pAB6NrsezCyLSllot93CL059CO53spj2WRY4mp/TVFgVkqMSm1emhjrHCJnKw+oqXx2Btjxp8PwFvwg=="],
 

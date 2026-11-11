@@ -1,13 +1,102 @@
 import { describe, expect, it } from "@effect/vitest";
-import { Effect, Schema } from "effect";
-import { SesEmailNotification } from "@krak-stack/registry/notification-channel-email-ses/schema";
-import { NotificationService } from "@krak-stack/registry/service-notification";
-import { NotificationSendError } from "@krak-stack/registry/service-notification/schema";
+import { Effect, Exit, Layer, Schema } from "effect";
+import { DirectNotificationDispatcher } from "@krak-stack/notifications/direct";
+import { makeFakeTransport } from "@krak-stack/notifications/testing";
+import { NotificationTransportPermanent } from "@krak-stack/notifications/transport";
+import {
+  EmailPayloadV1,
+  formatEmailRecipient,
+} from "@krak-stack/notifications/transport/email";
 import { vi } from "vitest";
 import { m } from "@/paraglide/messages";
 import { AuthEmailKind } from "@/services/auth-emails/schema";
+import { brandingEmailSender } from "@/services/auth/email-sender";
 
 describe("authentication email sender", () => {
+  it.effect(
+    "normalizes branding names before dispatch without losing punctuation",
+    () =>
+      Effect.gen(function* () {
+        const { sendNotificationEmail } = yield* Effect.promise(
+          () => import("./notification.server"),
+        );
+        const transport = makeFakeTransport({ channel: "email" });
+        const sender = brandingEmailSender({
+          name: ' \r\n(PROD) Test\r\n "Team" \\ 1\r\n ',
+          domain: "example.test",
+          fallbackName: "Auth",
+        });
+        yield* sendNotificationEmail({
+          ...sender,
+          to: "user@example.test",
+          subject: "Sign in",
+          text: "000000",
+        }).pipe(
+          Effect.provide(
+            DirectNotificationDispatcher.layer.pipe(
+              Layer.provide(transport.layer),
+            ),
+          ),
+        );
+        expect(transport.sent[0]?.payload).toMatchObject({
+          from: "noreply@example.test",
+          fromName: '(PROD) Test "Team" \\ 1',
+        });
+        expect(
+          brandingEmailSender({
+            name: "\r\n ",
+            domain: "example.test",
+            fallbackName: "Auth\r\n",
+          }).fromName,
+        ).toBe("Auth");
+        expect(
+          brandingEmailSender({
+            name: "\r\n",
+            domain: "example.test",
+            fallbackName: "\n ",
+          }).fromName,
+        ).toBe("Krakstack Auth");
+      }),
+  );
+
+  it.effect("quotes and escapes organization sender names", () =>
+    Effect.gen(function* () {
+      const { sendNotificationEmail } = yield* Effect.promise(
+        () => import("./notification.server"),
+      );
+      const transport = makeFakeTransport({ channel: "email" });
+      yield* sendNotificationEmail({
+        to: "user@example.test",
+        from: "noreply@example.test",
+        fromName: "(PROD) Test Team 1",
+        subject: "Sign in",
+        text: "000000",
+      }).pipe(
+        Effect.provide(
+          DirectNotificationDispatcher.layer.pipe(
+            Layer.provide(transport.layer),
+          ),
+        ),
+      );
+      const email = yield* Schema.decodeUnknownEffect(EmailPayloadV1)(
+        transport.sent[0]?.payload,
+      );
+      expect(email.fromName).toBe("(PROD) Test Team 1");
+      expect(
+        formatEmailRecipient({
+          address: email.from!,
+          name: email.fromName ?? null,
+        }),
+      ).toBe('"(PROD) Test Team 1" <noreply@example.test>');
+      expect(
+        formatEmailRecipient({
+          address: "noreply@example.test",
+          name: 'Team "One" \\ Support',
+        }),
+      ).toBe('"Team \\"One\\" \\\\ Support" <noreply@example.test>');
+    }),
+  );
+
   it.effect(
     "renders non-authenticating localized samples for every email type",
     () =>
@@ -50,16 +139,10 @@ describe("authentication email sender", () => {
     () =>
       Effect.gen(function* () {
         vi.resetModules();
-        const sentEmails: Array<unknown> = [];
-        const notifications = NotificationService.makeLayer([
-          {
-            key: "email",
-            send: (email) =>
-              Effect.sync(() => {
-                sentEmails.push(email);
-              }),
-          },
-        ]);
+        const transport = makeFakeTransport({ channel: "email" });
+        const notifications = DirectNotificationDispatcher.layer.pipe(
+          Layer.provide(transport.layer),
+        );
         vi.stubEnv("AUTH_EMAIL_FROM", "");
         vi.stubEnv("NOTIFICATION_EMAIL_FROM", "   ");
         vi.stubEnv("AUTH_EMAIL_NAME", "   ");
@@ -76,43 +159,82 @@ describe("authentication email sender", () => {
           },
           locale: "en",
         }).pipe(Effect.provide(notifications));
-        expect(sentEmails).toHaveLength(1);
-        const email = yield* Schema.decodeUnknownEffect(SesEmailNotification)(
-          sentEmails[0],
+        expect(transport.sent).toHaveLength(1);
+        const email = yield* Schema.decodeUnknownEffect(EmailPayloadV1)(
+          transport.sent[0]?.payload,
         );
-        expect(email.from).toBe("Krakstack Auth <no-reply@krakstack.local>");
-        expect(email.to).toBe("admin@example.test");
+        expect(email.from).toBe("no-reply@krakstack.local");
+        expect(email.fromName).toBe("Krakstack Auth");
+        expect(transport.sent[0]?.recipientAddress).toBe("admin@example.test");
       }).pipe(Effect.scoped),
   );
 
   const senderCases = [
     {
+      name: "preserves plain Unicode sender names for transport encoding",
+      from: "Équipe Française <auth@example.test>",
+      notificationFrom: undefined,
+      appName: "Example",
+      expected: { from: "auth@example.test", fromName: "Équipe Française" },
+    },
+    {
+      name: "decodes a quoted legacy sender name",
+      from: '"Team \\"One\\" \\\\ Support" <auth@example.test>',
+      notificationFrom: undefined,
+      appName: "Example",
+      expected: {
+        from: "auth@example.test",
+        fromName: 'Team "One" \\ Support',
+      },
+    },
+    {
+      name: "preserves parentheses in the sender display name",
+      from: "(PROD) Test Team 1 <auth@example.test>",
+      notificationFrom: undefined,
+      appName: "Example",
+      expected: { from: "auth@example.test", fromName: "(PROD) Test Team 1" },
+    },
+    {
+      name: "accepts a bare sender address",
+      from: "auth@example.test",
+      notificationFrom: undefined,
+      appName: "Example",
+      expected: { from: "auth@example.test" },
+    },
+    {
+      name: "accepts a sender mailbox without a display name",
+      from: "<auth@example.test>",
+      notificationFrom: undefined,
+      appName: "Example",
+      expected: { from: "auth@example.test" },
+    },
+    {
       name: "prefers the authentication sender and trims whitespace",
       from: "  Auth <auth@example.test>  ",
       notificationFrom: "Notify <notify@example.test>",
       appName: "Example",
-      expected: "Auth <auth@example.test>",
+      expected: { from: "auth@example.test", fromName: "Auth" },
     },
     {
       name: "inherits the notification sender when the authentication sender is blank",
       from: "  ",
       notificationFrom: "  Notify <notify@example.test>  ",
       appName: "Example",
-      expected: "Notify <notify@example.test>",
+      expected: { from: "notify@example.test", fromName: "Notify" },
     },
     {
       name: "inherits the notification sender when the authentication sender is absent",
       from: undefined,
       notificationFrom: "Notify <notify@example.test>",
       appName: "Example",
-      expected: "Notify <notify@example.test>",
+      expected: { from: "notify@example.test", fromName: "Notify" },
     },
     {
       name: "uses the configured app name when neither sender is configured",
       from: undefined,
       notificationFrom: undefined,
       appName: "  Example  ",
-      expected: "Example <no-reply@krakstack.local>",
+      expected: { from: "no-reply@krakstack.local", fromName: "Example" },
     },
   ];
   for (const scenario of senderCases) {
@@ -126,39 +248,51 @@ describe("authentication email sender", () => {
         const { sendProjectAuthEmailTest } = yield* Effect.promise(
           () => import("./email.server"),
         );
-        const sent: Array<SesEmailNotification> = [];
-        const notifications = NotificationService.makeLayer([
-          {
-            key: "email",
-            send: (payload) =>
-              Schema.decodeUnknownEffect(SesEmailNotification)(payload).pipe(
-                Effect.orDie,
-                Effect.tap((email) =>
-                  Effect.sync(() => {
-                    sent.push(email);
-                  }),
-                ),
-                Effect.asVoid,
-              ),
-          },
-        ]);
+        const transport = makeFakeTransport({ channel: "email" });
+        const notifications = DirectNotificationDispatcher.layer.pipe(
+          Layer.provide(transport.layer),
+        );
         yield* sendProjectAuthEmailTest({
           to: "admin@example.test",
           locale: "fr",
           email: { subject: "Subject", html: "<p>Sample</p>", text: "Sample" },
         }).pipe(Effect.provide(notifications));
-        expect(sent).toEqual([
-          {
-            from: scenario.expected,
-            to: "admin@example.test",
-            subject: "[TEST] Subject",
-            html: "<p>Sample</p>",
-            text: "Sample",
-          },
-        ]);
+        expect(transport.sent).toHaveLength(1);
+        expect(transport.sent[0]?.recipientAddress).toBe("admin@example.test");
+        expect(transport.sent[0]?.payload).toEqual({
+          ...scenario.expected,
+          subject: "[TEST] Subject",
+          html: "<p>Sample</p>",
+          text: "Sample",
+        });
       }).pipe(Effect.scoped),
     );
   }
+
+  it.effect("rejects sender header injection before dispatch", () =>
+    Effect.gen(function* () {
+      const { sendNotificationEmail } = yield* Effect.promise(
+        () => import("./notification.server"),
+      );
+      const transport = makeFakeTransport({ channel: "email" });
+      const result = yield* sendNotificationEmail({
+        to: "user@example.test",
+        from: "auth@example.test",
+        fromName: "Team\r\nBcc: attacker@example.test",
+        subject: "Sign in",
+        text: "000000",
+      }).pipe(
+        Effect.provide(
+          DirectNotificationDispatcher.layer.pipe(
+            Layer.provide(transport.layer),
+          ),
+        ),
+        Effect.exit,
+      );
+      expect(Exit.isFailure(result)).toBe(true);
+      expect(transport.sent).toHaveLength(0);
+    }),
+  );
 
   it.effect(
     "propagates delivery failures instead of reporting a successful test",
@@ -167,13 +301,17 @@ describe("authentication email sender", () => {
         const { sendProjectAuthEmailTest } = yield* Effect.promise(
           () => import("./email.server"),
         );
-        const failure = new NotificationSendError({
+        const failure = new NotificationTransportPermanent({
           channel: "email",
           message: "Delivery rejected",
         });
-        const notifications = NotificationService.makeLayer([
-          { key: "email", send: () => Effect.fail(failure) },
-        ]);
+        const transport = makeFakeTransport({
+          channel: "email",
+          send: () => Effect.fail(failure),
+        });
+        const notifications = DirectNotificationDispatcher.layer.pipe(
+          Layer.provide(transport.layer),
+        );
         const error = yield* sendProjectAuthEmailTest({
           to: "admin@example.test",
           locale: "en",
