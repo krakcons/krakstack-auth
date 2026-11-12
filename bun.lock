@@ -73,7 +73,7 @@
     },
     "packages/sdk": {
       "name": "@krak-stack/auth",
-      "version": "0.3.1",
+      "version": "0.3.2",
       "dependencies": {
         "@better-auth/core": "1.7.6",
         "@effect/atom-react": "^4.1.0",

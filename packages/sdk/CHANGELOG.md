@@ -1,5 +1,11 @@
 # @krak-stack/auth
 
+## 0.3.2
+
+### Patch Changes
+
+- Add English and French default messages to OAuthConsent, selected from the auth provider locale. Make messages optional and support partial overrides while preserving default labels for built-in permissions.
+
 ## 0.3.1
 
 ### Patch Changes

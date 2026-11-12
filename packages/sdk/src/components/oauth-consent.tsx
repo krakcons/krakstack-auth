@@ -24,7 +24,7 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { authClientApi, authHttpClient } from "./auth-client-api.js";
-import { useKrakstackAuth } from "./auth-provider.js";
+import { useKrakstackAuth, type KrakstackAuthLocale } from "./auth-provider.js";
 import { getOAuthAuthorizationQuery } from "../oauth/authorization.js";
 
 const ConsentSearch = Schema.Struct({
@@ -46,6 +46,72 @@ export type OAuthConsentMessages = {
     Record<string, { readonly title: string; readonly description?: string }>
   >;
 };
+
+const defaultMessages = {
+  en: {
+    title: "Authorize application",
+    description: ({ clientName }) =>
+      `${clientName} is requesting access to your account.`,
+    requestedScopes: "Requested scopes",
+    allow: "Authorize",
+    deny: "Deny",
+    error: "Unable to save your decision. Please try again.",
+    invalidRequest:
+      "This authorization request is invalid or incomplete. Start again from your application.",
+    notice: "Only connect applications you trust. You can revoke access later.",
+    permissions: {
+      "mcp:read": {
+        title: "Read application data",
+        description:
+          "View information your account can access in your organization.",
+      },
+      "mcp:write": {
+        title: "Make changes on your behalf",
+        description: "Only actions your account is allowed to perform.",
+      },
+      offline_access: {
+        title: "Stay connected",
+        description:
+          "Continue access without asking you to sign in each time, until access is revoked.",
+      },
+      openid: { title: "Verify your identity" },
+      profile: { title: "View your name and profile picture" },
+      email: { title: "View your email address" },
+    },
+  },
+  fr: {
+    title: "Autoriser l'application",
+    description: ({ clientName }) =>
+      `${clientName} demande l'accès à votre compte.`,
+    requestedScopes: "Portées demandées",
+    allow: "Autoriser",
+    deny: "Refuser",
+    error: "Impossible d'enregistrer votre décision. Veuillez réessayer.",
+    invalidRequest:
+      "Cette demande d'autorisation est invalide ou incomplète. Recommencez depuis votre application.",
+    notice:
+      "Connectez uniquement des applications de confiance. Vous pourrez révoquer l'accès plus tard.",
+    permissions: {
+      "mcp:read": {
+        title: "Lire les données de l'application",
+        description:
+          "Consulter les informations accessibles à votre compte dans votre organisation.",
+      },
+      "mcp:write": {
+        title: "Effectuer des modifications en votre nom",
+        description: "Uniquement les actions autorisées pour votre compte.",
+      },
+      offline_access: {
+        title: "Rester connecté",
+        description:
+          "Continuer l'accès sans vous demander de vous reconnecter à chaque fois, jusqu'à sa révocation.",
+      },
+      openid: { title: "Vérifier votre identité" },
+      profile: { title: "Consulter votre nom et votre photo de profil" },
+      email: { title: "Consulter votre adresse courriel" },
+    },
+  },
+} satisfies Record<KrakstackAuthLocale, OAuthConsentMessages>;
 
 const scopeIcon = (scope: string): LucideIcon => {
   switch (scope) {
@@ -91,13 +157,19 @@ const makeConsentAtom = (baseUrl: string | undefined, search: string) => {
 /** Shared login-provider-aware consent. The signed OAuth query is sent intact;
  * the provider, not the component, validates scopes, grants and callbacks. */
 export const OAuthConsent = ({
-  messages,
+  messages: overrides,
   baseUrl: providedBaseUrl,
 }: {
-  readonly messages: OAuthConsentMessages;
+  readonly messages?: Partial<OAuthConsentMessages>;
   readonly baseUrl?: string;
 }) => {
   const auth = useKrakstackAuth();
+  const defaults = defaultMessages[auth?.locale ?? "en"];
+  const messages: OAuthConsentMessages = {
+    ...defaults,
+    ...overrides,
+    permissions: { ...defaults.permissions, ...overrides?.permissions },
+  };
   const baseUrl = providedBaseUrl ?? auth?.baseUrl;
   const search = useRouterState({
     select: (state) => state.location.searchStr,
