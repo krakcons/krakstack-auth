@@ -69,7 +69,7 @@ Groups: `trigger` (visual, image, icon, content, label, subtitle, indicator, bad
 
 Classes reach the actual portalled surfaces, including nested account/admin dialogs and table menus. Internal `data-auth-slot` markers identify account-specific parts without replacing primitive `data-slot` attributes. Scope form controls and existing tab/navigation layouts beneath your supplied dialog/form classes; do not target all popups globally. Caller-provided menu actions remain caller-owned. Local CSS variables must also be defined on portal scopes, not only the trigger wrapper.
 
-Use matching **styling-enabled** registry package/items for AppBrand part classes, table classes and field popup classes. Older registry versions keep their defaults but cannot implement these new hooks. Release and update the registry before consuming those hooks; changing appearance does not require auth server or database changes.
+SDK 0.3.3 requires `@krak-stack/registry@^0.10.2` for AppBrand part classes, table classes and field popup classes. Update any installed registry source items separately; updating the npm package does not replace copied component files. Changing appearance does not require auth server or database changes.
 
 ## Server Configuration
 

@@ -1,5 +1,11 @@
 # @krak-stack/auth
 
+## 0.3.3
+
+### Patch Changes
+
+- 3a84c4a: Add optional trigger variants, sizes, classes and non-interactive badges to UserButton and OrganizationSwitcher. Expose grouped presentation classes for menus, dialogs, forms, nested selects and tables, forwarding scope through portals without changing authentication, requests or actions. Require KrakStack registry 0.10.2 or later in the 0.10 release line for table, brand and field popup hooks, and update the SDK's development dependency and peer range to match.
+
 ## 0.3.2
 
 ### Patch Changes
