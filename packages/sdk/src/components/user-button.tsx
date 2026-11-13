@@ -42,11 +42,7 @@ import {
   useState,
 } from "react";
 
-import {
-  DataTable,
-  type DataTableColDef,
-} from "@krak-stack/registry/data-table";
-import { AppBrand } from "@krak-stack/registry/app-brand";
+import { type DataTableColDef } from "@krak-stack/registry/data-table";
 import { EditingLocaleSwitcher } from "@krak-stack/registry/editing-locale-switcher";
 import {
   effectFormMessages,
@@ -59,20 +55,9 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { CopyButton } from "@krak-stack/registry/copy-button";
-import {
-  Dialog,
-  DialogFooter,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
+import { Dialog } from "@/components/ui/dialog";
 import {
   DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuGroup,
-  DropdownMenuItem,
-  DropdownMenuLabel,
-  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Separator } from "@/components/ui/separator";
@@ -99,7 +84,22 @@ import { ApiKeyRateLimit, apiKeyUsagePercent } from "./api-key-rate-limit.js";
 import { ApiKeyReferrers } from "./api-key-referrers.js";
 import { useLatestAtom, useOpenedOnce } from "./hooks.js";
 import { ExtraUploadedAsset } from "../extra/schema.js";
-import { assetPath, assetUrl } from "./utils.js";
+import { assetPath, assetUrl, cn } from "./utils.js";
+import {
+  AuthUIStylesContext,
+  AppBrand,
+  DataTable,
+  DialogFooter,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+  DropdownMenuContent,
+  DropdownMenuGroup,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  type AuthUIClassNames,
+} from "./appearance.js";
 import { AdminOrganizationsTable } from "./admin-organizations.js";
 import { AdminUsersTable } from "./admin-users.js";
 import {
@@ -851,6 +851,11 @@ const userApiKeysAtom = Atom.family((baseUrl?: string) =>
 const emptyApiKeysAtom = Atom.make(Effect.succeed(Array<ApiKeySummary>()));
 
 export type UserButtonProps = {
+  className?: string;
+  classNames?: AuthUIClassNames;
+  variant?: ComponentProps<typeof Button>["variant"];
+  size?: ComponentProps<typeof Button>["size"];
+  triggerBadge?: ReactNode;
   baseUrl?: string | undefined;
   signOutRedirect?: string;
   side?: ComponentProps<typeof DropdownMenuContent>["side"];
@@ -872,7 +877,18 @@ export type UserButtonDialog =
   | "adminUsers"
   | "adminOrganizations";
 
-export const UserButton = ({
+export const UserButton = (props: UserButtonProps) => (
+  <AuthUIStylesContext.Provider value={props.classNames}>
+    <UserButtonContent {...props} />
+  </AuthUIStylesContext.Provider>
+);
+
+const UserButtonContent = ({
+  className,
+  classNames,
+  variant = "outline",
+  size = "icon",
+  triggerBadge,
   baseUrl,
   signOutRedirect = "/",
   side = "bottom",
@@ -1064,16 +1080,50 @@ export const UserButton = ({
         <DropdownMenu>
           <DropdownMenuTrigger
             render={
-              <Button variant="outline" size="icon" className="overflow-hidden">
-                {displayImage ? (
-                  <img
-                    src={displayImage}
-                    alt={displayName || displayEmail}
-                    className="size-full object-cover"
-                  />
-                ) : (
-                  <UserIcon className="size-4.5" />
+              <Button
+                variant={variant}
+                size={size}
+                data-auth-slot="user-trigger"
+                className={cn(
+                  triggerBadge != null ? "relative" : "overflow-hidden",
+                  className,
                 )}
+              >
+                {triggerBadge != null ? (
+                  <span
+                    data-auth-slot="trigger-badge"
+                    className={cn(
+                      "pointer-events-none absolute -top-1 -right-1 z-10",
+                      classNames?.trigger?.badge,
+                    )}
+                  >
+                    {triggerBadge}
+                  </span>
+                ) : null}
+                <span
+                  data-auth-slot="trigger-visual"
+                  className={cn(
+                    "flex size-full items-center justify-center overflow-hidden rounded-[inherit]",
+                    classNames?.trigger?.visual,
+                  )}
+                >
+                  {displayImage ? (
+                    <img
+                      src={displayImage}
+                      alt={displayName || displayEmail}
+                      data-auth-slot="trigger-image"
+                      className={cn(
+                        "size-full object-cover",
+                        classNames?.trigger?.image,
+                      )}
+                    />
+                  ) : (
+                    <UserIcon
+                      data-auth-slot="trigger-icon"
+                      className={cn("size-4.5", classNames?.trigger?.icon)}
+                    />
+                  )}
+                </span>
                 <span className="sr-only">{m.user_button_aria_label()}</span>
               </Button>
             }
@@ -1094,6 +1144,7 @@ export const UserButton = ({
               ) : null}
               <DropdownMenuLabel className="p-0 font-normal">
                 <AppBrand
+                  appearance="menuHeader"
                   to={null}
                   label={displayName || displayEmail}
                   subtitle={

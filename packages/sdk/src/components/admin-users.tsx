@@ -4,23 +4,23 @@ import { Effect, Schema } from "effect";
 import { Ban, Loader2, ShieldOff, UserCog, UserIcon } from "lucide-react";
 import { useEffect, useState } from "react";
 
-import {
-  DataTable,
-  type DataTableColDef,
-} from "@krak-stack/registry/data-table";
+import { type DataTableColDef } from "@krak-stack/registry/data-table";
 import { Query, type QueryType } from "@krak-stack/registry/query";
 import { ErrorMessage } from "@krak-stack/registry/effect-form";
-import { AppBrand } from "@krak-stack/registry/app-brand";
-import { Badge } from "@/components/ui/badge";
 import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
+  AppBrand,
+  DataTable,
   AlertDialogContent,
   AlertDialogDescription,
   AlertDialogFooter,
   AlertDialogHeader,
   AlertDialogTitle,
+} from "./appearance.js";
+import { Badge } from "@/components/ui/badge";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
 } from "@/components/ui/alert-dialog";
 import type {
   AdminOrganizationPreview,

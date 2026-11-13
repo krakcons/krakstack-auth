@@ -42,47 +42,26 @@ import {
 } from "react";
 
 import {
-  DataTable,
   type DataTableColDef,
   DataTableListCell,
 } from "@krak-stack/registry/data-table";
 import {
   CheckboxField,
   ImageField,
-  SelectField,
   SubmitButton,
   SubmitError,
   TextAreaField,
   TextField,
 } from "@krak-stack/registry/effect-form";
 import { EditingLocaleSwitcher } from "@krak-stack/registry/editing-locale-switcher";
-import { AppBrand } from "@krak-stack/registry/app-brand";
 import { FieldSet } from "@/components/ui/field";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import {
-  AlertDialog,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from "@/components/ui/alert-dialog";
+import { AlertDialog } from "@/components/ui/alert-dialog";
 import { CopyButton } from "@krak-stack/registry/copy-button";
-import {
-  Dialog,
-  DialogFooter,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
+import { Dialog } from "@/components/ui/dialog";
 import {
   DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuGroup,
-  DropdownMenuItem,
-  DropdownMenuLabel,
-  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Separator } from "@/components/ui/separator";
@@ -152,6 +131,27 @@ import {
 } from "./invitation-expiration.js";
 import { ExtraUploadedAsset } from "../extra/schema.js";
 import { assetPath, assetUrl, cn } from "./utils.js";
+import {
+  AuthUIStylesContext,
+  AppBrand,
+  DataTable,
+  DialogFooter,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  DropdownMenuContent,
+  DropdownMenuGroup,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  type AuthUIClassNames,
+  SelectField,
+} from "./appearance.js";
 import type { ProjectAccessLabelCatalog } from "../access.js";
 import { AssociatedProjectsNotice } from "./associated-projects-notice.js";
 import { ExtraApiKeyPermissions } from "../extra/schema.js";
@@ -588,6 +588,10 @@ export type OrganizationSwitcherFeatures = {
 };
 
 export type OrganizationSwitcherProps = {
+  classNames?: AuthUIClassNames;
+  variant?: ComponentProps<typeof Button>["variant"];
+  size?: ComponentProps<typeof Button>["size"];
+  triggerBadge?: ReactNode;
   baseUrl?: string | undefined;
   side?: ComponentProps<typeof DropdownMenuContent>["side"];
   className?: string;
@@ -1174,7 +1178,17 @@ const organizationMetadataFromForm = Effect.fn(function* (
   };
 });
 
-export function OrganizationSwitcher({
+export const OrganizationSwitcher = (props: OrganizationSwitcherProps) => (
+  <AuthUIStylesContext.Provider value={props.classNames}>
+    <OrganizationSwitcherContent {...props} />
+  </AuthUIStylesContext.Provider>
+);
+
+const OrganizationSwitcherContent = ({
+  classNames,
+  variant = "ghost",
+  size,
+  triggerBadge,
   baseUrl: providedBaseUrl,
   side = "bottom",
   className,
@@ -1190,7 +1204,7 @@ export function OrganizationSwitcher({
   onCreate,
   onDialogChange,
   apiKeyPermissions,
-}: OrganizationSwitcherProps) {
+}: OrganizationSwitcherProps) => {
   const auth = useKrakstackAuth();
   const baseUrl = providedBaseUrl ?? auth?.baseUrl;
 
@@ -1341,13 +1355,29 @@ export function OrganizationSwitcher({
           <DropdownMenuTrigger
             render={
               <Button
-                variant="ghost"
+                variant={variant}
+                size={size}
+                data-auth-slot="organization-trigger"
                 className={cn(
-                  "h-11 w-full justify-between gap-2 !px-1 !py-0 group-data-[collapsible=icon]:size-8 group-data-[collapsible=icon]:justify-start group-data-[collapsible=icon]:!p-0",
+                  "w-full justify-between gap-2 group-data-[collapsible=icon]:size-8 group-data-[collapsible=icon]:justify-start group-data-[collapsible=icon]:!p-0",
+                  size === undefined && "h-11 !px-1 !py-0",
+                  triggerBadge != null && "relative",
                   className,
                 )}
               >
+                {triggerBadge != null ? (
+                  <span
+                    data-auth-slot="trigger-badge"
+                    className={cn(
+                      "pointer-events-none absolute -top-1 -right-1 z-10",
+                      classNames?.trigger?.badge,
+                    )}
+                  >
+                    {triggerBadge}
+                  </span>
+                ) : null}
                 <AppBrand
+                  appearance="trigger"
                   to={null}
                   label={
                     activeName
@@ -1364,7 +1394,13 @@ export function OrganizationSwitcher({
                     ? { imageSrc: activeDisplay.image }
                     : {})}
                 />
-                <ChevronsUpDown className="text-muted-foreground size-4 shrink-0 group-data-[collapsible=icon]:hidden" />
+                <ChevronsUpDown
+                  data-auth-slot="trigger-indicator"
+                  className={cn(
+                    "text-muted-foreground size-4 shrink-0 group-data-[collapsible=icon]:hidden",
+                    classNames?.trigger?.indicator,
+                  )}
+                />
               </Button>
             }
           />
@@ -1377,6 +1413,7 @@ export function OrganizationSwitcher({
             <DropdownMenuGroup>
               <DropdownMenuLabel className="p-0 font-normal">
                 <AppBrand
+                  appearance="menuHeader"
                   to={null}
                   label={activeDisplay.name}
                   subtitle={activeSubtitle}
@@ -1739,7 +1776,7 @@ export function OrganizationSwitcher({
       </Dialog>
     </OrganizationMessagesContext.Provider>
   );
-}
+};
 
 const OrganizationDeletionDialog = ({
   baseUrl,

@@ -9,11 +9,11 @@ import { Field, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import {
   Select,
-  SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { SelectContent } from "./appearance.js";
 import type {
   ContactEmail,
   ContactLocale,

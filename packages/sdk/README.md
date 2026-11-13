@@ -34,6 +34,43 @@ Choose a narrow package subpath for the runtime boundary:
 
 The complete export map is defined in `package.json` and documented at [auth.krakstack.net/en/docs/sdk](https://auth.krakstack.net/en/docs/sdk).
 
+## Account UI appearance
+
+`UserButton` and `OrganizationSwitcher` accept `variant`, `size`, trigger `className`, optional non-interactive `triggerBadge`, and grouped `classNames: AuthUIClassNames`. Defaults remain unchanged. Badges render on the closed trigger, not in its menu. Supply localized accessible descriptions in the consuming application; do not put interactive controls inside a trigger badge.
+
+```tsx
+<OrganizationSwitcher
+  variant="outline"
+  className="project-account-trigger"
+  triggerBadge={<span aria-hidden="true">P</span>}
+  classNames={{
+    trigger: { badge: "project-account-badge", label: "project-account-label" },
+    menu: {
+      content: "project-account-menu",
+      subContent: "project-account-menu",
+    },
+    dialog: { content: "project-account-dialog", body: "project-account-body" },
+    form: { content: "project-account-fields" },
+    popup: { select: "project-select", combobox: "project-combobox" },
+    table: {
+      className: "project-account-table",
+      classNames: {
+        menu: {
+          content: "project-table-menu",
+          subContent: "project-table-menu",
+        },
+      },
+    },
+  }}
+/>
+```
+
+Groups: `trigger` (visual, image, icon, content, label, subtitle, indicator, badge); `menu` (content, header, group, item, label, separator, subContent, subTrigger); `dialog` (content, header, title, description, body, footer); `popup` (select, combobox); `form.content` (scrollable form-body scope); and `table` (DataTable root className and grouped classNames). Trigger text hooks apply where that trigger renders text; UserButton remains icon-only. Table hooks mirror the registry table's presentation map.
+
+Classes reach the actual portalled surfaces, including nested account/admin dialogs and table menus. Internal `data-auth-slot` markers identify account-specific parts without replacing primitive `data-slot` attributes. Scope form controls and existing tab/navigation layouts beneath your supplied dialog/form classes; do not target all popups globally. Caller-provided menu actions remain caller-owned. Local CSS variables must also be defined on portal scopes, not only the trigger wrapper.
+
+Use matching **styling-enabled** registry package/items for AppBrand part classes, table classes and field popup classes. Older registry versions keep their defaults but cannot implement these new hooks. Release and update the registry before consuming those hooks; changing appearance does not require auth server or database changes.
+
 ## Server Configuration
 
 Server clients use:

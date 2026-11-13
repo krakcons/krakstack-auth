@@ -77,6 +77,7 @@ export type {
   OrganizationSwitcherProps,
 } from "./organization-switcher.js";
 export type { UserButtonDialog, UserButtonProps } from "./user-button.js";
+export type { AuthUIClassNames } from "./appearance.js";
 export type {
   MemberRequiredMessages,
   MemberRequiredProps,

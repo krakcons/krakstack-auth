@@ -1,7 +1,8 @@
 import type { ComponentProps, ReactNode } from "react";
 
-import { DialogContent } from "@/components/ui/dialog";
+import { DialogContent, useAuthUIStyles } from "./appearance.js";
 import { Separator } from "@/components/ui/separator";
+import { cn } from "./utils.js";
 
 type ScrollableDialogSize = "2xl" | "3xl" | "4xl" | "6xl";
 
@@ -15,13 +16,18 @@ const widthClass = {
 export const ScrollableDialogContent = ({
   children,
   size,
+  className,
   ...props
 }: Omit<ComponentProps<typeof DialogContent>, "className"> & {
+  readonly className?: string;
   readonly children: ReactNode;
   readonly size: ScrollableDialogSize;
 }) => (
   <DialogContent
-    className={`grid max-h-[85vh] min-w-0 grid-rows-[auto_minmax(0,1fr)_auto] gap-0 overflow-hidden ${widthClass[size]}`}
+    className={cn(
+      `grid max-h-[85vh] min-w-0 grid-rows-[auto_minmax(0,1fr)_auto] gap-0 overflow-hidden ${widthClass[size]}`,
+      className,
+    )}
     {...props}
   >
     {children}
@@ -32,12 +38,23 @@ export const ScrollableDialogHeader = ({
   children,
   className = "",
   ...props
-}: ComponentProps<"div">) => (
-  <div className={`flex flex-col gap-6 pb-6 ${className}`} {...props}>
-    {children}
-    <Separator />
-  </div>
-);
+}: ComponentProps<"div">) => {
+  const styles = useAuthUIStyles();
+  return (
+    <div
+      data-auth-slot="dialog-header"
+      className={cn(
+        "flex flex-col gap-6 pb-6",
+        styles?.dialog?.header,
+        className,
+      )}
+      {...props}
+    >
+      {children}
+      <Separator />
+    </div>
+  );
+};
 
 export const ScrollableDialogBody = ({
   children,
@@ -47,12 +64,24 @@ export const ScrollableDialogBody = ({
 }: Omit<ComponentProps<"div">, "className"> & {
   readonly className?: string;
   readonly padding?: "default" | "form";
-}) => (
-  <div className="-mx-6 min-h-0 overflow-y-auto" {...props}>
+}) => {
+  const styles = useAuthUIStyles();
+  return (
     <div
-      className={`min-w-0 px-6 pt-1 ${padding === "form" ? "pb-6" : "pb-2"} ${className}`}
+      data-auth-slot="dialog-body"
+      className={cn("-mx-6 min-h-0 overflow-y-auto", styles?.dialog?.body)}
+      {...props}
     >
-      {children}
+      <div
+        data-auth-slot="form-scope"
+        className={cn(
+          `min-w-0 px-6 pt-1 ${padding === "form" ? "pb-6" : "pb-2"}`,
+          styles?.form?.content,
+          className,
+        )}
+      >
+        {children}
+      </div>
     </div>
-  </div>
-);
+  );
+};

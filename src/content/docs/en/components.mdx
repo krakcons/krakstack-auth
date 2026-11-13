@@ -62,14 +62,14 @@ import { setLocale } from "@/paraglide/runtime";
 
 The flow is `LocaleSwitcher → Paraglide → KrakstackProvider → KrakstackAuthProvider → user.locale`. With Paraglide's default reload behavior, the new page supplies the updated context locale and synchronization runs after its session loads. If your application changes language without a reload, it must rerender `KrakstackProvider` with the new `locale` value.
 
-| Situation | Behavior |
-| --- | --- |
-| Session is loading or refreshing | Wait; do not update the user. |
-| Visitor is signed out | Keep the browser language; do not update a user. |
-| Session is impersonating another user | Do not change the impersonated user's saved preference. |
-| Saved locale matches the context | Do not send an update request. |
-| Signed-in user's saved locale differs or is missing | Save the context locale with an optimistic update, then revalidate session queries. |
-| Saving fails | Roll back optimistic state, log the failure, and call `onLocaleSyncError` if provided. Do not continuously retry the same user/locale pair. |
+| Situation                                           | Behavior                                                                                                                                    |
+| --------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------- |
+| Session is loading or refreshing                    | Wait; do not update the user.                                                                                                               |
+| Visitor is signed out                               | Keep the browser language; do not update a user.                                                                                            |
+| Session is impersonating another user               | Do not change the impersonated user's saved preference.                                                                                     |
+| Saved locale matches the context                    | Do not send an update request.                                                                                                              |
+| Signed-in user's saved locale differs or is missing | Save the context locale with an optimistic update, then revalidate session queries.                                                         |
+| Saving fails                                        | Roll back optimistic state, log the failure, and call `onLocaleSyncError` if provided. Do not continuously retry the same user/locale pair. |
 
 Use the optional `onLocaleSyncError` callback on `KrakstackAuthProvider` to show a localized, application-owned error notice. The callback receives the failure cause; changing its reference does not retry a failed save.
 
@@ -98,6 +98,37 @@ import {
 ```
 
 `OrganizationSwitcher` supports custom menu actions for links into your application's workspace settings. `UserButton` provides account actions and sign-out behavior. Its profile editor also manages localized public contact emails, phone numbers, websites, and social profiles; these values are separate from the email used to sign in and are available to trusted server API clients.
+
+### Styling account controls
+
+Both account controls accept `variant`, `size`, trigger `className`, an optional non-interactive `triggerBadge`, and grouped `classNames` exported as `AuthUIClassNames`. Defaults and actions remain unchanged. The badge appears on the closed trigger, not in its dropdown.
+
+```tsx
+<OrganizationSwitcher
+  className="project-org-trigger"
+  variant="outline"
+  triggerBadge={<span aria-hidden="true">P</span>}
+  classNames={{
+    menu: { content: "project-menu", subContent: "project-menu" },
+    dialog: { content: "project-dialog", body: "project-dialog-body" },
+    form: { content: "project-fields" },
+    popup: { select: "project-select", combobox: "project-select" },
+    table: {
+      className: "project-table",
+      classNames: {
+        menu: {
+          content: "project-table-menu",
+          subContent: "project-table-menu",
+        },
+      },
+    },
+  }}
+/>
+```
+
+Other groups target trigger visuals/text/indicator/badge, menu headers/groups/items/separators, and dialog headers/titles/descriptions/footers. Trigger text hooks apply only where text is rendered; `UserButton` remains icon-only. Internal `data-auth-slot` markers retain primitive `data-slot` attributes. Style fields and existing navigation beneath your supplied dialog/form scope.
+
+Popup classes are applied inside portals, including nested dialogs and table menus. Caller-provided custom content remains caller-owned. Use matching styling-enabled KrakStack registry components/package for brand, table and field-popup hooks. No auth server update is required. Keep product colors, badge meaning, localized accessible descriptions and conditional styling in your application.
 
 ## Forms
 

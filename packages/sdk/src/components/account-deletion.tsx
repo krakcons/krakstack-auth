@@ -7,14 +7,14 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { FieldLabel } from "@/components/ui/field";
+import { Dialog } from "@/components/ui/dialog";
 import {
-  Dialog,
   DialogContent,
   DialogHeader,
   DialogTitle,
   DialogDescription,
   DialogFooter,
-} from "@/components/ui/dialog";
+} from "./appearance.js";
 import { authClientApi } from "./auth-client-api.js";
 import { requestAccountDeletion } from "./account-deletion-request.js";
 import { refreshOnAuthChange } from "./auth-atoms.js";

@@ -6,18 +6,18 @@ import { useState } from "react";
 
 import {
   ImageField,
-  SingleSearchableSelectField,
   SubmitButton,
   SubmitError,
   TextField,
 } from "@krak-stack/registry/effect-form";
+import { Dialog } from "@/components/ui/dialog";
 import {
-  Dialog,
   DialogContent,
   DialogDescription,
   DialogHeader,
   DialogTitle,
-} from "@/components/ui/dialog";
+  SingleSearchableSelectField,
+} from "./appearance.js";
 import {
   AdminCreateOrganizationPayload,
   type AdminOrganization,
