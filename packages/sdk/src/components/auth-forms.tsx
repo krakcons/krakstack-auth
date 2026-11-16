@@ -13,6 +13,7 @@ import {
   useRouterState,
 } from "@tanstack/react-router";
 import { Effect, Option, Schema } from "effect";
+import type * as Types from "effect/Types";
 import { Atom, AsyncResult } from "effect/reactivity";
 import { HttpClientError } from "effect/http";
 import { REGEXP_ONLY_DIGITS } from "input-otp";
@@ -85,6 +86,7 @@ import type {
   AuthExpectationFailed,
   AuthForbidden,
   AuthNotFound,
+  SsoDiscoveryQuery,
 } from "../auth/schema.js";
 
 const signinFormBuilder = FormBuilder.empty
@@ -444,7 +446,7 @@ export const resolveInitialAuthMethod = ({
   return emailOtp ? "emailOtp" : "password";
 };
 
-export function Signin(props: AuthFormProps) {
+export function Signin(props: AuthFormProps & { sso?: { label: string } }) {
   const registry = useContext(RegistryContext);
   const {
     baseUrl,
@@ -747,6 +749,48 @@ export function Signin(props: AuthFormProps) {
   );
   const startSocialSignIn = useAtomSet(socialSignIn);
   const socialSignInResult = useAtomValue(socialSignIn);
+  const [ssoSignIn] = useState(() =>
+    authClientApi(baseUrl).runtime.fn(
+      (payload: {
+        email: string;
+        organizationSlug?: string;
+        callbackURL: string;
+        errorCallbackURL: string;
+      }) =>
+        authHttpClient(baseUrl, locale).pipe(
+          Effect.flatMap((client) =>
+            Effect.gen(function* () {
+              const query: Types.Mutable<typeof SsoDiscoveryQuery.Type> = {};
+              if (payload.email) query.email = payload.email;
+              if (payload.organizationSlug)
+                query.organizationSlug = payload.organizationSlug;
+              const connection = yield* client.auth.getSsoConfig({
+                query,
+              });
+              if (!connection)
+                return yield* new AuthBadRequest({
+                  message: "SSO unavailable",
+                });
+              return yield* client.auth.signInSso({
+                payload: {
+                  providerId: connection.providerId,
+                  callbackURL: payload.callbackURL,
+                  errorCallbackURL: payload.errorCallbackURL,
+                },
+              });
+            }),
+          ),
+          Effect.flatMap((result) => {
+            const url = result.url;
+            return url
+              ? Effect.promise(() => Promise.resolve(onNavigate(url)))
+              : Effect.void;
+          }),
+        ),
+    ),
+  );
+  const startSsoSignIn = useAtomSet(ssoSignIn);
+  const ssoSignInResult = useAtomValue(ssoSignIn);
   const formValues = Option.getOrElse(useAtomValue(form.values), () => ({
     email: "",
     password: "",
@@ -806,6 +850,21 @@ export function Signin(props: AuthFormProps) {
       ),
     );
 
+  const signInWithSso = () => {
+    const { callbackURL, errorCallbackURL } = getSocialSignInDestinations(
+      router,
+      props.defaultRedirectTo,
+      window.location.href,
+    );
+    startSsoSignIn({
+      email: formValues.email.trim(),
+      organizationSlug:
+        getSearchParam(searchString, "organization") ?? undefined,
+      callbackURL,
+      errorCallbackURL,
+    });
+  };
+
   return (
     <Card className="w-full max-w-md">
       <CardHeader>
@@ -829,6 +888,9 @@ export function Signin(props: AuthFormProps) {
         </CardDescription>
       </CardHeader>
       <CardContent>
+        {getSearchParam(searchString, "error") ? (
+          <ErrorMessage text={m.sign_in_error} />
+        ) : null}
         {hasPrimaryAuth ? (
           <form.Initialize
             defaultValues={{ email: initialEmail, password: "", otp: "" }}
@@ -960,7 +1022,7 @@ export function Signin(props: AuthFormProps) {
           </form.Initialize>
         ) : null}
         {(emailSubmitted && canChangeAuthMethod) ||
-        (options.google && !emailSubmitted) ? (
+        ((options.google || props.sso) && !emailSubmitted) ? (
           <div className="mt-4 flex flex-col gap-3">
             {hasPrimaryAuth ? (
               <Divider label={m.auth_or_continue_with} />
@@ -985,7 +1047,11 @@ export function Signin(props: AuthFormProps) {
                   type="button"
                   variant="outline"
                   className="w-full"
-                  disabled={submitResult.waiting}
+                  disabled={
+                    submitResult.waiting ||
+                    socialSignInResult.waiting ||
+                    ssoSignInResult.waiting
+                  }
                   onClick={signInWithGoogle}
                 >
                   <GoogleLogo />
@@ -998,9 +1064,36 @@ export function Signin(props: AuthFormProps) {
                 />
               </>
             ) : null}
+            {props.sso && !emailSubmitted ? (
+              <>
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="w-full"
+                  disabled={
+                    submitResult.waiting ||
+                    socialSignInResult.waiting ||
+                    ssoSignInResult.waiting
+                  }
+                  onClick={signInWithSso}
+                >
+                  {ssoSignInResult.waiting ? (
+                    <Loader2 className="animate-spin" />
+                  ) : (
+                    <KeyRound />
+                  )}
+                  {props.sso.label}
+                </Button>
+                <AuthSubmitError
+                  result={ssoSignInResult}
+                  labels={m}
+                  messages={{ fallback: m.sign_in_error }}
+                />
+              </>
+            ) : null}
           </div>
         ) : null}
-        {!hasPrimaryAuth && !options.google ? (
+        {!hasPrimaryAuth && !options.google && !props.sso ? (
           <p className="text-muted-foreground text-sm">
             {m.oauth_client_no_auth_methods}
           </p>

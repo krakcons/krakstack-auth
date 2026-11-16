@@ -21,11 +21,8 @@ import {
   useSidebarLayout,
 } from "@krak-stack/registry/sidebar-layout";
 import { authBaseUrl, getAuthSession } from "@/services/auth/client";
-import {
-  MemberRequired,
-  OrganizationSwitcher,
-  UserButton,
-} from "@krak-stack/auth/components";
+import { MemberRequired, UserButton } from "@krak-stack/auth/components";
+import { OrganizationSwitcher } from "@/services/auth/client/organization-switcher";
 
 const krakOrganizationId = import.meta.env.VITE_KRAKSTACK_AUTH_ORGANIZATION_ID;
 const testApiKeyPermissions = {

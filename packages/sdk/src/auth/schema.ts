@@ -115,6 +115,53 @@ export const SignOutPayload = Schema.Struct({}).annotate({
   identifier: "SignOutPayload",
 });
 
+export const SignInSsoPayload = Schema.Struct({
+  providerId: Schema.NonEmptyString,
+  callbackURL: Schema.NonEmptyString,
+  errorCallbackURL: Schema.optional(Schema.NonEmptyString),
+}).annotate({ identifier: "SignInSsoPayload" });
+
+export const SsoPublicConfig = Schema.NullOr(
+  Schema.Struct({
+    providerId: Schema.NonEmptyString,
+  }),
+).annotate({ identifier: "SsoPublicConfig" });
+
+export const SsoDiscoveryQuery = Schema.Struct({
+  email: Schema.optional(Schema.NonEmptyString),
+  organizationSlug: Schema.optional(Schema.NonEmptyString),
+}).annotate({ identifier: "SsoDiscoveryQuery" });
+
+export const OrganizationSsoQuery = Schema.Struct({
+  organizationId: Schema.NonEmptyString,
+}).annotate({ identifier: "OrganizationSsoQuery" });
+
+export const OrganizationSsoSettings = Schema.Struct({
+  organizationId: Schema.NonEmptyString,
+  issuer: Schema.NonEmptyString,
+  domain: Schema.NonEmptyString,
+  clientId: Schema.NonEmptyString,
+  clientSecret: Schema.optional(Schema.NonEmptyString),
+}).annotate({ identifier: "OrganizationSsoSettings" });
+
+export const OrganizationSsoEnabled = Schema.Struct({
+  organizationId: Schema.NonEmptyString,
+  enabled: Schema.Boolean,
+}).annotate({ identifier: "OrganizationSsoEnabled" });
+
+export const OrganizationSsoConnection = Schema.Struct({
+  callbackURL: Schema.optional(Schema.NonEmptyString),
+  organizationId: Schema.NonEmptyString,
+  providerId: Schema.NonEmptyString,
+  issuer: Schema.NonEmptyString,
+  domain: Schema.NonEmptyString,
+  clientId: Schema.NonEmptyString,
+  enabled: Schema.Boolean,
+  domainVerified: Schema.Boolean,
+  verificationName: Schema.NonEmptyString,
+  verificationToken: Schema.NonEmptyString,
+}).annotate({ identifier: "OrganizationSsoConnection" });
+
 export const AuthSuccessResponse = Schema.Struct({
   success: Schema.Boolean,
 }).annotate({ identifier: "AuthSuccessResponse", title: "Success response" });

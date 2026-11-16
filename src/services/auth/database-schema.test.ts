@@ -23,5 +23,12 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)("Better Auth SQL names", () => {
     expect(tables.oauthRefreshToken?.modelName).toBe("oauth_refresh_token");
     expect(tables.apikey?.fields.referenceId?.fieldName).toBe("reference_id");
     expect(tables.organization?.fields.parentId?.fieldName).toBe("parent_id");
+    expect(tables.ssoProvider?.modelName).toBe("sso_provider");
+    expect(tables.ssoProvider?.fields.providerId?.fieldName).toBe(
+      "provider_id",
+    );
+    expect(tables.ssoProvider?.fields.domainVerified?.fieldName).toBe(
+      "domain_verified",
+    );
   });
 });
