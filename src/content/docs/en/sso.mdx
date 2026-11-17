@@ -47,11 +47,11 @@ Microsoft, Okta, Auth0 and Google OIDC endpoint origins are allowed by the platf
 
 Only one verified, enabled connection may route an email domain. Unverified connections cannot sign anyone in. Issuer and domain cannot be changed in place after creation: remove the connection and create another to establish a new identity boundary.
 
-Saved secrets are never returned to the browser. To rotate credentials, edit the client ID or enter a replacement secret; leave the secret blank to preserve it. Saving disables the connection until it is enabled again. Rotating the server's encryption secret without migrating encrypted data requires re-entering connection credentials.
+Saved secrets are never returned to the browser. To rotate credentials, edit the client ID or enter a replacement secret; leave the secret blank to preserve it. Changing credentials disables the connection until it is enabled again. Saving unchanged credentials preserves its current status. Client IDs are trimmed before saving. Rotating the server's encryption secret without migrating encrypted data requires re-entering connection credentials.
 
 ## Employee sign-in
 
-On the central sign-in page, enter the company email and choose **Continue with company SSO**. Auth discovers the organization's verified, enabled connection from its email domain. It redirects to the IdP, validates the callback, checks current organization membership, and selects that organization in the new session.
+On the central sign-in page, enter the company email and choose **Continue**. Then choose **Continue with company SSO** alongside the email-code/password options. Auth discovers the organization's verified, enabled connection from its email domain. It redirects to the IdP, validates the callback, checks current organization membership, and selects that organization in the new session.
 
 An organization-specific login link may use `/sign-in?organization=YOUR-ORGANIZATION-SLUG`. The slug selects a connection; it never grants membership. A connection that is disabled or removed while a login is in progress cannot finish authentication.
 

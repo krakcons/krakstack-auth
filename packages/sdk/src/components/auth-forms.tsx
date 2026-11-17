@@ -74,6 +74,7 @@ import {
   ExtraProjectPublicConfig as ExtraProjectPublicConfigSchema,
   type ExtraProjectPublicConfig,
 } from "../extra/schema.js";
+import { EmailAddress } from "../schema.js";
 import {
   AuthBadRequest,
   AuthInternalServerError,
@@ -90,7 +91,7 @@ import type {
 } from "../auth/schema.js";
 
 const signinFormBuilder = FormBuilder.empty
-  .addField("email", Schema.String)
+  .addField("email", EmailAddress)
   .addField("password", Schema.String)
   .addField("otp", Schema.String);
 
@@ -488,7 +489,9 @@ export function Signin(props: AuthFormProps & { sso?: { label: string } }) {
     }),
   );
   const initialMethodStep =
-    Boolean(initialEmail) && requestedMethod === initialAuthMethod;
+    Option.isSome(Schema.decodeOption(EmailAddress)(initialEmail)) &&
+    (options.emailPassword || options.emailOtp) &&
+    requestedMethod === initialAuthMethod;
   const [emailSubmitted, setEmailSubmitted] = useState(initialMethodStep);
   const [authMethod, setAuthMethod] = useState<AuthMethod>(initialAuthMethod);
   const [otpSentTo, setOtpSentTo] = useState(
@@ -645,6 +648,13 @@ export function Signin(props: AuthFormProps & { sso?: { label: string } }) {
           }
 
           if (!action.emailSubmitted) {
+            if (
+              (!options.emailPassword && !options.emailOtp) ||
+              (props.sso && action.method === "emailOtp")
+            ) {
+              setEmailSubmitted(true);
+              return;
+            }
             if (action.method === "emailOtp") yield* sendEmailOtp;
             else {
               setEmailSubmitted(true);
@@ -891,138 +901,144 @@ export function Signin(props: AuthFormProps & { sso?: { label: string } }) {
         {getSearchParam(searchString, "error") ? (
           <ErrorMessage text={m.sign_in_error} />
         ) : null}
-        {hasPrimaryAuth ? (
+        {hasPrimaryAuth || props.sso ? (
           <form.Initialize
             defaultValues={{ email: initialEmail, password: "", otp: "" }}
           >
-            <form
-              className="flex flex-col gap-4"
-              onSubmit={(event) => {
-                event.preventDefault();
-                event.stopPropagation();
-                setErrorContext(
-                  !emailSubmitted ||
-                    (selectedAuthMethod === "emailOtp" && !otpSentTo)
-                    ? "sendEmailOtp"
-                    : selectedAuthMethod === "emailOtp"
-                      ? "verifyEmailOtp"
-                      : "signIn",
-                );
-                submit({
-                  type: "submit",
-                  emailSubmitted,
-                  method: selectedAuthMethod,
-                  otpSent: Boolean(otpSentTo),
-                });
-              }}
-            >
-              {!emailSubmitted ? (
-                <form.email
-                  label={m.field_email}
-                  type="email"
-                  autoFocus
-                  autoComplete="email"
-                  onKeyDown={(event) => {
-                    if (event.key !== "Enter") return;
-                    event.preventDefault();
-                    event.currentTarget.form?.requestSubmit();
-                  }}
-                  required
-                />
-              ) : null}
-              {emailSubmitted && selectedAuthMethod === "password" ? (
-                <div className="flex flex-col gap-2">
-                  <form.password
-                    label={m.field_password}
+            {hasPrimaryAuth || !emailSubmitted ? (
+              <form
+                className="flex flex-col gap-4"
+                onSubmit={(event) => {
+                  event.preventDefault();
+                  event.stopPropagation();
+                  setErrorContext(
+                    !emailSubmitted ||
+                      (selectedAuthMethod === "emailOtp" && !otpSentTo)
+                      ? "sendEmailOtp"
+                      : selectedAuthMethod === "emailOtp"
+                        ? "verifyEmailOtp"
+                        : "signIn",
+                  );
+                  submit({
+                    type: "submit",
+                    emailSubmitted,
+                    method: selectedAuthMethod,
+                    otpSent: Boolean(otpSentTo),
+                  });
+                }}
+              >
+                {!emailSubmitted ? (
+                  <form.email
+                    label={m.field_email}
+                    type="email"
                     autoFocus
-                    autoComplete="current-password"
-                    recovery={{
-                      label: m.sign_in_forgot_password,
-                      disabled: submitResult.waiting,
-                      onClick: () => {
-                        setErrorContext("resetPassword");
-                        submit({ type: "resetPassword" });
-                      },
+                    autoComplete="email"
+                    onKeyDown={(event) => {
+                      if (event.key !== "Enter") return;
+                      event.preventDefault();
+                      event.currentTarget.form?.requestSubmit();
                     }}
                     required
                   />
-                </div>
-              ) : null}
-              {emailSubmitted && selectedAuthMethod === "emailOtp" ? (
-                <div className="flex flex-col gap-2">
-                  <form.otp label={m.sign_in_email_otp_code} />
-                  <p className="text-muted-foreground text-sm">
-                    {m.sign_in_otp_expiry}
-                  </p>
-                  <div className="flex flex-wrap gap-x-4 gap-y-2 text-sm">
-                    {otpSentTo ? (
-                      <Button
-                        type="button"
-                        variant="link"
-                        className="h-auto px-0"
-                        disabled={
-                          submitResult.waiting || emailOtpResendSeconds > 0
-                        }
-                        onClick={resendEmailOtp}
-                      >
-                        {emailOtpResendSeconds > 0
-                          ? text(m.sign_in_email_otp_resend_countdown, {
-                              seconds: String(emailOtpResendSeconds),
-                            })
-                          : m.sign_in_email_otp_resend}
-                      </Button>
-                    ) : null}
+                ) : null}
+                {emailSubmitted && selectedAuthMethod === "password" ? (
+                  <div className="flex flex-col gap-2">
+                    <form.password
+                      label={m.field_password}
+                      autoFocus
+                      autoComplete="current-password"
+                      recovery={{
+                        label: m.sign_in_forgot_password,
+                        disabled: submitResult.waiting,
+                        onClick: () => {
+                          setErrorContext("resetPassword");
+                          submit({ type: "resetPassword" });
+                        },
+                      }}
+                      required
+                    />
                   </div>
-                </div>
-              ) : null}
-              <AuthSubmitError
-                result={submitResult}
-                labels={m}
-                messages={{
-                  fallback:
-                    errorContext === "resetPassword"
-                      ? m.forgot_password_error
-                      : errorContext === "sendEmailOtp"
-                        ? m.sign_in_email_otp_send_error
+                ) : null}
+                {emailSubmitted &&
+                selectedAuthMethod === "emailOtp" &&
+                otpSentTo ? (
+                  <div className="flex flex-col gap-2">
+                    <form.otp label={m.sign_in_email_otp_code} />
+                    <p className="text-muted-foreground text-sm">
+                      {m.sign_in_otp_expiry}
+                    </p>
+                    <div className="flex flex-wrap gap-x-4 gap-y-2 text-sm">
+                      {otpSentTo ? (
+                        <Button
+                          type="button"
+                          variant="link"
+                          className="h-auto px-0"
+                          disabled={
+                            submitResult.waiting || emailOtpResendSeconds > 0
+                          }
+                          onClick={resendEmailOtp}
+                        >
+                          {emailOtpResendSeconds > 0
+                            ? text(m.sign_in_email_otp_resend_countdown, {
+                                seconds: String(emailOtpResendSeconds),
+                              })
+                            : m.sign_in_email_otp_resend}
+                        </Button>
+                      ) : null}
+                    </div>
+                  </div>
+                ) : null}
+                <AuthSubmitError
+                  result={submitResult}
+                  labels={m}
+                  messages={{
+                    fallback:
+                      errorContext === "resetPassword"
+                        ? m.forgot_password_error
+                        : errorContext === "sendEmailOtp"
+                          ? m.sign_in_email_otp_send_error
+                          : errorContext === "verifyEmailOtp"
+                            ? m.sign_in_email_otp_error
+                            : m.sign_in_error,
+                    badRequest:
+                      errorContext === "resetPassword"
+                        ? m.forgot_password_error
                         : errorContext === "verifyEmailOtp"
-                          ? m.sign_in_email_otp_error
-                          : m.sign_in_error,
-                  badRequest:
-                    errorContext === "resetPassword"
-                      ? m.forgot_password_error
-                      : errorContext === "verifyEmailOtp"
-                        ? m.auth_invalid_code
+                          ? m.auth_invalid_code
+                          : errorContext === "signIn"
+                            ? m.sign_in_invalid_credentials
+                            : m.sign_in_email_otp_send_error,
+                    unauthorized:
+                      errorContext === "resetPassword"
+                        ? m.forgot_password_error
                         : errorContext === "signIn"
                           ? m.sign_in_invalid_credentials
-                          : m.sign_in_email_otp_send_error,
-                  unauthorized:
-                    errorContext === "resetPassword"
-                      ? m.forgot_password_error
-                      : errorContext === "signIn"
-                        ? m.sign_in_invalid_credentials
-                        : m.sign_in_error,
-                }}
-              />
-              <div>
-                <Button type="submit" disabled={submitResult.waiting}>
-                  {submitResult.waiting ? (
-                    <Loader2
-                      className="animate-spin"
-                      data-icon="inline-start"
-                    />
-                  ) : null}
-                  {!emailSubmitted
-                    ? m.sign_in_continue
-                    : selectedAuthMethod === "emailOtp"
-                      ? m.sign_in_email_otp_verify
-                      : m.auth_sign_in}
-                </Button>
-              </div>
-            </form>
+                          : m.sign_in_error,
+                  }}
+                />
+                <div>
+                  <Button type="submit" disabled={submitResult.waiting}>
+                    {submitResult.waiting ? (
+                      <Loader2
+                        className="animate-spin"
+                        data-icon="inline-start"
+                      />
+                    ) : null}
+                    {!emailSubmitted
+                      ? m.sign_in_continue
+                      : selectedAuthMethod === "emailOtp"
+                        ? otpSentTo
+                          ? m.sign_in_email_otp_verify
+                          : m.sign_in_use_email_otp
+                        : m.auth_sign_in}
+                  </Button>
+                </div>
+              </form>
+            ) : null}
           </form.Initialize>
         ) : null}
-        {(emailSubmitted && canChangeAuthMethod) ||
-        ((options.google || props.sso) && !emailSubmitted) ? (
+        {(emailSubmitted && (canChangeAuthMethod || props.sso)) ||
+        (options.google && !emailSubmitted) ? (
           <div className="mt-4 flex flex-col gap-3">
             {hasPrimaryAuth ? (
               <Divider label={m.auth_or_continue_with} />
@@ -1064,7 +1080,7 @@ export function Signin(props: AuthFormProps & { sso?: { label: string } }) {
                 />
               </>
             ) : null}
-            {props.sso && !emailSubmitted ? (
+            {props.sso && emailSubmitted ? (
               <>
                 <Button
                   type="button"

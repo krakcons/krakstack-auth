@@ -91,6 +91,7 @@ test("configures an organization connection, verifies ownership, rolls back a re
   let stored: typeof OrganizationSsoConnection.Type | null = null;
   let rejectVerification = true;
   let rejectEnable = true;
+  let rejectRemoval = true;
   let settingsReads = 0;
   await mockOrganizationSession(page);
   await page.route("**/api/auth/organization/sso**", async (route) => {
@@ -125,21 +126,32 @@ test("configures an organization connection, verifies ownership, rolls back a re
       }
       if (stored) stored = { ...stored, enabled: payload.enabled };
     } else if (path.endsWith("/delete")) {
+      if (rejectRemoval) {
+        rejectRemoval = false;
+        return route.fulfill({
+          status: 400,
+          json: { code: "REMOVE_REJECTED" },
+        });
+      }
       stored = null;
       return route.fulfill({ json: { success: true } });
     } else {
-      const payload = Schema.decodeUnknownSync(OrganizationSsoSettings)(
-        request.postDataJSON(),
+      const payload = Schema.decodeUnknownSync(
+        Schema.toCodecJson(OrganizationSsoSettings),
+      )(request.postDataJSON());
+      expect(payload.clientSecret).toBe(
+        stored ? undefined : "entered-test-secret",
       );
-      expect(payload.clientSecret).toBe("entered-test-secret");
       stored = {
         organizationId: payload.organizationId,
         providerId: "test-sso-provider",
         issuer: payload.issuer,
         domain: payload.domain,
         clientId: payload.clientId,
-        enabled: false,
-        domainVerified: false,
+        enabled: Boolean(
+          stored?.enabled && stored.clientId === payload.clientId,
+        ),
+        domainVerified: stored?.domainVerified ?? false,
         verificationName: "_krakstack-sso-test-sso-provider.acme.example",
         verificationToken: "dns-proof-token",
       };
@@ -168,9 +180,17 @@ test("configures an organization connection, verifies ownership, rolls back a re
   await page
     .getByRole("button", { name: "Save connection", exact: true })
     .click();
+  await expect(issuer).toBeHidden();
+  await expect(secret).toBeHidden();
+  await page.getByText("Identity provider", { exact: true }).click();
+  await expect(
+    page.getByRole("button", { name: "Edit credentials", exact: true }),
+  ).toHaveCount(0);
   await expect(issuer).toBeDisabled();
   await expect(domain).toBeDisabled();
   await expect(secret).toHaveValue("");
+  await page.getByText("Identity provider", { exact: true }).click();
+  await expect(secret).toBeHidden();
   await expect(
     page.getByLabel("Callback URL to register with your identity provider"),
   ).toHaveValue(
@@ -199,13 +219,66 @@ test("configures an organization connection, verifies ownership, rolls back a re
   await expect(
     page.getByRole("button", { name: "Disable SSO", exact: true }),
   ).toBeEnabled();
+  await expect(secret).toBeHidden();
+  await page.getByText("Identity provider", { exact: true }).click();
   await expect(secret).toHaveValue("");
+  await expect(
+    page.getByRole("button", { name: "Save connection", exact: true }),
+  ).toBeDisabled();
+  await page
+    .getByRole("textbox", { name: "Client ID", exact: true })
+    .fill(" client-id ");
+  await page
+    .getByRole("button", { name: "Save connection", exact: true })
+    .click();
+  await expect(
+    page.getByRole("button", { name: "Disable SSO", exact: true }),
+  ).toBeEnabled();
+  await page
+    .getByRole("textbox", { name: "Client ID", exact: true })
+    .fill(" updated-client-id ");
+  await page
+    .getByRole("button", { name: "Save connection", exact: true })
+    .click();
+  await expect(secret).toHaveValue("");
+  await expect(enable).toBeEnabled();
+  await enable.click();
+  await expect(
+    page.getByRole("button", { name: "Disable SSO", exact: true }),
+  ).toBeEnabled();
   await page
     .getByRole("button", { name: "Remove connection", exact: true })
     .click();
-  await page
-    .getByRole("button", { name: "Remove and unlink SSO", exact: true })
+  const removalDialog = page.getByRole("region", {
+    name: "Remove SSO connection?",
+    exact: true,
+  });
+  await expect(removalDialog).toBeVisible();
+  await expect(page.getByRole("dialog")).toHaveCount(1);
+  await expect(
+    page.getByRole("button", { name: "Disable SSO", exact: true }),
+  ).toBeHidden();
+  await removalDialog
+    .getByRole("button", { name: "Cancel", exact: true })
     .click();
+  await expect(removalDialog).toBeHidden();
+  await expect(
+    page.getByRole("button", { name: "Remove SSO connection", exact: true }),
+  ).toHaveCount(0);
+  await expect(
+    page.getByRole("button", { name: "Remove connection", exact: true }),
+  ).toBeFocused();
+  await page
+    .getByRole("button", { name: "Remove connection", exact: true })
+    .click();
+  await removalDialog
+    .getByRole("button", { name: "Remove SSO connection", exact: true })
+    .click();
+  await expect(removalDialog.getByRole("alert")).toBeVisible();
+  await removalDialog
+    .getByRole("button", { name: "Remove SSO connection", exact: true })
+    .click();
+  await expect(removalDialog).toBeHidden();
   await expect(issuer).toBeEnabled();
   await expect(issuer).toHaveValue("");
 });

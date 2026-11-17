@@ -158,6 +158,14 @@ export class OrganizationSso extends Context.Service<OrganizationSso>()(
           : null;
         const clientSecret = payload.clientSecret ?? oldConfig?.clientSecret;
         if (!clientSecret) return yield* invalid();
+        // An unchanged save is not a credential rotation. Keep availability and
+        // avoid unnecessary discovery, encryption and database writes.
+        if (
+          oldConfig?.clientId === payload.clientId &&
+          oldConfig.clientSecret === clientSecret
+        ) {
+          return yield* get(actor);
+        }
         // The library validates discovery issuer, endpoints and redirect/SSRF rules.
         const discovered = yield* Effect.tryPromise({
           try: () =>

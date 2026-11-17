@@ -2,12 +2,52 @@ import { describe, expect, it } from "@effect/vitest";
 import { Effect, Layer, Schema } from "effect";
 import { SqlClient } from "effect/sql";
 import { vi } from "vitest";
+import { discoverOIDCConfig } from "@better-auth/sso";
 import { sqlTestLayer } from "@/services/database";
 import { createAuth } from "../config";
-import { ApprovedSsoUrl, SsoIssuer, SsoDomain } from "./schema";
+import {
+  ApprovedSsoUrl,
+  SsoIssuer,
+  SsoDomain,
+  SsoOidcConfiguration,
+  ssoIdpOrigins,
+  SsoSettingsBody,
+  SsoClientId,
+} from "./schema";
 import { OrganizationSso, SsoDns, SsoSettingsError } from "./settings";
 
 describe("organization SSO trust boundaries", () => {
+  it("trims client IDs and rejects whitespace-only values", () => {
+    expect(Schema.decodeSync(SsoClientId)("  google-client-id \n")).toBe(
+      "google-client-id",
+    );
+    expect(() => Schema.decodeSync(SsoClientId)(" \n ")).toThrow();
+  });
+  it("decodes blank-secret JSON requests without accepting invalid secrets", async () => {
+    const body = Schema.toStandardSchemaV1(SsoSettingsBody);
+    const settings = {
+      organizationId: "test-organization",
+      issuer: "https://accounts.google.com",
+      domain: "example.com",
+      clientId: "test-client",
+    };
+    for (const input of [settings, { ...settings, clientSecret: null }]) {
+      expect(await body["~standard"].validate(input)).toEqual({
+        value: { ...settings, clientSecret: undefined },
+      });
+    }
+    for (const clientSecret of ["", 42]) {
+      expect(
+        await body["~standard"].validate({ ...settings, clientSecret }),
+      ).toHaveProperty("issues");
+    }
+    expect(
+      await body["~standard"].validate({
+        ...settings,
+        clientSecret: "replacement-secret",
+      }),
+    ).toEqual({ value: { ...settings, clientSecret: "replacement-secret" } });
+  });
   it("accepts approved OIDC origins and rejects internal services and ambiguous Microsoft issuers", () => {
     const valid = Schema.is(ApprovedSsoUrl);
     expect(valid("https://acme.okta.com/oauth2/default")).toBe(true);
@@ -21,6 +61,7 @@ describe("organization SSO trust boundaries", () => {
       "https://acme.okta.com.evil.example",
       "https://user:password@acme.okta.com",
       "https://acme.okta.com:8443",
+      "https://www.googleapis.com.evil.example/oauth2/v3/certs",
     ])
       expect(valid(url)).toBe(false);
     expect(
@@ -28,6 +69,56 @@ describe("organization SSO trust boundaries", () => {
     ).toBe(false);
     expect(Schema.is(SsoDomain)("*.acme.com")).toBe(false);
   });
+
+  it.effect(
+    "accepts Google's discovered signing-key and UserInfo endpoints",
+    () =>
+      Effect.gen(function* () {
+        const issuer = "https://accounts.google.com";
+        // Google publishes its signing keys on a different origin from its issuer,
+        // token and UserInfo endpoints.
+        const discovery = {
+          issuer,
+          authorization_endpoint: `${issuer}/o/oauth2/v2/auth`,
+          token_endpoint: "https://oauth2.googleapis.com/token",
+          userinfo_endpoint: "https://openidconnect.googleapis.com/v1/userinfo",
+          jwks_uri: "https://www.googleapis.com/oauth2/v3/certs",
+          token_endpoint_auth_methods_supported: [
+            "client_secret_post",
+            "client_secret_basic",
+          ],
+          response_types_supported: ["code", "token", "id_token"],
+          scopes_supported: ["openid", "email", "profile"],
+        };
+        vi.stubGlobal(
+          "fetch",
+          async (input: RequestInfo | URL, init?: RequestInit) => {
+            expect(new Request(input, init).url).toBe(
+              `${issuer}/.well-known/openid-configuration`,
+            );
+            return Response.json(discovery);
+          },
+        );
+        const discovered = yield* Effect.promise(() =>
+          discoverOIDCConfig({
+            issuer,
+            isTrustedOrigin: Schema.is(ApprovedSsoUrl),
+          }),
+        );
+        const config = yield* Schema.decodeUnknownEffect(SsoOidcConfiguration)({
+          ...discovered,
+          issuer,
+          clientId: "google-test-client",
+          clientSecret: "test-only-secret",
+          discoveryEndpoint: `${issuer}/.well-known/openid-configuration`,
+          pkce: true,
+          scopes: ["openid", "email", "profile"],
+        });
+        expect(config.jwksEndpoint).toBe(discovery.jwks_uri);
+        expect(config.userInfoEndpoint).toBe(discovery.userinfo_endpoint);
+        expect(ssoIdpOrigins).toContain(new URL(config.jwksEndpoint).origin);
+      }).pipe(Effect.ensuring(Effect.sync(() => vi.unstubAllGlobals()))),
+  );
 });
 
 describe.skipIf(!process.env.TEST_DATABASE_URL)(
@@ -93,6 +184,16 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)(
               yield* sql`SELECT oidc_config FROM sso_provider WHERE organization_id = ${id}`;
             expect(JSON.stringify(stored)).not.toContain(payload.clientSecret);
             expect(JSON.stringify(stored)).not.toContain(payload.clientId);
+            const updated = yield* service.save({
+              userId: owner,
+              settings: yield* Schema.decodeEffect(SsoSettingsBody)({
+                ...payload,
+                clientId: "updated-client",
+                clientSecret: null,
+              }),
+            });
+            expect(updated?.clientId).toBe("updated-client");
+            expect(updated?.providerId).toBe(saved?.providerId);
             expect(
               yield* service.discover({ email: `employee@${payload.domain}` }),
             ).toBeNull();
@@ -127,6 +228,21 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)(
                 enabled: true,
               }))?.enabled,
             ).toBe(true);
+            const discoveryCalls = fetchCalls;
+            for (const clientSecret of [undefined, payload.clientSecret]) {
+              const unchanged = yield* service.save({
+                userId: owner,
+                settings: {
+                  ...payload,
+                  clientId: " updated-client ",
+                  clientSecret,
+                },
+              });
+              expect(unchanged?.enabled).toBe(true);
+              expect(unchanged?.domainVerified).toBe(true);
+              expect(unchanged?.clientId).toBe("updated-client");
+            }
+            expect(fetchCalls).toBe(discoveryCalls);
             const otherSaved = yield* service.save({
               userId: outsider,
               settings: { ...payload, organizationId: other },
@@ -246,6 +362,36 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)(
             );
             expect(forbidden.status).toBe(403);
             const ownerCookie = yield* loginCookie(owner);
+            yield* service.setEnabled({
+              userId: owner,
+              organizationId: id,
+              enabled: true,
+            });
+            const unchangedResponse = yield* Effect.promise(() =>
+              auth.handler(
+                new Request(
+                  "https://localhost:3001/api/auth/organization/sso",
+                  {
+                    method: "POST",
+                    headers: {
+                      origin: "https://localhost:3001",
+                      cookie: ownerCookie,
+                      "content-type": "application/json",
+                    },
+                    body: JSON.stringify({
+                      ...withoutSecret,
+                      clientId: ` ${withoutSecret.clientId} `,
+                      clientSecret: null,
+                    }),
+                  },
+                ),
+              ),
+            );
+            expect(unchangedResponse.status).toBe(200);
+            expect(
+              (yield* service.get({ userId: owner, organizationId: id }))
+                ?.enabled,
+            ).toBe(true);
             const readable = yield* Effect.promise(() =>
               auth.handler(
                 new Request(

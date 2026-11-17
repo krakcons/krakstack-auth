@@ -47,11 +47,11 @@ Les origines OIDC Microsoft, Okta, Auth0 et Google sont approuvées par la polit
 
 Un domaine de courriel ne peut être associé qu’à une connexion vérifiée et activée. Une connexion non vérifiée ne permet aucune authentification. L’émetteur et le domaine sont immuables après création : supprimez la connexion et créez-en une nouvelle pour établir une autre frontière d’identité.
 
-Les secrets enregistrés ne sont jamais renvoyés au navigateur. Pour effectuer une rotation, modifiez l’identifiant client ou saisissez un nouveau secret ; laissez ce champ vide pour conserver le secret actuel. L’enregistrement désactive la connexion jusqu’à sa réactivation. Une rotation du secret de chiffrement serveur sans migration des données nécessite de ressaisir les identifiants des connexions.
+Les secrets enregistrés ne sont jamais renvoyés au navigateur. Pour effectuer une rotation, modifiez l’identifiant client ou saisissez un nouveau secret ; laissez ce champ vide pour conserver le secret actuel. La modification des identifiants désactive la connexion jusqu’à sa réactivation. Un enregistrement sans modification conserve son état actuel. Les espaces en début et en fin d’identifiant client sont supprimés avant l’enregistrement. Une rotation du secret de chiffrement serveur sans migration des données nécessite de ressaisir les identifiants des connexions.
 
 ## Connexion des employés
 
-Sur la page centrale, saisissez le courriel professionnel puis choisissez **Continuer avec le SSO de l’entreprise**. Auth trouve la connexion vérifiée et activée à partir du domaine, redirige vers le fournisseur, valide le retour, vérifie l’adhésion actuelle et sélectionne l’organisation dans la nouvelle session.
+Sur la page centrale, saisissez le courriel professionnel puis choisissez **Continuer**. Choisissez ensuite **Continuer avec le SSO de l’entreprise**, à côté des options de code par courriel et de mot de passe. Auth trouve la connexion vérifiée et activée à partir du domaine, redirige vers le fournisseur, valide le retour, vérifie l’adhésion actuelle et sélectionne l’organisation dans la nouvelle session.
 
 Un lien propre à l’organisation peut utiliser `/sign-in?organization=YOUR-ORGANIZATION-SLUG`. Ce slug sélectionne une connexion sans accorder d’adhésion. Une connexion désactivée ou supprimée pendant le parcours ne permet pas de terminer l’authentification.
 

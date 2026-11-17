@@ -13,6 +13,7 @@ export const ssoIdpOrigins = [
   "https://accounts.google.com",
   "https://oauth2.googleapis.com",
   "https://openidconnect.googleapis.com",
+  "https://www.googleapis.com",
 ];
 
 export const ApprovedSsoUrl = Schema.String.check(
@@ -34,6 +35,7 @@ export const ApprovedSsoUrl = Schema.String.check(
       "accounts.google.com",
       "oauth2.googleapis.com",
       "openidconnect.googleapis.com",
+      "www.googleapis.com",
     ];
     const suffixes = [
       ".okta.com",
@@ -69,11 +71,22 @@ export const SsoDomain = Schema.String.check(
   ),
 ).annotate({ identifier: "SsoDomain" });
 
+export const SsoClientId = Schema.Trim.check(Schema.isNonEmpty()).annotate({
+  identifier: "SsoClientId",
+});
+
 export const SsoSettingsWrite = Schema.Struct({
   ...OrganizationSsoSettings.fields,
   issuer: SsoIssuer,
   domain: SsoDomain,
+  clientId: SsoClientId,
 }).annotate({ identifier: "SsoSettingsWrite" });
+
+// HttpApi JSON encoding represents optional undefined values as null. Decode
+// that wire format before passing settings to Better Auth's native endpoint.
+export const SsoSettingsBody = Schema.toCodecJson(
+  OrganizationSsoSettings,
+).annotate({ identifier: "SsoSettingsBody" });
 
 export const SsoOidcConfiguration = Schema.Struct({
   issuer: SsoIssuer,

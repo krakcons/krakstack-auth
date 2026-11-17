@@ -14,11 +14,16 @@ import {
   SsoPublicConfig,
   SsoDiscoveryQuery,
   OrganizationSsoQuery,
-  OrganizationSsoSettings,
   OrganizationSsoEnabled,
   OrganizationSsoConnection,
 } from "@krak-stack/auth/auth";
-import { SsoBinding, SsoAccount, SsoLocalUser, SsoMember } from "./schema";
+import {
+  SsoBinding,
+  SsoAccount,
+  SsoLocalUser,
+  SsoMember,
+  SsoSettingsBody,
+} from "./schema";
 import { EmailAddress } from "@krak-stack/auth/schema";
 import { getAuthoritativeSessionFromCtx } from "better-auth/api";
 import {
@@ -271,7 +276,7 @@ export const organizationSso = (
         "/organization/sso",
         {
           method: "POST",
-          body: Schema.toStandardSchemaV1(OrganizationSsoSettings),
+          body: Schema.toStandardSchemaV1(SsoSettingsBody),
         },
         async (ctx) => {
           const userId = await requireActor(ctx);
