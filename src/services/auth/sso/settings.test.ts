@@ -3,6 +3,7 @@ import { Effect, Layer, Schema } from "effect";
 import { SqlClient } from "effect/sql";
 import { vi } from "vitest";
 import { discoverOIDCConfig } from "@better-auth/sso";
+import { OrganizationSsoConnection } from "@krak-stack/auth/auth";
 import { sqlTestLayer } from "@/services/database";
 import { createAuth } from "../config";
 import {
@@ -14,7 +15,11 @@ import {
   SsoSettingsBody,
   SsoClientId,
 } from "./schema";
-import { OrganizationSso, SsoDns, SsoSettingsError } from "./settings";
+import { OrganizationSso, SsoSettingsError } from "./settings";
+
+const dnsLookup = vi.hoisted(() => vi.fn<() => Promise<string[][]>>());
+// oxlint-disable-next-line anti-slop/no-module-mocking -- The third-party verifier imports DNS directly and exposes no resolver injection; keep its challenge and verification logic real.
+vi.mock("node:dns/promises", () => ({ resolveTxt: dnsLookup }));
 
 describe("organization SSO trust boundaries", () => {
   it("trims client IDs and rejects whitespace-only values", () => {
@@ -143,6 +148,82 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)(
             clientId: "test-client",
             clientSecret: "PRIVATE-first-secret",
           };
+          const auth = createAuth({
+            allowedHosts: ["localhost:3001"],
+            auditRun: async () => {},
+          });
+          const loginCookie = Effect.fnUntraced(function* (userId: string) {
+            const email = `${userId}@example.com`;
+            const otp = yield* Effect.promise(() =>
+              auth.api.createVerificationOTP({
+                body: { email, type: "sign-in" },
+              }),
+            );
+            const response = yield* Effect.promise(() =>
+              auth.handler(
+                new Request(
+                  "https://localhost:3001/api/auth/sign-in/email-otp",
+                  {
+                    method: "POST",
+                    headers: {
+                      origin: "https://localhost:3001",
+                      "content-type": "application/json",
+                    },
+                    body: JSON.stringify({ email, otp }),
+                  },
+                ),
+              ),
+            );
+            expect(response.status).toBe(200);
+            return response.headers
+              .getSetCookie()
+              .map((value) => value.split(";")[0])
+              .join("; ");
+          });
+          dnsLookup.mockResolvedValue([]);
+          const headersFor = (cookie: string) =>
+            new Headers({
+              origin: "https://localhost:3001",
+              cookie,
+            });
+          const challengeIdentifiers = new Set<string>();
+          const settingsRequest = (
+            cookie: string,
+            organizationId: string,
+            verify = false,
+          ) =>
+            auth.handler(
+              new Request(
+                verify
+                  ? "https://localhost:3001/api/auth/organization/sso/verify"
+                  : `https://localhost:3001/api/auth/organization/sso?organizationId=${organizationId}`,
+                {
+                  method: verify ? "POST" : "GET",
+                  headers: {
+                    ...Object.fromEntries(headersFor(cookie)),
+                    "content-type": "application/json",
+                  },
+                  body: verify ? JSON.stringify({ organizationId }) : undefined,
+                },
+              ),
+            );
+          const readSettings = Effect.fnUntraced(function* (
+            cookie: string,
+            organizationId: string,
+          ) {
+            const response = yield* Effect.promise(() =>
+              settingsRequest(cookie, organizationId),
+            );
+            expect(response.status).toBe(200);
+            const connection = yield* Schema.decodeUnknownEffect(
+              Schema.NullOr(OrganizationSsoConnection),
+            )(yield* Effect.promise(() => response.json()));
+            if (connection)
+              challengeIdentifiers.add(
+                `_krakstack-sso-${connection.providerId}`,
+              );
+            return connection;
+          });
           let fetchCalls = 0;
           const discovery = {
             issuer,
@@ -160,6 +241,8 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)(
             for (const user of [owner, member, outsider])
               yield* sql`INSERT INTO "user" (id, name, email, email_verified) VALUES (${user}, 'Settings user', ${`${user}@example.com`}, true)`;
             yield* sql`INSERT INTO member (id, organization_id, user_id, role, created_at) VALUES (${`${id}-o`}, ${id}, ${owner}, 'owner', now()), (${`${id}-m`}, ${id}, ${member}, 'member', now()), (${`${id}-x`}, ${other}, ${outsider}, 'owner', now())`;
+            const ownerCookie = yield* loginCookie(owner);
+            const outsiderCookie = yield* loginCookie(outsider);
             for (const userId of [member, outsider]) {
               expect(
                 yield* service
@@ -206,21 +289,49 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)(
                 })
                 .pipe(Effect.flip),
             ).toMatchObject({ status: "BAD_REQUEST" });
-            expect(
-              yield* service
-                .verify({ userId: owner, organizationId: id })
-                .pipe(Effect.flip),
-            ).toMatchObject({ status: "BAD_REQUEST" });
-            const proofLayer = Layer.succeed(SsoDns, {
-              lookup: () => Effect.succeed([saved?.verificationToken ?? ""]),
-            });
-            const verified = yield* OrganizationSso.make.pipe(
-              Effect.provide(proofLayer),
+            const [firstChallenge, concurrentChallenge] = yield* Effect.all(
+              [readSettings(ownerCookie, id), readSettings(ownerCookie, id)],
+              { concurrency: "unbounded" },
+            );
+            let challenge = firstChallenge;
+            expect(challenge?.verificationToken).toBeTruthy();
+            expect(concurrentChallenge?.verificationToken).toBe(
+              challenge?.verificationToken,
             );
             expect(
-              (yield* verified.verify({ userId: owner, organizationId: id }))
-                ?.domainVerified,
-            ).toBe(true);
+              yield* sql`SELECT id FROM verification
+                WHERE identifier = ${`_krakstack-sso-${saved?.providerId}`}`,
+            ).toHaveLength(1);
+            expect(
+              (yield* readSettings(ownerCookie, id))?.verificationToken,
+            ).toBe(challenge?.verificationToken);
+            // Expired challenges cannot verify, and reopening settings renews
+            // them through the plugin rather than reusing our old SQL column.
+            yield* sql`UPDATE verification SET expires_at = now() - interval '1 second'
+              WHERE identifier = ${`_krakstack-sso-${saved?.providerId}`}`;
+            expect(
+              (yield* Effect.promise(() =>
+                settingsRequest(ownerCookie, id, true),
+              )).status,
+            ).toBe(404);
+            const expiredToken = challenge?.verificationToken;
+            challenge = yield* readSettings(ownerCookie, id);
+            expect(challenge?.verificationToken).not.toBe(expiredToken);
+            expect(
+              (yield* Effect.promise(() =>
+                settingsRequest(ownerCookie, id, true),
+              )).status,
+            ).toBe(400);
+            dnsLookup.mockResolvedValue([[challenge?.verificationToken ?? ""]]);
+            expect(
+              (yield* Effect.promise(() =>
+                settingsRequest(ownerCookie, id, true),
+              )).status,
+            ).toBe(200);
+            const verified = yield* readSettings(ownerCookie, id);
+            expect(verified?.domainVerified).toBe(true);
+            expect(verified?.verificationToken).toBeUndefined();
+            expect(dnsLookup).toHaveBeenCalledWith(challenge?.verificationName);
             expect(
               (yield* service.setEnabled({
                 userId: owner,
@@ -247,16 +358,16 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)(
               userId: outsider,
               settings: { ...payload, organizationId: other },
             });
-            const otherVerifier = yield* OrganizationSso.make.pipe(
-              Effect.provideService(SsoDns, {
-                lookup: () =>
-                  Effect.succeed([otherSaved?.verificationToken ?? ""]),
-              }),
-            );
-            yield* otherVerifier.verify({
-              userId: outsider,
-              organizationId: other,
-            });
+            const otherChallenge = yield* readSettings(outsiderCookie, other);
+            expect(otherChallenge?.providerId).toBe(otherSaved?.providerId);
+            dnsLookup.mockResolvedValue([
+              [otherChallenge?.verificationToken ?? ""],
+            ]);
+            expect(
+              (yield* Effect.promise(() =>
+                settingsRequest(outsiderCookie, other, true),
+              )).status,
+            ).toBe(200);
             expect(
               yield* service
                 .setEnabled({
@@ -266,10 +377,6 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)(
                 })
                 .pipe(Effect.flip),
             ).toMatchObject({ status: "CONFLICT" });
-            const auth = createAuth({
-              allowedHosts: ["localhost:3001"],
-              auditRun: async () => {},
-            });
             expect(
               yield* Effect.promise(() =>
                 auth.api.getSsoConfig({
@@ -323,35 +430,17 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)(
                 ?.providerId,
             ).toBe(saved?.providerId);
 
-            const loginCookie = Effect.fnUntraced(function* (userId: string) {
-              const email = `${userId}@example.com`;
-              const otp = yield* Effect.promise(() =>
-                auth.api.createVerificationOTP({
-                  body: { email, type: "sign-in" },
-                }),
-              );
-              const response = yield* Effect.promise(() =>
-                auth.handler(
-                  new Request(
-                    "https://localhost:3001/api/auth/sign-in/email-otp",
-                    {
-                      method: "POST",
-                      headers: {
-                        origin: "https://localhost:3001",
-                        "content-type": "application/json",
-                      },
-                      body: JSON.stringify({ email, otp }),
-                    },
-                  ),
-                ),
-              );
-              expect(response.status).toBe(200);
-              return response.headers
-                .getSetCookie()
-                .map((value) => value.split(";")[0])
-                .join("; ");
-            });
             const memberCookie = yield* loginCookie(member);
+            expect(
+              (yield* Effect.promise(() =>
+                settingsRequest(memberCookie, id, true),
+              )).status,
+            ).toBe(403);
+            expect(
+              (yield* Effect.promise(() =>
+                settingsRequest(outsiderCookie, id, true),
+              )).status,
+            ).toBe(403);
             const forbidden = yield* Effect.promise(() =>
               auth.handler(
                 new Request(
@@ -361,7 +450,6 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)(
               ),
             );
             expect(forbidden.status).toBe(403);
-            const ownerCookie = yield* loginCookie(owner);
             yield* service.setEnabled({
               userId: owner,
               organizationId: id,
@@ -452,6 +540,8 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)(
             Effect.ensuring(
               Effect.gen(function* () {
                 vi.unstubAllGlobals();
+                dnsLookup.mockReset();
+                yield* sql`DELETE FROM verification WHERE identifier IN ${sql.in([...challengeIdentifiers])}`;
                 yield* sql`DELETE FROM "user" WHERE id IN ${sql.in([owner, member, outsider])}`;
                 yield* sql`DELETE FROM organization WHERE id IN ${sql.in([id, other])}`;
               }).pipe(Effect.orDie),
@@ -459,12 +549,7 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)(
           );
         }).pipe(
           Effect.provide(
-            Layer.effect(OrganizationSso, OrganizationSso.make).pipe(
-              Layer.provide(
-                Layer.succeed(SsoDns, { lookup: () => Effect.succeed([]) }),
-              ),
-              Layer.provideMerge(sqlTestLayer),
-            ),
+            OrganizationSso.layer.pipe(Layer.provideMerge(sqlTestLayer)),
           ),
         ),
       { timeout: 30_000 },

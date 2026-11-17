@@ -117,11 +117,12 @@ export const SsoBinding = Schema.Struct({
 }).annotate({ identifier: "SsoBinding" });
 export type SsoBinding = typeof SsoBinding.Type;
 
+export const ssoVerificationTokenPrefix = "krakstack-sso";
+
 export const SsoStoredConnection = Schema.Struct({
   ...SsoBinding.fields,
   id: Schema.NonEmptyString,
   oidcConfig: Schema.NonEmptyString,
-  verificationToken: Schema.NonEmptyString,
 }).annotate({ identifier: "SsoStoredConnection" });
 
 export const SsoLocalUser = Schema.Struct({

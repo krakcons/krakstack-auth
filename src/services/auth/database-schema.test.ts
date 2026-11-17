@@ -14,12 +14,7 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)("Better Auth SQL names", () => {
       const auth = createAuth({ allowedHosts: ["localhost:3001"] });
       expect(
         getAuthTables(auth.options).ssoProvider?.fields.verificationToken,
-      ).toMatchObject({
-        fieldName: "verification_token",
-        required: true,
-        input: false,
-        returned: false,
-      });
+      ).toBeUndefined();
       const columns = yield* SqlSchema.findAll({
         Request: Schema.Void,
         Result: Schema.Struct({
@@ -33,12 +28,28 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)("Better Auth SQL names", () => {
             FROM information_schema.columns
             WHERE table_schema = 'public' AND table_name = 'sso_provider'`,
       })();
+      expect(columns.find(({ name }) => name === "verification_token")).toEqual(
+        { name: "verification_token", nullable: false, hasDefault: true },
+      );
       const expected = getExpectedSchema(auth.options).sso_provider;
       expect(expected).toBeDefined();
       if (!expected) throw new Error("Missing SSO provider model");
       expect(
+        diffSchema({ sso_provider: expected }, [
+          { name: "sso_provider", columns: [...columns] },
+        ]),
+      ).toEqual([]);
+      expect(
         diffSchema(
-          { sso_provider: expected },
+          {
+            sso_provider: {
+              ...expected,
+              fields: {
+                ...expected.fields,
+                verification_token: { type: "string", required: true },
+              },
+            },
+          },
           [{ name: "sso_provider", columns: [...columns] }],
         ),
       ).toEqual([]);
@@ -46,7 +57,9 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)("Better Auth SQL names", () => {
       const user = yield* Effect.promise(() =>
         context.adapter.findOne({
           model: "user",
-          where: [{ field: "id", value: `schema-check-${crypto.randomUUID()}` }],
+          where: [
+            { field: "id", value: `schema-check-${crypto.randomUUID()}` },
+          ],
         }),
       );
       expect(user).toBeNull();

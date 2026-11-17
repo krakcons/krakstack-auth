@@ -159,7 +159,7 @@ export const OrganizationSsoConnection = Schema.Struct({
   enabled: Schema.Boolean,
   domainVerified: Schema.Boolean,
   verificationName: Schema.NonEmptyString,
-  verificationToken: Schema.NonEmptyString,
+  verificationToken: Schema.optional(Schema.NonEmptyString),
 }).annotate({ identifier: "OrganizationSsoConnection" });
 
 export const AuthSuccessResponse = Schema.Struct({

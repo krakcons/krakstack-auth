@@ -109,10 +109,15 @@ test("configures an organization connection, verifies ownership, rolls back a re
         rejectVerification = false;
         return route.fulfill({
           status: 400,
-          json: { code: "DNS_NOT_VERIFIED" },
+          json: { code: "DOMAIN_VERIFICATION_FAILED" },
         });
       }
-      if (stored) stored = { ...stored, domainVerified: true };
+      if (stored)
+        stored = {
+          ...stored,
+          domainVerified: true,
+          verificationToken: undefined,
+        };
     } else if (path.endsWith("/enabled")) {
       const payload = Schema.decodeUnknownSync(OrganizationSsoEnabled)(
         request.postDataJSON(),
@@ -153,7 +158,9 @@ test("configures an organization connection, verifies ownership, rolls back a re
         ),
         domainVerified: stored?.domainVerified ?? false,
         verificationName: "_krakstack-sso-test-sso-provider.acme.example",
-        verificationToken: "dns-proof-token",
+        verificationToken: stored?.domainVerified
+          ? undefined
+          : "dns-proof-token",
       };
     }
     return route.fulfill({ json: stored });

@@ -45,6 +45,10 @@ Les origines OIDC Microsoft, Okta, Auth0 et Google sont approuvées par la polit
 5. Après propagation, choisissez **Vérifier l’enregistrement DNS**. Cette vérification n’active pas encore la connexion.
 6. Choisissez **Activer le SSO**, puis testez avec un membre existant dont le courriel est vérifié.
 
+La vérification DNS utilise le stockage des défis et le vérificateur intégrés de Better Auth. Les défis expirent après sept jours ; rouvrez les paramètres pour obtenir la valeur TXT actuelle si le défi a expiré. Les connexions vérifiées n’ont pas besoin d’un nouveau défi.
+
+La migration 6 confie les vérifications en attente à Better Auth. Si vous avez commencé la vérification avant la mise à jour, rouvrez les paramètres et publiez la nouvelle valeur TXT. Les connexions déjà vérifiées ne sont pas affectées.
+
 Un domaine de courriel ne peut être associé qu’à une connexion vérifiée et activée. Une connexion non vérifiée ne permet aucune authentification. L’émetteur et le domaine sont immuables après création : supprimez la connexion et créez-en une nouvelle pour établir une autre frontière d’identité.
 
 Les secrets enregistrés ne sont jamais renvoyés au navigateur. Pour effectuer une rotation, modifiez l’identifiant client ou saisissez un nouveau secret ; laissez ce champ vide pour conserver le secret actuel. La modification des identifiants désactive la connexion jusqu’à sa réactivation. Un enregistrement sans modification conserve son état actuel. Les espaces en début et en fin d’identifiant client sont supprimés avant l’enregistrement. Une rotation du secret de chiffrement serveur sans migration des données nécessite de ressaisir les identifiants des connexions.

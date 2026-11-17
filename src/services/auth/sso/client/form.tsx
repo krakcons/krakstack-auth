@@ -8,7 +8,13 @@ import {
 import { CopyButton } from "@krak-stack/registry/copy-button";
 import { AsyncResult } from "effect/reactivity";
 import { Schema } from "effect";
-import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
+import {
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useState,
+  type ReactNode,
+} from "react";
 import {
   ChevronDownIcon,
   KeyRoundIcon,
@@ -311,33 +317,37 @@ const OrganizationSsoForm = ({
                   </Badge>
                 }
               >
-                <p className="text-muted-foreground text-sm">
-                  {m.sso_dns_help()}
-                </p>
-                <dl className="mt-3 grid gap-2 text-sm">
-                  <dt>{m.sso_dns_name()}</dt>
-                  <dd className="bg-muted/50 flex min-w-0 items-center gap-2 rounded-md border p-2 text-sm">
-                    <code className="min-w-0 flex-1 break-all">
-                      {connection.verificationName}
-                    </code>
-                    <CopyButton value={connection.verificationName} />
-                  </dd>
-                  <dt>{m.sso_dns_value()}</dt>
-                  <dd className="bg-muted/50 flex min-w-0 items-center gap-2 rounded-md border p-2 text-sm">
-                    <code className="min-w-0 flex-1 break-all">
-                      {connection.verificationToken}
-                    </code>
-                    <CopyButton value={connection.verificationToken} />
-                  </dd>
-                </dl>
-                {!connection.domainVerified ? (
-                  <Button
-                    className="mt-3"
-                    disabled={busy}
-                    onClick={() => verify()}
-                  >
-                    {m.sso_verify()}
-                  </Button>
+                {connection.verificationToken ? (
+                  <>
+                    <p className="text-muted-foreground text-sm">
+                      {m.sso_dns_help()}
+                    </p>
+                    <dl className="mt-3 grid gap-2 text-sm">
+                      <dt>{m.sso_dns_name()}</dt>
+                      <dd className="bg-muted/50 flex min-w-0 items-center gap-2 rounded-md border p-2 text-sm">
+                        <code className="min-w-0 flex-1 break-all">
+                          {connection.verificationName}
+                        </code>
+                        <CopyButton value={connection.verificationName} />
+                      </dd>
+                      <dt>{m.sso_dns_value()}</dt>
+                      <dd className="bg-muted/50 flex min-w-0 items-center gap-2 rounded-md border p-2 text-sm">
+                        <code className="min-w-0 flex-1 break-all">
+                          {connection.verificationToken}
+                        </code>
+                        <CopyButton value={connection.verificationToken} />
+                      </dd>
+                    </dl>
+                    {!connection.domainVerified ? (
+                      <Button
+                        className="mt-3"
+                        disabled={busy}
+                        onClick={() => verify()}
+                      >
+                        {m.sso_verify()}
+                      </Button>
+                    ) : null}
+                  </>
                 ) : null}
               </SsoSettingsCard>
             </>

@@ -45,6 +45,10 @@ Microsoft, Okta, Auth0 and Google OIDC endpoint origins are allowed by the platf
 5. Choose **Verify DNS record** after propagation. Verification alone does not enable login.
 6. Choose **Enable SSO**, then test with an existing verified member.
 
+DNS verification uses Better Auth's built-in challenge storage and verifier. Challenges expire after seven days; reopen settings to get the current TXT value if verification expires. Verified connections do not need a new challenge.
+
+Migration 6 switches pending verification to Better Auth. If you started verification before the upgrade, reopen settings and publish the new TXT value. Already-verified connections are unaffected.
+
 Only one verified, enabled connection may route an email domain. Unverified connections cannot sign anyone in. Issuer and domain cannot be changed in place after creation: remove the connection and create another to establish a new identity boundary.
 
 Saved secrets are never returned to the browser. To rotate credentials, edit the client ID or enter a replacement secret; leave the secret blank to preserve it. Changing credentials disables the connection until it is enabled again. Saving unchanged credentials preserves its current status. Client IDs are trimmed before saving. Rotating the server's encryption secret without migrating encrypted data requires re-entering connection credentials.

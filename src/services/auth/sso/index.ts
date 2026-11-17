@@ -6,7 +6,7 @@ import {
 } from "@better-auth/sso";
 import { createAuthEndpoint } from "@better-auth/core/api";
 import { tryGetCurrentAuthEndpointContext } from "@better-auth/core/context";
-import { APIError, createAuthMiddleware } from "better-auth/api";
+import { APIError, createAuthMiddleware, isAPIError } from "better-auth/api";
 import { Data, Effect, Option, Schema } from "effect";
 import {
   AuthRedirectURLFromString,
@@ -23,6 +23,7 @@ import {
   SsoLocalUser,
   SsoMember,
   SsoSettingsBody,
+  ssoVerificationTokenPrefix,
 } from "./schema";
 import { EmailAddress } from "@krak-stack/auth/schema";
 import { getAuthoritativeSessionFromCtx } from "better-auth/api";
@@ -39,29 +40,20 @@ const runSettings = <A, E>(effect: Effect.Effect<A, E, OrganizationSso>) =>
     effect.pipe(
       Effect.provide(OrganizationSso.layer),
       Effect.mapError((error) =>
-        error instanceof SsoSettingsError
-          ? new APIError(error.status, {
-              message: "Organization SSO request could not be completed",
-            })
-          : new APIError("INTERNAL_SERVER_ERROR", {
-              message: "Organization SSO request failed",
-            }),
+        isAPIError(error)
+          ? error
+          : error instanceof SsoSettingsError
+            ? new APIError(error.status, {
+                message: "Organization SSO request could not be completed",
+              })
+            : new APIError("INTERNAL_SERVER_ERROR", {
+                message: "Organization SSO request failed",
+              }),
       ),
     ),
   );
 
 class SsoResolutionError extends Data.TaggedError("SsoResolutionError")<{}> {}
-
-const settingsResponse = (
-  baseURL: string,
-  connection: typeof OrganizationSsoConnection.Type | null,
-) =>
-  connection
-    ? {
-        ...connection,
-        callbackURL: `${baseURL}/sso/callback/${connection.providerId}`,
-      }
-    : null;
 
 const rejected = (): SSOUserResolution => ({
   action: "reject",
@@ -149,21 +141,15 @@ export const organizationSso = (
 ) => {
   const plugin = sso({
     providersLimit: 0,
-    domainVerification: { enabled: true },
+    domainVerification: {
+      enabled: true,
+      tokenPrefix: ssoVerificationTokenPrefix,
+    },
     disableImplicitSignUp: true,
     organizationProvisioning: { disabled: true },
     schema: {
       ssoProvider: {
         additionalFields: {
-          // Settings owns this value, but Better Auth's schema validation must
-          // know about the required SQL column before serving any auth query.
-          verificationToken: {
-            type: "string",
-            required: true,
-            defaultValue: () => crypto.randomUUID(),
-            input: false,
-            returned: false,
-          },
           enabled: {
             type: "boolean",
             required: false,
@@ -233,6 +219,41 @@ export const organizationSso = (
     return session.user.id;
   };
 
+  const settingsResponse = async (
+    ctx: Parameters<typeof getAuthoritativeSessionFromCtx>[0],
+    connection: typeof OrganizationSsoConnection.Type | null,
+  ) => {
+    if (!connection) return null;
+    const verification = connection.domainVerified
+      ? undefined
+      : await runSettings(
+          OrganizationSso.use((service) =>
+            service.withVerificationLock(
+              connection.providerId,
+              Effect.tryPromise({
+                try: () =>
+                  plugin.endpoints.requestDomainVerification({
+                    context: ctx.context,
+                    headers: ctx.headers,
+                    body: { providerId: connection.providerId },
+                  }),
+                catch: (error) =>
+                  isAPIError(error)
+                    ? error
+                    : new APIError("INTERNAL_SERVER_ERROR", {
+                        message: "Organization SSO request failed",
+                      }),
+              }),
+            ),
+          ),
+        );
+    return {
+      ...connection,
+      verificationToken: verification?.domainVerificationToken,
+      callbackURL: `${ctx.context.baseURL}/sso/callback/${connection.providerId}`,
+    };
+  };
+
   return {
     ...plugin,
     // Keep native registration/mutation APIs private so callers cannot bypass
@@ -266,12 +287,13 @@ export const organizationSso = (
         {
           method: "GET",
           query: Schema.toStandardSchemaV1(OrganizationSsoQuery),
+          metadata: { noStore: true },
         },
         async (ctx) => {
           const userId = await requireActor(ctx);
           return ctx.json(
-            settingsResponse(
-              ctx.context.baseURL,
+            await settingsResponse(
+              ctx,
               await runSettings(
                 OrganizationSso.use((service) =>
                   service.get({ userId, ...ctx.query }),
@@ -286,12 +308,13 @@ export const organizationSso = (
         {
           method: "POST",
           body: Schema.toStandardSchemaV1(SsoSettingsBody),
+          metadata: { noStore: true },
         },
         async (ctx) => {
           const userId = await requireActor(ctx);
           return ctx.json(
-            settingsResponse(
-              ctx.context.baseURL,
+            await settingsResponse(
+              ctx,
               await runSettings(
                 OrganizationSso.use((service) =>
                   service.save({ userId, settings: ctx.body }),
@@ -309,13 +332,35 @@ export const organizationSso = (
         },
         async (ctx) => {
           const userId = await requireActor(ctx);
+          const actor = { userId, ...ctx.body };
+          const connection = await runSettings(
+            OrganizationSso.use((service) => service.get(actor)),
+          );
+          if (!connection)
+            throw new APIError("NOT_FOUND", {
+              message: "SSO provider not found",
+            });
+          // Keep organization/session policy at this boundary; the plugin owns
+          // challenge storage, expiry, DNS lookup and the verified-state update.
+          try {
+            await plugin.endpoints.verifyDomain({
+              context: ctx.context,
+              headers: ctx.headers,
+              body: { providerId: connection.providerId },
+            });
+          } catch (error) {
+            if (isAPIError(error) && error.statusCode === 502)
+              throw new APIError("BAD_REQUEST", {
+                code: "DOMAIN_VERIFICATION_FAILED",
+                message: "Unable to verify domain ownership",
+              });
+            throw error;
+          }
           return ctx.json(
-            settingsResponse(
-              ctx.context.baseURL,
+            await settingsResponse(
+              ctx,
               await runSettings(
-                OrganizationSso.use((service) =>
-                  service.verify({ userId, ...ctx.body }),
-                ),
+                OrganizationSso.use((service) => service.get(actor)),
               ),
             ),
           );
@@ -326,12 +371,13 @@ export const organizationSso = (
         {
           method: "POST",
           body: Schema.toStandardSchemaV1(OrganizationSsoEnabled),
+          metadata: { noStore: true },
         },
         async (ctx) => {
           const userId = await requireActor(ctx);
           return ctx.json(
-            settingsResponse(
-              ctx.context.baseURL,
+            await settingsResponse(
+              ctx,
               await runSettings(
                 OrganizationSso.use((service) =>
                   service.setEnabled({ userId, ...ctx.body }),

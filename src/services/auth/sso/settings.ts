@@ -11,7 +11,6 @@ import {
 import { SqlClient, SqlSchema } from "effect/sql";
 import { discoverOIDCConfig } from "@better-auth/sso";
 import { symmetricDecrypt, symmetricEncrypt } from "better-auth/crypto";
-import { resolveTxt } from "node:dns/promises";
 import { EmailAddress } from "@krak-stack/auth/schema";
 import {
   OrganizationSsoConnection,
@@ -23,6 +22,7 @@ import {
   SsoOidcJson,
   SsoSettingsWrite,
   SsoStoredConnection,
+  ssoVerificationTokenPrefix,
 } from "./schema";
 
 export class SsoSettingsError extends Data.TaggedError("SsoSettingsError")<{
@@ -49,35 +49,14 @@ export const decryptSsoConfig = Effect.fn("Sso.decryptConfig")(function* (
   });
 });
 
-export class SsoDns extends Context.Service<
-  SsoDns,
-  {
-    readonly lookup: (
-      name: string,
-    ) => Effect.Effect<ReadonlyArray<string>, SsoSettingsError>;
-  }
->()("auth/SsoDns") {
-  static readonly layer = Layer.succeed(this, {
-    lookup: (name) =>
-      Effect.tryPromise({
-        try: () =>
-          resolveTxt(name).then((records) =>
-            records.map((record) => record.join("")),
-          ),
-        catch: invalid,
-      }),
-  });
-}
-
 export const verificationName = (providerId: string, domain: string) =>
-  `_krakstack-sso-${providerId}.${domain}`;
+  `_${ssoVerificationTokenPrefix}-${providerId}.${domain}`;
 
 export class OrganizationSso extends Context.Service<OrganizationSso>()(
   "auth/OrganizationSso",
   {
     make: Effect.gen(function* () {
       const sql = yield* SqlClient.SqlClient;
-      const dns = yield* SsoDns;
       const find = SqlSchema.findOneOption({
         Request: Schema.String,
         Result: SsoStoredConnection,
@@ -120,7 +99,6 @@ export class OrganizationSso extends Context.Service<OrganizationSso>()(
           enabled: row.enabled,
           domainVerified: row.domainVerified,
           verificationName: verificationName(row.providerId, row.domain),
-          verificationToken: row.verificationToken,
         });
       });
       const get = Effect.fn("OrganizationSso.get")(function* (actor: {
@@ -131,6 +109,18 @@ export class OrganizationSso extends Context.Service<OrganizationSso>()(
         const row = yield* find(actor.organizationId);
         return Option.isSome(row) ? yield* view(row.value) : null;
       });
+      const withVerificationLock = <A, E, R>(
+        providerId: string,
+        issue: Effect.Effect<A, E, R>,
+      ) =>
+        sql.withTransaction(
+          Effect.gen(function* () {
+            // Better Auth reads then creates the challenge through its own
+            // pool. Serialize issuance for this provider across replicas.
+            yield* sql`SELECT pg_advisory_xact_lock(hashtextextended(${`sso-domain-verification:${providerId}`}, 0))`;
+            return yield* issue;
+          }),
+        );
       const save = Effect.fn("OrganizationSso.save")(function* ({
         userId,
         settings,
@@ -208,36 +198,9 @@ export class OrganizationSso extends Context.Service<OrganizationSso>()(
             yield* sql`UPDATE sso_provider SET oidc_config = ${encrypted}, enabled = false, updated_at = now() WHERE id = ${latest.value.id}`;
           } else {
             const id = crypto.randomUUID();
-            yield* sql`INSERT INTO sso_provider (id, provider_id, issuer, oidc_config, user_id, organization_id, domain, verification_token)
-            VALUES (${id}, ${id}, ${payload.issuer}, ${encrypted}, ${userId}, ${payload.organizationId}, ${payload.domain}, ${crypto.randomUUID()})`;
+            yield* sql`INSERT INTO sso_provider (id, provider_id, issuer, oidc_config, user_id, organization_id, domain)
+            VALUES (${id}, ${id}, ${payload.issuer}, ${encrypted}, ${userId}, ${payload.organizationId}, ${payload.domain})`;
           }
-          return yield* get(actor);
-        }).pipe(sql.withTransaction);
-      });
-      const verify = Effect.fn("OrganizationSso.verify")(function* (actor: {
-        userId: string;
-        organizationId: string;
-      }) {
-        yield* requireAdmin(actor);
-        const row = yield* find(actor.organizationId);
-        if (Option.isNone(row))
-          return yield* new SsoSettingsError({ status: "NOT_FOUND" });
-        const records = yield* dns.lookup(
-          verificationName(row.value.providerId, row.value.domain),
-        );
-        if (
-          !records.some(
-            (record) => record.trim() === row.value.verificationToken,
-          )
-        )
-          return yield* invalid();
-        return yield* Effect.gen(function* () {
-          yield* requireAdmin(actor);
-          const updated =
-            yield* sql`UPDATE sso_provider SET domain_verified = true, updated_at = now()
-          WHERE id = ${row.value.id} AND verification_token = ${row.value.verificationToken} RETURNING id`;
-          if (!updated.length)
-            return yield* new SsoSettingsError({ status: "CONFLICT" });
           return yield* get(actor);
         }).pipe(sql.withTransaction);
       });
@@ -298,11 +261,9 @@ export class OrganizationSso extends Context.Service<OrganizationSso>()(
         })();
         return rows.length === 1 ? (rows[0] ?? null) : null;
       });
-      return { get, save, verify, setEnabled, remove, discover };
+      return { get, save, setEnabled, remove, discover, withVerificationLock };
     }),
   },
 ) {
-  static readonly layer = Layer.effect(this, this.make).pipe(
-    Layer.provide(SsoDns.layer),
-  );
+  static readonly layer = Layer.effect(this, this.make);
 }

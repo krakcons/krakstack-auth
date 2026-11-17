@@ -188,8 +188,8 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)(
               tokenEndpointAuthentication: "client_secret_post",
             });
             const encrypted = yield* encryptSsoConfig(oidc);
-            yield* sql`INSERT INTO sso_provider (id, provider_id, issuer, oidc_config, user_id, organization_id, domain, domain_verified, enabled, verification_token)
-              VALUES (${id}, ${id}, ${config.issuer}, ${encrypted}, ${userIds[0]}, ${id}, ${domain}, true, true, 'test-token')`;
+            yield* sql`INSERT INTO sso_provider (id, provider_id, issuer, oidc_config, user_id, organization_id, domain, domain_verified, enabled)
+              VALUES (${id}, ${id}, ${config.issuer}, ${encrypted}, ${userIds[0]}, ${id}, ${domain}, true, true)`;
 
             const publicConfig = yield* Effect.promise(() =>
               auth.handler(

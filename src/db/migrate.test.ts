@@ -14,6 +14,8 @@ import { SqlClient, SqlSchema } from "effect/sql";
 import { adopt, verifyBaseline } from "./adopt";
 import { migrate } from "./migrate";
 import initialMigration from "./migrations/0001_initial";
+import ssoMigration from "./migrations/0005_sso";
+import ssoBuiltinVerificationMigration from "./migrations/0006_sso_builtin_verification";
 import { applicationTables } from "./migration-schema";
 import { sqlTestLayer } from "@/services/database";
 
@@ -128,6 +130,7 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)(
               { migrationId: 3 },
               { migrationId: 4 },
               { migrationId: 5 },
+              { migrationId: 6 },
             ]);
             yield* migrated`INSERT INTO "user" (id, name, email) VALUES ('automatic', 'Automatic', 'automatic@example.test')`;
             expect(
@@ -161,6 +164,7 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)(
               [3, "account_deletion"],
               [4, "project_mcp"],
               [5, "sso"],
+              [6, "sso_builtin_verification"],
             ]);
             yield* sql`INSERT INTO "user" (id, name, email) VALUES ('locale-default', 'Default', 'default@example.test')`;
             expect(
@@ -169,6 +173,38 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)(
             // New supported languages must not require a database migration.
             yield* sql`UPDATE "user" SET locale = 'es' WHERE id = 'locale-default'`;
             expect(yield* migrate).toEqual([]);
+          }),
+        ),
+    );
+    it.effect(
+      "allows new SSO inserts without breaking schema validation on older replicas",
+      () =>
+        withDatabase(
+          Effect.gen(function* () {
+            const sql = yield* SqlClient.SqlClient;
+            yield* initialMigration;
+            yield* ssoMigration;
+            yield* sql`INSERT INTO sso_provider
+            (id, provider_id, issuer, domain, verification_token, domain_verified, enabled)
+            VALUES
+              ('pending', 'pending', 'https://accounts.google.com', 'pending.example.com', 'pending-proof', false, false),
+              ('verified', 'verified', 'https://accounts.google.com', 'verified.example.com', 'verified-proof', true, true)`;
+            yield* ssoBuiltinVerificationMigration;
+            expect(
+              yield* sql`SELECT identifier, value, expires_at > now() AS active
+            FROM verification WHERE identifier LIKE '_krakstack-sso-%'`,
+            ).toEqual([]);
+            expect(
+              yield* sql`SELECT domain_verified, enabled FROM sso_provider WHERE id = 'verified'`,
+            ).toEqual([{ domainVerified: true, enabled: true }]);
+            expect(
+              yield* sql`SELECT verification_token FROM sso_provider WHERE id = 'pending'`,
+            ).toEqual([{ verificationToken: "pending-proof" }]);
+            const inserted =
+              yield* sql`INSERT INTO sso_provider (id, provider_id, issuer, domain)
+              VALUES ('new', 'new', 'https://accounts.google.com', 'new.example.com')
+              RETURNING length(verification_token) > 0 AS has_token`;
+            expect(inserted).toEqual([{ hasToken: true }]);
           }),
         ),
     );
@@ -234,6 +270,7 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)(
               [3, "account_deletion"],
               [4, "project_mcp"],
               [5, "sso"],
+              [6, "sso_builtin_verification"],
             ]);
             expect(
               yield* sql`SELECT locale FROM "user" WHERE id = 'u'`,
@@ -385,7 +422,7 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)(
           });
           expect(
             results.map((rows) => rows.length).sort((a, b) => a - b),
-          ).toEqual([0, 5]);
+          ).toEqual([0, 6]);
         }),
       ),
     );
@@ -400,6 +437,7 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)(
             [3, "account_deletion"],
             [4, "project_mcp"],
             [5, "sso"],
+            [6, "sso_builtin_verification"],
           ]);
         }),
       ),
