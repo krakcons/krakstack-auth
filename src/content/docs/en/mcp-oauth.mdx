@@ -1,0 +1,125 @@
+---
+slug: mcp-oauth
+path: /docs/mcp-oauth
+title: MCP OAuth
+description: Protect an MCP endpoint with resource discovery, PKCE client registration, user consent, and scoped access tokens.
+icon: lucide:key-round
+order: 14
+locale: en
+section: integration
+type: how-to
+---
+
+# MCP OAuth
+
+Use MCP OAuth to let agents connect to your application's MCP endpoint on a user's behalf. Krakstack Auth owns the OAuth provider, client registrations, consent, and grants. Your application exposes discovery metadata and verifies resource-bound access tokens.
+
+This guide assumes you already have an MCP transport and the [auth proxy](/docs/proxy). The SDK adds authentication; it does not create an MCP server or expose tools automatically.
+
+## 1. Enable the project's MCP endpoint
+
+Before connecting a client:
+
+1. Register the consumer application's host as an [active project domain](/docs/domains).
+2. Authorize the application's existing service key to proxy that project.
+3. In **Project > Settings > MCP**, enter the exact endpoint URL, such as `https://learning.example.com/api/mcp`, and enable MCP OAuth.
+4. Choose **Read only** or **Read and write** under **Access**. Write access allows delegation of `mcp:write`; it does not grant additional user permissions.
+
+The endpoint's host must belong to an active domain of the same project. Saving the settings persists the OAuth resource and enables PKCE-protected dynamic client registration on that host. No MCP environment variable or auth restart is required.
+
+For self-hosted Auth, apply database migration 4 before deploying this feature. Deploy the provider changes before connecting clients.
+
+## 2. Configure the SDK
+
+Use the same resource URL in project settings, discovery, and token verification. For a consumer that hosts the issuer through its auth proxy:
+
+```ts
+import { AuthMiddleware, McpAuth } from "@krak-stack/auth/server";
+
+const oauth = {
+  issuer: "https://learning.example.com/api/auth",
+  resource: "https://learning.example.com/api/mcp",
+  jwksUrl: "https://learning.example.com/api/auth/jwks",
+  requiredScopes: ["mcp:read"],
+  scopesSupported: ["mcp:read", "mcp:write", "offline_access"],
+  challengeScopes: ["mcp:read", "mcp:write", "offline_access"],
+};
+
+// Merge this layer beside your existing MCP routes.
+const metadata = McpAuth.metadataLayer(oauth);
+
+// Provide this middleware only to your MCP transport layer.
+const mcpAuthentication = McpAuth.middleware(oauth).layer;
+
+// Add `oauth` to your existing AuthMiddleware.layer({ ... }) options.
+```
+
+For a read-only integration, omit `mcp:write` from `scopesSupported` and `challengeScopes`. Request `offline_access` only when the client needs refresh tokens.
+
+`McpAuth.middleware` authenticates the transport. The existing API authentication and [authorization middleware](/docs/middleware) must still protect tool execution. Add `oauth` to `AuthMiddleware.layer(...)` so API calls can resolve the verified user and consented organization.
+
+Use the exact issuer reported by [OAuth discovery](/docs/oauth), including `/api/auth` when present. If the issuer is hosted independently, use its actual issuer and JWKS URL instead.
+
+## 3. Expose public discovery
+
+Route `/.well-known/$` to the HTTP router as well as the MCP endpoint. Keep discovery accessible without a session or access token.
+
+For the example above, `McpAuth.metadataLayer(oauth)` serves protected-resource metadata at:
+
+```text
+https://learning.example.com/.well-known/oauth-protected-resource
+https://learning.example.com/.well-known/oauth-protected-resource/api/mcp
+```
+
+Use `McpAuth.discoveryRequest(request, oauth)` when dispatching discovery requests through the consumer's existing auth proxy. It accepts the supported resource-metadata paths and rewrites:
+
+```text
+/.well-known/oauth-authorization-server/api/auth
+→ /api/auth/.well-known/oauth-authorization-server
+```
+
+The helper returns `undefined` for unrelated paths. This rewrite assumes the consumer hosts the issuer through its auth proxy. An independently hosted issuer serves its own authorization-server metadata.
+
+## 4. Add the consent page
+
+Render `OAuthConsent` from `@krak-stack/auth/components` in a thin `/consent` route, inside the shared auth-page layout. The component reads the signed authorization query, identifies the client, submits the decision, and navigates to the provider-validated callback.
+
+The component includes English and French defaults and uses the locale from `KrakstackAuthProvider`. For application-specific copy, pass translated `messages`: `title`, `description({ clientName })`, `requestedScopes`, `allow`, `deny`, `error`, and `invalidRequest`. The optional `messages.permissions` map supplies translated scope titles and descriptions; unknown scopes remain visible.
+
+Do not place consent under a guest-only layout. Sign-in guards must preserve authorization requests recognized by `getOAuthAuthorizationQuery(location.searchStr)` from `@krak-stack/auth/components`. Keep branding and locale switching in the shared layout.
+
+## 5. Connect an MCP client
+
+Configure the MCP client with the exact endpoint URL. A compatible client discovers the authorization server and registers dynamically on the configured host. New registrations are linked only to that MCP resource and require PKCE and user consent. Other auth hosts keep dynamic registration disabled.
+
+If the client requires pre-registration, create an OAuth client with its exact callback URI, PKCE enabled, the required scopes, and a link to the resource. The admin client creation payload supports `resources`, `publicClient`, and `nativeClient`; see `/api/docs` for the API contract. Public clients use no client secret. Native clients support loopback callbacks. Configure the resulting client ID in the MCP client.
+
+Loopback HTTP callbacks without an explicit application type are classified as native; HTTPS callbacks retain the provider's web-client policy. Registration is rate-limited per auth instance, so multi-instance deployments also need shared ingress limits.
+
+## Verify the connection
+
+1. Fetch the protected-resource metadata and authorization-server metadata without credentials. Confirm the resource, issuer, and supported scopes match your configuration.
+2. Request the MCP endpoint without credentials. Expect `401` and a `WWW-Authenticate` header containing the protected-resource metadata URL.
+3. Connect the MCP client, sign in, select the intended active organization, and approve consent.
+4. Run a permitted read tool. Confirm access remains limited to the consenting user's organization and permissions.
+5. If writes are enabled, verify a permitted write and a denied write for a user without the required permission.
+
+OAuth API requests default to `GET` and `HEAD`. To expose mutations, explicitly configure `allowedMethods` in the API OAuth options. Other methods also require `mcp:write` by default; `writeScope` can override the scope name. MCP transport `POST` requests are authenticated separately and do not grant API write access.
+
+## Troubleshoot common failures
+
+| Symptom | Check |
+| --- | --- |
+| Endpoint cannot be enabled | Its exact host must be an active domain of the same project. |
+| Discovery returns `404` | Forward `/.well-known/$`, install the metadata layer, and handle authorization-server discovery through the proxy. |
+| Sign-in loops or loses consent | Keep consent outside guest-only layouts and preserve the signed authorization query through sign-in. |
+| MCP returns `401` | Check the token's issuer, resource audience, expiry, and access-token type. Identity-only tokens are not MCP tokens. |
+| MCP returns `403` with `insufficient_scope` | Request the required scopes and check the project's access settings. |
+| MCP returns `503` | Check issuer/JWKS availability and auth service health. |
+| Transport connects but a tool is denied | Check API `allowedMethods`, write scope, organization membership, and ordinary role/domain authorization. |
+
+Bearer tokens take precedence over cookies and API keys; an invalid bearer token never falls back to another credential. Verification checks the token and rechecks membership and user bans. Caller-supplied organization overrides are ignored.
+
+Changing or disabling the endpoint disables its previous OAuth resource and removes client/resource links. Clients must reconnect. This integration accepts bearer JWT access tokens, not opaque or DPoP-bound tokens. Grant revocation does not immediately invalidate an already-issued JWT before expiry; keep access-token lifetimes short.
+
+Continue with [authorization](/docs/rbac) and [security guidance](/docs/security) before exposing additional tools.

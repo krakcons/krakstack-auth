@@ -1,0 +1,125 @@
+---
+slug: mcp-oauth
+path: /docs/mcp-oauth
+title: OAuth pour MCP
+description: Protégez un point MCP avec la découverte de ressource, l'enregistrement PKCE, le consentement et des jetons à portées limitées.
+icon: lucide:key-round
+order: 14
+locale: fr
+section: integration
+type: how-to
+---
+
+# OAuth pour MCP
+
+Utilisez OAuth pour MCP afin de permettre aux agents de se connecter au point MCP de votre application au nom d'un utilisateur. Krakstack Auth gère le fournisseur OAuth, les clients, le consentement et les autorisations. Votre application expose les métadonnées de découverte et vérifie les jetons d'accès liés à la ressource.
+
+Ce guide suppose que vous disposez déjà d'un transport MCP et du [proxy d'authentification](/docs/proxy). Le SDK ajoute l'authentification; il ne crée pas de serveur MCP et n'expose pas automatiquement d'outils.
+
+## 1. Activer le point MCP du projet
+
+Avant de connecter un client :
+
+1. Enregistrez l'hôte de l'application cliente comme [domaine actif du projet](/docs/domains).
+2. Autorisez la clé de service existante de l'application à relayer ce projet.
+3. Dans **Projet > Paramètres > MCP**, saisissez l'URL exacte, par exemple `https://learning.example.com/api/mcp`, et activez OAuth pour MCP.
+4. Choisissez **Lecture seule** ou **Lecture et écriture** sous **Accès**. L'écriture autorise la délégation de `mcp:write`; elle n'accorde pas de permissions supplémentaires à l'utilisateur.
+
+L'hôte du point MCP doit appartenir à un domaine actif du même projet. L'enregistrement des paramètres persiste la ressource OAuth et active l'enregistrement dynamique des clients protégé par PKCE sur cet hôte. Aucune variable d'environnement MCP ni aucun redémarrage d'Auth n'est nécessaire.
+
+Pour une installation autohébergée, appliquez la migration de base de données 4 avant de déployer cette fonctionnalité. Déployez les changements du fournisseur avant de connecter les clients.
+
+## 2. Configurer le SDK
+
+Utilisez la même URL de ressource dans les paramètres du projet, la découverte et la vérification des jetons. Pour une application qui héberge l'émetteur via son proxy d'authentification :
+
+```ts
+import { AuthMiddleware, McpAuth } from "@krak-stack/auth/server";
+
+const oauth = {
+  issuer: "https://learning.example.com/api/auth",
+  resource: "https://learning.example.com/api/mcp",
+  jwksUrl: "https://learning.example.com/api/auth/jwks",
+  requiredScopes: ["mcp:read"],
+  scopesSupported: ["mcp:read", "mcp:write", "offline_access"],
+  challengeScopes: ["mcp:read", "mcp:write", "offline_access"],
+};
+
+// Fusionnez cette couche avec les routes MCP existantes.
+const metadata = McpAuth.metadataLayer(oauth);
+
+// Fournissez ce middleware uniquement à la couche du transport MCP.
+const mcpAuthentication = McpAuth.middleware(oauth).layer;
+
+// Ajoutez `oauth` aux options existantes de AuthMiddleware.layer({ ... }).
+```
+
+Pour une intégration en lecture seule, retirez `mcp:write` de `scopesSupported` et de `challengeScopes`. Demandez `offline_access` uniquement si le client a besoin de jetons de renouvellement.
+
+`McpAuth.middleware` authentifie le transport. L'authentification API et les [middlewares d'autorisation](/docs/middleware) existants doivent toujours protéger l'exécution des outils. Ajoutez `oauth` à `AuthMiddleware.layer(...)` pour que les appels API puissent résoudre l'utilisateur vérifié et l'organisation autorisée par consentement.
+
+Utilisez l'émetteur exact indiqué par la [découverte OAuth](/docs/oauth), y compris `/api/auth` s'il est présent. Si l'émetteur est hébergé séparément, utilisez son véritable émetteur et son URL JWKS.
+
+## 3. Exposer la découverte publique
+
+Transmettez `/.well-known/$` au routeur HTTP en plus du point MCP. La découverte doit rester accessible sans session ni jeton d'accès.
+
+Pour l'exemple ci-dessus, `McpAuth.metadataLayer(oauth)` sert les métadonnées de ressource protégée aux adresses suivantes :
+
+```text
+https://learning.example.com/.well-known/oauth-protected-resource
+https://learning.example.com/.well-known/oauth-protected-resource/api/mcp
+```
+
+Utilisez `McpAuth.discoveryRequest(request, oauth)` pour acheminer la découverte via le proxy d'authentification existant de l'application. Cet utilitaire accepte les chemins de métadonnées de ressource pris en charge et réécrit :
+
+```text
+/.well-known/oauth-authorization-server/api/auth
+→ /api/auth/.well-known/oauth-authorization-server
+```
+
+L'utilitaire retourne `undefined` pour les autres chemins. Cette réécriture suppose que l'application héberge l'émetteur via son proxy d'authentification. Un émetteur hébergé séparément sert ses propres métadonnées de serveur d'autorisation.
+
+## 4. Ajouter la page de consentement
+
+Affichez `OAuthConsent` depuis `@krak-stack/auth/components` dans une route `/consent` minimale, à l'intérieur de la mise en page partagée des pages d'authentification. Le composant lit la requête d'autorisation signée, identifie le client, soumet la décision et navigue vers le rappel validé par le fournisseur.
+
+Le composant inclut des textes anglais et français et utilise la langue de `KrakstackAuthProvider`. Pour adapter les textes, passez des `messages` traduits : `title`, `description({ clientName })`, `requestedScopes`, `allow`, `deny`, `error` et `invalidRequest`. La table facultative `messages.permissions` fournit les titres et descriptions traduits des portées; les portées inconnues restent visibles.
+
+Ne placez pas le consentement sous une mise en page réservée aux visiteurs non connectés. Les gardes de connexion doivent préserver les requêtes reconnues par `getOAuthAuthorizationQuery(location.searchStr)` depuis `@krak-stack/auth/components`. Conservez la marque et le changement de langue dans la mise en page partagée.
+
+## 5. Connecter un client MCP
+
+Configurez le client MCP avec l'URL exacte du point MCP. Un client compatible découvre le serveur d'autorisation et s'enregistre dynamiquement sur l'hôte configuré. Les nouveaux clients sont liés uniquement à cette ressource MCP et exigent PKCE ainsi que le consentement de l'utilisateur. L'enregistrement dynamique reste désactivé sur les autres hôtes d'authentification.
+
+Si le client exige un enregistrement préalable, créez un client OAuth avec son URI de rappel exacte, PKCE activé, les portées requises et un lien vers la ressource. La charge utile de création administrative accepte `resources`, `publicClient` et `nativeClient`; consultez `/api/docs` pour le contrat API. Les clients publics n'utilisent pas de secret. Les clients natifs acceptent les rappels sur l'interface de bouclage. Configurez l'identifiant obtenu dans le client MCP.
+
+Les rappels HTTP sur l'interface de bouclage sans type d'application explicite sont classés comme natifs; les rappels HTTPS conservent la politique Web du fournisseur. L'enregistrement est limité par instance Auth; les déploiements multi-instances nécessitent aussi des limites partagées à l'entrée.
+
+## Vérifier la connexion
+
+1. Récupérez les métadonnées de ressource protégée et du serveur d'autorisation sans identifiants. Vérifiez la ressource, l'émetteur et les portées annoncées.
+2. Appelez le point MCP sans identifiants. Attendez un statut `401` et un en-tête `WWW-Authenticate` contenant l'URL des métadonnées de ressource protégée.
+3. Connectez le client MCP, authentifiez-vous, sélectionnez l'organisation active voulue et approuvez le consentement.
+4. Exécutez un outil de lecture autorisé. Vérifiez que l'accès reste limité à l'organisation et aux permissions de l'utilisateur ayant consenti.
+5. Si l'écriture est activée, vérifiez une écriture autorisée et un refus pour un utilisateur sans la permission requise.
+
+Les requêtes API OAuth sont limitées par défaut à `GET` et `HEAD`. Pour exposer des mutations, configurez explicitement `allowedMethods` dans les options OAuth de l'API. Les autres méthodes exigent aussi `mcp:write` par défaut; `writeScope` permet de changer ce nom. Les requêtes `POST` du transport MCP sont authentifiées séparément et n'accordent pas l'écriture sur l'API.
+
+## Résoudre les problèmes courants
+
+| Symptôme | Vérification |
+| --- | --- |
+| Impossible d'activer le point MCP | Son hôte exact doit être un domaine actif du même projet. |
+| La découverte retourne `404` | Transmettez `/.well-known/$`, installez la couche de métadonnées et traitez la découverte du serveur d'autorisation via le proxy. |
+| La connexion boucle ou perd le consentement | Placez le consentement hors des mises en page réservées aux visiteurs et préservez la requête d'autorisation signée pendant la connexion. |
+| MCP retourne `401` | Vérifiez l'émetteur, l'audience de ressource, l'expiration et le type du jeton d'accès. Un jeton d'identité seul n'est pas un jeton MCP. |
+| MCP retourne `403` avec `insufficient_scope` | Demandez les portées requises et vérifiez les paramètres d'accès du projet. |
+| MCP retourne `503` | Vérifiez la disponibilité de l'émetteur, de JWKS et du service Auth. |
+| Le transport se connecte, mais un outil est refusé | Vérifiez `allowedMethods`, la portée d'écriture, l'appartenance à l'organisation et les autorisations habituelles de rôle et de domaine. |
+
+Les jetons Bearer ont priorité sur les témoins et les clés API; un jeton Bearer invalide ne provoque jamais de repli vers un autre identifiant. La vérification contrôle le jeton, l'appartenance et les bannissements. Les remplacements d'organisation fournis par l'appelant sont ignorés.
+
+Modifier ou désactiver le point MCP désactive son ancienne ressource OAuth et supprime les liens entre clients et ressource. Les clients doivent se reconnecter. Cette intégration accepte les jetons d'accès JWT Bearer, pas les jetons opaques ni ceux liés à DPoP. La révocation d'une autorisation n'invalide pas immédiatement un JWT déjà émis avant son expiration; limitez la durée de vie des jetons d'accès.
+
+Consultez les guides d'[autorisation](/docs/rbac) et de [sécurité](/docs/security) avant d'exposer d'autres outils.

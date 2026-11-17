@@ -14,6 +14,8 @@ type: how-to
 
 Krakstack Auth publie les métadonnées OpenID Connect et OAuth et prend en charge le flux par code d'autorisation. Utilisez une bibliothèque OAuth/OIDC maintenue plutôt que d'implémenter manuellement les requêtes et la validation.
 
+Pour les agents qui se connectent à un point MCP, suivez le [guide OAuth pour MCP](/docs/mcp-oauth). Il couvre l'enregistrement de la ressource, la découverte, le consentement et les jetons d'accès à portées limitées.
+
 ## Enregistrer un client
 
 Dans **Administration > Clients**, configurez :
@@ -23,7 +25,7 @@ Dans **Administration > Clients**, configurez :
 - Les portées minimales : `openid`, `profile`, `email` et éventuellement `offline_access`
 - Un projet lié facultatif pour la marque et les options de connexion
 
-Copiez immédiatement l'identifiant et le secret. Le secret n'est affiché qu'une fois et reste dans un coffre serveur. Les clients créés actuellement sont des clients Web confidentiels utilisant `client_secret_basic` et PKCE obligatoire. Les clients publics et natifs ne sont pas exposés.
+Copiez immédiatement l'identifiant et le secret. Le secret n'est affiché qu'une fois et reste dans un coffre serveur. Le formulaire administratif standard crée des clients Web confidentiels utilisant `client_secret_basic` et PKCE obligatoire. Pour les clients MCP publics ou natifs et l'enregistrement dynamique, consultez [OAuth pour MCP](/docs/mcp-oauth).
 
 ## Découverte
 
