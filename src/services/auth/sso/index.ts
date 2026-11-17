@@ -155,6 +155,15 @@ export const organizationSso = (
     schema: {
       ssoProvider: {
         additionalFields: {
+          // Settings owns this value, but Better Auth's schema validation must
+          // know about the required SQL column before serving any auth query.
+          verificationToken: {
+            type: "string",
+            required: true,
+            defaultValue: () => crypto.randomUUID(),
+            input: false,
+            returned: false,
+          },
           enabled: {
             type: "boolean",
             required: false,
