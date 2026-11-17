@@ -8,8 +8,7 @@ import {
 import { CopyButton } from "@krak-stack/registry/copy-button";
 import { AsyncResult } from "effect/reactivity";
 import { Schema } from "effect";
-import { useEffect, useRef, useState, type ReactNode } from "react";
-import { flushSync } from "react-dom";
+import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import {
   ChevronDownIcon,
   KeyRoundIcon,
@@ -128,6 +127,13 @@ const OrganizationSsoForm = ({
   const removeResult = useAtomValue(deleteOrganizationSsoAtom(organizationId));
   const [confirmingRemoval, setConfirmingRemoval] = useState(false);
   const removeButton = useRef<HTMLButtonElement>(null);
+  const restoreRemovalFocus = useRef(false);
+  useLayoutEffect(() => {
+    if (!confirmingRemoval && restoreRemovalFocus.current) {
+      restoreRemovalFocus.current = false;
+      removeButton.current?.focus();
+    }
+  }, [confirmingRemoval]);
   const busy =
     result.waiting ||
     verificationResult.waiting ||
@@ -164,8 +170,10 @@ const OrganizationSsoForm = ({
               variant="outline"
               disabled={busy}
               onClick={() => {
-                flushSync(() => setConfirmingRemoval(false));
-                removeButton.current?.focus();
+                // Restore focus after React has made the settings visible,
+                // before the dialog handles the removed confirmation button.
+                restoreRemovalFocus.current = true;
+                setConfirmingRemoval(false);
               }}
             >
               {m.sso_cancel()}
