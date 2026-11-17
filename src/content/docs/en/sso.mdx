@@ -1,0 +1,79 @@
+---
+slug: sso
+path: /docs/sso
+title: Organization single sign-on
+description: Let organization owners connect their OIDC identity provider in organization settings.
+icon: lucide:key-round
+order: 13
+locale: en
+section: integration
+type: how-to
+---
+
+# Organization single sign-on
+
+SSO connections are **organization settings**, stored in Postgres. Each organization can configure one OIDC connection. No connection-specific environment variables or server restart are needed. The service encrypts credentials with its existing server-side `BETTER_AUTH_SECRET`; retain that secret when redeploying.
+
+SSO is optional. Existing password and email-OTP methods keep working. Only existing organization members can sign in; an invitation must be accepted before SSO can be used. Initial account linking requires a verified local email address at the exact configured domain. Returning users are identified by their stable provider subject, not a mutable email address.
+
+## Open organization settings
+
+1. Sign in and open the organization switcher.
+2. Select the organization, then choose **Security** to open its security dialog.
+3. Configure **Single sign-on (SSO)** in that dialog as an organization owner or admin. Ordinary members and impersonated sessions cannot read or change these settings.
+
+API authorization checks the selected organization against the authenticated user's membership on every request. Security settings are scoped to that organization, not the platform-admin role.
+
+## Register an identity provider application
+
+Create an OIDC **Web** application in the company's provider. Obtain its exact issuer URL, client ID and client secret value. For Microsoft Entra ID:
+
+1. Create an **App registration** with **Accounts in this organizational directory only**.
+2. Copy its directory tenant ID and application client ID.
+3. Create a client secret and copy its **value**, not its ID. Record its expiry for rotation.
+4. Use `https://login.microsoftonline.com/YOUR-TENANT-ID/v2.0` as the issuer. Do not use `/common` or `/organizations`.
+5. Ensure the OIDC profile includes standard `sub` and `email` claims. The service does not use UPN or `preferred_username` as a permanent identity.
+
+Microsoft, Okta, Auth0 and Google OIDC endpoint origins are allowed by the platform's trust policy. The connection model is provider-neutral. Custom IdP domains need platform approval before use; arbitrary organization-supplied URLs are not trusted for discovery or token requests.
+
+## Save, verify and enable
+
+1. In the organization's SSO settings, enter the issuer, company email domain, client ID and client secret.
+2. Choose **Save connection**. The server validates OIDC discovery, encrypts the configuration and generates a unique provider ID. The connection starts disabled.
+3. Copy the displayed **Callback URL** into the provider's registered Web redirect URIs. Use the actual auth hostname your employees will use. Validated proxies can change the effective callback hostname, so register each intended hostname.
+4. Publish the displayed DNS **TXT record name** and **TXT record value** for the company email domain.
+5. Choose **Verify DNS record** after propagation. Verification alone does not enable login.
+6. Choose **Enable SSO**, then test with an existing verified member.
+
+Only one verified, enabled connection may route an email domain. Unverified connections cannot sign anyone in. Issuer and domain cannot be changed in place after creation: remove the connection and create another to establish a new identity boundary.
+
+Saved secrets are never returned to the browser. To rotate credentials, edit the client ID or enter a replacement secret; leave the secret blank to preserve it. Changing credentials disables the connection until it is enabled again. Saving unchanged credentials preserves its current status. Client IDs are trimmed before saving. Rotating the server's encryption secret without migrating encrypted data requires re-entering connection credentials.
+
+## Employee sign-in
+
+On the central sign-in page, enter the company email and choose **Continue**. Then choose **Continue with company SSO** alongside the email-code/password options. Auth discovers the organization's verified, enabled connection from its email domain. It redirects to the IdP, validates the callback, checks current organization membership, and selects that organization in the new session.
+
+An organization-specific login link may use `/sign-in?organization=YOUR-ORGANIZATION-SLUG`. The slug selects a connection; it never grants membership. A connection that is disabled or removed while a login is in progress cannot finish authentication.
+
+Other applications can opt in to the SDK button with a translated label:
+
+```tsx
+<Signin defaultRedirectTo="/" sso={{ label: m.auth_continue_with_sso() }} />
+```
+
+Here `m` is the application's generated Paraglide message module. Define the message in English and French. Organization settings and discovery contracts are exported through `@krak-stack/auth/auth` and documented at `/api/docs`.
+
+## Disable or remove a connection
+
+**Disable SSO** stops new SSO logins immediately, without restarting Auth. **Remove connection** also unlinks the associated SSO accounts. Neither action removes organization members, disables their other login methods, or revokes existing sessions. Revoke sessions separately when offboarding requires it.
+
+This release does not enforce mandatory SSO or provide SAML, SCIM or automatic membership provisioning. Configure IdP-side employee assignment and MFA according to company policy.
+
+## Troubleshooting
+
+- **Settings unavailable:** check owner/admin membership in the selected organization and use a non-impersonated session.
+- **Discovery rejected:** check the exact issuer and that all discovered endpoints belong to approved provider origins. Never solve this by trusting arbitrary redirect targets or private-network hosts.
+- **Redirect mismatch:** compare the actual callback hostname and generated provider ID against the IdP's Web redirect URI.
+- **DNS verification fails:** publish the full TXT record name and exact value shown in settings, then allow DNS propagation.
+- **Login rejected:** confirm the user has accepted their invitation, belongs to this organization and has verified their local email before the first link. The provider must supply `sub` and `email`.
+- **Secret expired:** save a replacement secret and enable the connection again. Failed logins never fall back to automatic registration.

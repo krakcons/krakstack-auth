@@ -1,0 +1,79 @@
+---
+slug: sso
+path: /docs/sso
+title: Authentification unique d’organisation
+description: Permettre aux propriétaires d’organisation de connecter leur fournisseur OIDC depuis les paramètres.
+icon: lucide:key-round
+order: 13
+locale: fr
+section: integration
+type: how-to
+---
+
+# Authentification unique d’organisation
+
+Les connexions SSO sont des **paramètres d’organisation**, enregistrés dans Postgres. Chaque organisation peut configurer une connexion OIDC, sans variable d’environnement propre à la connexion ni redémarrage du serveur. Les identifiants sont chiffrés avec le secret serveur existant `BETTER_AUTH_SECRET` ; conservez-le lors des redéploiements.
+
+Le SSO reste facultatif. Les méthodes par mot de passe et code par courriel restent disponibles. Seuls les membres existants peuvent se connecter ; une invitation doit être acceptée au préalable. La première association exige un courriel local vérifié appartenant au domaine exact configuré. Les connexions suivantes utilisent le sujet stable du fournisseur, pas un courriel modifiable.
+
+## Ouvrir les paramètres d’organisation
+
+1. Connectez-vous et ouvrez le sélecteur d’organisation.
+2. Sélectionnez l’organisation, puis choisissez **Sécurité** pour ouvrir sa boîte de dialogue de sécurité.
+3. Configurez l’**Authentification unique (SSO)** dans cette boîte de dialogue en tant que propriétaire ou administrateur. Les membres ordinaires et les sessions d’usurpation ne peuvent ni consulter ni modifier ces paramètres.
+
+Chaque requête vérifie les droits de l’utilisateur authentifié dans l’organisation sélectionnée. Les paramètres de sécurité sont liés à cette organisation, pas au rôle d’administrateur de plateforme.
+
+## Enregistrer une application chez le fournisseur
+
+Créez une application OIDC **Web** chez le fournisseur de l’entreprise. Récupérez son émetteur exact, son identifiant client et la valeur de son secret. Pour Microsoft Entra ID :
+
+1. Créez une **App registration** avec **Accounts in this organizational directory only**.
+2. Copiez l’identifiant du tenant et l’identifiant client de l’application.
+3. Créez un secret client et copiez sa **valeur**, pas son identifiant. Notez son expiration pour organiser sa rotation.
+4. Utilisez `https://login.microsoftonline.com/YOUR-TENANT-ID/v2.0` comme émetteur. N’utilisez pas `/common` ni `/organizations`.
+5. Vérifiez que le profil OIDC contient les attributs standards `sub` et `email`. Le service n’utilise pas l’UPN ou `preferred_username` comme identité permanente.
+
+Les origines OIDC Microsoft, Okta, Auth0 et Google sont approuvées par la politique de confiance de la plateforme. Le modèle de connexion reste indépendant du fournisseur. Les domaines personnalisés nécessitent une approbation de plateforme ; les URL arbitraires fournies par une organisation ne sont pas approuvées pour la découverte ou les échanges de jetons.
+
+## Enregistrer, vérifier et activer
+
+1. Renseignez l’émetteur, le domaine de courriel de l’entreprise, l’identifiant client et le secret dans les paramètres SSO.
+2. Choisissez **Enregistrer la connexion**. Le serveur valide la découverte OIDC, chiffre la configuration et génère un identifiant de fournisseur unique. La connexion est initialement désactivée.
+3. Copiez l’**URL de retour** affichée dans les URI Web du fournisseur. Utilisez l’hôte d’authentification réellement employé. Les proxys validés peuvent modifier l’hôte effectif : enregistrez chaque hôte prévu.
+4. Publiez le **nom** et la **valeur de l’enregistrement TXT** affichés pour le domaine de courriel.
+5. Après propagation, choisissez **Vérifier l’enregistrement DNS**. Cette vérification n’active pas encore la connexion.
+6. Choisissez **Activer le SSO**, puis testez avec un membre existant dont le courriel est vérifié.
+
+Un domaine de courriel ne peut être associé qu’à une connexion vérifiée et activée. Une connexion non vérifiée ne permet aucune authentification. L’émetteur et le domaine sont immuables après création : supprimez la connexion et créez-en une nouvelle pour établir une autre frontière d’identité.
+
+Les secrets enregistrés ne sont jamais renvoyés au navigateur. Pour effectuer une rotation, modifiez l’identifiant client ou saisissez un nouveau secret ; laissez ce champ vide pour conserver le secret actuel. La modification des identifiants désactive la connexion jusqu’à sa réactivation. Un enregistrement sans modification conserve son état actuel. Les espaces en début et en fin d’identifiant client sont supprimés avant l’enregistrement. Une rotation du secret de chiffrement serveur sans migration des données nécessite de ressaisir les identifiants des connexions.
+
+## Connexion des employés
+
+Sur la page centrale, saisissez le courriel professionnel puis choisissez **Continuer**. Choisissez ensuite **Continuer avec le SSO de l’entreprise**, à côté des options de code par courriel et de mot de passe. Auth trouve la connexion vérifiée et activée à partir du domaine, redirige vers le fournisseur, valide le retour, vérifie l’adhésion actuelle et sélectionne l’organisation dans la nouvelle session.
+
+Un lien propre à l’organisation peut utiliser `/sign-in?organization=YOUR-ORGANIZATION-SLUG`. Ce slug sélectionne une connexion sans accorder d’adhésion. Une connexion désactivée ou supprimée pendant le parcours ne permet pas de terminer l’authentification.
+
+Les autres applications peuvent activer le bouton du SDK avec un libellé traduit :
+
+```tsx
+<Signin defaultRedirectTo="/" sso={{ label: m.auth_continue_with_sso() }} />
+```
+
+`m` représente le module de messages Paraglide généré de l’application. Définissez le message en anglais et en français. Les contrats de gestion et de découverte sont exportés via `@krak-stack/auth/auth` et documentés dans `/api/docs`.
+
+## Désactiver ou supprimer une connexion
+
+**Désactiver le SSO** bloque immédiatement les nouvelles connexions SSO, sans redémarrage. **Supprimer la connexion** dissocie aussi les comptes SSO correspondants. Ces actions ne suppriment pas les membres, ne désactivent pas leurs autres méthodes de connexion et ne révoquent pas leurs sessions existantes. Révoquez les sessions séparément si le départ d’un employé l’exige.
+
+Cette version ne comprend ni SSO obligatoire, ni SAML, ni SCIM, ni ajout automatique de membres. Configurez les affectations d’employés et la MFA chez le fournisseur selon la politique de l’entreprise.
+
+## Dépannage
+
+- **Paramètres indisponibles :** vérifiez le rôle de propriétaire ou d’administrateur et utilisez une session sans usurpation.
+- **Découverte refusée :** vérifiez l’émetteur exact et les origines des points d’accès découverts. N’approuvez jamais des redirections arbitraires ou des hôtes du réseau privé pour contourner cette protection.
+- **Redirection différente :** comparez l’hôte de retour et l’identifiant généré avec l’URI Web enregistrée.
+- **Échec DNS :** publiez le nom TXT complet et la valeur exacte affichés, puis attendez la propagation.
+- **Connexion refusée :** confirmez que l’invitation est acceptée, que l’utilisateur appartient à l’organisation et que son courriel local est vérifié avant la première association. Le fournisseur doit transmettre `sub` et `email`.
+- **Secret expiré :** enregistrez un nouveau secret et réactivez la connexion. Un échec ne déclenche jamais d’inscription automatique.

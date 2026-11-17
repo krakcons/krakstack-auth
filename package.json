@@ -34,6 +34,7 @@
     "@better-auth/api-key": "1.7.6",
     "@better-auth/core": "1.7.6",
     "@better-auth/oauth-provider": "1.7.6",
+    "@better-auth/sso": "1.7.6",
     "@distilled.cloud/aws": "1.0.0-rc.17",
     "@distilled.cloud/cloudflare": "1.0.0-rc.17",
     "@effect/atom-react": "4.1.0",

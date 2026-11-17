@@ -25,6 +25,7 @@ import {
   Mail,
   PencilIcon,
   Plus,
+  ShieldCheck,
   Trash2,
   UserIcon,
   UserPlus,
@@ -599,6 +600,11 @@ export type OrganizationSwitcherProps = {
   features?: OrganizationSwitcherFeatures;
   hideTrigger?: boolean;
   menuActions?: ReactNode;
+  security?: {
+    label: string;
+    description: string;
+    renderContent: (organizationId: string) => ReactNode;
+  };
   renderUnauthenticated?: () => ReactNode;
   allowedOrganizationIds?: readonly string[];
   messages?: OrganizationSwitcherMessages;
@@ -619,7 +625,7 @@ type OrganizationSummary = {
 };
 
 export type OrganizationSwitcherDialog =
-  "create" | "manage" | "members" | "apiKeys" | "invitations";
+  "create" | "manage" | "members" | "apiKeys" | "invitations" | "security";
 type ApiKeySummary = Omit<ApiKey, "key">;
 type OrganizationMemberSummary = AuthMember;
 type OrganizationInvitationSummary = AuthInvitation;
@@ -1196,6 +1202,7 @@ const OrganizationSwitcherContent = ({
   features,
   hideTrigger = false,
   menuActions,
+  security,
   renderUnauthenticated,
   allowedOrganizationIds,
   messages,
@@ -1278,6 +1285,10 @@ const OrganizationSwitcherContent = ({
   const canUpdateOrganization = activeMemberRoles.some(
     (role) => role === "owner" || role === "admin",
   );
+  const canManageSecurity =
+    canUpdateOrganization &&
+    !session?.session.impersonatedBy &&
+    !session?.session.impersonatedByOrganizationId;
   const canSwitchOrganizations = features?.organizationSwitching ?? true;
   const canCreateOrganization = features?.organizationCreation ?? true;
   const canViewOrganizationInvitations = features?.userInvitations ?? true;
@@ -1562,6 +1573,12 @@ const OrganizationSwitcherContent = ({
                       {m.organization_switcher_manage()}
                     </DropdownMenuItem>
                   ) : null}
+                  {security && canManageSecurity ? (
+                    <DropdownMenuItem onClick={() => setDialog("security")}>
+                      <ShieldCheck />
+                      {security.label}
+                    </DropdownMenuItem>
+                  ) : null}
                   <DropdownMenuItem onClick={() => setDialog("members")}>
                     <Users />
                     {m.organization_members_title()}
@@ -1690,6 +1707,31 @@ const OrganizationSwitcherContent = ({
             editingLocale={editingOrganizationLocale}
             organization={activeOrganization}
           />
+        ) : null}
+      </Dialog>
+      <Dialog
+        open={dialog === "security" && canManageSecurity && Boolean(security)}
+        onOpenChange={(open) => {
+          setDialog((current) =>
+            open ? "security" : current === "security" ? null : current,
+          );
+        }}
+      >
+        {dialog === "security" &&
+        activeOrganization &&
+        canManageSecurity &&
+        security ? (
+          <ScrollableDialogContent size="2xl">
+            <ScrollableDialogHeader>
+              <DialogHeader>
+                <DialogTitle className="text-2xl">{security.label}</DialogTitle>
+                <DialogDescription>{security.description}</DialogDescription>
+              </DialogHeader>
+            </ScrollableDialogHeader>
+            <ScrollableDialogBody>
+              {security.renderContent(activeOrganization.id)}
+            </ScrollableDialogBody>
+          </ScrollableDialogContent>
         ) : null}
       </Dialog>
       <Dialog

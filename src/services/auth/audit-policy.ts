@@ -9,6 +9,11 @@ const actions = new Map(
     "/sign-in/anonymous": "session.signed_in",
     "/sign-in/social": "session.signed_in",
     "/callback/:id": "session.signed_in",
+    "/sso/callback/:providerId": "session.signed_in",
+    "POST /organization/sso": "sso_connection.configured",
+    "/organization/sso/verify": "sso_connection.domain_verified",
+    "/organization/sso/enabled": "sso_connection.updated",
+    "/organization/sso/delete": "sso_connection.deleted",
     "/sign-out": "session.signed_out",
     "/delete-anonymous-user": "user.deleted",
     "/reset-password": "password.reset",
@@ -80,6 +85,12 @@ const actions = new Map(
 
 const exclusions = new Map(
   Object.entries({
+    "GET /organization/sso":
+      "Organization SSO settings read; owner/admin only.",
+    "/sso/config":
+      "Public SSO availability; no credentials or tenant identifiers.",
+    "/sign-in/sso":
+      "SSO authorization handoff; authentication happens at the callback.",
     "/request-password-reset":
       "Password-reset link request; no password changed.",
     "/send-verification-email":

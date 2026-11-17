@@ -13,6 +13,8 @@ import {
 import { oauthProvider } from "@better-auth/oauth-provider";
 import { apiKey } from "@better-auth/api-key";
 import { APIError } from "@better-auth/core/error";
+import { organizationSso } from "./sso";
+import { SsoSessionContext, ssoIdpOrigins } from "./sso/schema";
 import { isAPIError } from "better-auth/api";
 import { Data, Effect, Option, Schema } from "effect";
 import { SqlClient, SqlSchema } from "effect/sql";
@@ -506,7 +508,15 @@ export const createAuth = ({
       protocol: isDev ? "http" : "https",
       fallback: betterAuthUrl,
     },
-    trustedOrigins: (request) => trustedOriginsForRequest(request),
+    trustedOrigins: async (request) => [
+      ...(await trustedOriginsForRequest(request)),
+      ...(request &&
+      /\/api\/auth\/(?:sign-in\/sso|sso\/callback\/)/.test(
+        new URL(request.url).pathname,
+      )
+        ? ssoIdpOrigins
+        : []),
+    ],
     database: databasePool,
     verification: { fields: coreSqlFields.verification },
     advanced: {
@@ -689,7 +699,27 @@ export const createAuth = ({
           },
         },
         create: {
-          before: async (session) => {
+          before: async (session, context) => {
+            if (context?.path === "/sso/callback/:providerId") {
+              const sso = Schema.decodeUnknownOption(SsoSessionContext)(
+                context.context,
+              );
+              if (
+                Option.isNone(sso) ||
+                sso.value.krakstackSsoSession.userId !== session.userId
+              ) {
+                throw new APIError("FORBIDDEN", {
+                  message: "SSO membership is required",
+                });
+              }
+              return {
+                data: {
+                  ...session,
+                  activeOrganizationId:
+                    sso.value.krakstackSsoSession.organizationId,
+                },
+              };
+            }
             return await runWithDatabase(
               Effect.gen(function* () {
                 const sql = yield* SqlClient.SqlClient;
@@ -722,6 +752,7 @@ export const createAuth = ({
       },
     },
     plugins: [
+      withSqlNames(organizationSso(trustedOriginsForRequest)),
       withSqlNames(openAPI()),
       withSqlNames(admin()),
       withSqlNames(anonymous()),

@@ -61,6 +61,13 @@ import {
   SignInEmailResponse,
   SignInResponse,
   SignInSocialPayload,
+  SignInSsoPayload,
+  SsoPublicConfig,
+  SsoDiscoveryQuery,
+  OrganizationSsoQuery,
+  OrganizationSsoSettings,
+  OrganizationSsoEnabled,
+  OrganizationSsoConnection,
   SignOutPayload,
   SocialRedirectResponse,
   TwoFactorBackupVerifyPayload,
@@ -95,6 +102,69 @@ const docs = (title: string, description: string) =>
   OpenApi.annotations({ title, summary: title, description });
 
 export const AuthApiGroup = HttpApiGroup.make("auth")
+  .add(
+    HttpApiEndpoint.get("getSsoConfig", "/sso/config", {
+      query: SsoDiscoveryQuery.fields,
+      success: SsoPublicConfig,
+      error: errors,
+    }).annotateMerge(
+      docs(
+        "Get SSO configuration",
+        "Returns the available organization SSO provider, or null.",
+      ),
+    ),
+  )
+  .add(
+    HttpApiEndpoint.get("getOrganizationSso", "/organization/sso", {
+      query: OrganizationSsoQuery.fields,
+      success: Schema.NullOr(OrganizationSsoConnection),
+      error: errors,
+    }),
+  )
+  .add(
+    HttpApiEndpoint.post("saveOrganizationSso", "/organization/sso", {
+      payload: OrganizationSsoSettings,
+      success: OrganizationSsoConnection,
+      error: errors,
+    }),
+  )
+  .add(
+    HttpApiEndpoint.post("verifyOrganizationSso", "/organization/sso/verify", {
+      payload: OrganizationSsoQuery,
+      success: OrganizationSsoConnection,
+      error: errors,
+    }),
+  )
+  .add(
+    HttpApiEndpoint.post(
+      "setOrganizationSsoEnabled",
+      "/organization/sso/enabled",
+      {
+        payload: OrganizationSsoEnabled,
+        success: OrganizationSsoConnection,
+        error: errors,
+      },
+    ),
+  )
+  .add(
+    HttpApiEndpoint.post("deleteOrganizationSso", "/organization/sso/delete", {
+      payload: OrganizationSsoQuery,
+      success: AuthSuccessResponse,
+      error: errors,
+    }),
+  )
+  .add(
+    HttpApiEndpoint.post("signInSso", "/sign-in/sso", {
+      payload: SignInSsoPayload,
+      success: SocialRedirectResponse,
+      error: errors,
+    }).annotateMerge(
+      docs(
+        "Sign in with SSO",
+        "Starts organization SSO for an existing member.",
+      ),
+    ),
+  )
   .add(
     HttpApiEndpoint.post("deleteUser", "/delete-user", {
       payload: DeleteUserPayload,
