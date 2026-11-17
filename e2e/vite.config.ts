@@ -7,7 +7,18 @@ import { defineConfig } from "vite";
 export default defineConfig({
   envDir: false,
   cacheDir: "./tmp/e2e-vite",
+  optimizeDeps: { entries: ["e2e/fixtures/*.html"] },
   resolve: {
+    dedupe: [
+      "@base-ui/react",
+      "@effect/atom-react",
+      "@krak-stack/registry",
+      "@lucas-barake/effect-form-react",
+      "@tanstack/react-router",
+      "effect",
+      "react",
+      "react-dom",
+    ],
     tsconfigPaths: true,
     alias: {
       "@/paraglide": fileURLToPath(

@@ -1,7 +1,7 @@
 import { RegistryContext } from "@effect/atom-react";
 import { AtomRegistry } from "effect/reactivity";
 import { createRoot } from "react-dom/client";
-import { OrganizationSwitcher } from "@/services/auth/client/organization-switcher";
+import { OrganizationSwitcher } from "@krak-stack/auth/components";
 import { setLocale } from "@/paraglide/runtime";
 import "../../src/styles.css";
 

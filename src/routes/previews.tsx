@@ -4,9 +4,9 @@ import {
   activeAuthOrganizationAtom,
   authOrganizationsAtom,
   authSessionAtom,
+  OrganizationSwitcher,
   UserButton,
 } from "@krak-stack/auth/components";
-import { OrganizationSwitcher } from "@/services/auth/client/organization-switcher";
 import { AsyncResult } from "effect/reactivity";
 
 import { ThemeToggle } from "@/components/theme-toggle";

@@ -1,5 +1,19 @@
 # @krak-stack/auth
 
+## 0.4.0
+
+### Minor Changes
+
+- 0f8d256: Add typed organization-managed OIDC settings, domain discovery, verification, enable/disable and removal endpoints. The opt-in SSO sign-in button resolves the organization's connection dynamically from an email domain or organization slug.
+
+  Show organization SSO settings directly in the organization switcher’s Security dialog for owners and admins. No app-specific panel is required.
+
+  Keep the Callback URL section open or closed as selected when toggling SSO.
+
+### Patch Changes
+
+- c9a1e7b: Allow verified organization SSO settings to omit the DNS challenge token. Domain verification now uses Better Auth's built-in challenge lifecycle instead of custom provider token storage.
+
 ## 0.3.3
 
 ### Patch Changes

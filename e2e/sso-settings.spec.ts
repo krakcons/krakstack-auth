@@ -150,6 +150,8 @@ test("configures an organization connection, verifies ownership, rolls back a re
       stored = {
         organizationId: payload.organizationId,
         providerId: "test-sso-provider",
+        callbackURL:
+          "http://127.0.0.1:4179/api/auth/sso/callback/test-sso-provider",
         issuer: payload.issuer,
         domain: payload.domain,
         clientId: payload.clientId,
@@ -198,9 +200,12 @@ test("configures an organization connection, verifies ownership, rolls back a re
   await expect(secret).toHaveValue("");
   await page.getByText("Identity provider", { exact: true }).click();
   await expect(secret).toBeHidden();
-  await expect(
-    page.getByLabel("Callback URL to register with your identity provider"),
-  ).toHaveValue(
+  const callbackUrl = page.getByLabel(
+    "Callback URL to register with your identity provider",
+  );
+  const callbackSection = page.getByText("Callback URL", { exact: true });
+  await expect(callbackUrl).toBeVisible();
+  await expect(callbackUrl).toHaveValue(
     "http://127.0.0.1:4179/api/auth/sso/callback/test-sso-provider",
   );
   const enable = page.getByRole("button", { name: "Enable SSO", exact: true });
@@ -218,9 +223,17 @@ test("configures an organization connection, verifies ownership, rolls back a re
   await expect(page.getByRole("alert")).toBeVisible();
   await expect(enable).toBeEnabled();
   await enable.click();
-  await expect(
-    page.getByRole("button", { name: "Disable SSO", exact: true }),
-  ).toBeEnabled();
+  const disable = page.getByRole("button", { name: "Disable SSO", exact: true });
+  await expect(disable).toBeEnabled();
+  await expect(callbackUrl).toBeVisible();
+  await callbackSection.click();
+  await expect(callbackUrl).toBeHidden();
+  await disable.click();
+  await expect(enable).toBeEnabled();
+  await expect(callbackUrl).toBeHidden();
+  await enable.click();
+  await expect(disable).toBeEnabled();
+  await expect(callbackUrl).toBeHidden();
   await page.reload();
   await openSecurity(page);
   await expect(

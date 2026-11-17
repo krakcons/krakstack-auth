@@ -21,24 +21,18 @@ import {
   LinkIcon,
   ShieldCheckIcon,
 } from "lucide-react";
-import type { OrganizationSsoConnection } from "@krak-stack/auth/auth";
+import type { OrganizationSsoConnection } from "../auth/schema.js";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
-import { m } from "@/paraglide/messages";
-import { SsoClientId, SsoDomain, SsoIssuer } from "../schema";
-import {
-  organizationSsoAtom,
-  saveOrganizationSsoAtom,
-  verifyOrganizationSsoAtom,
-  enableOrganizationSsoAtom,
-  deleteOrganizationSsoAtom,
-} from "./atom";
+import type { KrakstackAuthLocale } from "./auth-provider.js";
+import { organizationSsoAtoms } from "./organization-sso-atom.js";
+import { organizationSsoMessages } from "./organization-sso-messages.js";
 
 const builder = FormBuilder.empty
-  .addField("issuer", SsoIssuer)
-  .addField("domain", SsoDomain)
-  .addField("clientId", SsoClientId)
+  .addField("issuer", Schema.Trim.check(Schema.isNonEmpty()))
+  .addField("domain", Schema.Trim.check(Schema.isNonEmpty()))
+  .addField("clientId", Schema.Trim.check(Schema.isNonEmpty()))
   .addField("clientSecret", Schema.String);
 
 const SsoSettingsCard = ({
@@ -74,29 +68,38 @@ const SsoSettingsCard = ({
 
 export const OrganizationSsoSettingsPanel = ({
   organizationId,
+  baseUrl,
+  locale,
 }: {
   organizationId: string;
+  baseUrl?: string;
+  locale: KrakstackAuthLocale;
 }) => {
-  const result = useAtomValue(organizationSsoAtom(organizationId));
+  const m = organizationSsoMessages[locale];
+  const atoms = organizationSsoAtoms(baseUrl)(organizationId);
+  const result = useAtomValue(atoms.settings);
   return AsyncResult.match(result, {
     onInitial: () => <p role="status">{m.sso_loading()}</p>,
     onFailure: () => <ErrorMessage text={m.sso_load_error()} />,
     onSuccess: ({ value }) => (
       <OrganizationSsoForm
         key={value?.providerId ?? "new"}
-        organizationId={organizationId}
+        atoms={atoms}
         connection={value}
+        m={m}
       />
     ),
   });
 };
 
 const OrganizationSsoForm = ({
-  organizationId,
+  atoms,
   connection,
+  m,
 }: {
-  organizationId: string;
+  atoms: ReturnType<ReturnType<typeof organizationSsoAtoms>>;
   connection: typeof OrganizationSsoConnection.Type | null;
+  m: (typeof organizationSsoMessages)[KrakstackAuthLocale];
 }) => {
   const [form] = useState(() =>
     FormReact.make(builder, {
@@ -107,7 +110,7 @@ const OrganizationSsoForm = ({
         clientSecret: TextField,
       },
       onSubmit: (_, { decoded: { clientSecret, ...value }, get }) =>
-        get.setResult(saveOrganizationSsoAtom(organizationId), {
+        get.setResult(atoms.save, {
           ...value,
           clientSecret: clientSecret || undefined,
         }),
@@ -123,15 +126,14 @@ const OrganizationSsoForm = ({
       clearSecret("");
     }
   }, [result, clearSecret]);
-  const verify = useAtomSet(verifyOrganizationSsoAtom(organizationId));
-  const verificationResult = useAtomValue(
-    verifyOrganizationSsoAtom(organizationId),
-  );
-  const enable = useAtomSet(enableOrganizationSsoAtom(organizationId));
-  const enableResult = useAtomValue(enableOrganizationSsoAtom(organizationId));
-  const remove = useAtomSet(deleteOrganizationSsoAtom(organizationId));
-  const removeResult = useAtomValue(deleteOrganizationSsoAtom(organizationId));
+  const verify = useAtomSet(atoms.verify);
+  const verificationResult = useAtomValue(atoms.verify);
+  const enable = useAtomSet(atoms.enable);
+  const enableResult = useAtomValue(atoms.enable);
+  const remove = useAtomSet(atoms.remove);
+  const removeResult = useAtomValue(atoms.remove);
   const [confirmingRemoval, setConfirmingRemoval] = useState(false);
+  const [callbackInitiallyOpen] = useState(() => !connection?.enabled);
   const removeButton = useRef<HTMLButtonElement>(null);
   const restoreRemovalFocus = useRef(false);
   useLayoutEffect(() => {
@@ -150,10 +152,7 @@ const OrganizationSsoForm = ({
     AsyncResult.isFailure(verificationResult) ||
     AsyncResult.isFailure(enableResult) ||
     AsyncResult.isFailure(removeResult);
-  const callbackUrl = connection
-    ? (connection.callbackURL ??
-      `${window.location.origin}/api/auth/sso/callback/${connection.providerId}`)
-    : "";
+  const callbackUrl = connection?.callbackURL;
   return (
     <>
       {confirmingRemoval ? (
@@ -277,29 +276,31 @@ const OrganizationSsoForm = ({
           </SsoSettingsCard>
           {connection ? (
             <>
-              <SsoSettingsCard
-                title={m.sso_callback_step()}
-                icon={<LinkIcon className="size-5" aria-hidden="true" />}
-                open={!connection.enabled}
-                description={
-                  <span className="text-muted-foreground mt-1 block text-xs">
-                    {m.sso_callback_help()}
-                  </span>
-                }
-              >
-                <div className="flex flex-col gap-2">
-                  <label
-                    className="text-muted-foreground text-sm"
-                    htmlFor="sso-callback"
-                  >
-                    {m.sso_callback()}
-                  </label>
-                  <div className="flex min-w-0 gap-2">
-                    <Input id="sso-callback" readOnly value={callbackUrl} />
-                    <CopyButton value={callbackUrl} />
+              {callbackUrl ? (
+                <SsoSettingsCard
+                  title={m.sso_callback_step()}
+                  icon={<LinkIcon className="size-5" aria-hidden="true" />}
+                  open={callbackInitiallyOpen}
+                  description={
+                    <span className="text-muted-foreground mt-1 block text-xs">
+                      {m.sso_callback_help()}
+                    </span>
+                  }
+                >
+                  <div className="flex flex-col gap-2">
+                    <label
+                      className="text-muted-foreground text-sm"
+                      htmlFor="sso-callback"
+                    >
+                      {m.sso_callback()}
+                    </label>
+                    <div className="flex min-w-0 gap-2">
+                      <Input id="sso-callback" readOnly value={callbackUrl} />
+                      <CopyButton value={callbackUrl} />
+                    </div>
                   </div>
-                </div>
-              </SsoSettingsCard>
+                </SsoSettingsCard>
+              ) : null}
               <SsoSettingsCard
                 title={m.sso_domain_verification()}
                 icon={<ShieldCheckIcon className="size-5" aria-hidden="true" />}

@@ -156,6 +156,8 @@ import {
 import type { ProjectAccessLabelCatalog } from "../access.js";
 import { AssociatedProjectsNotice } from "./associated-projects-notice.js";
 import { ExtraApiKeyPermissions } from "../extra/schema.js";
+import { OrganizationSsoSettingsPanel } from "./organization-sso-settings.js";
+import { organizationSsoMessages } from "./organization-sso-messages.js";
 
 class OrganizationActionError extends Data.TaggedError(
   "OrganizationActionError",
@@ -600,11 +602,6 @@ export type OrganizationSwitcherProps = {
   features?: OrganizationSwitcherFeatures;
   hideTrigger?: boolean;
   menuActions?: ReactNode;
-  security?: {
-    label: string;
-    description: string;
-    renderContent: (organizationId: string) => ReactNode;
-  };
   renderUnauthenticated?: () => ReactNode;
   allowedOrganizationIds?: readonly string[];
   messages?: OrganizationSwitcherMessages;
@@ -1202,7 +1199,6 @@ const OrganizationSwitcherContent = ({
   features,
   hideTrigger = false,
   menuActions,
-  security,
   renderUnauthenticated,
   allowedOrganizationIds,
   messages,
@@ -1214,6 +1210,8 @@ const OrganizationSwitcherContent = ({
 }: OrganizationSwitcherProps) => {
   const auth = useKrakstackAuth();
   const baseUrl = providedBaseUrl ?? auth?.baseUrl;
+  const locale = auth?.locale ?? getLocale();
+  const security = organizationSsoMessages[locale];
 
   const labels = organizationSwitcherMessages(messages);
   const m = organizationMessageFns(labels);
@@ -1573,10 +1571,10 @@ const OrganizationSwitcherContent = ({
                       {m.organization_switcher_manage()}
                     </DropdownMenuItem>
                   ) : null}
-                  {security && canManageSecurity ? (
+                  {canManageSecurity ? (
                     <DropdownMenuItem onClick={() => setDialog("security")}>
                       <ShieldCheck />
-                      {security.label}
+                      {security.organization_security()}
                     </DropdownMenuItem>
                   ) : null}
                   <DropdownMenuItem onClick={() => setDialog("members")}>
@@ -1710,26 +1708,36 @@ const OrganizationSwitcherContent = ({
         ) : null}
       </Dialog>
       <Dialog
-        open={dialog === "security" && canManageSecurity && Boolean(security)}
+        open={
+          dialog === "security" &&
+          canManageSecurity &&
+          Boolean(activeOrganization)
+        }
         onOpenChange={(open) => {
           setDialog((current) =>
             open ? "security" : current === "security" ? null : current,
           );
         }}
       >
-        {dialog === "security" &&
-        activeOrganization &&
-        canManageSecurity &&
-        security ? (
+        {dialog === "security" && activeOrganization && canManageSecurity ? (
           <ScrollableDialogContent size="2xl">
             <ScrollableDialogHeader>
               <DialogHeader>
-                <DialogTitle className="text-2xl">{security.label}</DialogTitle>
-                <DialogDescription>{security.description}</DialogDescription>
+                <DialogTitle className="text-2xl">
+                  {security.organization_security()}
+                </DialogTitle>
+                <DialogDescription>
+                  {security.organization_security_description()}
+                </DialogDescription>
               </DialogHeader>
             </ScrollableDialogHeader>
             <ScrollableDialogBody>
-              {security.renderContent(activeOrganization.id)}
+              <OrganizationSsoSettingsPanel
+                key={JSON.stringify([baseUrl, activeOrganization.id])}
+                organizationId={activeOrganization.id}
+                baseUrl={baseUrl}
+                locale={locale}
+              />
             </ScrollableDialogBody>
           </ScrollableDialogContent>
         ) : null}
