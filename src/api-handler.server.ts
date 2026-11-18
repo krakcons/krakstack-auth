@@ -38,6 +38,7 @@ import { adminApiHandler } from "@/services/admin/api.builder";
 import { auditHandler } from "@/services/audit/api.builder";
 import { authApiHandler } from "@/services/auth/api.builder";
 import { BetterAuthRequest } from "@/services/auth/better-auth-request";
+import { handleProjectOAuth } from "@/services/auth/project-oauth";
 import {
   adminAuthMiddlewareLayer,
   serviceApiKeyMiddlewareLayer,
@@ -151,7 +152,8 @@ const runAuthHandler = (
     );
     return yield* Effect.tryPromise({
       try: () =>
-        openTelemetryContext.with(parentContext, () =>
+        openTelemetryContext.with(parentContext, async () =>
+          (await handleProjectOAuth(authRequest.request, authRequest.auth)) ??
           authRequest.handler(authRequest.request),
         ),
       catch: () => new HttpApiError.InternalServerError({}),

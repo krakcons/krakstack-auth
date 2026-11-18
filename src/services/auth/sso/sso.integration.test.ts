@@ -9,6 +9,7 @@ import type { TrackEvent } from "@krak-stack/registry/events/schema";
 import { testEventsLayer } from "@/services/audit/test-layer";
 import { sqlTestLayer } from "@/services/database";
 import { createAuth } from "../config";
+import { handleProjectOAuth } from "../project-oauth";
 import { SsoOidcJson } from "./schema";
 import { encryptSsoConfig } from "./settings";
 
@@ -33,7 +34,10 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)(
             yield* Effect.context<never>(),
           );
           const id = `sso-${crypto.randomUUID()}`;
-          const domain = `${id}.example.com`;
+           const domain = `${id}.example.com`;
+           const projectOrigin = `https://${domain}`;
+           const sharedCallback = `${origin}/api/auth/sso/callback`;
+           let expectedCallback = `${origin}/api/auth/sso/callback/${id}`;
           const memberEmail = `member@${domain}`;
           const outsiderEmail = `outsider@${domain}`;
           const unverifiedEmail = `unverified@${domain}`;
@@ -103,7 +107,7 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)(
                 lastVerifier = form.get("code_verifier");
                 expect(form.get("client_secret")).toBe(config.clientSecret);
                 expect(form.get("redirect_uri")).toBe(
-                  `${origin}/api/auth/sso/callback/${id}`,
+                   expectedCallback,
                 );
                 const token = await new SignJWT({
                   email,
@@ -278,6 +282,56 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)(
               yield* sql`SELECT user_id FROM account WHERE provider_id = ${id}`,
             ).toEqual([{ userId: userIds[0] }]);
 
+            yield* sql`INSERT INTO project (id, name) VALUES (${id}, 'Shared SSO project')`;
+            yield* sql`INSERT INTO domains (id, hostname, root_hostname, project_id, hostname_id, managed, active)
+              VALUES (${id}, ${domain}, ${domain}, ${id}, ${id}, false, true)`;
+            vi.stubEnv("BETTER_AUTH_URL", origin);
+            vi.stubEnv("PROJECT_SSO_OAUTH_ORIGINS", projectOrigin);
+            expectedCallback = sharedCallback;
+            yield* Effect.promise(async () => {
+              const handle = (request: Request) =>
+                handleProjectOAuth(request, auth, (fixedBaseURL, projectId, sharedSsoRedirectURI) =>
+                  createAuth({
+                    allowedHosts: ["localhost:3001"],
+                    fixedBaseURL,
+                    projectId,
+                    sharedSsoRedirectURI,
+                    auditRun: (effect) => runAudit(effect.pipe(Effect.provideService(Events, events))),
+                  }),
+                );
+              const proxyHeaders = { "x-forwarded-host": domain, "x-forwarded-proto": "https" };
+              const start = await handle(new Request(`${origin}/api/auth/sign-in/sso`, {
+                method: "POST",
+                headers: { ...proxyHeaders, origin: projectOrigin, "content-type": "application/json" },
+                body: JSON.stringify({ providerId: id, callbackURL: `${projectOrigin}/admin` }),
+              }));
+              expect(start?.status).toBe(200);
+              const projectCookie = cookieFrom(start!);
+              const { url } = Schema.decodeUnknownSync(Schema.Struct({ url: Schema.String }))(await start?.json());
+              const redirect = await handle(new Request(url));
+              expect(redirect?.status).toBe(303);
+              const authorize = new URL(redirect?.headers.get("location") ?? "");
+              expect(authorize.searchParams.get("redirect_uri")).toBe(sharedCallback);
+              const callback = new URL(sharedCallback);
+              callback.searchParams.set("state", authorize.searchParams.get("state") ?? "");
+              callback.searchParams.set("code", "test-shared-code");
+              const done = await handle(new Request(callback, { headers: { cookie: cookieFrom(redirect!) } }));
+              expect(done?.status).toBe(303);
+              expect(cookieFrom(done!)).not.toContain("session_token");
+              const redeem = new URL(done?.headers.get("location") ?? "");
+              expect(redeem.origin).toBe(projectOrigin);
+              const local = await handle(new Request(new URL(redeem.pathname + redeem.search, origin), {
+                headers: { ...proxyHeaders, cookie: projectCookie },
+              }));
+              expect(local?.headers.get("location")).toBe(`${projectOrigin}/admin`);
+              const session = await auth.api.getSession({ headers: new Headers({
+                cookie: cookieFrom(local!), host: "localhost:3001", "x-forwarded-proto": "https",
+              }) });
+              expect(session?.user.id).toBe(userIds[0]);
+              expect(session?.session.activeOrganizationId).toBe(id);
+            });
+            expectedCallback = `${origin}/api/auth/sso/callback/${id}`;
+
             const callsBeforeReplay = tokenCalls;
             const replay = yield* finish(flow);
             expect(replay.headers.get("location")).not.toBe(`${origin}/admin`);
@@ -360,6 +414,10 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)(
             Effect.ensuring(
               Effect.gen(function* () {
                 vi.unstubAllGlobals();
+                vi.unstubAllEnvs();
+                yield* sql`DELETE FROM project_oauth_flow WHERE project_id = ${id}`;
+                yield* sql`DELETE FROM domains WHERE id = ${id}`;
+                yield* sql`DELETE FROM project WHERE id = ${id}`;
                 yield* sql`DELETE FROM events WHERE user_id IN ${sql.in(userIds)}`;
                 yield* sql`DELETE FROM "user" WHERE id IN ${sql.in(userIds)}`;
                 yield* sql`DELETE FROM organization WHERE id IN ${sql.in([id, `${id}-other`])}`;

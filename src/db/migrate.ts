@@ -9,6 +9,7 @@ import accountDeletionMigration from "./migrations/0003_account_deletion";
 import projectMcpMigration from "./migrations/0004_project_mcp";
 import ssoMigration from "./migrations/0005_sso";
 import ssoBuiltinVerificationMigration from "./migrations/0006_sso_builtin_verification";
+import projectOAuthMigration from "./migrations/0007_project_oauth";
 
 // Keep the already-persisted ID/name; replacing the implementation must not
 // rewrite an existing Effect ledger or reapply migration 1.
@@ -19,6 +20,7 @@ export const migrationLoader = PgMigrator.fromRecord({
   "4_project_mcp": projectMcpMigration,
   "5_sso": ssoMigration,
   "6_sso_builtin_verification": ssoBuiltinVerificationMigration,
+  "7_project_oauth": projectOAuthMigration,
 });
 
 export const migrate = Effect.gen(function* () {

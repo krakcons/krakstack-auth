@@ -34,6 +34,7 @@ import {
   decryptSsoConfig,
 } from "./settings";
 import { runWithDatabase } from "@/services/database";
+import { sharedSsoCallbackFor } from "../project-oauth/policy";
 
 const runSettings = <A, E>(effect: Effect.Effect<A, E, OrganizationSso>) =>
   runWithDatabase(
@@ -138,8 +139,10 @@ export const organizationSso = (
   applicationOrigins: (
     request?: Request,
   ) => Promise<readonly string[]> = async () => [],
+  sharedRedirectURI?: string,
 ) => {
   const plugin = sso({
+    redirectURI: sharedRedirectURI,
     providersLimit: 0,
     domainVerification: {
       enabled: true,
@@ -250,7 +253,9 @@ export const organizationSso = (
     return {
       ...connection,
       verificationToken: verification?.domainVerificationToken,
-      callbackURL: `${ctx.context.baseURL}/sso/callback/${connection.providerId}`,
+      callbackURL:
+        sharedSsoCallbackFor(new URL(ctx.context.baseURL).origin) ??
+        `${ctx.context.baseURL}/sso/callback/${connection.providerId}`,
     };
   };
 
@@ -261,6 +266,7 @@ export const organizationSso = (
     endpoints: {
       signInSSO: plugin.endpoints.signInSSO,
       callbackSSO: plugin.endpoints.callbackSSO,
+      ...(sharedRedirectURI ? { callbackSSOShared: plugin.endpoints.callbackSSOShared } : {}),
       getSsoConfig: createAuthEndpoint(
         "/sso/config",
         {

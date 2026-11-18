@@ -40,7 +40,7 @@ Les origines OIDC Microsoft, Okta, Auth0 et Google sont approuvées par la polit
 
 1. Renseignez l’émetteur, le domaine de courriel de l’entreprise, l’identifiant client et le secret dans les paramètres SSO.
 2. Choisissez **Enregistrer la connexion**. Le serveur valide la découverte OIDC, chiffre la configuration et génère un identifiant de fournisseur unique. La connexion est initialement désactivée.
-3. Copiez l’**URL de retour** affichée dans les URI Web du fournisseur. Utilisez l’hôte d’authentification réellement employé. Les proxys validés peuvent modifier l’hôte effectif : enregistrez chaque hôte prévu.
+3. Copiez l’**URL de retour** affichée dans les paramètres SSO du projet dans les URI de redirection Web du fournisseur. Les projets qui utilisent l’URL commune n’ont pas à enregistrer leur propre nom d’hôte. Pour les autres projets, enregistrez l’URL affichée pour chaque hôte de connexion.
 4. Publiez le **nom** et la **valeur de l’enregistrement TXT** affichés pour le domaine de courriel.
 5. Après propagation, choisissez **Vérifier l’enregistrement DNS**. Cette vérification n’active pas encore la connexion.
 6. Choisissez **Activer le SSO**, puis testez avec un membre existant dont le courriel est vérifié.
@@ -59,13 +59,13 @@ Sur la page centrale, saisissez le courriel professionnel puis choisissez **Cont
 
 Un lien propre à l’organisation peut utiliser `/sign-in?organization=YOUR-ORGANIZATION-SLUG`. Ce slug sélectionne une connexion sans accorder d’adhésion. Une connexion désactivée ou supprimée pendant le parcours ne permet pas de terminer l’authentification.
 
-Les autres applications peuvent activer le bouton du SDK avec un libellé traduit :
+Le formulaire de connexion du SDK recherche automatiquement une connexion SSO après la saisie de l’adresse courriel et affiche le bouton si une connexion est disponible. Les libellés sont intégrés en français et en anglais :
 
 ```tsx
-<Signin defaultRedirectTo="/" sso={{ label: m.auth_continue_with_sso() }} />
+<Signin defaultRedirectTo="/" />
 ```
 
-`m` représente le module de messages Paraglide généré de l’application. Définissez le message en anglais et en français. Les contrats de gestion et de découverte sont exportés via `@krak-stack/auth/auth` et documentés dans `/api/docs`.
+Pour personnaliser le libellé, passez `sso={{ label: ... }}`. Les contrats de gestion et de découverte sont exportés via `@krak-stack/auth/auth` et documentés dans `/api/docs`.
 
 ## Désactiver ou supprimer une connexion
 

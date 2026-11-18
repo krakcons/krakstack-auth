@@ -131,6 +131,7 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)(
               { migrationId: 4 },
               { migrationId: 5 },
               { migrationId: 6 },
+              { migrationId: 7 },
             ]);
             yield* migrated`INSERT INTO "user" (id, name, email) VALUES ('automatic', 'Automatic', 'automatic@example.test')`;
             expect(
@@ -165,6 +166,7 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)(
               [4, "project_mcp"],
               [5, "sso"],
               [6, "sso_builtin_verification"],
+              [7, "project_oauth"],
             ]);
             yield* sql`INSERT INTO "user" (id, name, email) VALUES ('locale-default', 'Default', 'default@example.test')`;
             expect(
@@ -271,6 +273,7 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)(
               [4, "project_mcp"],
               [5, "sso"],
               [6, "sso_builtin_verification"],
+              [7, "project_oauth"],
             ]);
             expect(
               yield* sql`SELECT locale FROM "user" WHERE id = 'u'`,
@@ -422,7 +425,7 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)(
           });
           expect(
             results.map((rows) => rows.length).sort((a, b) => a - b),
-          ).toEqual([0, 6]);
+          ).toEqual([0, 7]);
         }),
       ),
     );
@@ -438,6 +441,7 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)(
             [4, "project_mcp"],
             [5, "sso"],
             [6, "sso_builtin_verification"],
+            [7, "project_oauth"],
           ]);
         }),
       ),

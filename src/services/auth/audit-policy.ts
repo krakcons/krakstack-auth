@@ -10,6 +10,7 @@ const actions = new Map(
     "/sign-in/social": "session.signed_in",
     "/callback/:id": "session.signed_in",
     "/sso/callback/:providerId": "session.signed_in",
+    "/sso/callback": "session.signed_in",
     "POST /organization/sso": "sso_connection.configured",
     "/organization/sso/verify": "sso_connection.domain_verified",
     "/organization/sso/enabled": "sso_connection.updated",

@@ -301,6 +301,8 @@ export const createAuth = ({
   allowedHosts,
   cookieDomain,
   projectId = null,
+  fixedBaseURL,
+  sharedSsoRedirectURI,
   mcpResource,
   mcpDynamicClientRegistration = Boolean(mcpResource),
   mcpScopes = ["mcp:read"],
@@ -310,6 +312,8 @@ export const createAuth = ({
   allowedHosts: readonly string[];
   cookieDomain?: string | undefined;
   projectId?: string | null;
+  fixedBaseURL?: string;
+  sharedSsoRedirectURI?: string;
   mcpResource?: string;
   mcpDynamicClientRegistration?: boolean;
   mcpScopes?: readonly ("mcp:read" | "mcp:write")[];
@@ -503,7 +507,7 @@ export const createAuth = ({
         });
       },
     },
-    baseURL: {
+    baseURL: fixedBaseURL ?? {
       allowedHosts: Array.from(allowedHosts),
       protocol: isDev ? "http" : "https",
       fallback: betterAuthUrl,
@@ -511,7 +515,7 @@ export const createAuth = ({
     trustedOrigins: async (request) => [
       ...(await trustedOriginsForRequest(request)),
       ...(request &&
-      /\/api\/auth\/(?:sign-in\/sso|sso\/callback\/)/.test(
+      /\/api\/auth\/(?:sign-in\/sso$|sso\/callback(?:\/|$))/.test(
         new URL(request.url).pathname,
       )
         ? ssoIdpOrigins
@@ -700,7 +704,10 @@ export const createAuth = ({
         },
         create: {
           before: async (session, context) => {
-            if (context?.path === "/sso/callback/:providerId") {
+            if (
+              context?.path === "/sso/callback/:providerId" ||
+              context?.path === "/sso/callback"
+            ) {
               const sso = Schema.decodeUnknownOption(SsoSessionContext)(
                 context.context,
               );
@@ -752,7 +759,7 @@ export const createAuth = ({
       },
     },
     plugins: [
-      withSqlNames(organizationSso(trustedOriginsForRequest)),
+      withSqlNames(organizationSso(trustedOriginsForRequest, sharedSsoRedirectURI)),
       withSqlNames(openAPI()),
       withSqlNames(admin()),
       withSqlNames(anonymous()),

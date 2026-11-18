@@ -40,7 +40,7 @@ Microsoft, Okta, Auth0 and Google OIDC endpoint origins are allowed by the platf
 
 1. In the organization's SSO settings, enter the issuer, company email domain, client ID and client secret.
 2. Choose **Save connection**. The server validates OIDC discovery, encrypts the configuration and generates a unique provider ID. The connection starts disabled.
-3. Copy the displayed **Callback URL** into the provider's registered Web redirect URIs. Use the actual auth hostname your employees will use. Validated proxies can change the effective callback hostname, so register each intended hostname.
+3. Copy the **Callback URL** shown in the project's SSO settings into the provider's registered Web redirect URIs. Projects using the shared callback don't need to register their own hostname. Projects still using a per-host callback must register the URL shown for each sign-in host.
 4. Publish the displayed DNS **TXT record name** and **TXT record value** for the company email domain.
 5. Choose **Verify DNS record** after propagation. Verification alone does not enable login.
 6. Choose **Enable SSO**, then test with an existing verified member.
@@ -59,13 +59,13 @@ On the central sign-in page, enter the company email and choose **Continue**. Th
 
 An organization-specific login link may use `/sign-in?organization=YOUR-ORGANIZATION-SLUG`. The slug selects a connection; it never grants membership. A connection that is disabled or removed while a login is in progress cannot finish authentication.
 
-Other applications can opt in to the SDK button with a translated label:
+The SDK sign-in form discovers SSO automatically after email entry and shows the button only for an available connection. English and French labels are built in:
 
 ```tsx
-<Signin defaultRedirectTo="/" sso={{ label: m.auth_continue_with_sso() }} />
+<Signin defaultRedirectTo="/" />
 ```
 
-Here `m` is the application's generated Paraglide message module. Define the message in English and French. Organization settings and discovery contracts are exported through `@krak-stack/auth/auth` and documented at `/api/docs`.
+To override the label, pass `sso={{ label: ... }}`. Organization settings and discovery contracts are exported through `@krak-stack/auth/auth` and documented at `/api/docs`.
 
 ## Disable or remove a connection
 

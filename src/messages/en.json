@@ -357,7 +357,6 @@
   "auth_sign_in": "Sign in",
   "auth_or_continue_with": "Or",
   "auth_continue_with_google": "Continue with Google",
-  "auth_continue_with_sso": "Continue with company SSO",
   "organization_security": "Security",
   "organization_security_description": "Manage sign-in security for this organization.",
   "sso_settings_title": "Single sign-on (SSO)",
