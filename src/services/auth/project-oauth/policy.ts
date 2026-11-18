@@ -15,16 +15,7 @@ export const centralOAuthOrigin = () => {
     : null;
 };
 
-export const projectOAuthOrigins = (provider: "google" | "sso") =>
-  ((
-    provider === "sso"
-      ? process.env.PROJECT_SSO_OAUTH_ORIGINS
-      : process.env.PROJECT_GOOGLE_OAUTH_ORIGINS
-  ) ?? "").split(",").map((part) => part.trim()).filter(Boolean);
-
-export const sharedSsoCallbackFor = (origin: string) => {
+export const sharedSsoCallback = () => {
   const central = centralOAuthOrigin();
-  return central && origin !== central.origin && projectOAuthOrigins("sso").includes(origin)
-    ? new URL(sharedSsoPath, central).href
-    : null;
+  return central ? new URL(sharedSsoPath, central).href : null;
 };

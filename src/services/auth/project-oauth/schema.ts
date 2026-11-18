@@ -35,4 +35,5 @@ export const Flow = Schema.Struct({
 export const Redemption = Schema.Struct({
   destination: Schema.String,
   sessionCookie: Schema.String,
+  loginMethod: Schema.Literals(["google", "sso"]),
 }).annotate({ identifier: "ProjectOAuthRedemption" });

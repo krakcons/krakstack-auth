@@ -34,7 +34,7 @@ import {
   decryptSsoConfig,
 } from "./settings";
 import { runWithDatabase } from "@/services/database";
-import { sharedSsoCallbackFor } from "../project-oauth/policy";
+import { sharedSsoCallback } from "../project-oauth/policy";
 
 const runSettings = <A, E>(effect: Effect.Effect<A, E, OrganizationSso>) =>
   runWithDatabase(
@@ -254,7 +254,7 @@ export const organizationSso = (
       ...connection,
       verificationToken: verification?.domainVerificationToken,
       callbackURL:
-        sharedSsoCallbackFor(new URL(ctx.context.baseURL).origin) ??
+        sharedSsoCallback() ??
         `${ctx.context.baseURL}/sso/callback/${connection.providerId}`,
     };
   };

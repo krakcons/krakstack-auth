@@ -5,7 +5,7 @@ import { runWithDatabase } from "@/services/database";
 import { registeredAuthDomainForRequest } from "@/services/domains";
 import { SignInSsoPayload } from "@krak-stack/auth/auth";
 import { createAuth, type Auth } from "../config";
-import { centralOAuthOrigin, projectOAuthOrigins, sharedSsoPath, supportsProjectOAuthOrigin } from "./policy";
+import { centralOAuthOrigin, sharedSsoPath, supportsProjectOAuthOrigin } from "./policy";
 import { Flow, GoogleStart, ProviderOptions, ProviderRedirect } from "./schema";
 import { ProjectOAuthStore } from "./store";
 
@@ -104,9 +104,7 @@ export const handleProjectOAuth = async (
 ): Promise<Response | undefined> => {
   const url = new URL(request.url);
   const central = centralOAuthOrigin();
-  const googleOrigins = projectOAuthOrigins("google");
-  const ssoOrigins = projectOAuthOrigins("sso");
-  if (!central || (!googleOrigins.length && !ssoOrigins.length)) {
+  if (!central) {
     return url.pathname.startsWith(`${prefix}/`) ? respond(404) : undefined;
   }
 
@@ -118,12 +116,22 @@ export const handleProjectOAuth = async (
   const isSsoSignIn = url.pathname === ssoSignInPath;
   const sharedRedirect = new URL(sharedSsoPath, central).href;
 
+  const nativeSharedSso = () =>
+    createAuth({
+      allowedHosts: [central.host],
+      fixedBaseURL: central.origin,
+      sharedSsoRedirectURI: sharedRedirect,
+    }).handler(request);
+
+  // Auth's own sign-in needs no project handoff.
+  if (isSsoSignIn && onCentralHost && request.method === "POST")
+    return nativeSharedSso();
+
   if (
     (url.pathname === googleSignInPath || isSsoSignIn) &&
     request.method === "POST" &&
     projectOrigin &&
-    projectOrigin !== central.origin &&
-    (isSsoSignIn ? ssoOrigins : googleOrigins).includes(projectOrigin)
+    projectOrigin !== central.origin
   ) {
     if (request.headers.get("content-type")?.split(";")[0]?.trim() !== "application/json")
       return isSsoSignIn ? respond(415) : undefined;
@@ -185,7 +193,6 @@ export const handleProjectOAuth = async (
     );
     const providerId = flow?.providerOptions.providerId;
     if (!flow || (url.pathname === ssoStartPath) !== Boolean(providerId) ||
-        !(providerId ? ssoOrigins : googleOrigins).includes(flow.projectOrigin) ||
         !(await isCurrentDomain(flow))) {
       return respond(403);
     }
@@ -244,12 +251,14 @@ export const handleProjectOAuth = async (
     const flow = Option.getOrNull(
       await runStore(ProjectOAuthStore.use((store) => store.findCallback(hash(state)))),
     );
-    if (!flow) return url.pathname === sharedSsoPath ? respond(403) : undefined;
+    if (!flow) {
+      if (url.pathname !== sharedSsoPath) return undefined;
+      return nativeSharedSso();
+    }
     const providerId = flow.providerOptions.providerId;
     const name = `${browserCookie}-${flow.id}`;
     const stateValue = cookieValue(request, name);
     if (!stateValue || (url.pathname === sharedSsoPath) !== Boolean(providerId) ||
-        !(providerId ? ssoOrigins : googleOrigins).includes(flow.projectOrigin) ||
         !(await isCurrentDomain(flow))) {
       return respond(403);
     }
@@ -299,8 +308,7 @@ export const handleProjectOAuth = async (
   if (
     url.pathname === redeemPath &&
     projectOrigin &&
-    request.method === "GET" &&
-    (googleOrigins.includes(projectOrigin) || ssoOrigins.includes(projectOrigin))
+    request.method === "GET"
   ) {
     const code = Option.getOrNull(decodeSecret(url.searchParams.get("code")));
     const browser = Option.getOrNull(decodeSecret(cookieValue(request, browserCookie)));
@@ -317,8 +325,6 @@ export const handleProjectOAuth = async (
             projectOrigin,
             projectId,
             domainId: domain.id,
-            googleEnabled: googleOrigins.includes(projectOrigin),
-            ssoEnabled: ssoOrigins.includes(projectOrigin),
           }),
         ),
       ),
@@ -333,7 +339,11 @@ export const handleProjectOAuth = async (
     if (!cookie.startsWith(`${context.authCookies.sessionToken.name}=`)) return respond(403);
     // The project proxy applies its normal cookie-domain policy. Never expose
     // the central domain attribute or any provider cookies to the project.
-    return respond(303, redeemed.destination, [cookie.replace(/;\s*domain=[^;]*/gi, "")]);
+    const preference = `krakstack-auth.last_used_login_method=${redeemed.loginMethod}; Path=/; Max-Age=2592000; SameSite=Lax${proxyUrl?.protocol === "https:" ? "; Secure" : ""}`;
+    return respond(303, redeemed.destination, [
+      cookie.replace(/;\s*domain=[^;]*/gi, ""),
+      preference,
+    ]);
   }
   return url.pathname.startsWith(`${prefix}/`) ? respond(404) : undefined;
 };

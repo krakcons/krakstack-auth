@@ -253,6 +253,7 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)(
             expect(tracked).toEqual([]);
             const response = yield* finish(flow);
             expect(response.headers.get("location")).toBe(`${origin}/admin`);
+            expect(cookieFrom(response)).toContain("krakstack-auth.last_used_login_method=sso");
             expect(lastVerifier).toBeTruthy();
             expect(
               createHash("sha256")
@@ -286,7 +287,6 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)(
             yield* sql`INSERT INTO domains (id, hostname, root_hostname, project_id, hostname_id, managed, active)
               VALUES (${id}, ${domain}, ${domain}, ${id}, ${id}, false, true)`;
             vi.stubEnv("BETTER_AUTH_URL", origin);
-            vi.stubEnv("PROJECT_SSO_OAUTH_ORIGINS", projectOrigin);
             expectedCallback = sharedCallback;
             yield* Effect.promise(async () => {
               const handle = (request: Request) =>
@@ -324,6 +324,9 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)(
                 headers: { ...proxyHeaders, cookie: projectCookie },
               }));
               expect(local?.headers.get("location")).toBe(`${projectOrigin}/admin`);
+              expect(local?.headers.getSetCookie()).toContainEqual(
+                expect.stringContaining("krakstack-auth.last_used_login_method=sso;"),
+              );
               const session = await auth.api.getSession({ headers: new Headers({
                 cookie: cookieFrom(local!), host: "localhost:3001", "x-forwarded-proto": "https",
               }) });

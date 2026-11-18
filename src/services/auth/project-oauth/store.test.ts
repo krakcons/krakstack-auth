@@ -36,7 +36,7 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)("Project OAuth persistence", () 
           expect(Option.isNone(yield* store.claimCallback(proof))).toBe(true);
           yield* store.complete({ id, codeHash, sessionCookie: "encrypted" });
 
-        const input = { ...flow, codeHash, googleEnabled: true, ssoEnabled: false };
+          const input = { ...flow, codeHash };
           for (const override of [
             { browserHash: "different-browser" },
             { projectOrigin: "https://courses.example.test" },
@@ -49,7 +49,7 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)("Project OAuth persistence", () 
             concurrency: 2,
           });
           expect(results.filter(Option.isSome).map(({ value }) => value)).toEqual([
-            { destination: flow.destination, sessionCookie: "encrypted" },
+            { destination: flow.destination, sessionCookie: "encrypted", loginMethod: "google" },
           ]);
 
           yield* store.create(flow);

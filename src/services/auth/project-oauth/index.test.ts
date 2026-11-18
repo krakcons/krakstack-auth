@@ -19,7 +19,6 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)("Central Google sign-in", () => 
         const central = "https://auth.example.test";
         const email = `${id}@example.test`;
         vi.stubEnv("BETTER_AUTH_URL", central);
-        vi.stubEnv("PROJECT_GOOGLE_OAUTH_ORIGINS", project);
         yield* sql`INSERT INTO project (id, name) VALUES (${id}, 'Central OAuth test')`;
         yield* sql`INSERT INTO domains (id, hostname, root_hostname, project_id, hostname_id, managed, active)
         VALUES (${id}, ${hostname}, ${hostname}, ${id}, ${id}, false, true)`;
@@ -99,6 +98,9 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)("Central Google sign-in", () => 
           expect(session?.headers.get("location")).toBe(`${project}/dashboard`);
           const sessionCookie = session?.headers.getSetCookie()[0]?.split(";")[0] ?? "";
           expect(sessionCookie).toMatch(/krakstack-auth\.session_token=/);
+          expect(session?.headers.getSetCookie()).toContainEqual(
+            expect.stringContaining("krakstack-auth.last_used_login_method=google;"),
+          );
           const local = await projectAuth.api.getSession({
             headers: new Headers({ Cookie: sessionCookie }),
           });

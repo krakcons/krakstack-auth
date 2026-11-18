@@ -40,7 +40,7 @@ Les origines OIDC Microsoft, Okta, Auth0 et Google sont approuvées par la polit
 
 1. Renseignez l’émetteur, le domaine de courriel de l’entreprise, l’identifiant client et le secret dans les paramètres SSO.
 2. Choisissez **Enregistrer la connexion**. Le serveur valide la découverte OIDC, chiffre la configuration et génère un identifiant de fournisseur unique. La connexion est initialement désactivée.
-3. Copiez l’**URL de retour** affichée dans les paramètres SSO du projet dans les URI de redirection Web du fournisseur. Les projets qui utilisent l’URL commune n’ont pas à enregistrer leur propre nom d’hôte. Pour les autres projets, enregistrez l’URL affichée pour chaque hôte de connexion.
+3. Copiez l’**URL de retour** affichée dans les paramètres SSO dans les URI de redirection Web du fournisseur. Krakstack Auth utilise une URL de retour commune à tous les domaines de projet. N’enregistrez pas le nom d’hôte de chaque projet.
 4. Publiez le **nom** et la **valeur de l’enregistrement TXT** affichés pour le domaine de courriel.
 5. Après propagation, choisissez **Vérifier l’enregistrement DNS**. Cette vérification n’active pas encore la connexion.
 6. Choisissez **Activer le SSO**, puis testez avec un membre existant dont le courriel est vérifié.

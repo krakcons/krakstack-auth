@@ -78,8 +78,6 @@ export class ProjectOAuthStore extends Context.Service<ProjectOAuthStore>()(
 
       const redeem = SqlSchema.findOneOption({
         Request: Schema.Struct({
-          googleEnabled: Schema.Boolean,
-          ssoEnabled: Schema.Boolean,
           codeHash: Schema.String,
           browserHash: Schema.String,
           projectOrigin: Schema.String,
@@ -88,14 +86,13 @@ export class ProjectOAuthStore extends Context.Service<ProjectOAuthStore>()(
         }),
         Result: Redemption,
         // Match all bindings and consume in a single statement, even across replicas.
-        execute: ({ codeHash, browserHash, projectOrigin, projectId, domainId, googleEnabled, ssoEnabled }) =>
+        execute: ({ codeHash, browserHash, projectOrigin, projectId, domainId }) =>
           sql`DELETE FROM project_oauth_flow
             WHERE code_hash = ${codeHash} AND browser_hash = ${browserHash}
               AND project_origin = ${projectOrigin} AND project_id = ${projectId}
               AND domain_id = ${domainId} AND expires_at > now()
-              AND CASE WHEN provider_options ? 'providerId'
-                THEN ${ssoEnabled}::boolean ELSE ${googleEnabled}::boolean END
-            RETURNING destination, session_cookie`,
+            RETURNING destination, session_cookie,
+              CASE WHEN provider_options ? 'providerId' THEN 'sso' ELSE 'google' END AS login_method`,
       });
 
       return { create, claimStart, bindState, findCallback, claimCallback, complete, redeem };

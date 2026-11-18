@@ -40,7 +40,7 @@ Microsoft, Okta, Auth0 and Google OIDC endpoint origins are allowed by the platf
 
 1. In the organization's SSO settings, enter the issuer, company email domain, client ID and client secret.
 2. Choose **Save connection**. The server validates OIDC discovery, encrypts the configuration and generates a unique provider ID. The connection starts disabled.
-3. Copy the **Callback URL** shown in the project's SSO settings into the provider's registered Web redirect URIs. Projects using the shared callback don't need to register their own hostname. Projects still using a per-host callback must register the URL shown for each sign-in host.
+3. Copy the **Callback URL** shown in SSO settings into the provider's registered Web redirect URIs. Krakstack Auth uses one shared callback for all project domains; do not register each project's hostname.
 4. Publish the displayed DNS **TXT record name** and **TXT record value** for the company email domain.
 5. Choose **Verify DNS record** after propagation. Verification alone does not enable login.
 6. Choose **Enable SSO**, then test with an existing verified member.

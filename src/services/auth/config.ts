@@ -786,6 +786,8 @@ export const createAuth = ({
           storeInDatabase: true,
           customResolveMethod: (context) => {
             if (context.path === "/sign-in/email-otp") return "email-otp";
+            if (context.path === "/sso/callback" || context.path === "/sso/callback/:providerId")
+              return "sso";
             return null;
           },
         }),
