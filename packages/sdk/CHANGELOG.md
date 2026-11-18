@@ -1,5 +1,11 @@
 # @krak-stack/auth
 
+## 0.4.2
+
+### Patch Changes
+
+- Show the available post-email sign-in choices whether or not company SSO is available. Put the last-used choice first and highlight it without selecting it or sending an email code. Google remains available at the initial step and stays available after email entry when password and email code are disabled.
+
 ## 0.4.1
 
 ### Patch Changes

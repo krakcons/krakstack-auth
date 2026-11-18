@@ -64,18 +64,24 @@ const mockSignIn = async (page: Page, emailMethods = true, google = false) => {
 test("shows SSO with the post-email OTP/password options and uses the latest confirmed email", async ({
   page,
 }) => {
-  const requests = await mockSignIn(page);
+  const requests = await mockSignIn(page, true, true);
+  await page.context().addCookies([{
+    name: "krakstack-auth.last_used_login_method",
+    value: "sso",
+    url: "http://127.0.0.1:4179",
+  }]);
   await page.goto("/e2e/fixtures/sso-sign-in.html");
   const email = page.getByRole("textbox", { name: "Email", exact: true });
+  const google = page.getByRole("button", { name: "Continue with Google" });
   const sso = page.getByRole("button", {
-    name: "Continue with company SSO",
-    exact: true,
+    name: /^Single sign-on/,
   });
   const continueButton = page.getByRole("button", {
     name: "Continue",
     exact: true,
   });
   await expect(email).toBeVisible();
+  await expect(google).toBeVisible();
   await expect(sso).toHaveCount(0);
   await continueButton.click();
   await expect(email).toBeVisible();
@@ -86,13 +92,22 @@ test("shows SSO with the post-email OTP/password options and uses the latest con
   await email.fill("first@acme.example");
   await continueButton.click();
   await expect(sso).toBeVisible();
+  await expect(sso.getByText("Last used")).toBeVisible();
+  await expect(
+    page.getByRole("button", {
+      name: /^(Single sign-on|Password|Email code)/,
+    }).first(),
+  ).toHaveAccessibleName(/^Single sign-on/);
+  await expect(page.getByRole("button", { name: "Password", exact: true })).toBeEnabled();
+  await expect(google).toHaveCount(0);
+  await expect(page.getByLabel("Password", { exact: true })).toHaveCount(0);
   await expect(page.getByLabel("Email code", { exact: true })).toHaveCount(0);
   expect(requests.otp).toBe(0);
   await page
-    .getByRole("button", { name: "Use email code", exact: true })
+    .getByRole("button", { name: "Email code", exact: true })
     .click();
   await expect(page.getByLabel("Email code", { exact: true })).toBeVisible();
-  await page.getByRole("button", { name: "Use password", exact: true }).click();
+  await page.getByRole("button", { name: "Password", exact: true }).click();
   await expect(page.getByLabel("Password", { exact: true })).toBeVisible();
   await expect(sso).toBeVisible();
   expect(requests.discoveredEmails).toEqual(["first@acme.example"]);
@@ -107,6 +122,33 @@ test("shows SSO with the post-email OTP/password options and uses the latest con
   expect(requests.signIns).toBe(1);
 });
 
+test("highlights the last-used password without opening the password form or hiding other choices", async ({
+  page,
+}) => {
+  const requests = await mockSignIn(page);
+  await page.context().addCookies([
+    {
+      name: "krakstack-auth.last_used_login_method",
+      value: "email",
+      url: "http://127.0.0.1:4179",
+    },
+  ]);
+  await page.goto("/e2e/fixtures/sso-sign-in.html");
+  await page.getByRole("textbox", { name: "Email", exact: true }).fill("employee@acme.example");
+  await page.getByRole("button", { name: "Continue", exact: true }).click();
+
+  const choices = page.getByRole("button", {
+    name: /^(Password|Email code|Single sign-on)/,
+  });
+  await expect(choices).toHaveCount(3);
+  await expect(choices.first()).toHaveAccessibleName("Password Last used");
+  await expect(page.getByLabel("Password", { exact: true })).toHaveCount(0);
+  expect(requests.otp).toBe(0);
+
+  await choices.first().click();
+  await expect(page.getByLabel("Password", { exact: true })).toBeVisible();
+});
+
 test("keeps Google available alongside company SSO when email methods are disabled", async ({
   page,
 }) => {
@@ -119,19 +161,33 @@ test("keeps Google available alongside company SSO when email methods are disabl
     .fill("employee@acme.example");
   await page.getByRole("button", { name: "Continue", exact: true }).click();
   await expect(
-    page.getByRole("button", { name: "Continue with company SSO" }),
+    page.getByRole("button", { name: "Single sign-on", exact: true }),
   ).toBeEnabled();
-  await expect(google).toBeVisible();
-  await expect(google).toBeEnabled();
+  const googleChoice = page.getByRole("button", { name: "Google", exact: true });
+  await expect(googleChoice).toBeVisible();
+  await expect(googleChoice).toBeEnabled();
 });
 
-test("keeps the normal email flow for domains without SSO", async ({ page }) => {
+test("shows the method picker without SSO and only sends a code when selected", async ({ page }) => {
   const requests = await mockSignIn(page);
+  await page.context().addCookies([
+    {
+      name: "krakstack-auth.last_used_login_method",
+      value: "email-otp",
+      url: "http://127.0.0.1:4179",
+    },
+  ]);
   await page.goto("/e2e/fixtures/sso-sign-in.html");
   await page.getByRole("textbox", { name: "Email", exact: true }).fill("learner@other.example");
   await page.getByRole("button", { name: "Continue", exact: true }).click();
+  const choices = page.getByRole("button", { name: /^(Email code|Password)/ });
+  await expect(choices).toHaveCount(2);
+  await expect(choices.first()).toHaveAccessibleName("Email code Last used");
+  await expect(page.getByRole("button", { name: "Single sign-on", exact: true })).toHaveCount(0);
+  await expect(page.getByLabel("Email code", { exact: true })).toHaveCount(0);
+  expect(requests.otp).toBe(0);
+  await choices.first().click();
   await expect(page.getByLabel("Email code", { exact: true })).toBeVisible();
-  await expect(page.getByRole("button", { name: "Continue with company SSO" })).toHaveCount(0);
   expect(requests.otp).toBe(1);
 });
 
@@ -141,7 +197,7 @@ test("collects an email before SSO when password and email OTP are disabled", as
   const requests = await mockSignIn(page, false);
   await page.goto("/e2e/fixtures/sso-sign-in.html");
   const sso = page.getByRole("button", {
-    name: "Continue with company SSO",
+    name: "Single sign-on",
     exact: true,
   });
   await expect(sso).toHaveCount(0);

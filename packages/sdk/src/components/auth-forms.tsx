@@ -17,8 +17,8 @@ import type * as Types from "effect/Types";
 import { Atom, AsyncResult } from "effect/reactivity";
 import { HttpClientError } from "effect/http";
 import { REGEXP_ONLY_DIGITS } from "input-otp";
-import { ArrowLeft, KeyRound, Loader2, Mail } from "lucide-react";
-import { useContext, useEffect, useRef, useState } from "react";
+import { ArrowLeft, Building2, KeyRound, Loader2, Mail } from "lucide-react";
+import { Fragment, useContext, useEffect, useRef, useState } from "react";
 
 import { Button, buttonVariants } from "@/components/ui/button";
 import {
@@ -116,7 +116,8 @@ const twoFactorFormBuilder = FormBuilder.empty
 const defaultMessages = {
   en: {
     auth_continue_with_google: "Continue with Google",
-    auth_continue_with_sso: "Continue with company SSO",
+    auth_single_sign_on: "Single sign-on",
+    auth_last_used: "Last used",
     auth_sso_error: "Could not sign in with company SSO. Check your work email or try another sign-in method.",
     auth_or_continue_with: "Or",
     auth_sign_in: "Sign in",
@@ -165,8 +166,8 @@ const defaultMessages = {
     sign_in_invalid_credentials: "The email or password is incorrect.",
     auth_invalid_code: "The code is invalid or has expired.",
     sign_in_forgot_password: "Forgot your password?",
-    sign_in_use_email_otp: "Use email code",
-    sign_in_use_password: "Use password",
+    sign_in_method_email_code: "Email code",
+    sign_in_method_password: "Password",
     two_factor_backup_code: "Backup code",
     two_factor_code: "Authentication code",
     two_factor_email_code: "Email verification code",
@@ -196,7 +197,8 @@ const defaultMessages = {
   },
   fr: {
     auth_continue_with_google: "Continuer avec Google",
-    auth_continue_with_sso: "Continuer avec le SSO de l’entreprise",
+    auth_single_sign_on: "Authentification unique",
+    auth_last_used: "Dernière méthode utilisée",
     auth_sso_error: "Impossible de vous connecter avec le SSO de l’entreprise. Vérifiez votre adresse courriel professionnelle ou essayez une autre méthode de connexion.",
     auth_or_continue_with: "Ou",
     auth_sign_in: "Se connecter",
@@ -249,8 +251,8 @@ const defaultMessages = {
       "Le courriel ou le mot de passe est incorrect.",
     auth_invalid_code: "Le code est invalide ou a expiré.",
     sign_in_forgot_password: "Mot de passe oublié?",
-    sign_in_use_email_otp: "Utiliser un code courriel",
-    sign_in_use_password: "Utiliser un mot de passe",
+    sign_in_method_email_code: "Code par courriel",
+    sign_in_method_password: "Mot de passe",
     two_factor_backup_code: "Code de secours",
     two_factor_code: "Code d'authentification",
     two_factor_email_code: "Code de vérification par courriel",
@@ -514,6 +516,9 @@ export function Signin(props: AuthFormProps & { sso?: boolean | { label?: string
     (options.emailPassword || options.emailOtp) &&
     requestedMethod === initialAuthMethod;
   const [emailSubmitted, setEmailSubmitted] = useState(initialMethodStep);
+  const [showMethodChoices, setShowMethodChoices] = useState(false);
+  const [lastUsed, setLastUsed] = useState<string | null>(null);
+  useEffect(() => setLastUsed(getLastUsedLoginMethod() ?? null), []);
   const [ssoConnection, setSsoConnection] = useState<{
     email: string;
     providerId: string;
@@ -559,7 +564,8 @@ export function Signin(props: AuthFormProps & { sso?: boolean | { label?: string
         : "password";
   const hasPrimaryAuth = options.emailPassword || options.emailOtp;
   const canChangeAuthMethod = options.emailPassword && options.emailOtp;
-  const showGoogle = options.google && (!emailSubmitted || !hasPrimaryAuth);
+  const showGoogle =
+    options.google && (!emailSubmitted || !hasPrimaryAuth);
   useEffect(() => {
     if (!initialMethodStep || checkedSso.current === initialEmail) return;
     const controller = new AbortController();
@@ -608,7 +614,6 @@ export function Signin(props: AuthFormProps & { sso?: boolean | { label?: string
               emailSubmitted: boolean;
               method: "password" | "emailOtp";
               otpSent: boolean;
-              hasPrimaryAuth: boolean;
               organizationSlug?: string;
             }
           | { type: "sendEmailOtp" }
@@ -668,6 +673,7 @@ export function Signin(props: AuthFormProps & { sso?: boolean | { label?: string
           ).pipe(
             Effect.tap(() =>
               Effect.sync(() => {
+                setShowMethodChoices(false);
                 setAuthMethod("emailOtp");
                 setEmailSubmitted(true);
                 setOtpSentTo(email);
@@ -704,22 +710,8 @@ export function Signin(props: AuthFormProps & { sso?: boolean | { label?: string
             );
             checkedSso.current = email;
             setSsoConnection(connection ? { email, providerId: connection.providerId } : null);
-            if (
-              !action.hasPrimaryAuth ||
-              (connection && action.method === "emailOtp")
-            ) {
-              setEmailSubmitted(true);
-              return;
-            }
-            if (action.method === "emailOtp") yield* sendEmailOtp;
-            else {
-              setEmailSubmitted(true);
-              void navigate({
-                to: "/sign-in",
-                search: authMethodSearch(searchString, "password", email),
-                replace: true,
-              });
-            }
+            setShowMethodChoices(true);
+            setEmailSubmitted(true);
             return;
           }
 
@@ -856,6 +848,7 @@ export function Signin(props: AuthFormProps & { sso?: boolean | { label?: string
     resetForm();
     setEmail(email);
     setEmailSubmitted(false);
+    setShowMethodChoices(false);
     setSsoConnection(null);
     checkedSso.current = "";
     setOtpSentTo("");
@@ -867,23 +860,37 @@ export function Signin(props: AuthFormProps & { sso?: boolean | { label?: string
     });
   };
 
-  const switchAuthMethod = () => {
+  const selectPassword = () => {
+    resetForm();
+    setEmail(formValues.email);
+    setShowMethodChoices(false);
+    setAuthMethod("password");
+    void navigate({
+      to: "/sign-in",
+      search: authMethodSearch(searchString, "password", formValues.email),
+      replace: true,
+    });
+  };
+
+  const sendSignInCode = () => {
     setPassword("");
     setOtp("");
-    if (selectedAuthMethod === "emailOtp") {
-      resetForm();
-      setEmail(formValues.email);
-      setAuthMethod("password");
-      void navigate({
-        to: "/sign-in",
-        search: authMethodSearch(searchString, "password", formValues.email),
-        replace: true,
-      });
-      return;
-    }
     setErrorContext("sendEmailOtp");
     submit({ type: "sendEmailOtp" });
   };
+
+  const switchAuthMethod = () =>
+    selectedAuthMethod === "emailOtp" ? selectPassword() : sendSignInCode();
+
+  const methodButtonClassName = (method: string) =>
+    cn("w-full", lastUsed === method && "relative border-primary dark:border-primary");
+
+  const lastUsedBadge = (method: string) =>
+    lastUsed === method ? (
+      <span className="pointer-events-none absolute end-2 top-0 -translate-y-1/2 rounded-full border border-primary bg-background px-2 text-xs text-primary">
+        {m.auth_last_used}
+      </span>
+    ) : null;
 
   const resendEmailOtp = () => {
     setOtp("");
@@ -943,7 +950,7 @@ export function Signin(props: AuthFormProps & { sso?: boolean | { label?: string
         <form.Initialize
             defaultValues={{ email: initialEmail, password: "", otp: "" }}
           >
-            {hasPrimaryAuth || !emailSubmitted ? (
+            {!emailSubmitted || (hasPrimaryAuth && !showMethodChoices) ? (
               <form
                 className="flex flex-col gap-4"
                 onSubmit={(event) => {
@@ -962,7 +969,6 @@ export function Signin(props: AuthFormProps & { sso?: boolean | { label?: string
                     emailSubmitted,
                     method: selectedAuthMethod,
                     otpSent: Boolean(otpSentTo),
-                    hasPrimaryAuth,
                     organizationSlug,
                   });
                 }}
@@ -1069,20 +1075,21 @@ export function Signin(props: AuthFormProps & { sso?: boolean | { label?: string
                       : selectedAuthMethod === "emailOtp"
                         ? otpSentTo
                           ? m.sign_in_email_otp_verify
-                          : m.sign_in_use_email_otp
+                          : m.sign_in_method_email_code
                         : m.auth_sign_in}
                   </Button>
                 </div>
               </form>
             ) : null}
         </form.Initialize>
-        {(emailSubmitted && (canChangeAuthMethod || providerId)) ||
+        {(emailSubmitted &&
+          (canChangeAuthMethod || providerId || (showMethodChoices && hasPrimaryAuth))) ||
         showGoogle ? (
           <div className="mt-4 flex flex-col gap-3">
-            {hasPrimaryAuth ? (
+            {hasPrimaryAuth && !showMethodChoices ? (
               <Divider label={m.auth_or_continue_with} />
             ) : null}
-            {emailSubmitted && canChangeAuthMethod ? (
+            {emailSubmitted && !showMethodChoices && canChangeAuthMethod ? (
               <Button
                 type="button"
                 variant="outline"
@@ -1092,16 +1099,45 @@ export function Signin(props: AuthFormProps & { sso?: boolean | { label?: string
               >
                 {selectedAuthMethod === "password" ? <Mail /> : <KeyRound />}
                 {selectedAuthMethod === "password"
-                  ? m.sign_in_use_email_otp
-                  : m.sign_in_use_password}
+                  ? m.sign_in_method_email_code
+                  : m.sign_in_method_password}
               </Button>
             ) : null}
-            {showGoogle ? (
-              <>
+            {[
+            showMethodChoices && options.emailOtp ? (
+              <Button
+                key="email-otp"
+                type="button"
+                variant="outline"
+                className={methodButtonClassName("email-otp")}
+                disabled={submitResult.waiting}
+                onClick={sendSignInCode}
+              >
+                <Mail />
+                {m.sign_in_method_email_code}
+                {lastUsedBadge("email-otp")}
+              </Button>
+            ) : null,
+            showMethodChoices && options.emailPassword ? (
+              <Button
+                key="email"
+                type="button"
+                variant="outline"
+                className={methodButtonClassName("email")}
+                disabled={submitResult.waiting}
+                onClick={selectPassword}
+              >
+                <KeyRound />
+                {m.sign_in_method_password}
+                {lastUsedBadge("email")}
+              </Button>
+            ) : null,
+            showGoogle ? (
+              <Fragment key="google">
                 <Button
                   type="button"
                   variant="outline"
-                  className="w-full"
+                  className={methodButtonClassName("google")}
                   disabled={
                     submitResult.waiting ||
                     socialSignInResult.waiting ||
@@ -1110,21 +1146,22 @@ export function Signin(props: AuthFormProps & { sso?: boolean | { label?: string
                   onClick={signInWithGoogle}
                 >
                   <GoogleLogo />
-                  {m.auth_continue_with_google}
+                   {emailSubmitted ? "Google" : m.auth_continue_with_google}
+                  {lastUsedBadge("google")}
                 </Button>
                 <AuthSubmitError
                   result={socialSignInResult}
                   labels={m}
                   messages={{ fallback: m.sign_in_error }}
                 />
-              </>
-            ) : null}
-            {providerId ? (
-              <>
+              </Fragment>
+            ) : null,
+            providerId ? (
+              <Fragment key="sso">
                 <Button
                   type="button"
                   variant="outline"
-                  className="w-full"
+                  className={methodButtonClassName("sso")}
                   disabled={
                     submitResult.waiting ||
                     socialSignInResult.waiting ||
@@ -1135,18 +1172,30 @@ export function Signin(props: AuthFormProps & { sso?: boolean | { label?: string
                   {ssoSignInResult.waiting ? (
                     <Loader2 className="animate-spin" />
                   ) : (
-                    <KeyRound />
+                    <Building2 />
                   )}
                   {typeof props.sso === "object"
-                    ? (props.sso.label ?? m.auth_continue_with_sso)
-                    : m.auth_continue_with_sso}
+                     ? (props.sso.label ?? m.auth_single_sign_on)
+                     : m.auth_single_sign_on}
+                  {lastUsedBadge("sso")}
                 </Button>
                 <AuthSubmitError
                   result={ssoSignInResult}
                   labels={m}
                   messages={{ fallback: m.auth_sso_error }}
                 />
-              </>
+              </Fragment>
+            ) : null,
+            ].sort((left, right) =>
+              Number(lastUsed !== null && right?.key === lastUsed) -
+              Number(lastUsed !== null && left?.key === lastUsed),
+            )}
+            {showMethodChoices ? (
+              <AuthSubmitError
+                result={submitResult}
+                labels={m}
+                messages={{ fallback: m.sign_in_email_otp_send_error }}
+              />
             ) : null}
           </div>
         ) : null}
