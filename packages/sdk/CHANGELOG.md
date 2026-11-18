@@ -1,5 +1,11 @@
 # @krak-stack/auth
 
+## 0.4.1
+
+### Patch Changes
+
+- `<Signin />` automatically discovers company SSO after email entry and shows the button when a verified, enabled connection is available. English and French labels are built in; existing custom labels still work. When password and email-code sign-in are disabled, Google remains available alongside company SSO if enabled for the project.
+
 ## 0.4.0
 
 ### Minor Changes

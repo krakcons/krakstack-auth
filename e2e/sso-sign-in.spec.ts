@@ -5,7 +5,7 @@ import {
   SendVerificationOtpPayload,
 } from "../packages/sdk/src/auth/schema";
 
-const mockSignIn = async (page: Page, emailMethods = true) => {
+const mockSignIn = async (page: Page, emailMethods = true, google = false) => {
   const requests = {
     otp: 0,
     discoveredEmails: new Array<string>(),
@@ -27,7 +27,7 @@ const mockSignIn = async (page: Page, emailMethods = true) => {
             authOptions: {
               emailPassword: emailMethods,
               emailOtp: emailMethods,
-              google: false,
+              google,
             },
           },
         });
@@ -39,7 +39,11 @@ const mockSignIn = async (page: Page, emailMethods = true) => {
         return route.fulfill({ json: { success: true } });
       case "/api/auth/sso/config":
         requests.discoveredEmails.push(url.searchParams.get("email") ?? "");
-        return route.fulfill({ json: { providerId: "acme-sso" } });
+        return route.fulfill({
+          json: url.searchParams.get("email")?.endsWith("@acme.example")
+            ? { providerId: "acme-sso" }
+            : null,
+        });
       case "/api/auth/sign-in/sso": {
         const payload = Schema.decodeUnknownSync(SignInSsoPayload)(
           request.postDataJSON(),
@@ -91,7 +95,7 @@ test("shows SSO with the post-email OTP/password options and uses the latest con
   await page.getByRole("button", { name: "Use password", exact: true }).click();
   await expect(page.getByLabel("Password", { exact: true })).toBeVisible();
   await expect(sso).toBeVisible();
-  expect(requests.discoveredEmails).toEqual([]);
+  expect(requests.discoveredEmails).toEqual(["first@acme.example"]);
   await page.getByRole("button", { name: "Back", exact: true }).click();
   await expect(sso).toHaveCount(0);
   await email.fill("second@acme.example");
@@ -99,8 +103,36 @@ test("shows SSO with the post-email OTP/password options and uses the latest con
   await expect(sso).toBeVisible();
   await sso.click();
   await expect(page.getByRole("status")).toHaveText("SSO redirect requested");
-  expect(requests.discoveredEmails).toEqual(["second@acme.example"]);
+  expect(requests.discoveredEmails).toEqual(["first@acme.example", "second@acme.example"]);
   expect(requests.signIns).toBe(1);
+});
+
+test("keeps Google available alongside company SSO when email methods are disabled", async ({
+  page,
+}) => {
+  await mockSignIn(page, false, true);
+  await page.goto("/e2e/fixtures/sso-sign-in.html");
+  const google = page.getByRole("button", { name: "Continue with Google" });
+  await expect(google).toBeVisible();
+  await page
+    .getByRole("textbox", { name: "Email", exact: true })
+    .fill("employee@acme.example");
+  await page.getByRole("button", { name: "Continue", exact: true }).click();
+  await expect(
+    page.getByRole("button", { name: "Continue with company SSO" }),
+  ).toBeEnabled();
+  await expect(google).toBeVisible();
+  await expect(google).toBeEnabled();
+});
+
+test("keeps the normal email flow for domains without SSO", async ({ page }) => {
+  const requests = await mockSignIn(page);
+  await page.goto("/e2e/fixtures/sso-sign-in.html");
+  await page.getByRole("textbox", { name: "Email", exact: true }).fill("learner@other.example");
+  await page.getByRole("button", { name: "Continue", exact: true }).click();
+  await expect(page.getByLabel("Email code", { exact: true })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Continue with company SSO" })).toHaveCount(0);
+  expect(requests.otp).toBe(1);
 });
 
 test("collects an email before SSO when password and email OTP are disabled", async ({

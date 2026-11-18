@@ -116,6 +116,8 @@ const twoFactorFormBuilder = FormBuilder.empty
 const defaultMessages = {
   en: {
     auth_continue_with_google: "Continue with Google",
+    auth_continue_with_sso: "Continue with company SSO",
+    auth_sso_error: "Could not sign in with company SSO. Check your work email or try another sign-in method.",
     auth_or_continue_with: "Or",
     auth_sign_in: "Sign in",
     field_email: "Email",
@@ -194,6 +196,8 @@ const defaultMessages = {
   },
   fr: {
     auth_continue_with_google: "Continuer avec Google",
+    auth_continue_with_sso: "Continuer avec le SSO de l’entreprise",
+    auth_sso_error: "Impossible de vous connecter avec le SSO de l’entreprise. Vérifiez votre adresse courriel professionnelle ou essayez une autre méthode de connexion.",
     auth_or_continue_with: "Ou",
     auth_sign_in: "Se connecter",
     field_email: "Courriel",
@@ -447,7 +451,23 @@ export const resolveInitialAuthMethod = ({
   return emailOtp ? "emailOtp" : "password";
 };
 
-export function Signin(props: AuthFormProps & { sso?: { label: string } }) {
+const discoverSso = (
+  baseUrl: string | undefined,
+  locale: (() => "en" | "fr") | undefined,
+  email: string,
+  organizationSlug?: string,
+) => {
+  const query: Types.Mutable<typeof SsoDiscoveryQuery.Type> = { email };
+  if (organizationSlug) query.organizationSlug = organizationSlug;
+  return authHttpClient(baseUrl, locale).pipe(
+    Effect.flatMap((client) => client.auth.getSsoConfig({ query })),
+    Effect.timeoutOption("3 seconds"),
+    Effect.map(Option.getOrNull),
+    Effect.catch(() => Effect.succeed(null)),
+  );
+};
+
+export function Signin(props: AuthFormProps & { sso?: boolean | { label?: string } }) {
   const registry = useContext(RegistryContext);
   const {
     baseUrl,
@@ -470,6 +490,7 @@ export function Signin(props: AuthFormProps & { sso?: { label: string } }) {
     props.defaultRedirectTo,
   );
   const initialEmail = getSearchParam(searchString, "email")?.trim() ?? "";
+  const organizationSlug = getSearchParam(searchString, "organization") ?? undefined;
   const oauthQuery = getOAuthQuery(searchString);
   const authOptions = projectConfig?.authOptions;
   const onNavigate = (target: string) => navigateTarget(target, navigate);
@@ -493,6 +514,11 @@ export function Signin(props: AuthFormProps & { sso?: { label: string } }) {
     (options.emailPassword || options.emailOtp) &&
     requestedMethod === initialAuthMethod;
   const [emailSubmitted, setEmailSubmitted] = useState(initialMethodStep);
+  const [ssoConnection, setSsoConnection] = useState<{
+    email: string;
+    providerId: string;
+  } | null>(null);
+  const checkedSso = useRef("");
   const [authMethod, setAuthMethod] = useState<AuthMethod>(initialAuthMethod);
   const [otpSentTo, setOtpSentTo] = useState(
     initialMethodStep && initialAuthMethod === "emailOtp" ? initialEmail : "",
@@ -533,6 +559,26 @@ export function Signin(props: AuthFormProps & { sso?: { label: string } }) {
         : "password";
   const hasPrimaryAuth = options.emailPassword || options.emailOtp;
   const canChangeAuthMethod = options.emailPassword && options.emailOtp;
+  const showGoogle = options.google && (!emailSubmitted || !hasPrimaryAuth);
+  useEffect(() => {
+    if (!initialMethodStep || checkedSso.current === initialEmail) return;
+    const controller = new AbortController();
+    void Effect.runPromise(
+      discoverSso(baseUrl, undefined, initialEmail, organizationSlug).pipe(
+        Effect.tap((connection) =>
+          Effect.sync(() => {
+            if (connection && !controller.signal.aborted)
+              setSsoConnection((current) => current ?? {
+                email: initialEmail,
+                providerId: connection.providerId,
+              });
+          }),
+        ),
+      ),
+      { signal: controller.signal },
+    ).catch(() => undefined);
+    return () => controller.abort();
+  }, [baseUrl, initialEmail, initialMethodStep, organizationSlug]);
   useEffect(() => {
     if (!emailOtpResendAvailableAt) return;
 
@@ -562,6 +608,8 @@ export function Signin(props: AuthFormProps & { sso?: { label: string } }) {
               emailSubmitted: boolean;
               method: "password" | "emailOtp";
               otpSent: boolean;
+              hasPrimaryAuth: boolean;
+              organizationSlug?: string;
             }
           | { type: "sendEmailOtp" }
           | { type: "resendEmailOtp" }
@@ -648,9 +696,17 @@ export function Signin(props: AuthFormProps & { sso?: { label: string } }) {
           }
 
           if (!action.emailSubmitted) {
+            const connection = yield* discoverSso(
+              baseUrl,
+              locale,
+              email,
+              action.organizationSlug,
+            );
+            checkedSso.current = email;
+            setSsoConnection(connection ? { email, providerId: connection.providerId } : null);
             if (
-              (!options.emailPassword && !options.emailOtp) ||
-              (props.sso && action.method === "emailOtp")
+              !action.hasPrimaryAuth ||
+              (connection && action.method === "emailOtp")
             ) {
               setEmailSubmitted(true);
               return;
@@ -762,34 +818,12 @@ export function Signin(props: AuthFormProps & { sso?: { label: string } }) {
   const [ssoSignIn] = useState(() =>
     authClientApi(baseUrl).runtime.fn(
       (payload: {
-        email: string;
-        organizationSlug?: string;
+        providerId: string;
         callbackURL: string;
         errorCallbackURL: string;
       }) =>
         authHttpClient(baseUrl, locale).pipe(
-          Effect.flatMap((client) =>
-            Effect.gen(function* () {
-              const query: Types.Mutable<typeof SsoDiscoveryQuery.Type> = {};
-              if (payload.email) query.email = payload.email;
-              if (payload.organizationSlug)
-                query.organizationSlug = payload.organizationSlug;
-              const connection = yield* client.auth.getSsoConfig({
-                query,
-              });
-              if (!connection)
-                return yield* new AuthBadRequest({
-                  message: "SSO unavailable",
-                });
-              return yield* client.auth.signInSso({
-                payload: {
-                  providerId: connection.providerId,
-                  callbackURL: payload.callbackURL,
-                  errorCallbackURL: payload.errorCallbackURL,
-                },
-              });
-            }),
-          ),
+          Effect.flatMap((client) => client.auth.signInSso({ payload })),
           Effect.flatMap((result) => {
             const url = result.url;
             return url
@@ -806,6 +840,10 @@ export function Signin(props: AuthFormProps & { sso?: { label: string } }) {
     password: "",
     otp: "",
   }));
+  const providerId =
+    emailSubmitted && ssoConnection?.email === formValues.email.trim()
+      ? ssoConnection.providerId
+      : undefined;
   const resetForm = useAtomSet(form.reset);
   const setEmail = useAtomSet(form.getFieldAtoms(form.fields.email).setValue);
   const setPassword = useAtomSet(
@@ -818,6 +856,8 @@ export function Signin(props: AuthFormProps & { sso?: { label: string } }) {
     resetForm();
     setEmail(email);
     setEmailSubmitted(false);
+    setSsoConnection(null);
+    checkedSso.current = "";
     setOtpSentTo("");
     setEmailOtpResendAvailableAt(0);
     void navigate({
@@ -861,15 +901,14 @@ export function Signin(props: AuthFormProps & { sso?: { label: string } }) {
     );
 
   const signInWithSso = () => {
+    if (!providerId) return;
     const { callbackURL, errorCallbackURL } = getSocialSignInDestinations(
       router,
       props.defaultRedirectTo,
       window.location.href,
     );
     startSsoSignIn({
-      email: formValues.email.trim(),
-      organizationSlug:
-        getSearchParam(searchString, "organization") ?? undefined,
+      providerId,
       callbackURL,
       errorCallbackURL,
     });
@@ -901,8 +940,7 @@ export function Signin(props: AuthFormProps & { sso?: { label: string } }) {
         {getSearchParam(searchString, "error") ? (
           <ErrorMessage text={m.sign_in_error} />
         ) : null}
-        {hasPrimaryAuth || props.sso ? (
-          <form.Initialize
+        <form.Initialize
             defaultValues={{ email: initialEmail, password: "", otp: "" }}
           >
             {hasPrimaryAuth || !emailSubmitted ? (
@@ -924,6 +962,8 @@ export function Signin(props: AuthFormProps & { sso?: { label: string } }) {
                     emailSubmitted,
                     method: selectedAuthMethod,
                     otpSent: Boolean(otpSentTo),
+                    hasPrimaryAuth,
+                    organizationSlug,
                   });
                 }}
               >
@@ -1035,10 +1075,9 @@ export function Signin(props: AuthFormProps & { sso?: { label: string } }) {
                 </div>
               </form>
             ) : null}
-          </form.Initialize>
-        ) : null}
-        {(emailSubmitted && (canChangeAuthMethod || props.sso)) ||
-        (options.google && !emailSubmitted) ? (
+        </form.Initialize>
+        {(emailSubmitted && (canChangeAuthMethod || providerId)) ||
+        showGoogle ? (
           <div className="mt-4 flex flex-col gap-3">
             {hasPrimaryAuth ? (
               <Divider label={m.auth_or_continue_with} />
@@ -1057,7 +1096,7 @@ export function Signin(props: AuthFormProps & { sso?: { label: string } }) {
                   : m.sign_in_use_password}
               </Button>
             ) : null}
-            {options.google && !emailSubmitted ? (
+            {showGoogle ? (
               <>
                 <Button
                   type="button"
@@ -1080,7 +1119,7 @@ export function Signin(props: AuthFormProps & { sso?: { label: string } }) {
                 />
               </>
             ) : null}
-            {props.sso && emailSubmitted ? (
+            {providerId ? (
               <>
                 <Button
                   type="button"
@@ -1098,18 +1137,20 @@ export function Signin(props: AuthFormProps & { sso?: { label: string } }) {
                   ) : (
                     <KeyRound />
                   )}
-                  {props.sso.label}
+                  {typeof props.sso === "object"
+                    ? (props.sso.label ?? m.auth_continue_with_sso)
+                    : m.auth_continue_with_sso}
                 </Button>
                 <AuthSubmitError
                   result={ssoSignInResult}
                   labels={m}
-                  messages={{ fallback: m.sign_in_error }}
+                  messages={{ fallback: m.auth_sso_error }}
                 />
               </>
             ) : null}
           </div>
         ) : null}
-        {!hasPrimaryAuth && !options.google && !props.sso ? (
+        {emailSubmitted && !hasPrimaryAuth && !options.google && !providerId ? (
           <p className="text-muted-foreground text-sm">
             {m.oauth_client_no_auth_methods}
           </p>

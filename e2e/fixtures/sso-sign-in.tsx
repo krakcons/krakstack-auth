@@ -11,7 +11,6 @@ import {
 import { AtomRegistry } from "effect/reactivity";
 import { Suspense } from "react";
 import { createRoot } from "react-dom/client";
-import { m } from "@/paraglide/messages";
 import { setLocale } from "@/paraglide/runtime";
 import "../../src/styles.css";
 
@@ -20,12 +19,7 @@ const rootRoute = createRootRoute({ component: () => <Outlet /> });
 const signInRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: "/sign-in",
-  component: () => (
-    <Signin
-      baseUrl="http://127.0.0.1:4179"
-      sso={{ label: m.auth_continue_with_sso() }}
-    />
-  ),
+  component: () => <Signin baseUrl="http://127.0.0.1:4179" />,
 });
 const completeRoute = createRoute({
   getParentRoute: () => rootRoute,
