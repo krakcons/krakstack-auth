@@ -61,8 +61,13 @@ const response = (
 const makeAuth = (
   handler: Parameters<typeof HttpClient.make>[0],
   headers: Record<string, string> = { "x-api-key": "user_secret" },
+  memoizeCookieSessionForRequest?: boolean,
 ) =>
-  AuthService.make({ headers, apiKeyConfigId: "user" }).pipe(
+  AuthService.make({
+    headers,
+    apiKeyConfigId: "user",
+    memoizeCookieSessionForRequest,
+  }).pipe(
     Effect.provideService(
       AuthClientConfig,
       AuthClientConfig.of({
@@ -121,6 +126,70 @@ describe("AuthService batch email lookup", () => {
         .listUsersByEmails({ query: { emails: "missing@example.com" } })
         .pipe(Effect.flip);
       expect(error).toBeInstanceOf(HttpApiError.Unauthorized);
+    }),
+  );
+});
+
+describe("AuthService cookie session freshness", () => {
+  const cookie = { cookie: "session=same-cookie" };
+  const session = (activeOrganizationId: string) => ({
+    user,
+    session: {
+      id: "session-1",
+      token: "session-token",
+      userId: user.id,
+      createdAt: now,
+      updatedAt: now,
+      expiresAt: "2026-01-02T00:00:00.000Z",
+      activeOrganizationId,
+    },
+  });
+
+  it.effect("shares the lookup within a request but not across requests with the same cookie", () =>
+    Effect.gen(function* () {
+      let organization = "org-1";
+      let lookups = 0;
+      const makeRequestAuth = makeAuth(
+        (request, url) => {
+          expect(url.pathname).toBe("/api/auth/get-session");
+          lookups++;
+          return Effect.succeed(response(request, 200, session(organization)));
+        },
+        cookie,
+        true,
+      );
+
+      const firstRequest = yield* makeRequestAuth;
+      const [firstSession, firstRequired] = yield* Effect.all(
+        [firstRequest.getSession(), firstRequest.requireOrganization()],
+        { concurrency: "unbounded" },
+      );
+      expect(firstSession?.session.activeOrganizationId).toBe("org-1");
+      expect(firstRequired.session.activeOrganizationId).toBe("org-1");
+      expect(lookups).toBe(1);
+
+      organization = "org-2";
+      const secondRequest = yield* makeRequestAuth;
+      const current = yield* secondRequest.requireOrganization();
+      expect(current.session.activeOrganizationId).toBe("org-2");
+      expect(lookups).toBe(2);
+    }),
+  );
+
+  it.effect("does not memoize on a shared service instance by default", () =>
+    Effect.gen(function* () {
+      let organization = "org-1";
+      const auth = yield* makeAuth(
+        (request) => Effect.succeed(response(request, 200, session(organization))),
+        cookie,
+      );
+
+      const first = yield* auth.requireOrganization();
+      expect(first.session.activeOrganizationId).toBe("org-1");
+
+      organization = "org-2";
+      const current = yield* auth.requireOrganization();
+      expect(current.session.activeOrganizationId).toBe("org-2");
     }),
   );
 });

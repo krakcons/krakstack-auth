@@ -1,5 +1,11 @@
 # @krak-stack/auth
 
+## 0.4.3
+
+### Patch Changes
+
+- Resolve cookie sessions fresh for each API request so an organization switch is visible immediately. Reuse the lookup within a single request.
+
 ## 0.4.2
 
 ### Patch Changes

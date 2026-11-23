@@ -162,6 +162,7 @@ const authenticateRequest = Effect.fnUntraced(function* <E>(
     authLayer ??
     AuthService.layer({
       ...options,
+      memoizeCookieSessionForRequest: true,
       headers: apiKey
         ? { ...request.headers, "x-api-key": apiKey }
         : request.headers,

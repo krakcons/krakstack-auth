@@ -1,12 +1,4 @@
-import {
-  Cache,
-  Context,
-  Duration,
-  Effect,
-  Exit,
-  Layer,
-  Redacted,
-} from "effect";
+import { Context, Effect, Layer, Redacted } from "effect";
 import { FetchHttpClient, HttpClient, HttpClientRequest } from "effect/http";
 import { HttpApiClient } from "effect/http-api";
 import { HttpApiError } from "effect/http-api";
@@ -14,7 +6,6 @@ import { HttpApiError } from "effect/http-api";
 import { AuthServiceApi } from "./api.js";
 import { AuthClientConfig, type ClientConfig } from "./config.js";
 import { ExtraVerifiedApiKey } from "./extra/schema.js";
-import type { GetSessionResponse } from "./auth/api.group.js";
 import type { Session, User } from "./schema.js";
 import type { OAuthResourceOptions } from "./oauth/schema.js";
 
@@ -52,6 +43,8 @@ export type AuthServiceLayerOptions = Partial<ClientConfig> & {
   readonly oauth?: OAuthResourceOptions;
   readonly headers?: Record<string, string>;
   readonly apiKeyConfigId?: "user" | "organization" | "service";
+  /** Enable only for an AuthService instance created for one HTTP request. */
+  readonly memoizeCookieSessionForRequest?: boolean;
 };
 
 const forwardedAuthHeaderNames = [
@@ -90,9 +83,6 @@ const authHttpClientLayer = (headers: Record<string, string>) =>
     }),
   ).pipe(Layer.provide(FetchHttpClient.layer));
 
-const getSessionCacheKey = (headers: Record<string, string>) =>
-  JSON.stringify(forwardedAuthHeaders(headers));
-
 const headerValue = (headers: Record<string, string>, name: string) => {
   const lowerName = name.toLowerCase();
   const entry = Object.entries(headers).find(
@@ -124,38 +114,6 @@ const withRequiredOrganization = <A extends AuthSession>(
 const isAuthSessionRequest = (request: HttpClientRequest.HttpClientRequest) =>
   request.url.endsWith("/api/auth/get-session");
 
-class SessionLookup extends Context.Service<
-  SessionLookup,
-  {
-    readonly getSession: Effect.Effect<
-      GetSessionResponse,
-      HttpApiError.ServiceUnavailable
-    >;
-  }
->()("@krak-stack/auth/SessionLookup") {}
-
-const sessionCache = Effect.runSync(
-  Cache.makeWith<
-    string,
-    GetSessionResponse,
-    HttpApiError.ServiceUnavailable,
-    SessionLookup,
-    "lookup"
-  >(
-    () =>
-      Effect.gen(function* () {
-        const lookup = yield* SessionLookup;
-        return yield* lookup.getSession;
-      }),
-    {
-      capacity: 500,
-      timeToLive: (exit) =>
-        Exit.isSuccess(exit) ? Duration.seconds(2) : Duration.zero,
-      requireServicesAt: "lookup",
-    },
-  ),
-);
-
 export class AuthService extends Context.Service<AuthService>()(
   "@krak-stack/auth/AuthService",
   {
@@ -178,7 +136,6 @@ export class AuthService extends Context.Service<AuthService>()(
           baseUrl: config.baseUrl,
           httpClient,
         });
-        const sessionCacheKey = getSessionCacheKey(headers);
         const apiKey = headerValue(headers, "x-api-key")?.trim();
         const authorization = headerValue(headers, "authorization");
         const organizationId = headerValue(
@@ -186,17 +143,10 @@ export class AuthService extends Context.Service<AuthService>()(
           "x-organization-id",
         )?.trim();
 
-        const getCookieSession = (): Effect.Effect<
-          AuthSession | null,
-          HttpApiError.ServiceUnavailable,
-          never
-        > =>
-          Cache.get(sessionCache, sessionCacheKey).pipe(
-            Effect.provideService(SessionLookup, {
-              getSession: api.auth
-                .getSession({ query: {} })
-                .pipe(Effect.mapError(serviceUnavailable)),
-            }),
+        const lookupCookieSession = api.auth
+          .getSession({ query: {} })
+          .pipe(
+            Effect.mapError(serviceUnavailable),
             Effect.map((authSession) =>
               authSession
                 ? ({
@@ -207,6 +157,10 @@ export class AuthService extends Context.Service<AuthService>()(
                 : null,
             ),
           );
+        // The same cookie can resolve to a different organization on the next request.
+        const cookieSession = options.memoizeCookieSessionForRequest
+          ? yield* Effect.cached(lookupCookieSession)
+          : lookupCookieSession;
 
         const userForApiKey = (
           verifiedKey: ExtraVerifiedApiKeyType,
@@ -344,7 +298,7 @@ export class AuthService extends Context.Service<AuthService>()(
             ? getOAuthSession()
             : apiKey
               ? getApiKeySession(apiKey)
-              : getCookieSession();
+              : cookieSession;
 
         const requireSession = (): Effect.Effect<
           AuthSession,
