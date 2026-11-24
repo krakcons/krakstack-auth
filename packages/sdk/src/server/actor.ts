@@ -26,6 +26,7 @@ const activeMemberRoles = ({
 
 const resolveCurrentActor = <Project extends string, Action extends string>(
   access: ProjectAccessDefinition<Project, Action>,
+  allowNoOrganization = false,
 ) =>
   Effect.gen(function* () {
     const auth = yield* AuthService;
@@ -38,9 +39,8 @@ const resolveCurrentActor = <Project extends string, Action extends string>(
       ).pipe(Effect.mapError(() => new HttpApiError.Unauthorized({})));
 
       const organizationId = session.session.activeOrganizationId;
-      if (!organizationId) return yield* new HttpApiError.Unauthorized({});
-
       if (apiKey.configId === "organization") {
+        if (!organizationId) return yield* new HttpApiError.Unauthorized({});
         return access.actorForApiKey({
           apiKeyId: apiKey.id,
           owner: { type: "organization", organizationId },
@@ -49,16 +49,18 @@ const resolveCurrentActor = <Project extends string, Action extends string>(
       }
 
       if (apiKey.configId === "user" && session.user) {
-        const roles = yield* activeMemberRoles({
-          organizationId,
-          userId: session.user.id,
-        });
+        if (!organizationId && !allowNoOrganization) {
+          return yield* new HttpApiError.Unauthorized({});
+        }
+        const roles = organizationId
+          ? yield* activeMemberRoles({ organizationId, userId: session.user.id })
+          : [];
         return access.actorForApiKey({
           apiKeyId: apiKey.id,
           owner: {
             type: "user",
             userId: session.user.id,
-            organizationId,
+            organizationId: organizationId ?? null,
             roles,
           },
           grant,
@@ -70,14 +72,15 @@ const resolveCurrentActor = <Project extends string, Action extends string>(
 
     if (!session.user) return yield* new HttpApiError.Unauthorized({});
     const organizationId = session.session.activeOrganizationId;
-    if (!organizationId) return yield* new HttpApiError.Unauthorized({});
-    const roles = yield* activeMemberRoles({
-      organizationId,
-      userId: session.user.id,
-    });
+    if (!organizationId && !allowNoOrganization) {
+      return yield* new HttpApiError.Unauthorized({});
+    }
+    const roles = organizationId
+      ? yield* activeMemberRoles({ organizationId, userId: session.user.id })
+      : [];
     return access.actorForUser({
       userId: session.user.id,
-      organizationId,
+      organizationId: organizationId ?? null,
       roles,
     });
   });
@@ -89,6 +92,17 @@ class AnyActorRequired extends HttpApiMiddleware.Service<
     provides: CurrentActor;
   }
 >()("@krak-stack/auth/ActorRequired", {
+  error: [
+    HttpApiError.Unauthorized,
+    HttpApiError.Forbidden,
+    HttpApiError.ServiceUnavailable,
+  ],
+}) {}
+
+class UnscopedActorAllowed extends HttpApiMiddleware.Service<
+  UnscopedActorAllowed,
+  { requires: AuthService; provides: CurrentActor }
+>()("@krak-stack/auth/ActorRequired/AllowNoOrganization", {
   error: [
     HttpApiError.Unauthorized,
     HttpApiError.Forbidden,
@@ -192,6 +206,9 @@ const withCurrentActor = <A, E, R>(
 };
 
 export function ActorRequired(): typeof AnyActorRequired;
+export function ActorRequired(options: {
+  readonly allowNoOrganization: true;
+}): typeof UnscopedActorAllowed;
 export function ActorRequired(constraint: {
   readonly type: "user";
 }): typeof UserActorRequired;
@@ -206,8 +223,11 @@ export function ActorRequired(constraint: {
 export function ActorRequired(constraint: {
   readonly type: "apiKey";
 }): typeof ApiKeyActorRequired;
-export function ActorRequired(constraint?: ActorConstraint) {
+export function ActorRequired(
+  constraint?: ActorConstraint | { readonly allowNoOrganization: true },
+) {
   if (!constraint) return AnyActorRequired;
+  if ("allowNoOrganization" in constraint) return UnscopedActorAllowed;
   if (constraint.type === "user") return UserActorRequired;
   if (constraint.ownerType === "user") return UserApiKeyActorRequired;
   if (constraint.ownerType === "organization") {
@@ -222,6 +242,11 @@ const actorRequiredLayer = <Project extends string, Action extends string>(
   Layer.mergeAll(
     Layer.succeed(AnyActorRequired, (httpEffect) =>
       requiredActor(access).pipe(
+        Effect.flatMap((actor) => withCurrentActor(httpEffect, actor)),
+      ),
+    ),
+    Layer.succeed(UnscopedActorAllowed, (httpEffect) =>
+      resolveCurrentActor(access, true).pipe(
         Effect.flatMap((actor) => withCurrentActor(httpEffect, actor)),
       ),
     ),

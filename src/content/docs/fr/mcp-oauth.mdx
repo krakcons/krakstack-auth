@@ -100,7 +100,7 @@ Les rappels HTTP sur l'interface de bouclage sans type d'application explicite s
 
 1. Récupérez les métadonnées de ressource protégée et du serveur d'autorisation sans identifiants. Vérifiez la ressource, l'émetteur et les portées annoncées.
 2. Appelez le point MCP sans identifiants. Attendez un statut `401` et un en-tête `WWW-Authenticate` contenant l'URL des métadonnées de ressource protégée.
-3. Connectez le client MCP, authentifiez-vous, sélectionnez l'organisation active voulue et approuvez le consentement.
+3. Connectez le client MCP, authentifiez-vous et choisissez l'organisation sur l'écran de consentement. Autoriser l'accès ne change pas votre organisation active.
 4. Exécutez un outil de lecture autorisé. Vérifiez que l'accès reste limité à l'organisation et aux permissions de l'utilisateur ayant consenti.
 5. Si l'écriture est activée, vérifiez une écriture autorisée et un refus pour un utilisateur sans la permission requise.
 

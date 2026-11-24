@@ -637,6 +637,9 @@ export const AuthApiGroup = HttpApiGroup.make("auth")
   )
   .add(
     HttpApiEndpoint.post("oauthConsent", "/oauth2/consent", {
+      headers: Schema.Struct({
+        "x-oauth-consent-organization": Schema.optionalKey(Schema.String),
+      }),
       payload: OAuthConsentPayload,
       success: OAuthRedirectResponse,
       error: errors,

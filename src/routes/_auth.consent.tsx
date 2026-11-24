@@ -13,11 +13,9 @@ export const Route = createFileRoute("/_auth/consent")({
         permissions: {
           "mcp:read": {
             title: m.consent_permission_read(),
-            description: m.consent_permission_read_description(),
           },
           "mcp:write": {
             title: m.consent_permission_write(),
-            description: m.consent_permission_write_description(),
           },
           offline_access: {
             title: m.consent_permission_offline(),

@@ -100,7 +100,7 @@ Loopback HTTP callbacks without an explicit application type are classified as n
 
 1. Fetch the protected-resource metadata and authorization-server metadata without credentials. Confirm the resource, issuer, and supported scopes match your configuration.
 2. Request the MCP endpoint without credentials. Expect `401` and a `WWW-Authenticate` header containing the protected-resource metadata URL.
-3. Connect the MCP client, sign in, select the intended active organization, and approve consent.
+3. Connect the MCP client, sign in, and choose the organization on the consent screen. Approving access does not switch your active organization.
 4. Run a permitted read tool. Confirm access remains limited to the consenting user's organization and permissions.
 5. If writes are enabled, verify a permitted write and a denied write for a user without the required permission.
 

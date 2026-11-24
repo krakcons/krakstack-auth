@@ -1,10 +1,55 @@
 import { describe, expect, it } from "@effect/vitest";
-import { Effect, Redacted, Schema } from "effect";
-import { HttpClient, HttpClientRequest, HttpClientResponse } from "effect/http";
-import { HttpApiError } from "effect/http-api";
+import { Effect, Layer, Redacted, Schema } from "effect";
+import {
+  HttpClient,
+  HttpClientRequest,
+  HttpClientResponse,
+  HttpRouter,
+} from "effect/http";
+import { HttpApi, HttpApiBuilder, HttpApiError } from "effect/http-api";
 
+import { defineProjectAccess } from "./access.js";
 import { AuthClientConfig } from "./config.js";
 import { AuthService } from "./service.js";
+import { ActorRequired } from "./server/actor.js";
+import { getCurrentIdentity, IdentityApiGroup } from "./server/identity.js";
+import { makeAuthenticationLive } from "./server/middleware.js";
+
+const IdentityApi = HttpApi.make("IdentityTest")
+  .add(IdentityApiGroup)
+  .prefix("/api");
+const IdentityAccess = defineProjectAccess({
+  project: "test",
+  permissions: ["read"],
+  roles: { member: ["read"] },
+});
+const requestIdentity = (auth: typeof AuthService.Service) =>
+  Effect.gen(function* () {
+    const web = yield* Effect.acquireRelease(
+      Effect.sync(() =>
+        HttpRouter.toWebHandler(
+          HttpApiBuilder.layer(IdentityApi).pipe(
+            Layer.provide(
+              HttpApiBuilder.group(IdentityApi, "identity", (handlers) =>
+                handlers.handle("getCurrentIdentity", getCurrentIdentity),
+              ),
+            ),
+            Layer.provide(ActorRequired.layer(IdentityAccess)),
+            Layer.provide(
+              makeAuthenticationLive({
+                authLayer: Layer.succeed(AuthService, auth),
+              }),
+            ),
+          ),
+          { disableLogger: true },
+        ),
+      ),
+      (web) => Effect.promise(web.dispose),
+    );
+    return yield* Effect.promise(() =>
+      web.handler(new Request("http://localhost/api/identity")),
+    );
+  });
 
 const now = "2026-01-01T00:00:00.000Z";
 
@@ -132,7 +177,7 @@ describe("AuthService batch email lookup", () => {
 
 describe("AuthService cookie session freshness", () => {
   const cookie = { cookie: "session=same-cookie" };
-  const session = (activeOrganizationId: string) => ({
+  const session = (activeOrganizationId: string | null) => ({
     user,
     session: {
       id: "session-1",
@@ -145,42 +190,65 @@ describe("AuthService cookie session freshness", () => {
     },
   });
 
-  it.effect("shares the lookup within a request but not across requests with the same cookie", () =>
+  it.effect("returns the current user without looking up a missing organization", () =>
     Effect.gen(function* () {
-      let organization = "org-1";
-      let lookups = 0;
-      const makeRequestAuth = makeAuth(
-        (request, url) => {
-          expect(url.pathname).toBe("/api/auth/get-session");
-          lookups++;
-          return Effect.succeed(response(request, 200, session(organization)));
-        },
-        cookie,
-        true,
-      );
-
-      const firstRequest = yield* makeRequestAuth;
-      const [firstSession, firstRequired] = yield* Effect.all(
-        [firstRequest.getSession(), firstRequest.requireOrganization()],
-        { concurrency: "unbounded" },
-      );
-      expect(firstSession?.session.activeOrganizationId).toBe("org-1");
-      expect(firstRequired.session.activeOrganizationId).toBe("org-1");
-      expect(lookups).toBe(1);
-
-      organization = "org-2";
-      const secondRequest = yield* makeRequestAuth;
-      const current = yield* secondRequest.requireOrganization();
-      expect(current.session.activeOrganizationId).toBe("org-2");
-      expect(lookups).toBe(2);
+      const auth = yield* makeAuth((request, url) => {
+        if (url.pathname === "/api/users/user-1") {
+          return Effect.succeed(response(request, 200, user));
+        }
+        expect(url.pathname).toBe("/api/auth/get-session");
+        return Effect.succeed(response(request, 200, session(null)));
+      }, cookie);
+      const result = yield* requestIdentity(auth);
+      expect(result.status).toBe(200);
+      expect(yield* Effect.promise(() => result.json())).toEqual({
+        user,
+        organization: null,
+      });
     }),
+  );
+
+  it.effect(
+    "shares the lookup within a request but not across requests with the same cookie",
+    () =>
+      Effect.gen(function* () {
+        let organization = "org-1";
+        let lookups = 0;
+        const makeRequestAuth = makeAuth(
+          (request, url) => {
+            expect(url.pathname).toBe("/api/auth/get-session");
+            lookups++;
+            return Effect.succeed(
+              response(request, 200, session(organization)),
+            );
+          },
+          cookie,
+          true,
+        );
+
+        const firstRequest = yield* makeRequestAuth;
+        const [firstSession, firstRequired] = yield* Effect.all(
+          [firstRequest.getSession(), firstRequest.requireOrganization()],
+          { concurrency: "unbounded" },
+        );
+        expect(firstSession?.session.activeOrganizationId).toBe("org-1");
+        expect(firstRequired.session.activeOrganizationId).toBe("org-1");
+        expect(lookups).toBe(1);
+
+        organization = "org-2";
+        const secondRequest = yield* makeRequestAuth;
+        const current = yield* secondRequest.requireOrganization();
+        expect(current.session.activeOrganizationId).toBe("org-2");
+        expect(lookups).toBe(2);
+      }),
   );
 
   it.effect("does not memoize on a shared service instance by default", () =>
     Effect.gen(function* () {
       let organization = "org-1";
       const auth = yield* makeAuth(
-        (request) => Effect.succeed(response(request, 200, session(organization))),
+        (request) =>
+          Effect.succeed(response(request, 200, session(organization))),
         cookie,
       );
 
@@ -316,6 +384,88 @@ describe("AuthService session lookup failures", () => {
         requestedUrls.some((url) => url.includes("/organizations/user/")),
       ).toBe(false);
     }),
+  );
+
+  it.effect(
+    "does not disclose an organization selected by a non-member API key owner",
+    () =>
+      Effect.gen(function* () {
+        const auth = yield* makeAuth(
+          (request, url) => {
+            switch (url.pathname) {
+              case "/api/auth/verify-api-key":
+                return Effect.succeed(
+                  response(request, 200, {
+                    valid: true,
+                    error: null,
+                    key: verifiedUserKey,
+                  }),
+                );
+              case "/api/users/user-1":
+                return Effect.succeed(response(request, 200, user));
+              default:
+                expect(url.pathname).toBe(
+                  "/api/organizations/other-org/members/user-1",
+                );
+                return Effect.succeed(
+                  response(request, 404, { _tag: "NotFound" }),
+                );
+            }
+          },
+          { "x-api-key": "user_secret", "x-organization-id": "other-org" },
+        );
+        expect((yield* requestIdentity(auth)).status).toBe(403);
+      }),
+  );
+
+  it.effect(
+    "reflects an organization key without inventing a user or accepting an override",
+    () =>
+      Effect.gen(function* () {
+        const auth = yield* makeAuth(
+          (request, url) => {
+            if (url.pathname === "/api/auth/verify-api-key") {
+              return Effect.succeed(
+                response(request, 200, {
+                  valid: true,
+                  error: null,
+                  key: verifiedOrganizationKey,
+                }),
+              );
+            }
+            expect(url.pathname).toBe("/api/organizations/org-owned");
+            return Effect.succeed(
+              response(request, 200, {
+                id: "org-owned",
+                name: "Owned organization",
+                slug: "owned",
+                logo: null,
+                metadata: null,
+                parentId: null,
+                createdAt: now,
+              }),
+            );
+          },
+          {
+            "x-api-key": "organization_secret",
+            "x-organization-id": "other-org",
+          },
+        );
+        const result = yield* requestIdentity(auth);
+        expect(result.status).toBe(200);
+        expect(yield* Effect.promise(() => result.json())).toEqual({
+          user: null,
+          organization: {
+            id: "org-owned",
+            name: "Owned organization",
+            slug: "owned",
+            logo: null,
+            metadata: { translations: [] },
+            parentId: null,
+            createdAt: now,
+          },
+        });
+      }),
   );
 
   it.effect("does not override organization-owned API keys", () =>

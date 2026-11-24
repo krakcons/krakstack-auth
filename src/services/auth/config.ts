@@ -1,5 +1,6 @@
 import { betterAuth, type BetterAuthOptions } from "better-auth";
 import type { GenericEndpointContext } from "@better-auth/core";
+import { tryGetCurrentAuthEndpointContext } from "@better-auth/core/context";
 import {
   admin,
   anonymous,
@@ -122,6 +123,20 @@ const OAuthGrantSession = Schema.Struct({
     Schema.NullOr(Schema.NonEmptyString),
   ),
 }).annotate({ identifier: "OAuthGrantSession" });
+
+const isMcpConsent = (scopes: readonly string[]) =>
+  scopes.some((scope) => scope === "mcp:read" || scope === "mcp:write");
+
+const selectedConsentOrganization = () => {
+  const endpoint = tryGetCurrentAuthEndpointContext();
+  // Better Auth internally redispatches approval to /oauth2/authorize.
+  // The original HTTP request stays a consent POST during both steps.
+  const request = endpoint?.request;
+  return request?.method === "POST" &&
+    new URL(request.url).pathname === "/api/auth/oauth2/consent"
+    ? request.headers.get("x-oauth-consent-organization")
+    : undefined;
+};
 
 const oauthAdminPrivileges = ({ user }: { user?: unknown }) => {
   const decoded = Schema.decodeUnknownOption(
@@ -398,19 +413,25 @@ export const createAuth = ({
     resourcePrivileges: oauthAdminPrivileges,
     postLogin: {
       page: "/consent",
-      shouldRedirect: () => false,
+      shouldRedirect: ({ session, scopes }) =>
+        Boolean(mcpResource) &&
+        isMcpConsent(scopes) &&
+        !session.activeOrganizationId &&
+        !session.impersonatedBy &&
+        !session.impersonatedByOrganizationId &&
+        !selectedConsentOrganization(),
       consentReferenceId: async ({ session, user, scopes }) => {
-        if (
-          !scopes.some((scope) => scope === "mcp:read" || scope === "mcp:write")
-        )
-          return undefined;
+        if (!isMcpConsent(scopes)) return undefined;
         if (!mcpResource)
           throw new APIError("FORBIDDEN", {
             message: "MCP is not enabled for this project host",
           });
         const grantSession =
           Schema.decodeUnknownSync(OAuthGrantSession)(session);
-        const organizationId = grantSession.activeOrganizationId;
+        // The consent POST can choose a grant organization without mutating the
+        // browser session. Authorization outside consent uses the active org.
+        const organizationId =
+          selectedConsentOrganization() ?? grantSession.activeOrganizationId;
         if (
           !organizationId ||
           grantSession.impersonatedBy ||

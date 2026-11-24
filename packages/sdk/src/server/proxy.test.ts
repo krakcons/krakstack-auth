@@ -227,6 +227,7 @@ describe("proxyAuthRequest", () => {
               "x-krakstack-forwarded-proto": "http",
               "x-krakstack-proxy-key": "attacker-key",
               authorization: "Bearer user-token",
+              "x-oauth-consent-organization": "approved-org",
               "accept-language": "fr",
               cookie: "session=user-session",
             },
@@ -250,6 +251,7 @@ describe("proxyAuthRequest", () => {
           "Bearer user-token",
         );
         expect(capturedRequest?.headers.cookie).toBe("session=user-session");
+        expect(capturedRequest?.headers["x-oauth-consent-organization"]).toBe("approved-org");
       }
     }),
   );

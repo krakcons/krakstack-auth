@@ -143,7 +143,7 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)(
     );
 
     it.effect(
-      "returns a PKCE code to the agent and issues tenant-bound access/refresh tokens",
+      "pins access and refresh tokens to the selected member organization without switching the session",
       () =>
         Effect.gen(function* () {
           const sql = yield* SqlClient.SqlClient;
@@ -162,6 +162,8 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)(
           const context = yield* Effect.promise(() => auth.$context);
           let clientId = "";
           let organizationId = "";
+          const selectedOrganizationId = `${id}-selected`;
+          const nonMemberOrganizationId = `${id}-other`;
           yield* Effect.gen(function* () {
             const now = new Date();
             yield* Effect.promise(() =>
@@ -229,6 +231,11 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)(
             )(yield* Effect.promise(() => sessionResponse.json()));
             organizationId = session.session.activeOrganizationId;
             expect(organizationId).not.toBe("");
+            yield* sql`INSERT INTO organization (id, name, slug, created_at) VALUES
+              (${selectedOrganizationId}, 'Selected organization', ${selectedOrganizationId}, now()),
+              (${nonMemberOrganizationId}, 'Other organization', ${nonMemberOrganizationId}, now())`;
+            yield* sql`INSERT INTO member (id, organization_id, user_id, role, created_at)
+              VALUES (${crypto.randomUUID()}, ${selectedOrganizationId}, ${id}, 'member', now())`;
             const client = yield* Effect.promise(() =>
               auth.api.adminCreateOAuthClient({
                 headers,
@@ -290,22 +297,30 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)(
             expect(new URLSearchParams(oauthQuery!).getAll("ba_param")).toEqual(
               consent.searchParams.getAll("ba_param"),
             );
-            const decision = yield* Effect.promise(() =>
-              auth.handler(
-                new Request(`${origin}/api/auth/oauth2/consent`, {
-                  method: "POST",
-                  headers: {
-                    ...Object.fromEntries(headers),
-                    "content-type": "application/json",
-                  },
-                  body: JSON.stringify({
-                    accept: true,
-                    scope: "mcp:read mcp:write offline_access",
-                    oauth_query: oauthQuery,
+            const submitConsent = (
+              selectedOrganization: string,
+              signedQuery = oauthQuery,
+            ) =>
+              Effect.promise(() =>
+                auth.handler(
+                  new Request(`${origin}/api/auth/oauth2/consent`, {
+                    method: "POST",
+                    headers: {
+                      ...Object.fromEntries(headers),
+                      "content-type": "application/json",
+                      "x-oauth-consent-organization": selectedOrganization,
+                    },
+                    body: JSON.stringify({
+                      accept: true,
+                      scope: "mcp:read mcp:write offline_access",
+                      oauth_query: signedQuery,
+                    }),
                   }),
-                }),
-              ),
-            );
+                ),
+              );
+            const nonMember = yield* submitConsent(nonMemberOrganizationId);
+            expect(nonMember.status).toBe(403);
+            const decision = yield* submitConsent(selectedOrganizationId);
             expect(decision.status).toBe(200);
             const redirect = yield* Schema.decodeUnknownEffect(
               RedirectResponse,
@@ -347,7 +362,7 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)(
             expect(decodeJwt(tokens.access_token)).toMatchObject({
               sub: id,
               aud: resource,
-              organization_id: organizationId,
+              organization_id: selectedOrganizationId,
               azp: clientId,
             });
             const jwks = yield* Effect.promise(() => auth.api.getJwks());
@@ -371,15 +386,56 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)(
               yield* Effect.promise(() => refreshed.json()),
             );
             expect(decodeJwt(rotated.access_token).organization_id).toBe(
-              organizationId,
+              selectedOrganizationId,
             );
             expect(rotated.refresh_token).not.toBe(tokens.refresh_token);
+            const unchanged = yield* Effect.promise(() =>
+              auth.handler(
+                new Request(`${origin}/api/auth/get-session`, { headers }),
+              ),
+            );
+            expect(yield* Effect.promise(() => unchanged.json())).toMatchObject({
+              session: { activeOrganizationId: organizationId },
+            });
+            const retryHeaders = new Headers(headers);
+            retryHeaders.set(
+              "x-oauth-consent-organization",
+              selectedOrganizationId,
+            );
+            const retried = yield* Effect.promise(() =>
+              auth.handler(new Request(authorize, { headers: retryHeaders })),
+            );
+            expect(
+              new URL(retried.headers.get("location")!, origin).pathname,
+            ).toBe("/consent");
+
+            yield* sql`UPDATE session SET active_organization_id = NULL WHERE user_id = ${id}`;
+            const noActiveOrganization = yield* Effect.promise(() =>
+              auth.handler(new Request(authorize, { headers })),
+            );
+            const consentWithoutActive = new URL(
+              noActiveOrganization.headers.get("location")!,
+              origin,
+            );
+            expect(consentWithoutActive.pathname).toBe("/consent");
+            const approvedWithoutActive = yield* submitConsent(
+              selectedOrganizationId,
+              getOAuthAuthorizationQuery(consentWithoutActive.search),
+            );
+            expect(approvedWithoutActive.status).toBe(200);
+            const callbackWithoutActive = yield* Schema.decodeUnknownEffect(
+              RedirectResponse,
+            )(yield* Effect.promise(() => approvedWithoutActive.json()));
+            expect(new URL(callbackWithoutActive.url).searchParams.has("code")).toBe(
+              true,
+            );
           }).pipe(
             Effect.ensuring(
               Effect.gen(function* () {
                 yield* sql`DELETE FROM oauth_client WHERE client_id = ${clientId}`;
                 yield* sql`DELETE FROM oauth_resource WHERE identifier = ${resource}`;
                 yield* sql`DELETE FROM "user" WHERE id = ${id}`;
+                yield* sql`DELETE FROM organization WHERE id IN (${selectedOrganizationId}, ${nonMemberOrganizationId})`;
                 if (organizationId)
                   yield* sql`DELETE FROM organization WHERE id = ${organizationId}`;
                 yield* Effect.promise(() => runtime.dispose());

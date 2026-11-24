@@ -1,5 +1,13 @@
 # @krak-stack/auth
 
+## 0.4.4
+
+### Patch Changes
+
+- Let users choose their organization on MCP OAuth consent screens. The connection stays bound to the chosen organization without switching the browser session's active organization.
+
+  Export `IdentityApiGroup` and `getCurrentIdentity` so consuming apps can return the full current user and organization records through REST and MCP without exposing the auth proxy or credentials. Identity uses `AuthMiddleware` and `ActorRequired({ allowNoOrganization: true })`. When no organization is active, the response has `organization: null`.
+
 ## 0.4.3
 
 ### Patch Changes
