@@ -50,7 +50,7 @@ const ConsentSearch = Schema.Struct({
 
 export type OAuthConsentMessages = {
   readonly title: string;
-  readonly description: (input: { clientName: string }) => string;
+  readonly description: (input: { clientName: string; email?: string }) => string;
   readonly requestedScopes: string;
   readonly allow: string;
   readonly deny: string;
@@ -69,7 +69,8 @@ export type OAuthConsentMessages = {
 const defaultMessages = {
   en: {
     title: "Authorize application",
-    description: ({ clientName }) => `${clientName} is requesting access to your account.`,
+    description: ({ clientName, email }) =>
+      `${clientName} is requesting access to ${email || "your account"}.`,
     requestedScopes: "What this app can do",
     allow: "Authorize",
     deny: "Deny",
@@ -100,7 +101,8 @@ const defaultMessages = {
   },
   fr: {
     title: "Autoriser l'application",
-    description: ({ clientName }) => `${clientName} demande l'accès à votre compte.`,
+    description: ({ clientName, email }) =>
+      `${clientName} demande l'accès à ${email || "votre compte"}.`,
     requestedScopes: "Ce que cette application peut faire",
     allow: "Autoriser",
     deny: "Refuser",
@@ -157,7 +159,7 @@ const clientAtom = Atom.family((baseUrl: string | undefined) =>
   ),
 );
 
-const noOrganization = Atom.make(null);
+const noQuery = Atom.make(null);
 
 const OrganizationOption = ({
   label,
@@ -239,25 +241,25 @@ export const OAuthConsent = ({
     if (AsyncResult.isSuccess(result)) window.location.assign(result.value.url);
   });
   const invalid = Option.isNone(decoded) || oauthQuery === null;
-  const clientLoading = !invalid && AsyncResult.isInitial(client);
-  const clientDescription = messages.description({ clientName });
   const isMcp =
     !invalid && requestedScopes.some((value) => value === "mcp:read" || value === "mcp:write");
-  const session = useAtomValue(isMcp ? authSessionAtom(baseUrl) : noOrganization);
-  const organizations = useAtomValue(isMcp ? authOrganizationsAtom(baseUrl) : noOrganization);
+  const session = useAtomValue(invalid ? noQuery : authSessionAtom(baseUrl));
+  const currentSession = session && AsyncResult.isSuccess(session) ? session.value : null;
+  const email = currentSession?.user.email;
+  const sessionLoading = session !== null && AsyncResult.isInitial(session);
+  const descriptionLoading = AsyncResult.isInitial(client) || sessionLoading;
+  const clientDescription = messages.description(email ? { clientName, email } : { clientName });
+  const emailStart = email ? clientDescription.lastIndexOf(email) : -1;
+  const organizations = useAtomValue(isMcp ? authOrganizationsAtom(baseUrl) : noQuery);
   const organizationLoading =
-    (session !== null && AsyncResult.isInitial(session)) ||
-    (organizations !== null && AsyncResult.isInitial(organizations));
+    sessionLoading || (organizations !== null && AsyncResult.isInitial(organizations));
   const organizationFieldId = useId();
   const [selection, setSelection] = useState<{
     request: string | null;
     baseUrl: string | undefined;
     id: string;
   }>();
-  const activeId =
-    session && AsyncResult.isSuccess(session)
-      ? session.value?.session.activeOrganizationId
-      : undefined;
+  const activeId = currentSession?.session.activeOrganizationId;
   const items =
     organizations && AsyncResult.isSuccess(organizations)
       ? organizations.value.map((organization) => {
@@ -287,8 +289,8 @@ export const OAuthConsent = ({
         {invalid ? (
           <CardDescription className="text-pretty">{messages.invalidRequest}</CardDescription>
         ) : (
-          <CardDescription aria-busy={clientLoading} className="min-h-10 min-w-0">
-            {clientLoading ? (
+          <CardDescription aria-busy={descriptionLoading} className="min-h-10 min-w-0">
+            {descriptionLoading ? (
               <div
                 className="flex h-10 flex-col items-center justify-center gap-2"
                 aria-hidden="true"
@@ -297,7 +299,17 @@ export const OAuthConsent = ({
                 <Skeleton className="h-3 w-1/2 motion-reduce:animate-none" />
               </div>
             ) : (
-              <p className="wrap-anywhere text-pretty">{clientDescription}</p>
+              <p className="wrap-anywhere text-pretty">
+                {email && emailStart >= 0 ? (
+                  <>
+                    {clientDescription.slice(0, emailStart)}
+                    <strong className="font-medium">{email}</strong>
+                    {clientDescription.slice(emailStart + email.length)}
+                  </>
+                ) : (
+                  clientDescription
+                )}
+              </p>
             )}
           </CardDescription>
         )}

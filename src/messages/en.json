@@ -440,6 +440,7 @@
   "consent_connected_application": "connected application",
   "consent_title": "Authorize application",
   "consent_description": "{clientName} is requesting access to your account.",
+  "consent_description_with_email": "{clientName} is requesting access to {email}.",
   "consent_requested_scopes": "What this app can do",
   "consent_authorize": "Authorize",
   "consent_deny": "Deny",

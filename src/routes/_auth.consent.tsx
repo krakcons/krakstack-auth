@@ -8,7 +8,10 @@ export const Route = createFileRoute("/_auth/consent")({
     <OAuthConsent
       messages={{
         title: m.consent_title(),
-        description: m.consent_description,
+        description: ({ clientName, email }) =>
+          email
+            ? m.consent_description_with_email({ clientName, email })
+            : m.consent_description({ clientName }),
         requestedScopes: m.consent_requested_scopes(),
         permissions: {
           "mcp:read": {

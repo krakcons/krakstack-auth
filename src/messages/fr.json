@@ -440,6 +440,7 @@
   "consent_connected_application": "application connectée",
   "consent_title": "Autoriser l'application",
   "consent_description": "{clientName} demande l'accès à votre compte.",
+  "consent_description_with_email": "{clientName} demande l'accès à {email}.",
   "consent_requested_scopes": "Ce que cette application peut faire",
   "consent_authorize": "Autoriser",
   "consent_deny": "Refuser",
