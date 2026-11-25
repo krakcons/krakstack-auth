@@ -45,11 +45,11 @@ const SsoSettingsCard = ({
   title: string;
   description?: ReactNode;
   icon: ReactNode;
-  open: boolean;
-  children: ReactNode;
-}) => (
-  <details className="group rounded-lg border" open={open}>
-    <summary className="hover:bg-muted/40 focus-visible:ring-ring flex cursor-pointer list-none items-center gap-3 rounded-lg p-4 focus-visible:ring-2 focus-visible:outline-none [&::-webkit-details-marker]:hidden">
+  open?: boolean;
+  children?: ReactNode;
+}) => {
+  const header = (
+    <>
       <span className="bg-background flex size-9 shrink-0 items-center justify-center rounded-full border">
         {icon}
       </span>
@@ -57,14 +57,30 @@ const SsoSettingsCard = ({
         <span className="block text-sm font-medium">{title}</span>
         {description}
       </span>
-      <ChevronDownIcon
-        className="text-muted-foreground size-4 shrink-0 transition-transform group-open:rotate-180"
-        aria-hidden="true"
-      />
-    </summary>
-    <div className="px-4 pt-3 pb-4">{children}</div>
-  </details>
-);
+    </>
+  );
+
+  if (open === undefined) {
+    return (
+      <div className="flex items-center gap-3 rounded-lg border p-4">
+        {header}
+      </div>
+    );
+  }
+
+  return (
+    <details className="group rounded-lg border" open={open}>
+      <summary className="hover:bg-muted/40 focus-visible:ring-ring flex cursor-pointer list-none items-center gap-3 rounded-lg p-4 focus-visible:ring-2 focus-visible:outline-none [&::-webkit-details-marker]:hidden">
+        {header}
+        <ChevronDownIcon
+          className="text-muted-foreground size-4 shrink-0 transition-transform group-open:rotate-180"
+          aria-hidden="true"
+        />
+      </summary>
+      <div className="px-4 pt-3 pb-4">{children}</div>
+    </details>
+  );
+};
 
 export const OrganizationSsoSettingsPanel = ({
   organizationId,
@@ -304,7 +320,7 @@ const OrganizationSsoForm = ({
               <SsoSettingsCard
                 title={m.sso_domain_verification()}
                 icon={<ShieldCheckIcon className="size-5" aria-hidden="true" />}
-                open={!connection.domainVerified}
+                open={connection.domainVerified ? undefined : true}
                 description={
                   <Badge
                     variant={
@@ -318,7 +334,7 @@ const OrganizationSsoForm = ({
                   </Badge>
                 }
               >
-                {connection.verificationToken ? (
+                {!connection.domainVerified && connection.verificationToken ? (
                   <>
                     <p className="text-muted-foreground text-sm">
                       {m.sso_dns_help()}
@@ -339,15 +355,13 @@ const OrganizationSsoForm = ({
                         <CopyButton value={connection.verificationToken} />
                       </dd>
                     </dl>
-                    {!connection.domainVerified ? (
-                      <Button
-                        className="mt-3"
-                        disabled={busy}
-                        onClick={() => verify()}
-                      >
-                        {m.sso_verify()}
-                      </Button>
-                    ) : null}
+                    <Button
+                      className="mt-3"
+                      disabled={busy}
+                      onClick={() => verify()}
+                    >
+                      {m.sso_verify()}
+                    </Button>
                   </>
                 ) : null}
               </SsoSettingsCard>

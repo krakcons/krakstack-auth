@@ -219,6 +219,18 @@ test("configures an organization connection, verifies ownership, rolls back a re
   await expect(enable).toBeDisabled();
   await verify.click();
   await expect(enable).toBeEnabled();
+  await expect(
+    page.getByText("Domain verified", { exact: true }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("group").filter({
+      has: page.getByText("Domain verification", { exact: true }),
+    }),
+  ).toHaveCount(0);
+  await expect(
+    page.getByText("dns-proof-token", { exact: true }),
+  ).toHaveCount(0);
+  await expect(verify).toHaveCount(0);
   await enable.click();
   await expect(page.getByRole("alert")).toBeVisible();
   await expect(enable).toBeEnabled();
