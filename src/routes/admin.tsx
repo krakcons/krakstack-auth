@@ -130,6 +130,12 @@ function AdminOrganizationSwitcher() {
   return (
     <OrganizationSwitcher
       baseUrl={authBaseUrl}
+      messages={{
+        organization_member_role_edit: m.organization_member_role_edit(),
+        organization_member_role_description:
+          m.organization_member_role_description({ name: "{name}" }),
+        organization_member_role_save: m.organization_member_role_save(),
+      }}
       {...(import.meta.env.DEV
         ? { apiKeyPermissions: testApiKeyPermissions }
         : {})}

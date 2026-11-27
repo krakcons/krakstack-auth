@@ -42,13 +42,11 @@ import {
   useState,
 } from "react";
 
-import {
-  type DataTableColDef,
-  DataTableListCell,
-} from "@krak-stack/registry/data-table";
+import { type DataTableColDef } from "@krak-stack/registry/data-table";
 import {
   CheckboxField,
   ImageField,
+  MultiSelectField,
   SubmitButton,
   SubmitError,
   TextAreaField,
@@ -84,12 +82,10 @@ import {
   type OrganizationWebsite as OrganizationWebsiteValue,
 } from "@krak-stack/auth/schema";
 import {
-  isOrganizationRole,
   normalizeOrganizationRole,
   normalizeOrganizationRoles,
   organizationRoles,
   parseRoleList,
-  type OrganizationRole,
 } from "../roles.js";
 
 import { authClientApi, authHttpClient } from "./auth-client-api.js";
@@ -249,6 +245,9 @@ const messages = {
     organization_member_remove: "Remove member",
     organization_member_remove_error: "Could not remove the member.",
     organization_member_role: "Role",
+    organization_member_role_edit: "Edit roles",
+    organization_member_role_description: "Select at least one role for {name}.",
+    organization_member_role_save: "Save roles",
     organization_member_role_error: "Could not update the member role.",
     organization_member_user: "User",
     organization_members_description:
@@ -411,6 +410,10 @@ const messages = {
     organization_member_remove: "Retirer le membre",
     organization_member_remove_error: "Impossible de retirer le membre.",
     organization_member_role: "Rôle",
+    organization_member_role_edit: "Modifier les rôles",
+    organization_member_role_description:
+      "Sélectionnez au moins un rôle pour {name}.",
+    organization_member_role_save: "Enregistrer les rôles",
     organization_member_role_error: "Impossible de modifier le rôle du membre.",
     organization_member_user: "Utilisateur",
     organization_members_description:
@@ -771,6 +774,13 @@ const organizationFormFields = {
 const inviteMemberFormBuilder = FormBuilder.empty
   .addField("email", Schema.NonEmptyString)
   .addField("role", Schema.String);
+
+const editMemberRolesFormBuilder = FormBuilder.empty.addField(
+  "roles",
+  Schema.Array(Schema.Literals(organizationRoles))
+    .check(Schema.isMinLength(1))
+    .annotate({ identifier: "SelectedOrganizationRoles" }),
+);
 
 const apiKeyFormBuilder = FormBuilder.empty
   .addField("name", Schema.NonEmptyString)
@@ -1753,6 +1763,7 @@ const OrganizationSwitcherContent = ({
         <ScrollableDialogContent size="4xl">
           {activeOrganization ? (
             <OrganizationMembersManager
+              key={activeOrganization.id}
               baseUrl={baseUrl}
               canManageMembers={canUpdateOrganization}
               organization={activeOrganization}
@@ -2620,6 +2631,9 @@ function OrganizationMembersManager({
   const refreshMembers = useAtomRefresh(membersAtom);
   const refreshInvitations = useAtomRefresh(invitationsAtom);
   const [inviting, setInviting] = useState(false);
+  const [editingMember, setEditingMember] = useState<OrganizationMemberRow | null>(
+    null,
+  );
   const [error, setError] = useState<string | null>(null);
   const [cancellingInvitationId, setCancellingInvitationId] = useState<
     string | null
@@ -2657,13 +2671,6 @@ function OrganizationMembersManager({
   const members = membersData.members;
   const invitations = membersData.invitations;
   const invitationNow = useInvitationExpirationClock(invitations);
-  const [memberRoleOverrides, setMemberRoleOverrides] = useState<
-    Record<string, string>
-  >({});
-  const displayedMembers: OrganizationMemberRow[] = members.map((member) => ({
-    ...member,
-    role: memberRoleOverrides[member.id] ?? member.role,
-  }));
   const membersError = AsyncResult.match(membersResult, {
     onInitial: () => null,
     onFailure: () => m.organization_members_load_error(),
@@ -2733,48 +2740,6 @@ function OrganizationMembersManager({
     resetInvitation();
     setInviting(false);
   });
-
-  const updateRole = async (
-    member: OrganizationMemberRow,
-    role: OrganizationRole | OrganizationRole[],
-  ) => {
-    setError(null);
-    const nextRole = Array.isArray(role)
-      ? Array.from(new Set(role)).join(",")
-      : normalizeOrganizationRole(role);
-
-    setMemberRoleOverrides((current) => ({
-      ...current,
-      [member.id]: nextRole,
-    }));
-
-    try {
-      await Effect.runPromise(
-        authHttpClient(baseUrl).pipe(
-          Effect.flatMap((client) =>
-            client.auth.organizationUpdateMemberRole({
-              payload: {
-                memberId: member.id,
-                role: Array.isArray(role)
-                  ? role
-                  : normalizeOrganizationRole(role),
-                organizationId: organization.id,
-              },
-            }),
-          ),
-        ),
-      );
-      refreshMembers();
-    } catch (cause) {
-      setMemberRoleOverrides((current) => ({
-        ...current,
-        [member.id]: member.role,
-      }));
-      setError(
-        organizationFailureMessage(cause, m.organization_member_role_error()),
-      );
-    }
-  };
 
   const removeMember = async (member: OrganizationMemberRow) => {
     setError(null);
@@ -2853,6 +2818,21 @@ function OrganizationMembersManager({
       setCancellingInvitationId(null);
     }
   };
+
+  if (editingMember && canManageMembers) {
+    return (
+      <OrganizationMemberRoleEditor
+        baseUrl={baseUrl}
+        member={editingMember}
+        organizationId={organization.id}
+        onBack={() => setEditingMember(null)}
+        onSaved={() => {
+          refreshMembers();
+          if (editingMember.userId === currentUserId) notifyAuthChange();
+        }}
+      />
+    );
+  }
 
   return (
     <>
@@ -2946,20 +2926,20 @@ function OrganizationMembersManager({
                 columnDefs={memberColumns({
                   m,
                   baseUrl,
-                  canChangeRoles: canManageMembers,
-                  onRoleChange: updateRole,
                 })}
-                rowData={displayedMembers}
+                rowData={members}
                 features={{
                   export: { baseName: `${organization.slug}-members` },
                   gallery: false,
                   rowActions: {
                     items: memberRowActions({
                       m,
+                      canChangeRoles: canManageMembers,
                       canRemoveMembers,
                       currentUserId,
                       leavingOrganization,
                       onLeave: leaveOrganization,
+                      onEditRoles: setEditingMember,
                       onRemove: removeMember,
                     }),
                   },
@@ -3007,19 +2987,109 @@ function OrganizationMembersManager({
   );
 }
 
+const OrganizationMemberRoleEditor = ({
+  baseUrl,
+  member,
+  organizationId,
+  onBack,
+  onSaved,
+}: {
+  baseUrl?: string | undefined;
+  member: OrganizationMemberRow;
+  organizationId: string;
+  onBack: () => void;
+  onSaved: () => void;
+}) => {
+  const m = useOrganizationMessages();
+  const [form] = useState(() =>
+    FormReact.make(editMemberRolesFormBuilder, {
+      runtime: authClientApi(baseUrl).runtime,
+      fields: { roles: MultiSelectField },
+      onSubmit: (_, { decoded: { roles } }) =>
+        authHttpClient(baseUrl).pipe(
+          Effect.flatMap((client) =>
+            client.auth.organizationUpdateMemberRole({
+              payload: { memberId: member.id, organizationId, role: roles },
+            }),
+          ),
+          Effect.mapError(
+            (cause) =>
+              new OrganizationActionError({
+                message: organizationFailureMessage(
+                  cause,
+                  m.organization_member_role_error(),
+                ),
+                cause,
+              }),
+          ),
+        ),
+    }),
+  );
+  const result = useAtomValue(form.submit);
+  useAtomSubscribe(form.submit, (result) => {
+    if (!result.waiting && AsyncResult.isSuccess(result)) {
+      onSaved();
+      onBack();
+    }
+  });
+
+  return (
+    <>
+      <ScrollableDialogHeader>
+        <DialogHeader className="sm:flex-row sm:items-end sm:justify-between sm:gap-4">
+          <div className="flex min-w-0 flex-col gap-2">
+            <DialogTitle className="text-2xl">
+              {m.organization_member_role_edit()}
+            </DialogTitle>
+            <DialogDescription>
+              {m.organization_member_role_description({ name: member.user.name })}
+            </DialogDescription>
+          </div>
+          <Button
+            className="mt-2 w-fit sm:mt-0"
+            onClick={onBack}
+            disabled={result.waiting}
+            type="button"
+            variant="secondary"
+          >
+            <ArrowLeft />
+            {m.organization_back()}
+          </Button>
+        </DialogHeader>
+      </ScrollableDialogHeader>
+      <ScrollableDialogBody>
+        <form.Initialize
+          defaultValues={{ roles: normalizeOrganizationRoles(member.role) }}
+        >
+          <div className="grid gap-4">
+            <fieldset disabled={result.waiting}>
+              <form.roles
+                label={m.organization_member_role()}
+                options={organizationRoles.map((role) => ({
+                  label: organizationRoleLabel(role, m),
+                  value: role,
+                }))}
+              />
+            </fieldset>
+            <SubmitError result={result} />
+            <DialogFooter>
+              <SubmitButton form={form}>
+                {m.organization_member_role_save()}
+              </SubmitButton>
+            </DialogFooter>
+          </div>
+        </form.Initialize>
+      </ScrollableDialogBody>
+    </>
+  );
+};
+
 const memberColumns = ({
   m,
   baseUrl,
-  canChangeRoles,
-  onRoleChange,
 }: {
   m: ReturnType<typeof organizationMessageFns>;
   baseUrl?: string | undefined;
-  canChangeRoles: boolean;
-  onRoleChange: (
-    member: OrganizationMemberRow,
-    role: OrganizationRole | OrganizationRole[],
-  ) => void;
 }): DataTableColDef<OrganizationMemberRow>[] => [
   {
     colId: "user",
@@ -3042,46 +3112,14 @@ const memberColumns = ({
   {
     field: "role",
     headerName: m.organization_member_role(),
-    cellRenderer: ({ data }) => {
-      const member = data;
-      const roles = normalizeOrganizationRoles(member.role);
-      const roleOptions = roles.map((role) => ({
-        label: organizationRoleLabel(role, m),
-        value: role,
-      }));
-
-      if (!canChangeRoles) {
-        return (
-          <div className="flex flex-wrap gap-1">
-            {roleOptions.map((role) => (
-              <Badge key={role.value} variant="secondary">
-                {role.label}
-              </Badge>
-            ))}
-          </div>
-        );
-      }
-
-      return (
-        <DataTableListCell
-          emptyLabel={m.organization_member_role()}
-          manageLabel={m.organization_member_role()}
-          options={organizationRoles.map((role) => ({
-            label: organizationRoleLabel(role, m),
-            value: role,
-          }))}
-          items={roleOptions}
-          onAdd={(value) => {
-            if (!isOrganizationRole(value)) return;
-            onRoleChange(member, Array.from(new Set([...roles, value])));
-          }}
-          onRemove={(value) => {
-            if (!isOrganizationRole(value)) return;
-            const nextRoles = roles.filter((role) => role !== value);
-            onRoleChange(member, nextRoles.length > 0 ? nextRoles : ["member"]);
-          }}
-        />
-      );
+    type: "list",
+    typeOptions: {
+      emptyLabel: m.organization_role_member(),
+      getItems: (data) =>
+        normalizeOrganizationRoles(data.role).map((role) => ({
+          value: role,
+          label: organizationRoleLabel(role, m),
+        })),
     },
   },
   {
@@ -3097,19 +3135,29 @@ const memberColumns = ({
 
 const memberRowActions = ({
   m,
+  canChangeRoles,
   canRemoveMembers,
   currentUserId,
   leavingOrganization,
+  onEditRoles,
   onLeave,
   onRemove,
 }: {
   m: ReturnType<typeof organizationMessageFns>;
+  canChangeRoles: boolean;
   canRemoveMembers: boolean;
   currentUserId: string;
   leavingOrganization: boolean;
+  onEditRoles: (member: OrganizationMemberRow) => void;
   onLeave: (member: OrganizationMemberRow) => void;
   onRemove: (member: OrganizationMemberRow) => void;
 }) => [
+  {
+    name: m.organization_member_role_edit(),
+    icon: <PencilIcon />,
+    visible: () => canChangeRoles,
+    onClick: onEditRoles,
+  },
   {
     name: m.organization_member_leave(),
     icon: <LogOut />,
