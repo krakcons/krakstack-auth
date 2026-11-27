@@ -384,7 +384,7 @@ const apiApplicationLayer = Layer.mergeAll(
     HttpApiOtlp.layer.pipe(
       Layer.provide(
         AuthMiddleware.routerLayer({
-          paths: ["/api/otel/v1/logs"],
+          paths: ["/api/diagnostics/events"],
           authLayer: localAuthServiceLayer,
         }),
       ),
