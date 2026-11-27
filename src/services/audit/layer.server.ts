@@ -15,3 +15,6 @@ export const auditEventsLayer = Events.layerWith({
 
 // Native Better Auth hooks execute outside the HttpApi Effect runtime.
 export const nativeAuditRuntime = ManagedRuntime.make(auditEventsLayer);
+
+if (import.meta.hot)
+  import.meta.hot.dispose(() => nativeAuditRuntime.dispose());

@@ -46,7 +46,8 @@ import {
 import { BackendAuth } from "@/services/backend-auth";
 import { backendAuthApiHandler } from "@/services/backend-auth/api.builder";
 import { BackendAuthApi } from "@/services/backend-auth/api.group";
-import { sqlLayer } from "@/services/database";
+import { disposeDatabase, sqlLayer } from "@/services/database";
+import { nativeAuditRuntime } from "@/services/audit/layer.server";
 import { SqlClient } from "effect/sql";
 import { Domains } from "@/services/domains";
 import { OAuthClients } from "@/services/oauth";
@@ -409,5 +410,8 @@ export const initializeApi = () =>
 export const disposeApi = async () => {
   await apiWebHandler.dispose();
   await accountDeletionRuntime.dispose();
+  await nativeAuditRuntime.dispose();
+  await disposeDatabase();
 };
-if (import.meta.hot) import.meta.hot.dispose(disposeApi);
+
+if (import.meta.hot) import.meta.hot.dispose(() => apiWebHandler.dispose());

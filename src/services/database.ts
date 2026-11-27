@@ -48,22 +48,30 @@ const naming = {
 
 // Effect 4 uses its native PostgreSQL pool; Better Auth retains the pg pool above.
 // Native timestamp codecs already decode timestamp-without-time-zone as UTC.
-export const sqlLayer = Layer.effectDiscard(migrate).pipe(
-  Layer.provideMerge(
-    PgClient.layerConfig({
-      url: Config.Redacted(
-        process.env.NODE_ENV === "test" ? "TEST_DATABASE_URL" : "DATABASE_URL",
-      ),
-      applicationName: Config.succeed("krakstack-auth"),
-      connectTimeout: Config.succeed("5 seconds"),
-      idleTimeout: Config.succeed("30 seconds"),
-      maxConnections: Config.succeed(databasePoolSize),
-      startupParameters: Config.succeed({ TimeZone: "UTC" }),
-      transformQueryNames: Config.succeed(naming.transformQueryNames),
-      transformResultNames: Config.succeed(naming.transformResultNames),
-      transformJson: Config.succeed(naming.transformJson),
-    }),
+const databaseRuntime = ManagedRuntime.make(
+  Layer.effectDiscard(migrate).pipe(
+    Layer.provideMerge(
+      PgClient.layerConfig({
+        url: Config.Redacted(
+          process.env.NODE_ENV === "test" ? "TEST_DATABASE_URL" : "DATABASE_URL",
+        ),
+        applicationName: Config.succeed("krakstack-auth"),
+        connectTimeout: Config.succeed("5 seconds"),
+        idleTimeout: Config.succeed("30 seconds"),
+        maxConnections: Config.succeed(databasePoolSize),
+        startupParameters: Config.succeed({ TimeZone: "UTC" }),
+        transformQueryNames: Config.succeed(naming.transformQueryNames),
+        transformResultNames: Config.succeed(naming.transformResultNames),
+        transformJson: Config.succeed(naming.transformJson),
+      }),
+    ),
   ),
+);
+
+// Request layers and independently built runtimes borrow the same SQL client.
+// Only the database runtime owns the pool and runs migrations.
+export const sqlLayer = Layer.effectContext(
+  Effect.suspend(() => databaseRuntime.contextEffect),
 );
 
 const pgLayer = (url: Redacted.Redacted) =>
@@ -91,8 +99,15 @@ const pgLayerFromConfig = (name: string) =>
 
 export const sqlTestLayer = pgLayerFromConfig("TEST_DATABASE_URL");
 
-const databaseRuntime = ManagedRuntime.make(sqlLayer);
-
 export const runWithDatabase = <A, E>(
   effect: Effect.Effect<A, E, SqlClient.SqlClient>,
 ) => databaseRuntime.runPromise(effect);
+
+let disposePromise: Promise<void> | undefined;
+export const disposeDatabase = () =>
+  (disposePromise ??= Promise.all([
+    databaseRuntime.dispose(),
+    databasePool.end(),
+  ]).then(() => undefined));
+
+if (import.meta.hot) import.meta.hot.dispose(disposeDatabase);
